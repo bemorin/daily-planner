@@ -242,6 +242,6 @@ Release-level changes are summarized in [`CHANGELOG.md`](./CHANGELOG.md). Contri
 
 ## License
 
-Daily Planner is **source-available**, not OSI open source. It is licensed under the **PolyForm Perimeter License 1.0.1**. The license permits use, modification, and distribution for permitted purposes, but does not permit providing a product that competes with Daily Planner.
+Published under the [PolyForm Perimeter License 1.0.1](./LICENSE).
 
 See [`LICENSE`](./LICENSE) for the complete terms.
