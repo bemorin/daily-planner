@@ -14,31 +14,39 @@
 <body>
   <main class="planner" data-app>
     <header class="topbar">
-      <div class="date-cluster">
+      <div class="date-identity">
+        <button class="view-toggle-button" type="button" data-week-view aria-label="Show week" data-tooltip="Week view" data-tooltip-key="V" aria-pressed="false">
+          <svg data-week-view-icon="week" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M8 12h2M12 12h2M16 12h1M8 16h2M12 16h2M16 16h1"/></svg>
+          <svg data-week-view-icon="day" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M10.5 13 12 11.5V17"/></svg>
+          <span class="sr-only" data-week-view-label>Week</span>
+        </button>
         <div class="date-title" data-date-picker role="button" tabindex="0" aria-label="Choose date">
           <p class="eyebrow" data-weekday></p>
           <h1><span data-date></span><span data-date-medium></span><span data-date-short></span></h1>
         </div>
-        <button class="view-toggle-button" type="button" data-week-view aria-label="Show week" data-tooltip="Week view" data-tooltip-key="V" aria-pressed="false">
-          <svg data-week-view-icon="week" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M8 12h2M12 12h2M16 12h1M8 16h2M12 16h2M16 16h1"/></svg>
-          <svg data-week-view-icon="day" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M10.5 13 12 11.5V17"/></svg>
-          <span data-week-view-label>Week</span>
-        </button>
-
-        <nav class="date-nav" aria-label="Day navigation">
-          <button class="icon-button" type="button" data-prev aria-label="Previous day" data-tooltip="Previous day" data-tooltip-key="←">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-          <button class="icon-button" type="button" data-next aria-label="Next day" data-tooltip="Next day" data-tooltip-key="→">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-          </button>
-          <button class="today-button" type="button" data-today aria-label="Go to now" data-tooltip="Go to now" data-tooltip-key="N">
-            <span data-today-label>Now</span>
-          </button>
-        </nav>
       </div>
 
+      <nav class="date-nav" aria-label="Day navigation">
+        <button class="icon-button" type="button" data-prev aria-label="Previous day" data-tooltip="Previous day" data-tooltip-key="←">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <button class="today-button" type="button" data-today aria-label="Go to now" data-tooltip="Go to now" data-tooltip-key="N">
+          <span class="today-calendar-icon" aria-hidden="true"><span data-today-day></span></span>
+          <span data-today-label>Now</span>
+        </button>
+        <button class="icon-button" type="button" data-next aria-label="Next day" data-tooltip="Next day" data-tooltip-key="→">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+      </nav>
+
       <div class="actions" aria-label="Planner actions">
+        <div class="workspace-switcher action-popover-wrap" data-workspace-switcher hidden>
+          <button class="workspace-switcher__trigger" type="button" data-workspace-toggle aria-label="Switch workspace" aria-expanded="false">
+            <span data-workspace-label>Personal</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
+          </button>
+          <div class="workspace-menu app-menu" data-workspace-menu hidden></div>
+        </div>
         <button class="icon-button" type="button" data-search-open aria-label="Search planner" data-tooltip="Search" data-tooltip-key="F">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.5 15.5 4.1 4.1"/></svg>
         </button>
@@ -101,6 +109,11 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.2" class="icon-fill"/><circle cx="12" cy="12" r="1.2" class="icon-fill"/><circle cx="19" cy="12" r="1.2" class="icon-fill"/></svg>
           </button>
           <div class="app-menu mobile-more-menu" data-mobile-more-menu hidden>
+            <div class="mobile-workspace" data-mobile-workspace hidden>
+              <span>Workspace</span>
+              <button type="button" data-mobile-workspace-toggle aria-expanded="false"><strong data-mobile-workspace-label>Personal</strong><svg class="disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
+              <div class="mobile-workspace-options" data-mobile-workspace-options hidden></div>
+            </div>
             <button type="button" data-mobile-print><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z"/></svg><span>Print / PDF</span></button>
             <div class="mobile-export-disclosure" data-mobile-export-disclosure>
               <button type="button" data-mobile-export-toggle aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg><span>Export</span><svg class="disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
@@ -203,6 +216,16 @@
             <div class="blocks" data-blocks></div>
           </div>
           <div class="week-schedule" data-week-schedule hidden></div>
+        </div>
+        <button class="mobile-quick-add" type="button" data-mobile-schedule-add aria-label="Add to schedule">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </section>
+      <section class="enterprise-workspace-shell" data-enterprise-workspace hidden aria-live="polite">
+        <div class="enterprise-workspace-shell__inner">
+          <p class="section-kicker">Workspace</p>
+          <h2 data-enterprise-workspace-name>Team workspace</h2>
+          <p>Your personal planner stays private. Shared calendars and team activity will appear here as Enterprise features are connected.</p>
         </div>
       </section>
     </section>

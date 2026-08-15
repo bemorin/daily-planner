@@ -44,6 +44,17 @@ export function nextPlanningDateFrom(inputDate, settings, { includeCurrent = fal
   return date;
 }
 
+export function previousPlanningDateFrom(inputDate, settings, { includeCurrent = false } = {}) {
+  const date = atNoon(new Date(inputDate));
+  if (includeCurrent && isPlanningDay(date, settings)) return date;
+
+  for (let index = 0; index < 14; index += 1) {
+    date.setDate(date.getDate() - 1);
+    if (isPlanningDay(date, settings)) return atNoon(date);
+  }
+  return date;
+}
+
 export function firstPlanningSlotAfter(inputDate, settings, { startMinutes = 0, endMinutes = 24 * 60 } = {}) {
   const now = new Date(inputDate);
   const day = atNoon(now);

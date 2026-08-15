@@ -34,7 +34,8 @@ const deploymentConfig = {
   PROJECT_GITHUB_URL: process.env.DAILY_PLANNER_GITHUB_URL || '',
   GITHUB_SPONSOR_URL: process.env.DAILY_PLANNER_SPONSOR_URL || '',
   SOCIAL_X_URL: process.env.DAILY_PLANNER_X_URL || '',
-  SOCIAL_LINKEDIN_URL: process.env.DAILY_PLANNER_LINKEDIN_URL || ''
+  SOCIAL_LINKEDIN_URL: process.env.DAILY_PLANNER_LINKEDIN_URL || '',
+  CLOUD_API_URL: process.env.DAILY_PLANNER_CLOUD_API_URL || ''
 };
 await fs.writeFile(resolve(dist, 'runtime-config.js'), `globalThis.__DAILY_PLANNER_CONFIG__ = Object.freeze(${JSON.stringify(deploymentConfig, null, 2)});\n`);
 await copyTree('src');

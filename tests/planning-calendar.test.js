@@ -4,6 +4,7 @@ import {
   activeWeekdays,
   isPlanningDay,
   nextPlanningDateFrom,
+  previousPlanningDateFrom,
   firstPlanningSlotAfter,
   planningWeekDates,
   planningWeekStart
@@ -25,6 +26,15 @@ test('planning-day helpers find the next configured day without mutating the inp
   assert.equal(ymdKey(next), '2026-08-12');
   assert.equal(ymdKey(tuesday), '2026-08-11');
   assert.equal(isPlanningDay(next, settings), true);
+});
+
+test('planning-day helpers find the previous configured day without mutating the input', () => {
+  const settings = { planningDays: [1, 3, 5], weekStartsOn: 1 };
+  const monday = new Date(2026, 7, 17, 9, 30);
+  const previous = previousPlanningDateFrom(monday, settings);
+  assert.equal(ymdKey(previous), '2026-08-14');
+  assert.equal(ymdKey(monday), '2026-08-17');
+  assert.equal(isPlanningDay(previous, settings), true);
 });
 
 test('planningWeekStart and planningWeekDates share one configured week definition', () => {

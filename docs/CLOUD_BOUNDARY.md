@@ -1,6 +1,6 @@
 # Optional cloud service boundary
 
-> Status: architecture proposal. Daily Planner currently has no account system or cloud database.
+> Status: client boundary in progress. The public planner remains local-first; the server implementation lives in a separate private repository.
 
 Daily Planner should remain a complete local-first planner. Cloud functionality, if offered, is an optional service around that local product rather than a requirement for using Day, Week, Horizon, Journal, Unresolved, or local backups.
 
@@ -12,10 +12,11 @@ daily-planner/                 public, source-available
 ├─ local persistence
 ├─ offline/PWA behavior
 ├─ import/export
+├─ optional workspace client boundary
 ├─ sync client contract       future
 └─ UI for optional account    future
 
-daily-planner-cloud/           private, future
+daily-planner-cloud/           private
 ├─ authentication
 ├─ sync API
 ├─ conflict resolution
@@ -27,6 +28,13 @@ daily-planner-cloud/           private, future
 ```
 
 The private service should not be implemented as secret JavaScript injected into the public client. Code shipped to a browser is inspectable. The durable boundary is an API: the public client knows how to request synchronization, while the private service owns how accounts, persistence, operations, and billing are implemented.
+
+
+## Workspace boundary
+
+The public client may be built with a `CLOUD_API_URL`. When that value is blank, no workspace request is made and the application behaves exactly like the local-only planner. When an authenticated cloud profile eventually returns organizations, the client can expose **Personal** plus those organization workspaces.
+
+Selecting an organization must never reinterpret the Personal planner as company data. Personal Day, Journal, Horizon, habits, and local notes stay private. Shared calendars, mentions, categories, and future booking surfaces belong to the organization workspace and are loaded through explicit organization-scoped API calls.
 
 ## Product principles
 

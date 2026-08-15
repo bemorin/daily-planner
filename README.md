@@ -46,7 +46,7 @@ Week view shows only the schedule across the days configured as planning days.
 - clicking a block edits it without leaving Week view;
 - the same schedule data is shared with Day view.
 
-Planning days are the days you **normally** want shown and used when finding the next planning day. They do not prevent you from opening or scheduling any other date manually.
+Planning days define Week columns and Day-view previous/next navigation. They do not prevent you from opening or scheduling another date directly with the date picker.
 
 ## Close day
 
@@ -210,7 +210,9 @@ Because of that interaction surface, the repository verifies releases in two lay
 
 ### Optional cloud boundary
 
-The public planner is designed to remain useful without an account or network connection. If official cloud services are added later, the intended boundary is a separate private service for authentication, synchronization, backups, billing, and integrations. The browser client would talk to that service through an explicit API instead of hiding proprietary server logic in shipped frontend code. See [`docs/CLOUD_BOUNDARY.md`](./docs/CLOUD_BOUNDARY.md).
+Daily Planner stays local-first: using the Personal workspace never requires an account or internet connection. The public client now contains only the **workspace boundary** for an optional private service. If a deployment provides `DAILY_PLANNER_CLOUD_API_URL` and an authenticated profile exposes organizations, a workspace selector can reveal **Personal** plus those company workspaces. Personal planner data is never reinterpreted as company data.
+
+The private service remains a separate repository and owns server-side authentication, organizations, shared data, future synchronization, billing, and Enterprise operations. See [`docs/CLOUD_BOUNDARY.md`](./docs/CLOUD_BOUNDARY.md).
 
 ## Verification
 
@@ -242,6 +244,6 @@ Release-level changes are summarized in [`CHANGELOG.md`](./CHANGELOG.md). Contri
 
 ## License
 
-Published under the [PolyForm Perimeter License 1.0.1](./LICENSE).
+Daily Planner is **source-available**, not OSI open source. It is licensed under the **PolyForm Perimeter License 1.0.1**. The license permits use, modification, and distribution for permitted purposes, but does not permit providing a product that competes with Daily Planner.
 
 See [`LICENSE`](./LICENSE) for the complete terms.

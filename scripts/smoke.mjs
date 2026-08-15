@@ -312,8 +312,11 @@ try {
   await check('Fit mode deactivates', "document.querySelector('[data-expanded-view]').click();!document.body.classList.contains('app-expanded')", true);
   await check('Export menu opens', "document.querySelector('[data-export]').click();!document.querySelector('[data-export-menu]').hidden", true);
   await check('Export menu closes', "document.querySelector('[data-export]').click();document.querySelector('[data-export-menu]').hidden", true);
+  await check('Day next navigation skips excluded weekend days', "document.querySelector('[data-next]').click();document.querySelector('[data-date]').textContent.includes('17')", true);
+  await check('Day previous navigation returns to the prior configured planning day', "document.querySelector('[data-prev]').click();document.querySelector('[data-date]').textContent.includes('14')", true);
 
   await check('Close day review opens', "document.querySelector('[data-end-day-open]').click();!document.querySelector('[data-end-day-modal]').hidden", true);
+  await check('Close day carry chevron is centered in its control', "(()=>{const box=document.querySelector('.end-day-date-chevron').getBoundingClientRect();const icon=document.querySelector('.end-day-date-chevron .select-chevron').getBoundingClientRect();return Math.abs((box.left+box.width/2)-(icon.left+icon.width/2))<1.5&&Math.abs((box.top+box.height/2)-(icon.top+icon.height/2))<1.5;})()", true);
   await check('Close day completes', "document.querySelector('[data-end-day-form]').requestSubmit();new Promise(r=>setTimeout(()=>r(!document.querySelector('[data-day-closed-modal]').hidden),320))", true, true);
   await check('Post-close page has no reopen action', "!document.querySelector('[data-day-closed-reopen]')", true);
   await check('Friday first shows next planning day prep', "!document.querySelector('[data-next-day-prep]').hidden && document.querySelector('[data-week-review-summary]').hidden", true);
@@ -326,6 +329,26 @@ try {
   await check('Unresolved tabs expose exact queue counts', "(()=>{const needs=Number(document.querySelector('[data-open-work-count=\"needs\"]')?.textContent);const later=Number(document.querySelector('[data-open-work-count=\"later\"]')?.textContent);return Number.isInteger(needs)&&needs>=0&&Number.isInteger(later)&&later>=0;})()", true);
   await check('Weekly review unresolved total matches both modal queues', "(()=>{const total=Number(document.querySelector('.week-review-section--unresolved .week-review-section__title em')?.textContent);const needs=Number(document.querySelector('[data-open-work-count=\"needs\"]')?.textContent);const later=Number(document.querySelector('[data-open-work-count=\"later\"]')?.textContent);return total===needs+later;})()", true);
   await check('Closing unresolved returns to weekly review', "document.querySelector('[data-open-work-modal] [data-modal-close]').click();new Promise(r=>setTimeout(()=>r(!document.querySelector('[data-day-closed-modal]').hidden && !document.querySelector('[data-week-review-summary]').hidden),460))", true, true);
+  await check('Close-day flow can finish before mobile shell checks', "document.querySelector('[data-day-closed-done]').click();new Promise(r=>setTimeout(()=>r(document.querySelector('[data-day-closed-modal]').hidden),300))", true, true);
+
+  await client.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+  await new Promise(resolveWait => setTimeout(resolveWait, 80));
+  await check('View toggle sits before the date identity on mobile', "document.querySelector('.date-identity').firstElementChild.matches('[data-week-view]')", true);
+  await check('Mobile removes previous/next chrome', "getComputedStyle(document.querySelector('[data-prev]')).display==='none'&&getComputedStyle(document.querySelector('[data-next]')).display==='none'", true);
+  await check('Mobile Today control is hidden on today', "getComputedStyle(document.querySelector('[data-today]')).display==='none'&&getComputedStyle(document.querySelector('[data-today-label]')).display==='none'&&document.querySelector('[data-today-day]').textContent==='14'", true);
+  await check('Mobile Today control appears away from today', "document.querySelector('[data-next]').click();getComputedStyle(document.querySelector('[data-today]')).display!=='none'", true);
+  await check('Mobile Today control returns to today', "document.querySelector('[data-today]').click();getComputedStyle(document.querySelector('[data-today]')).display==='none'", true);
+  await check('Mobile swipe left advances to the next planning day', "(()=>{const target=document.querySelector('[data-workspace]');target.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:41,pointerType:'touch',clientX:330,clientY:360}));target.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:41,pointerType:'touch',clientX:190,clientY:365}));return document.querySelector('[data-date]').textContent.includes('17');})()", true);
+  await check('Mobile swipe right returns to the previous planning day', "(()=>{const target=document.querySelector('[data-workspace]');target.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:42,pointerType:'touch',clientX:180,clientY:360}));target.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:42,pointerType:'touch',clientX:330,clientY:365}));return document.querySelector('[data-date]').textContent.includes('14');})()", true);
+  await check('Mobile Plan/Schedule dock has a real touch target', "document.querySelector('[data-mobile-view=\\\"plan\\\"]').getBoundingClientRect().height>=44&&parseFloat(getComputedStyle(document.querySelector('[data-mobile-view=\\\"plan\\\"]')).fontSize)>=13", true);
+  await check('Mobile schedule no longer carries a large bottom padding', "parseFloat(getComputedStyle(document.querySelector('[data-schedule-scroll]')).paddingBottom)<=12", true);
+  await check('Mobile Plan scroller stops above persistent dock', "document.querySelector('[data-left-pane]').getBoundingClientRect().bottom<=document.querySelector('[data-mobile-view-switch]').getBoundingClientRect().top+1", true);
+  await check('Mobile Schedule scroller stops above persistent dock', "document.querySelector('[data-schedule-pane]').getBoundingClientRect().bottom<=document.querySelector('[data-mobile-view-switch]').getBoundingClientRect().top+1", true);
+  await check('Mobile schedule exposes the floating add action', "document.querySelector('[data-mobile-view=\\\"schedule\\\"]').click();getComputedStyle(document.querySelector('[data-mobile-schedule-add]')).display==='grid'", true);
+  await check('Mobile floating add opens the block editor', "document.querySelector('[data-mobile-schedule-add]').click();!document.querySelector('[data-block-modal]').hidden", true);
+  await check('Modal suppresses persistent mobile chrome', "getComputedStyle(document.querySelector('[data-mobile-schedule-add]')).visibility==='hidden'&&getComputedStyle(document.querySelector('[data-mobile-view-switch]')).visibility==='hidden'", true);
+  await check('Modal layer sits above mobile actions', "Number(getComputedStyle(document.querySelector('[data-block-modal]')).zIndex)>Number(getComputedStyle(document.querySelector('[data-mobile-view-switch]')).zIndex)", true);
+  await check('Mobile floating add editor closes', "document.querySelector('[data-block-modal] [data-modal-close]').click();new Promise(r=>setTimeout(()=>r(document.querySelector('[data-block-modal]').hidden),260))", true, true);
 
   await new Promise(resolveWait => setTimeout(resolveWait, 80));
   const errors = runtimeErrors(client.events);

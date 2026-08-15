@@ -40,6 +40,8 @@
   flex-direction: column;
   overflow: hidden;
 }
+
+.mobile-quick-add { display: none; }
 .schedule-head { flex: 0 0 auto; margin: 8px 8px 8px 0; }
 .schedule-scroll {
   flex: 1 1 auto;
@@ -217,9 +219,36 @@
 .time-block.is-micro .time-block__link,
 .time-block.is-micro .time-block__meta { display: none; }
 @media (max-width: 790px) {
-  .schedule-section { height: 100%; }
+  .schedule-section { height: calc(100% - var(--mobile-dock-clearance)); }
   .workspace[data-mobile-active="plan"] .schedule-section { display: none; }
   .schedule-head { margin-top: 5px; }
+  .schedule-head [data-schedule-add] { display: none; }
+  .workspace[data-mobile-active="schedule"] .mobile-quick-add {
+    position: fixed;
+    z-index: var(--z-mobile-action);
+    right: 18px;
+    bottom: calc(var(--mobile-dock-clearance) + 10px);
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+    border-radius: 16px;
+    background: var(--ink);
+    color: var(--paper);
+    box-shadow: 0 12px 28px rgba(28,25,21,.2);
+    cursor: pointer;
+    transition: transform 160ms cubic-bezier(.22,1,.36,1), box-shadow 160ms ease;
+  }
+  .workspace[data-mobile-active="schedule"] .mobile-quick-add:hover,
+  .workspace[data-mobile-active="schedule"] .mobile-quick-add:focus-visible {
+    outline: 0;
+    transform: translateY(-1px);
+    box-shadow: 0 15px 32px rgba(28,25,21,.24);
+  }
+  .workspace[data-mobile-active="schedule"] .mobile-quick-add:active { transform: scale(.95); }
+  .mobile-quick-add svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 }
 @media (max-width: 620px) {
   .schedule { --hour: 64px; }
@@ -393,10 +422,6 @@
 }
 .block-notes-field textarea { min-height: 124px; }
 .block-form .block-submit { padding-inline: 34px; }
-@media (max-width: 790px) {
-  .schedule-scroll { padding-bottom: 62px; }
-}
-
 .schedule-head__actions {
   display: flex;
   align-items: center;
@@ -488,6 +513,8 @@
 @media (max-width: 790px) {
   .schedule-head { align-items: center; }
   .schedule-head__actions { gap: 3px; }
+  .schedule-scroll { max-height: none; padding-bottom: 0; }
+  .modal__actions--block:not(.is-add) > [data-block-delete] { grid-row: 1; align-self: center; }
 }
 .block-notes-field { order: initial; }
 .block-form > .form-error { order: 35; }
@@ -575,9 +602,6 @@
 .block-time-layout:not(.has-end-date) .block-time-field--end .block-time-controls { grid-template-columns: 142px; }
 .block-time-layout:not(.has-end-date) .time-combo { width: 142px; }
 .block-time-layout:not(.has-end-date) .time-input { flex: 0 0 64px; width: 64px; }
-@media (max-width: 790px) {
-  .schedule-scroll { max-height: calc(100dvh - var(--topbar-height, 74px) - 70px); }
-}
 @media (max-width: 620px) {
   .modal__actions--block:not(.is-add) > [data-block-delete] { width: 40px; height: 38px; padding: 0; border-radius: 9px; background: var(--soft); display: grid; place-items: center; }
   .modal__actions--block:not(.is-add) > [data-block-delete] span { display: none; }
@@ -600,9 +624,6 @@
   .block-time-layout:not(.has-end-date) .time-input { flex: 0 0 58px; width: 58px; min-width: 0; padding-inline: 5px; text-align: center; }
   .block-time-layout:not(.has-end-date) .time-menu-button { flex: 1 1 auto; min-width: 32px; padding-right: 7px; }
 }
-@media (max-width: 790px) {
-  .schedule-scroll { padding-bottom: 48px; max-height: calc(100dvh - var(--topbar-height, 74px) - 54px); }
-}
 .time-block { z-index: 8; }
 .time-block.is-dragging,
 .time-block.is-resizing { z-index: 30; }
@@ -621,10 +642,6 @@
 .time-block.is-current .block-check { background: color-mix(in srgb, #fffaf4 8%, transparent); border-color: color-mix(in srgb, #fffaf4 70%, transparent); }
 .time-block.is-current .block-check:checked { background: #fffaf4; border-color: #fffaf4; }
 .time-block.is-current .block-check:checked::after { border-color: #9a5149; }
-@media (max-width: 790px) {
-  .schedule-scroll { padding-bottom: 42px; max-height: calc(100dvh - var(--topbar-height, 74px) - 48px); }
-  .modal__actions--block:not(.is-add) > [data-block-delete] { grid-row: 1; align-self: center; }
-}
 .time-block { z-index:4; }
 .time-block.is-current { z-index:6; overflow:hidden; }
 .time-block.is-dragging,

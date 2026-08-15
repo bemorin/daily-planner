@@ -25,6 +25,12 @@
   --schedule-title-font: .76rem;
   --schedule-title-font-micro: .68rem;
   --schedule-note-font: .61rem;
+  --z-mobile-action: 170;
+  --z-mobile-dock: 180;
+  --mobile-dock-clearance: calc(56px + max(8px, env(safe-area-inset-bottom)));
+  --z-popover: 350;
+  --z-modal: 900;
+  --z-modal-stacked: 920;
   --text-edit-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='24' viewBox='0 0 16 24'%3E%3Cpath d='M8 2v20M4.5 2h7M4.5 22h7' fill='none' stroke='%231c1a17' stroke-width='1.35' stroke-linecap='round'/%3E%3C/svg%3E") 8 12, text;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
@@ -106,20 +112,21 @@ a { color: inherit; }
 
 .topbar {
   min-height: 60px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   padding: 0 0 11px;
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 
-.date-cluster {
+.date-identity {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 14px;
-  flex: 1 1 auto;
+  justify-self: start;
+  gap: 10px;
 }
 
 .date-title { min-width: 0; flex: 0 1 auto; }
@@ -156,7 +163,8 @@ a { color: inherit; }
 .date-nav,
 .actions { display: flex; align-items: center; gap: 3px; flex: 0 0 auto; }
 
-.actions { margin-left: auto; }
+.date-nav { justify-self: center; }
+.actions { justify-self: end; margin-left: 0; }
 
 .icon-button {
   width: 34px;
@@ -606,7 +614,7 @@ body.has-modal { overflow: hidden; }
 .modal {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--z-modal);
   display: grid;
   place-items: center;
   padding: clamp(.75rem, 3vw, 1.5rem);
@@ -794,7 +802,7 @@ body.has-modal { overflow: hidden; }
 
 .app-popover {
   position: fixed;
-  z-index: 350;
+  z-index: var(--z-popover);
   max-height: min(280px, calc(100dvh - 20px));
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -960,21 +968,61 @@ textarea,
 .today-button {
   min-width: 48px;
   min-height: 27px;
+  display: inline-grid;
+  place-items: center;
   padding: 4px 8px;
   border-radius: 999px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
   font-size: .67rem;
-  font-weight: 620;
+  font-weight: 650;
   letter-spacing: -.01em;
-  transition: color 130ms ease, background-color 130ms ease;
+  transition: color 130ms ease, background-color 130ms ease, transform 150ms cubic-bezier(.22,1,.36,1);
 }
 
 .today-button:hover,
 .today-button:focus-visible { outline: 0; color: var(--ink); background: var(--soft); }
 
-.today-button.is-away { min-width: 78px; color: var(--ink); }
+.today-button:active { transform: scale(.95); }
+
+.today-button.is-away { color: var(--ink); }
+
+.today-calendar-icon {
+  display: none;
+  position: relative;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding-top: 4px;
+  border: 1.5px solid currentColor;
+  border-radius: 7px;
+  font-size: .66rem;
+  font-weight: 760;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-calendar-icon::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 7px;
+  border-top: 1.5px solid currentColor;
+}
+
+.today-calendar-icon::after {
+  content: "";
+  position: absolute;
+  width: 2px;
+  height: 4px;
+  top: -2px;
+  left: 7px;
+  border-radius: 1px;
+  background: currentColor;
+  box-shadow: 12px 0 0 currentColor;
+}
 
 /* Left pane behaves like a real full-height writing surface. */
 
@@ -1140,36 +1188,39 @@ textarea,
 @media (max-width: 980px) {
   .planner { width: min(100% - 20px, 1360px); }
   .workspace { grid-template-columns: minmax(290px,.8fr) minmax(470px,1.2fr); gap: 24px; }
-  .date-cluster { gap: 8px; }
+  .date-identity { gap: 8px; }
   .actions,
 .date-nav { gap: 1px; }
   .icon-button { width: 32px; height: 32px; }
 }
 
 @media (max-width: 790px) {
-  .planner { grid-template-rows: auto auto minmax(0,1fr); }
-  .topbar { gap: 4px; }
-  .date-cluster { gap: 3px; }
+  .planner { grid-template-rows: auto minmax(0,1fr); }
+  .topbar { gap: 6px; }
+  .date-identity { gap: 6px; }
   .date-nav,
 .actions { gap: 0; }
-  .icon-button { width: 29px; height: 29px; }
-.mobile-view-switch {
-    display: flex;
-    width: fit-content;
-    margin: 7px auto 0;
-    gap: 2px;
-  }
-  .mobile-view-switch button {
-    min-height: 29px;
-    padding: 5px 10px;
-    border-radius: 999px;
+  .icon-button { width: 32px; height: 32px; }
+  .date-nav {
+    min-height: 34px;
+    padding: 0;
+    border-color: transparent;
     background: transparent;
-    color: var(--muted);
-    font-size: .69rem;
-    cursor: pointer;
   }
-  .mobile-view-switch button:hover { background: var(--soft); color: var(--ink); }
-  .mobile-view-switch button.is-active { background: #e7e1d8; color: var(--ink); }
+  .date-nav [data-prev],
+  .date-nav [data-next] { display: none; }
+  .today-button {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+    min-height: 34px;
+    padding: 0;
+    border-radius: 9px;
+    color: var(--muted);
+  }
+  .today-button [data-today-label] { display: none; }
+  .today-button:not(.is-away) { display: none; }
+  .today-calendar-icon { display: grid; }
   .workspace { display: block; padding-top: 8px; }
   .left { height: 100%; }
   .workspace[data-mobile-active="schedule"] .left { display: none; }
@@ -1178,11 +1229,10 @@ textarea,
 
 @media (max-width: 620px) {
   .planner { width: min(100% - 14px, 1360px); padding-top: 8px; }
-  .topbar { min-height: 48px; padding-bottom: 8px; }
-  .topbar h1 { font-size: .98rem; }
+  .topbar { min-height: 50px; padding-bottom: 8px; }
+  .topbar h1 { font-size: 1rem; }
   .eyebrow { font-size: .52rem; }
-  .icon-button { width: 27px; height: 27px; }
-  .date-nav .icon-button { width: 25px; }
+  .icon-button { width: 31px; height: 31px; }
   .left { gap: 21px; }
   .item-action-rail {
     left: auto;
@@ -1215,13 +1265,14 @@ textarea,
 
 @media (max-width: 480px) {
   .planner { width: min(100% - 10px, 1360px); }
-  .topbar { gap: 1px; }
-  .date-cluster { gap: 0; }
+  .topbar { gap: 4px; }
+  .date-identity { gap: 4px; }
   .date-title .eyebrow { display: none; }
-  .topbar h1 { font-size: .88rem; }
-  .icon-button { width: 25px; height: 25px; }
-  .date-nav .icon-button { width: 23px; }
-.actions { margin-left: 1px; }
+  .topbar h1 { font-size: .9rem; }
+  .icon-button { width: 30px; height: 30px; }
+  .view-toggle-button { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
+  .today-button { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
+  .today-calendar-icon { width: 29px; height: 29px; }
 }
 
 @media (hover: none) {
@@ -1230,19 +1281,9 @@ textarea,
 
 @media (max-width: 620px) {
   .tasks { margin-left: 0; padding-left: 0; }
-  .date-nav { min-height: 29px; padding: 1px; }
-  .today-button { min-width: 42px; min-height: 25px; padding: 3px 6px; font-size: .61rem; }
-  .today-button.is-away { min-width: 66px; }
   .end-day-item { grid-template-columns: 19px minmax(0,1fr); align-items: start; }
   .end-day-item__aside { grid-column: 2; justify-items: start; text-align: left; grid-auto-flow: column; justify-content: start; align-items: center; }
   .end-day-item__aside em { white-space: normal; }
-}
-
-@media (max-width: 480px) {
-  .date-nav .icon-button { width: 20px; height: 23px; }
-  .today-button { min-width: 38px; padding-inline: 4px; font-size: .56rem; }
-  .today-button.is-away { min-width: 58px; }
-  .actions .icon-button { width: 22px; height: 24px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1278,7 +1319,7 @@ textarea,
   box-shadow: inset 0 0 0 1px var(--line);
 }
 
-.end-day-summary span {
+.end-day-summary > div > span {
   display: block;
   color: var(--faint);
   font-size: .58rem;
@@ -1286,7 +1327,7 @@ textarea,
   letter-spacing: .06em;
 }
 
-.end-day-summary strong {
+.end-day-summary > div > strong {
   display: block;
   margin-top: .18rem;
   overflow: hidden;
@@ -1371,25 +1412,6 @@ textarea,
   .end-day-item__aside { grid-column:2; justify-items:start; text-align:left; grid-auto-flow:column; justify-content:start; align-items:center; }
   .end-day-item__aside em { white-space:normal; }
 }
-
-/* Keep the date navigation visually centered while actions stay on the right. */
-
-.topbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-}
-
-.date-cluster { display: contents; }
-
-.date-title { justify-self: start; }
-
-.date-nav { justify-self: center; }
-
-.actions { justify-self: end; margin-left: 0; }
-
-.today-button,
-.today-button.is-away { min-width: 42px; }
 
 /* App-only expanded view: proportional, full-width, without changing the rest of the domain. */
 
@@ -1828,28 +1850,63 @@ textarea,
 
 /* Stats: planned time is the translucent base, elapsed time sits at full opacity. */
 
-/* Carry-forward target is an actual app dropdown. */
+/* Carry-forward target is one compact control: date label plus a centered disclosure. */
 
-.end-day-target { display: grid; align-content: start; }
-
-.end-day-date-trigger {
-  min-width: 0;
-  width: 100%;
+.end-day-target {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+}
+
+.end-day-target > span { flex: 0 0 auto; }
+
+.end-day-date-trigger {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
-  margin-top: .1rem;
-  padding: 2px 0;
+  margin: 0;
+  padding: 0 0 0 10px;
+  border: 0;
   background: transparent;
   color: var(--ink);
   cursor: pointer;
-  text-align: left;
+  text-align: right;
 }
 
-.end-day-date-trigger strong { margin: 0; font-size: .86rem; }
+.end-day-date-trigger strong { margin: 0; font-size: 1rem; letter-spacing: -.02em; }
 
-.end-day-date-trigger svg {   flex: 0 0 auto; fill: none; stroke: var(--faint); stroke-width: 1.6; }
+.end-day-date-trigger:hover,
+.end-day-date-trigger:focus-visible { outline: 0; color: var(--ink); }
+
+.end-day-date-chevron {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--soft);
+  color: var(--muted);
+}
+
+.end-day-date-chevron .select-chevron {
+  width: 18px;
+  height: 18px;
+  display: block;
+  margin: 0;
+  padding: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: none;
+}
 
 .end-day-list {
   max-height: min(42dvh, 360px);
@@ -1887,35 +1944,51 @@ body.is-printing .app-tooltip-float { display: none; }
   .planner { grid-template-rows: auto minmax(0,1fr); }
   .mobile-view-switch {
     position: fixed;
-    z-index: 180;
+    z-index: var(--z-mobile-dock);
     left: 10px;
     right: 10px;
-    bottom: max(9px, env(safe-area-inset-bottom));
+    bottom: max(8px, env(safe-area-inset-bottom));
     width: auto;
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 3px;
+    gap: 4px;
     margin: 0;
-    padding: 3px;
-    border: 1px solid color-mix(in srgb, var(--line) 90%, transparent);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--surface-strong) 94%, transparent);
-    box-shadow: 0 10px 30px rgba(28,25,21,.12);
-    backdrop-filter: blur(12px);
+    padding: 4px;
+    border: 1px solid color-mix(in srgb, var(--line-strong) 55%, var(--line));
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--surface-strong) 96%, transparent);
+    box-shadow: 0 12px 34px rgba(28,25,21,.14);
+    backdrop-filter: blur(14px);
   }
   .mobile-view-switch button {
-    min-height: 38px;
+    min-height: 46px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 7px;
-    border-radius: 9px;
-    padding: 7px 10px;
+    gap: 9px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: .84rem;
+    font-weight: 650;
+    letter-spacing: -.012em;
   }
-  .mobile-view-switch button svg {   fill: none; stroke: currentColor; stroke-width: 1.55; stroke-linecap: round; stroke-linejoin: round; }
+  .mobile-view-switch button:hover,
+  .mobile-view-switch button:focus-visible { outline: 0; background: var(--soft); color: var(--ink); }
+  .mobile-view-switch button svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   .mobile-view-switch button .icon-fill { fill: currentColor; stroke: none; }
   .mobile-view-switch button.is-active { background: var(--ink); color: var(--paper); }
-  .pane-scroll { padding-bottom: 62px; }
+  body.has-modal .mobile-view-switch,
+  body.has-modal .mobile-quick-add {
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .workspace:not(.is-week-view) { touch-action: pan-y; }
+  .pane-scroll { height: calc(100% - var(--mobile-dock-clearance)); max-height: none; padding-bottom: 0; }
+
   .task { padding-right: 8px; }
   .item-row { grid-template-columns: 22px minmax(0,1fr) auto auto; }
   .item-actions { position: static; justify-self: end; }
@@ -1928,8 +2001,6 @@ body.is-printing .app-tooltip-float { display: none; }
 }
 
 .end-day-item .check { width: 20px; height: 20px; }
-
-@media (max-width: 790px) { .mobile-view-switch { z-index: 80; } }
 
 @media (max-width: 620px) { .item-time { display: inline-flex; max-width: 70px; } }
 
@@ -2084,26 +2155,6 @@ body.is-printing .app-tooltip-float { display: none; }
 
 .end-day-item:has(.check:not(:checked)) { background: color-mix(in srgb, var(--surface-strong) 45%, transparent); opacity: .72; }
 
-.end-day-date-trigger {
-  min-height: 36px;
-  padding: 4px 5px 4px 9px;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--surface-strong);
-}
-
-.end-day-date-trigger svg {
-
-
-  padding: 6px;
-  border-radius: 7px;
-  background: var(--soft);
-  color: var(--muted);
-  stroke: currentColor;
-}
-
-.end-day-date-trigger:hover,
-.end-day-date-trigger:focus-visible { outline: 0; border-color: var(--line-strong); }
 
 /* Help: only the actual documentation scrolls; the Bemorin footer stays visible. */
 
@@ -2471,19 +2522,10 @@ h3,
 
 .end-day-summary > div { min-width: 0; min-height: 58px; padding: 10px 11px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
-.end-day-summary span { margin: 0; }
+.end-day-summary > div > span { margin: 0; }
 
-.end-day-summary strong { margin: 0; font-size: 1rem; }
+.end-day-summary > div > strong { margin: 0; font-size: 1rem; }
 
-.end-day-target { display: flex; align-items: center; justify-content: space-between; }
-
-.end-day-target > span { flex: 0 0 auto; }
-
-.end-day-date-trigger { flex: 1 1 auto; min-width: 0; min-height: 36px; justify-content: flex-end; border: 0; background: transparent; padding: 0 0 0 10px; }
-
-.end-day-date-trigger strong { font-size: 1rem; letter-spacing: -.02em; }
-
-.end-day-date-trigger svg {   padding: 7px; border-radius: 8px; background: var(--soft); }
 
 .end-day-item__body small:empty { display: none; }
 
@@ -2563,7 +2605,7 @@ h3,
 
 @media (max-width: 620px) {
   .section-head { display: grid; grid-template-columns: minmax(0,1fr); gap: 2px; }
-  .section-guidance { max-width: none; margin: 0; text-align: left; font-size: .58rem; }
+  .section-guidance { max-width: none; margin: 0; text-align: left; font-size: .64rem; line-height: 1.4; }
   .end-day-summary { grid-template-columns: 1fr 1fr; }
   .end-day-target { grid-column: 1 / -1; }
   .end-day-reflection { grid-template-columns: 1fr; }
@@ -2782,12 +2824,6 @@ div.open-work-row__main { cursor: default; }
 
 /* Open Work sits beside Journal/Stats in the global action sequence. */
 
-@media (max-width: 790px) {
-  /* Stop pane scrollbars above the floating Plan/Schedule dock. */
-  .workspace { padding-bottom: 62px; }
-  .pane-scroll { max-height: calc(100dvh - var(--topbar-height, 74px) - 70px); }
-}
-
 @media (max-width: 620px) {
   .end-day-item { grid-template-columns: 1fr; gap: 7px; }
   .end-day-triage { justify-content: flex-start; overflow-x: auto; scrollbar-width: none; }
@@ -2896,13 +2932,6 @@ div.open-work-row__main { cursor: default; }
 /* Weekly chart tooltip belongs to the inspected point, never to the edge of the modal. */
 
 /* PiP date navigation copies the app's pill geometry instead of inventing a second language. */
-
-@media (max-width: 790px) {
-  /* Only reserve the physical dock height; no dead band above it. */
-  .workspace { padding-bottom: 50px; }
-  .pane-scroll { padding-bottom: 48px; max-height: calc(100dvh - var(--topbar-height, 74px) - 54px); }
-  .mobile-view-switch { bottom: max(6px, env(safe-area-inset-bottom)); }
-}
 
 @media (max-width: 620px) {
   .journal-columns-head,
@@ -3016,8 +3045,6 @@ div.open-work-row__main { cursor: default; }
 .shortcut-grid kbd { min-width: 24px; min-height: 22px; display: inline-grid; place-items: center; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-strong); color: var(--ink); font: inherit; font-size: .57rem; font-weight: 650; box-shadow: 0 1px 0 var(--line); }
 
 @media (max-width: 790px) {
-  .pane-scroll { padding-bottom: 42px; max-height: calc(100dvh - var(--topbar-height, 74px) - 48px); }
-  .workspace { padding-bottom: 44px; }
   .modal__actions--block:not(.is-add) { display: grid; grid-template-columns: 40px minmax(0,1fr); align-items: center; gap: 6px; }
   .modal__actions--block:not(.is-add) .modal__actions-right { width: 100%; min-width: 0; display: grid; grid-template-columns: 1fr 1.35fr; gap: 6px; }
 }
@@ -3310,25 +3337,25 @@ div.open-work-row__main { cursor: default; }
 :root { --current-time: #9a5149; }
 
 .view-toggle-button {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
   min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 6px 10px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: 9px;
-  background: var(--soft);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
   color: var(--muted);
   cursor: pointer;
-  font-size: .68rem;
-  font-weight: 620;
+  transition: color 140ms ease, background-color 140ms ease, border-color 140ms ease, transform 160ms cubic-bezier(.22,1,.36,1);
 }
 
 .view-toggle-button svg {
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.6;
+  stroke-width: 1.65;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -3338,12 +3365,15 @@ div.open-work-row__main { cursor: default; }
 .view-toggle-button[aria-pressed="true"] [data-week-view-icon="day"] { display: block; }
 
 .view-toggle-button:hover,
-.view-toggle-button.is-active,
-.view-toggle-button.is-active:hover {
+.view-toggle-button:focus-visible,
+.view-toggle-button.is-active {
+  outline: 0;
   border-color: var(--line-strong);
   background: var(--surface-strong);
   color: var(--ink);
 }
+
+.view-toggle-button:active { transform: scale(.94); }
 
 /* Week is a schedule-only surface, deliberately keeping the daily editor out. */
 
@@ -3391,16 +3421,6 @@ div.open-work-row__main { cursor: default; }
 
 .end-day-habit input:checked ~ b { background: var(--soft); color: var(--ink); }
 
-/* Week lives beside the date. Previous / Next / Now stay optically centered. */
-
-@media (min-width: 791px) {
-  .topbar { position: relative; display: flex; align-items: center; }
-  .date-cluster { display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; }
-  .date-nav { position: absolute; left: 50%; transform: translateX(-50%); justify-self: auto; }
-  .actions { margin-left: auto; }
-}
-
-
 /* Daily columns begin on the same optical baseline. */
 
 /* Week grid: hour rules belong to day columns, never to the hour gutter. */
@@ -3431,15 +3451,6 @@ div.open-work-row__main { cursor: default; }
 
 /* Week printing: the same visible range, all columns, no rules through the hour gutter. */
 
-
-@media (max-width: 790px) {
-  .topbar { display: flex; align-items: center; flex-wrap: nowrap; gap: 5px; }
-  .date-cluster { display: flex; align-items: center; gap: 3px; flex: 1 1 auto; width: auto; min-width: 0; }
-  .date-title { min-width: 0; flex: 0 1 auto; max-width: none; }
-  .view-toggle-button { flex: 0 0 auto; }
-  .date-nav { position: static; transform: none; flex: 0 0 auto; }
-  .actions { margin-left: auto; flex: 0 0 auto; width: auto; min-width: 0; }
-}
 
 /* Keep the two Daily column headings on the same optical top edge. */
 
@@ -3867,7 +3878,7 @@ div.open-work-row__main { cursor: default; }
 }
 
 /* Stacked destructive confirmations sit above Horizon instead of replacing it. */
-.modal[data-stacked-over="true"] { z-index: 520; }
+.modal[data-stacked-over="true"] { z-index: var(--z-modal-stacked); }
 .modal[data-stacked-over="true"] .modal__backdrop { background: color-mix(in srgb, var(--ink) 18%, transparent); }
 
 /* Mobile primary navigation: keep the core planner destinations visible and unique. */
@@ -3886,60 +3897,11 @@ div.open-work-row__main { cursor: default; }
   }
 }
 
-@media (max-width: 620px) {
-  .topbar { flex-wrap: nowrap; row-gap: 0; }
-  .date-cluster { flex: 1 1 auto; width: auto; min-width: 0; }
-  .view-toggle-button {
-    width: 34px;
-    height: 34px;
-    min-width: 34px;
-    min-height: 34px;
-    padding: 0;
-    gap: 0;
-    border-radius: 50%;
-  }
-  .view-toggle-button span { display: none; }
-  .actions {
-    flex: 0 0 auto;
-    width: auto;
-    justify-content: flex-end;
-    margin-left: auto;
-    gap: 1px;
-  }
-  .actions > .icon-button,
-  .actions > .action-popover-wrap > .icon-button {
-    width: 32px;
-    height: 32px;
-  }
-}
-
 @media (max-width: 480px) {
-  .date-cluster { gap: 1px; }
-  .view-toggle-button { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
   .actions > .icon-button,
   .actions > .action-popover-wrap > .icon-button { width: 30px; height: 30px; }
 }
 
-/* Close day date disclosure keeps the shared 20px icon readable. */
-.end-day-date-chevron {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  display: grid;
-  place-items: center;
-  border-radius: 9px;
-  background: var(--soft);
-  color: var(--muted);
-}
-.end-day-date-chevron .select-chevron {
-  width: var(--icon-size);
-  height: var(--icon-size);
-  padding: 0;
-  background: transparent;
-  color: currentColor;
-  stroke: currentColor;
-  transform: scale(1.18);
-}
 
 /* Unresolved tabs show the size of each queue without adding visual noise. */
 .open-work-tabs button {

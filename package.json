@@ -1,6 +1,6 @@
 {
   "name": "daily-planner",
-  "version": "1.12.0",
+  "version": "1.16.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,5 +14,5 @@
     "smoke:dist": "node scripts/smoke.mjs dist",
     "verify": "npm run lint && npm run format:check && npm run check && npm test && npm run quality && npm run build && npm run smoke:dist"
   },
-  "description": "A local-first daily and weekly planner by Ben Morin."
+  "description": "A lightweight vanilla-JS PWA for planning what matters, closing each day intentionally, and keeping unfinished work visible."
 }

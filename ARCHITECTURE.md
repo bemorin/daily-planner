@@ -34,7 +34,8 @@ app.js                   application coordinator and shared interaction shell
       ├─ search.js
       ├─ stats.js
       ├─ week-review.js
-      └─ week.js
+      ├─ week.js
+      └─ workspace.js
 ```
 
 `app.js` is still the coordinator for cross-feature state and lifecycle. It is intentionally divided into named sections so a reader can navigate it without relying on incidental line numbers:
@@ -68,6 +69,7 @@ styles/
 ├─ pip.css         Picture-in-Picture trigger/support UI
 ├─ settings.css    settings-specific UI
 ├─ horizon.css     Horizon / Year map
+├─ workspace.css   optional Personal / Enterprise workspace shell
 └─ print.css       print-only output
 ```
 
@@ -148,7 +150,7 @@ Feature modules receive explicit callbacks/context from `app.js` rather than imp
 
 User-authored text inserted into HTML templates must pass through the existing escaping helpers. URLs are normalized before being exposed as links.
 
-The public runtime configuration deliberately contains no owner-specific social or repository URLs. Production builds may inject them through environment variables without changing source files.
+The public runtime configuration deliberately contains no owner-specific social or repository URLs. Production builds may inject them through environment variables without changing source files. An optional `CLOUD_API_URL` may also be injected; when it is absent, the workspace feature performs no cloud request and the planner remains purely local.
 
 ## Build and release verification
 
@@ -180,8 +182,8 @@ The current cleanup strategy is to shrink the coordinator only through small pur
 
 Current examples are planning-calendar rules, schedule-time formatting, and note-line parsing. Each was moved independently and covered by unit tests before the next extraction.
 
-## Future cloud service boundary
+## Cloud service boundary
 
-Cloud functionality is intentionally outside the local runtime. If implemented, a separate private service would own authentication, synchronization, backups, billing, and third-party server integrations. The public client would depend only on a documented API contract. This keeps the local planner usable offline while allowing an official hosted service to add operational value without shipping its server implementation to the browser.
+Cloud functionality is intentionally outside the local planner runtime. A separate private service owns the server-side organization model and will later own authentication, synchronization, backups, billing, and third-party server integrations. The public client depends only on an API contract. The first client boundary is deliberately small: if `/v1/me` exposes organizations, the UI can reveal a workspace selector; Personal remains the default private planner and organization selection never reuses Personal data as team data.
 
 The proposed boundary is described in [`docs/CLOUD_BOUNDARY.md`](./docs/CLOUD_BOUNDARY.md).

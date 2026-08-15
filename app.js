@@ -2,7 +2,7 @@ import { qs, qsa } from './src/lib/dom.js';
 import { esc, escAttr, linkLabel, normalizeUrl, safeUrl } from './src/lib/text.js';
 import { clamp, uid } from './src/lib/utils.js';
 import { atNoon, ymdKey, dateFromKey, addDaysKey, daysBetweenKeys, weekdayNames } from './src/lib/dates.js';
-import { snap, minTaskSlots, scheduleTopPad, scheduleBottomPad, PROJECT_GITHUB_URL, GITHUB_SPONSOR_URL, SOCIAL_X_URL, SOCIAL_LINKEDIN_URL, palette, defaultCategories } from './src/config.js';
+import { snap, minTaskSlots, scheduleTopPad, scheduleBottomPad, PROJECT_GITHUB_URL, GITHUB_SPONSOR_URL, SOCIAL_X_URL, SOCIAL_LINKEDIN_URL, CLOUD_API_URL, palette, defaultCategories } from './src/config.js';
 import { createPrintFeature } from './src/features/print.js';
 import { pipStyles } from './src/features/pip-styles.js';
 import { rangeLabel, horizonCountdown, rangeOverlapsMonth, dayInRange, habitQuarterForMonth, habitChecked, habitQuarterBounds, habitActivityStats } from './src/features/horizon-model.js';
@@ -14,11 +14,12 @@ import { createStatsFeature } from './src/features/stats.js';
 import { createWeekFeature } from './src/features/week.js';
 import { searchPlannerDays, searchSnippet } from './src/features/search.js';
 import { createWeekReviewFeature } from './src/features/week-review.js';
+import { createWorkspaceFeature } from './src/features/workspace.js';
+import { createDaySwipeNavigation } from './src/features/day-swipe.js';
 import { visualScale, computeFitLayout } from './src/features/fit.js';
-import { detectedWeekStart, activeWeekdays as getActiveWeekdays, isPlanningDay as isConfiguredPlanningDay, nextPlanningDateFrom as getNextPlanningDateFrom, firstPlanningSlotAfter, planningWeekStart as getPlanningWeekStart, planningWeekDates as getPlanningWeekDates } from './src/domain/planning-calendar.js';
+import { detectedWeekStart, activeWeekdays as getActiveWeekdays, isPlanningDay as isConfiguredPlanningDay, nextPlanningDateFrom as getNextPlanningDateFrom, previousPlanningDateFrom as getPreviousPlanningDateFrom, firstPlanningSlotAfter, planningWeekStart as getPlanningWeekStart, planningWeekDates as getPlanningWeekDates } from './src/domain/planning-calendar.js';
 import { elapsedMinutesForDate, durationLabel, clockTime, pad2, padHour, time, blockEndDateKey as getBlockEndDateKey, blockTimeRange as getBlockTimeRange } from './src/domain/schedule-time.js';
 import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview, blockNoteLineHtml, dayNoteLineHtml } from './src/domain/note-lines.js';
-
 (() => {
   const store = createLocalStore();
   let date = atNoon(new Date());
@@ -91,6 +92,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   const activeWeekdays = () => getActiveWeekdays(settings);
   const isPlanningDay = inputDate => isConfiguredPlanningDay(inputDate, settings);
   const nextPlanningDateFrom = (inputDate, options) => getNextPlanningDateFrom(inputDate, settings, options);
+  const previousPlanningDateFrom = (inputDate, options) => getPreviousPlanningDateFrom(inputDate, settings, options);
   const planningWeekStart = inputDate => getPlanningWeekStart(inputDate, settings);
   const planningWeekDates = inputDate => getPlanningWeekDates(inputDate, settings);
 
@@ -230,9 +232,10 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     requestAnimationFrame(fitHeaderDate);
     const todayLabel = qs('[data-today-label]');
     if (todayLabel) todayLabel.textContent = 'Now';
+    qs('[data-today-day]')?.replaceChildren(String(new Date().getDate()));
     const todayButton = qs('[data-today]');
     if (todayButton) {
-      const todayInView = plannerRangeView === 'week' ? planningWeekDates(date).some(d => ymd(d) === ymd(new Date())) : isToday();
+      const todayInView = plannerRangeView === 'week' ? ymd(planningWeekStart(date)) === ymd(planningWeekStart(new Date())) : isToday();
       todayButton.classList.toggle('is-away', !todayInView);
       todayButton.dataset.tooltip = 'Go to now';
       todayButton.setAttribute('aria-label', 'Go to now');
@@ -249,12 +252,12 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     const prevButton = qs('[data-prev]');
     const nextButton = qs('[data-next]');
     if (prevButton) {
-      prevButton.dataset.tooltip = plannerRangeView === 'week' ? 'Previous week' : 'Previous day';
-      prevButton.setAttribute('aria-label', plannerRangeView === 'week' ? 'Previous week' : 'Previous day');
+      prevButton.dataset.tooltip = plannerRangeView === 'week' ? 'Previous week' : 'Previous planning day';
+      prevButton.setAttribute('aria-label', plannerRangeView === 'week' ? 'Previous week' : 'Previous planning day');
     }
     if (nextButton) {
-      nextButton.dataset.tooltip = plannerRangeView === 'week' ? 'Next week' : 'Next day';
-      nextButton.setAttribute('aria-label', plannerRangeView === 'week' ? 'Next week' : 'Next day');
+      nextButton.dataset.tooltip = plannerRangeView === 'week' ? 'Next week' : 'Next planning day';
+      nextButton.setAttribute('aria-label', plannerRangeView === 'week' ? 'Next week' : 'Next planning day');
     }
   }
 
@@ -625,6 +628,16 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     moveWeekBlock
   });
 
+
+  createDaySwipeNavigation({
+    element: qs('[data-workspace]'),
+    isEnabled: () => innerWidth <= 790
+      && plannerRangeView === 'day'
+      && !activeModal
+      && qs('[data-workspace]')?.dataset.workspaceMode !== 'enterprise',
+    onShift: shiftDate
+  });
+
   function renderScheduleRange() {
     const daySchedule = qs('[data-schedule]');
     const weekSchedule = qs('[data-week-schedule]');
@@ -818,7 +831,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   // Notes editors and lightweight checklist syntax
   // ---------------------------------------------------------------------------
 
-
   function setBlockNotesEditor(value = '') {
     const editor = qs('[data-block-notes-editor]');
     const storage = qs('[data-block-notes]');
@@ -842,7 +854,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     const storage = qs('[data-block-notes]');
     if (storage) storage.value = getBlockNotesValue();
   }
-
 
   function setDayNotesEditor(value = '') {
     const editor = qs('[data-day-notes-editor]');
@@ -1486,7 +1497,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     }, { compact: true, matchWidth: true, alignSelected: true, timeMenu: true });
   }
 
-
   function isStandaloneApp() {
     return window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone === true;
   }
@@ -1945,9 +1955,13 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     return clamp(9 * 60, visibleStartMinutes(), visibleEndMinutes() - 60);
   }
 
-  function shiftDate(days) {
+  function shiftDate(direction) {
     weekFeature?.resetAutoScroll?.();
-    date.setDate(date.getDate() + days * (plannerRangeView === 'week' ? 7 : 1));
+    if (plannerRangeView === 'week') {
+      date.setDate(date.getDate() + direction * 7);
+    } else {
+      date = direction < 0 ? previousPlanningDateFrom(date) : nextPlanningDateFrom(date);
+    }
     load();
   }
 
@@ -2829,7 +2843,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     else openEndDayModal();
   }
 
-
   // ---------------------------------------------------------------------------
   // Horizon / Year map
   // ---------------------------------------------------------------------------
@@ -2946,11 +2959,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     const later = (settings.openWork || []).map(item => ({ text: item.text, count: Number(item.carriedCount || 0), kind: 'Later' }));
     return [...needs, ...later].filter(item => item.text?.trim()).sort((a, b) => b.count - a.count).slice(0, limit);
   }
-
-
-
-
-
 
   function toggleHabitForDay(data, dayKey, index) {
     const current = new Set(Array.isArray(data.habitChecks?.[dayKey]) ? data.habitChecks[dayKey] : []);
@@ -3125,8 +3133,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     requestAnimationFrame(() => titleInput?.focus({ preventScroll: true }));
   }
 
-
-
   function renderHorizonUnified(content, nav) {
     const data = horizonYearData(horizonYear);
     const minYear = horizonMinYear();
@@ -3256,7 +3262,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       openNewKeyDatePopover(button,key,{preselect:false});
     }));
 
-
     const misogi=qs('[data-horizon-misogi]',content);
     autoGrowInlineField(misogi);
     misogi?.addEventListener('input',()=>{data.misogi=misogi.value;autoGrowInlineField(misogi);persistSettings();});
@@ -3322,11 +3327,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     }));
   }
 
-
   function chevronLeftSvg() { return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>'; }
   function chevronRightSvg() { return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>'; }
-
-
 
   // ---------------------------------------------------------------------------
   // Journal and Unresolved work
@@ -3673,7 +3675,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     doc.querySelectorAll('[data-t-calendar]').forEach(button => button.onclick = () => openScheduleFor('task', +button.dataset.tCalendar));
   }
 
-
   function hideAppTooltip() {
     tooltipTarget = null;
     tooltipNode?.remove();
@@ -3800,7 +3801,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qs('[data-task-add-toggle]').addEventListener('click', focusOrCreateTaskSlot);
 
   qs('[data-schedule]').addEventListener('click', handleScheduleClick);
-  qs('[data-schedule-add]').addEventListener('click', () => openBlockModal(null, { start: recommendedStart() }));
+  qsa('[data-schedule-add], [data-mobile-schedule-add]').forEach(button => button.addEventListener('click', () => openBlockModal(null, { start: recommendedStart() })));
   qs('[data-schedule]').addEventListener('pointermove', handleSchedulePointerMove);
   qs('[data-schedule]').addEventListener('pointerleave', () => { qs('[data-schedule-hover]').hidden = true; });
   qs('[data-prev]').addEventListener('click', () => shiftDate(-1));
@@ -4057,7 +4058,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   window.addEventListener('afterprint', cleanupPrintMode);
   setInterval(() => { updateNow(); renderStats(); renderPip(); }, 30000);
 
-
   qs('[data-mobile-export-md]')?.addEventListener('click', () => download(`daily-planner-${ymd()}.md`, markdown(), 'text/markdown'));
   qs('[data-mobile-export-json]')?.addEventListener('click', () => download(`daily-planner-${ymd()}.json`, JSON.stringify(state, null, 2), 'application/json'));
   qs('[data-mobile-export-backup]')?.addEventListener('click', exportPlannerBackup);
@@ -4106,13 +4106,12 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   const printHost = qs('[data-print-domain]');
   if (printHost) { printHost.textContent = 'planner.bemorin.com'; printHost.href = 'https://planner.bemorin.com'; }
   checkLocalStorage();
-
   setupHelpFaq();
+  createWorkspaceFeature({ apiUrl: CLOUD_API_URL }).load();
   setMobileView('plan');
   renderCategorySettings();
   renderSettingsHours();
   renderPlanningWeek();
-  renderInstallSetting();
-  load();
+  renderInstallSetting(); load();
   requestAnimationFrame(maybeOpenOnboarding);
 })();
