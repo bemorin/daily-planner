@@ -23,7 +23,8 @@ export function createDefaultSettings({ detectedWeekStart = 1, currentYear = new
     fitDefaultV8: true,
     weekStartDay: 1,
     weekEndDay: 5,
-    weekStartsOn: detectedWeekStart,
+    weekStartsOn: 1,
+    weekStartsOnExplicit: false,
     planningDays: [1, 2, 3, 4, 5],
     onboardingComplete: false,
     closeDayCount: 0,
@@ -49,7 +50,10 @@ export function normalizePlannerSettings(raw, { detectedWeekStart = 1, currentYe
     fitDefaultV8: true,
     weekStartDay: clamp(Number(raw.weekStartDay ?? 1), 0, 6),
     weekEndDay: clamp(Number(raw.weekEndDay ?? 5), 0, 6),
-    weekStartsOn: clamp(Number(raw.weekStartsOn ?? raw.weekStartDay ?? detectedWeekStart), 0, 6),
+    weekStartsOn: raw.weekStartsOnExplicit
+      ? clamp(Number(raw.weekStartsOn ?? 1), 0, 6)
+      : clamp(Number(raw.weekStartDay ?? 1), 0, 6),
+    weekStartsOnExplicit: !!raw.weekStartsOnExplicit,
     planningDays: Array.isArray(raw.planningDays) && raw.planningDays.length
       ? [...new Set(raw.planningDays.map(Number).filter(day => day >= 0 && day <= 6))]
       : null,

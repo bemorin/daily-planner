@@ -62,7 +62,17 @@ async function collectModules(relPath) {
 }
 await collectModules('app.js');
 
+const packageJson = JSON.parse(await fs.readFile(resolve(root, 'package.json'), 'utf8'));
+const releaseVersion = String(packageJson.version || '').trim();
+if (!/^\d+\.\d+\.\d+$/.test(releaseVersion)) failures.push('package.json: version must be semantic MAJOR.MINOR.PATCH');
+
+const changelog = await fs.readFile(resolve(root, 'CHANGELOG.md'), 'utf8');
+if (!changelog.includes(`## ${releaseVersion} —`)) failures.push(`CHANGELOG.md: latest public version must include ${releaseVersion}`);
+if (/^##\s+v\d+/m.test(changelog)) failures.push('CHANGELOG.md: internal v-number labels are not public release versions');
+
 const sw = await fs.readFile(resolve(root, 'sw.js'), 'utf8');
+if (!sw.includes(`const CACHE = 'daily-planner-${releaseVersion}';`)) failures.push(`sw.js: cache namespace must match package version ${releaseVersion}`);
+if (/daily-planner-v\d+/i.test(sw)) failures.push('sw.js: internal build labels must not be used as public cache names');
 for (const modulePath of modulePaths) {
   if (modulePath === 'app.js') continue;
   if (!sw.includes(`'./${modulePath}'`)) failures.push(`sw.js: CORE cache is missing ./${modulePath}`);

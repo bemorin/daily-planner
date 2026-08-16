@@ -294,13 +294,15 @@
   z-index: 2;
   min-width: 0;
   width: 100%;
+  box-sizing: border-box;
   display: grid;
   gap: 2px;
+  padding-right: 26px;
 }
 .week-time-block strong {
   display: -webkit-box;
   min-width: 0;
-  padding-right: 28px;
+  padding-right: 0;
   overflow: hidden;
   text-overflow: clip;
   white-space: normal;

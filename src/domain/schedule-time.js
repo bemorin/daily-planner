@@ -40,6 +40,27 @@ export function clockTime(minutes) {
   return `${pad2(Math.floor(wrapped / 60))}:${pad2(wrapped % 60)}`;
 }
 
+export function parseTimeValue(raw) {
+  const clean = String(raw || '').trim().replace('.', ':');
+  let hour;
+  let minute;
+  if (/^\d{1,2}$/.test(clean)) {
+    hour = Number(clean);
+    minute = 0;
+  } else if (/^\d{3,4}$/.test(clean)) {
+    const padded = clean.padStart(4, '0');
+    hour = Number(padded.slice(0, 2));
+    minute = Number(padded.slice(2));
+  } else {
+    const match = clean.match(/^(\d{1,2}):(\d{1,2})$/);
+    if (!match) return null;
+    hour = Number(match[1]);
+    minute = Number(match[2]);
+  }
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
 export function blockEndDateKey(block, fallbackDateKey) {
   if (block?.endDate) return block.endDate;
   const startDate = block?.startDate || fallbackDateKey;

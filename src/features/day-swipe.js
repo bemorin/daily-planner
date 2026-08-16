@@ -1,8 +1,8 @@
 const DEFAULT_INTERACTIVE_SELECTOR = [
   'a',
   'button',
-  'input',
-  'textarea',
+  'input[type=checkbox]',
+  'input[type=radio]',
   'select',
   '[contenteditable="true"]',
   '.time-block',
@@ -27,32 +27,35 @@ export function createDaySwipeNavigation({
   if (!element) return { destroy() {} };
 
   let gesture = null;
+  const shouldIgnoreTarget = target => !!target?.closest?.(interactiveSelector);
   const reset = () => { gesture = null; };
-  const shouldIgnoreTarget = target => target instanceof Element && !!target.closest(interactiveSelector);
 
-  const onPointerDown = event => {
-    if (event.pointerType !== 'touch' || !isEnabled() || shouldIgnoreTarget(event.target)) return;
-    gesture = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+  const onTouchStart = event => {
+    if (!isEnabled() || event.touches.length !== 1 || shouldIgnoreTarget(event.target)) return;
+    const touch = event.touches[0];
+    gesture = { identifier: touch.identifier, x: touch.clientX, y: touch.clientY };
   };
 
-  const onPointerUp = event => {
-    if (!gesture || gesture.pointerId !== event.pointerId) return;
-    const direction = swipeDirection(event.clientX - gesture.x, event.clientY - gesture.y, { minDistance, axisRatio });
+  const onTouchEnd = event => {
+    if (!gesture) return;
+    const touch = Array.from(event.changedTouches || []).find(item => item.identifier === gesture.identifier);
+    if (!touch) { reset(); return; }
+    const direction = swipeDirection(touch.clientX - gesture.x, touch.clientY - gesture.y, { minDistance, axisRatio });
     reset();
     if (!direction || !isEnabled()) return;
-    event.preventDefault();
+    if (event.cancelable) event.preventDefault();
     onShift(direction);
   };
 
-  element.addEventListener('pointerdown', onPointerDown, { passive: true });
-  element.addEventListener('pointerup', onPointerUp);
-  element.addEventListener('pointercancel', reset, { passive: true });
+  element.addEventListener('touchstart', onTouchStart, { passive: true });
+  element.addEventListener('touchend', onTouchEnd, { passive: false });
+  element.addEventListener('touchcancel', reset, { passive: true });
 
   return {
     destroy() {
-      element.removeEventListener('pointerdown', onPointerDown);
-      element.removeEventListener('pointerup', onPointerUp);
-      element.removeEventListener('pointercancel', reset);
+      element.removeEventListener('touchstart', onTouchStart);
+      element.removeEventListener('touchend', onTouchEnd);
+      element.removeEventListener('touchcancel', reset);
     }
   };
 }

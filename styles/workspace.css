@@ -94,6 +94,7 @@
 .mobile-workspace-options button[aria-current="true"] { background: var(--soft); color: var(--ink); }
 
 @media (max-width: 790px) {
+  .workspace:not(.is-week-view):not([data-workspace-mode="enterprise"]) { touch-action: pan-y; }
   .workspace-switcher { display: none; }
   .workspace[data-workspace-mode="enterprise"] { height: 100%; }
   .workspace[data-workspace-mode="enterprise"] > .enterprise-workspace-shell { height: 100%; padding: 22px 10px; }

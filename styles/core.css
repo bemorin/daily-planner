@@ -28,9 +28,9 @@
   --z-mobile-action: 170;
   --z-mobile-dock: 180;
   --mobile-dock-clearance: calc(56px + max(8px, env(safe-area-inset-bottom)));
-  --z-popover: 350;
   --z-modal: 900;
   --z-modal-stacked: 920;
+  --z-popover: 960;
   --text-edit-cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='24' viewBox='0 0 16 24'%3E%3Cpath d='M8 2v20M4.5 2h7M4.5 22h7' fill='none' stroke='%231c1a17' stroke-width='1.35' stroke-linecap='round'/%3E%3C/svg%3E") 8 12, text;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: var(--ink);
@@ -1698,21 +1698,12 @@ textarea,
 
 .mobile-more-wrap { display: none; }
 
-.mobile-more-menu a {
-  display: block;
-  padding: 8px 9px;
-  border-radius: 7px;
-  color: var(--muted);
-  text-decoration: none;
-  font-size: .74rem;
-}
-
-.mobile-more-menu a:hover { color: var(--ink); background: var(--soft); }
 
 @media (max-width: 790px) {
   .topbar { grid-template-columns: minmax(54px, 1fr) auto minmax(0,1fr); }
   .header-secondary { display: none; }
   .expanded-view-button { display: none; }
+  .header-horizon-action { display: none; }
   .mobile-more-wrap { display: flex; }
   .actions { gap: 0; }
   .date-nav { min-width: 0; }
@@ -3140,7 +3131,7 @@ div.open-work-row__main { cursor: default; }
 /* Mobile More mirrors the header rather than becoming a second navigation system. */
 
 .mobile-more-menu button,
-.mobile-more-menu a { width:100%; min-height:34px; display:flex; align-items:center; gap:9px; padding:7px 9px; border:0; border-radius:8px; background:transparent; color:var(--muted); text-decoration:none; font:inherit; font-size:.68rem; font-weight:570; text-align:left; cursor:pointer; }
+.mobile-more-menu a { width:100%; min-height:44px; display:flex; align-items:center; gap:11px; padding:10px 11px; border:0; border-radius:9px; background:transparent; color:var(--muted); text-decoration:none; font:inherit; font-size:.78rem; line-height:1.25; font-weight:590; text-align:left; cursor:pointer; }
 
 .mobile-more-menu button:hover,
 .mobile-more-menu a:hover { background:var(--soft); color:var(--ink); }
@@ -3157,7 +3148,7 @@ div.open-work-row__main { cursor: default; }
 /* PiP Plan stays compact and recognizably the same planner. */
 
 @media (max-width:790px) {
-  .mobile-more-menu { min-width:190px; padding:5px; }
+  .mobile-more-menu { min-width:220px; padding:7px; }
 }
 
 /* Keep in mind + outcome clears use the same calm hover-only language as task actions. */
@@ -3883,23 +3874,13 @@ div.open-work-row__main { cursor: default; }
 
 /* Mobile primary navigation: keep the core planner destinations visible and unique. */
 @media (max-width: 790px) {
-  .actions > .icon-button,
+  .topbar { --icon-size: 22px; }
+  .topbar .icon-button,
   .actions > .action-popover-wrap > .icon-button {
-    width: 32px;
-    height: 32px;
+    width: 38px;
+    height: 38px;
   }
-
-  .actions > .icon-button svg,
-  .actions > .action-popover-wrap > .icon-button svg {
-    width: var(--icon-size);
-    height: var(--icon-size);
-    flex: 0 0 var(--icon-size);
-  }
-}
-
-@media (max-width: 480px) {
-  .actions > .icon-button,
-  .actions > .action-popover-wrap > .icon-button { width: 30px; height: 30px; }
+  .mobile-more-menu svg { flex: 0 0 var(--icon-size); }
 }
 
 

@@ -159,12 +159,7 @@
 .time-block:hover .resize::after,
 .time-block.is-resizing .resize::after { opacity: 1; transform: translateX(-50%) scaleX(1); }
 .block-form { display: grid; grid-template-columns: 1fr 1fr; gap: .82rem .7rem; }
-.hours-setting { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
 .schedule-chip { cursor: pointer; }
-.hours-setting .select-trigger { justify-content: center; text-align: center; }
-.hours-setting .select-trigger__value { justify-content: center; width: 100%; }
-.hours-setting .select-trigger { position: relative; }
-.hours-setting .select-trigger .select-chevron { position: absolute; right: 9px; }
 .duration-field { margin-top: -.05rem; }
 .duration-shortcuts { display: flex; flex-wrap: wrap; gap: 5px; }
 .duration-shortcuts button {
@@ -253,10 +248,6 @@
 @media (max-width: 620px) {
   .schedule { --hour: 64px; }
   .block-form { grid-template-columns: 1fr; }
-  .hours-setting { grid-template-columns: 1fr 1fr; }
-}
-@media (max-width: 480px) {
-  .hours-setting { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
   .duration-shortcuts { gap: 4px; }

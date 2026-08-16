@@ -41,4 +41,4 @@ if (failures.length) {
   failures.forEach(failure => console.error(`- ${failure}`));
   process.exit(1);
 }
-console.log('Quality gate passed (no regression beyond the validated v51 baseline).');
+console.log('Quality gate passed (no regression beyond the validated quality baseline).');

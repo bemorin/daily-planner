@@ -1,3 +1,20 @@
+function normalizedWeekStart(value) {
+  const day = Number(value);
+  return Number.isInteger(day) && day >= 0 && day <= 6 ? day : 1;
+}
+
+function weekLabels(weekStartsOn) {
+  const labels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  return Array.from({ length: 7 }, (_, index) => labels[(weekStartsOn + index) % 7]);
+}
+
+function monthGridStart(ctx, monthStart, weekStartsOn) {
+  const offset = (monthStart.getDay() - weekStartsOn + 7) % 7;
+  const gridStart = ctx.atNoon(new Date(monthStart));
+  gridStart.setDate(gridStart.getDate() - offset);
+  return gridStart;
+}
+
 export function openDatePopover(ctx, anchor, selectedKey, onSelect, options = {}) {
   const parentPopover = options.preserveParent ? ctx.getActivePopover() : null;
   if (!parentPopover) ctx.closePopover();
@@ -12,9 +29,8 @@ export function openDatePopover(ctx, anchor, selectedKey, onSelect, options = {}
 
   const render = () => {
     const monthStart = ctx.atNoon(new Date(view.getFullYear(), view.getMonth(), 1));
-    const mondayIndex = (monthStart.getDay() + 6) % 7;
-    const gridStart = ctx.atNoon(new Date(monthStart));
-    gridStart.setDate(gridStart.getDate() - mondayIndex);
+    const weekStartsOn = normalizedWeekStart(options.weekStartsOn);
+    const gridStart = monthGridStart(ctx, monthStart, weekStartsOn);
     const prevMonth = ctx.atNoon(new Date(view.getFullYear(), view.getMonth() - 1, 1));
     const nextMonth = ctx.atNoon(new Date(view.getFullYear(), view.getMonth() + 1, 1));
     const prevDisabled = !!minDate && new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0) < minDate;
@@ -25,7 +41,7 @@ export function openDatePopover(ctx, anchor, selectedKey, onSelect, options = {}
         <strong>${ctx.esc(monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }))}</strong>
         <button class="calendar-popover__nav" type="button" data-cal-next aria-label="Next month">${ctx.chevronRightSvg()}</button>
       </div>
-      <div class="calendar-popover__weekdays">${['M','T','W','T','F','S','S'].map(label => `<span>${label}</span>`).join('')}</div>
+      <div class="calendar-popover__weekdays">${weekLabels(weekStartsOn).map(label => `<span>${label}</span>`).join('')}</div>
       <div class="calendar-popover__grid"></div>`;
     const prev = ctx.qs('[data-cal-prev]', popover);
     const next = ctx.qs('[data-cal-next]', popover);
@@ -79,9 +95,8 @@ export function openDateRangePopover(ctx, anchor, startKey, endKey, onSave, opti
 
   const render = () => {
     const monthStart = ctx.atNoon(new Date(view.getFullYear(), view.getMonth(), 1));
-    const mondayIndex = (monthStart.getDay() + 6) % 7;
-    const gridStart = ctx.atNoon(new Date(monthStart));
-    gridStart.setDate(gridStart.getDate() - mondayIndex);
+    const weekStartsOn = normalizedWeekStart(options.weekStartsOn);
+    const gridStart = monthGridStart(ctx, monthStart, weekStartsOn);
     const prevMonth = ctx.atNoon(new Date(view.getFullYear(), view.getMonth() - 1, 1));
     const nextMonth = ctx.atNoon(new Date(view.getFullYear(), view.getMonth() + 1, 1));
     const prevDisabled = !!minDate && new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0) < minDate;
@@ -95,7 +110,7 @@ export function openDateRangePopover(ctx, anchor, startKey, endKey, onSave, opti
         <strong>${ctx.esc(monthStart.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }))}</strong>
         <button class="calendar-popover__nav" type="button" data-cal-next aria-label="Next month">${ctx.chevronRightSvg()}</button>
       </div>
-      <div class="calendar-popover__weekdays">${['M','T','W','T','F','S','S'].map(label => `<span>${label}</span>`).join('')}</div>
+      <div class="calendar-popover__weekdays">${weekLabels(weekStartsOn).map(label => `<span>${label}</span>`).join('')}</div>
       <div class="calendar-popover__grid"></div>
       <div class="period-calendar-popover__actions">
         <button class="text-button" type="button" data-period-secondary>${hasPeriod ? 'Clear end' : 'Cancel'}</button>

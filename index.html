@@ -67,7 +67,7 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5h16v11H4z"/><path d="M4 12h4l1.5 2h5L16 12h4M8 7.5V5h8v2.5"/></svg>
         </button>
 
-        <button class="icon-button" type="button" data-horizon-open aria-label="Open horizon" data-tooltip="Horizon" data-tooltip-key="Y">
+        <button class="icon-button header-horizon-action" type="button" data-horizon-open aria-label="Open horizon" data-tooltip="Horizon" data-tooltip-key="Y">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m14.8 9.2-1.7 3.9-3.9 1.7 1.7-3.9 3.9-1.7Z"/></svg>
         </button>
 
@@ -114,6 +114,7 @@
               <button type="button" data-mobile-workspace-toggle aria-expanded="false"><strong data-mobile-workspace-label>Personal</strong><svg class="disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
               <div class="mobile-workspace-options" data-mobile-workspace-options hidden></div>
             </div>
+            <button type="button" class="mobile-horizon-action" data-horizon-open><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m14.8 9.2-1.7 3.9-3.9 1.7 1.7-3.9 3.9-1.7Z"/></svg><span>Horizon</span></button>
             <button type="button" data-mobile-print><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z"/></svg><span>Print / PDF</span></button>
             <div class="mobile-export-disclosure" data-mobile-export-disclosure>
               <button type="button" data-mobile-export-toggle aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg><span>Export</span><svg class="disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
@@ -431,14 +432,24 @@
             </div>
           </div>
           <div class="hours-setting">
-            <div class="form-field">
+            <label class="form-field">
               <span>From</span>
-              <button class="select-trigger select-trigger--wide" type="button" data-setting-start-hour aria-haspopup="listbox"></button>
-            </div>
-            <div class="form-field">
+              <span class="time-combo settings-time-combo">
+                <input class="time-input" data-setting-start-time inputmode="numeric" autocomplete="off" aria-label="Visible day starts at" placeholder="08:00">
+                <button class="time-menu-button" type="button" data-setting-start-hour aria-label="Choose start hour" data-tooltip="Choose a time">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
+                </button>
+              </span>
+            </label>
+            <label class="form-field">
               <span>To</span>
-              <button class="select-trigger select-trigger--wide" type="button" data-setting-end-hour aria-haspopup="listbox"></button>
-            </div>
+              <span class="time-combo settings-time-combo">
+                <input class="time-input" data-setting-end-time inputmode="numeric" autocomplete="off" aria-label="Visible day ends at" placeholder="18:00">
+                <button class="time-menu-button" type="button" data-setting-end-hour aria-label="Choose end hour" data-tooltip="Choose a time">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
+                </button>
+              </span>
+            </label>
           </div>
         </section>
 
@@ -457,6 +468,10 @@
             <button type="button" data-planning-day="5" aria-pressed="false"><span>F</span><small>Fri</small></button>
             <button type="button" data-planning-day="6" aria-pressed="false"><span>S</span><small>Sat</small></button>
             <button type="button" data-planning-day="0" aria-pressed="false"><span>S</span><small>Sun</small></button>
+          </div>
+          <div class="planning-week-start">
+            <div><span>Week starts on</span><small>Controls the order of days in Week view and calendar pickers.</small></div>
+            <button class="select-trigger select-trigger--wide" type="button" data-week-starts-on aria-haspopup="listbox"></button>
           </div>
         </section>
 

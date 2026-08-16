@@ -7,6 +7,7 @@ import {
   durationLabel,
   elapsedMinutesForDate,
   padHour,
+  parseTimeValue,
   time
 } from '../src/domain/schedule-time.js';
 
@@ -35,4 +36,13 @@ test('elapsedMinutesForDate distinguishes past, current and future days', () => 
   assert.equal(elapsedMinutesForDate(block, new Date(2026, 7, 13), now), 90);
   assert.equal(elapsedMinutesForDate(block, new Date(2026, 7, 14), now), 30);
   assert.equal(elapsedMinutesForDate(block, new Date(2026, 7, 15), now), 0);
+});
+
+
+test('parseTimeValue accepts compact and colon time input', () => {
+  assert.equal(parseTimeValue('8'), 8 * 60);
+  assert.equal(parseTimeValue('830'), 8 * 60 + 30);
+  assert.equal(parseTimeValue('08:45'), 8 * 60 + 45);
+  assert.equal(parseTimeValue('24:00'), null);
+  assert.equal(parseTimeValue('8:75'), null);
 });

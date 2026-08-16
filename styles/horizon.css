@@ -1496,6 +1496,7 @@ body.app-expanded [data-horizon-modal] .modal__panel {
 @media (max-width: 640px) {
   .horizon-adventure-grid--compass { grid-template-columns: 1fr; }
   .horizon-period-with-nav h2 { margin-left: 2px; }
+  .horizon-misogi-entry textarea { min-height: 58px; padding-block: 7px; line-height: 1.4; }
 }
 
 /* Horizon simplification and component parity --------------------- */
@@ -1596,7 +1597,7 @@ body.app-expanded [data-horizon-modal] .modal__panel {
   font-size: var(--hz-body);
 }
 
-/* Selected month was intentionally removed in v29: Horizon stays annual. */
+/* Selected-month mode is intentionally absent: Horizon stays annual. */
 .horizon-selected-month { display: none; }
 
 @media (max-width: 900px) {

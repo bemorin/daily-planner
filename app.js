@@ -5,6 +5,7 @@ import { atNoon, ymdKey, dateFromKey, addDaysKey, daysBetweenKeys, weekdayNames 
 import { snap, minTaskSlots, scheduleTopPad, scheduleBottomPad, PROJECT_GITHUB_URL, GITHUB_SPONSOR_URL, SOCIAL_X_URL, SOCIAL_LINKEDIN_URL, CLOUD_API_URL, palette, defaultCategories } from './src/config.js';
 import { createPrintFeature } from './src/features/print.js';
 import { pipStyles } from './src/features/pip-styles.js';
+import { openPipDatePicker } from './src/features/pip-date-picker.js';
 import { rangeLabel, horizonCountdown, rangeOverlapsMonth, dayInRange, habitQuarterForMonth, habitChecked, habitQuarterBounds, habitActivityStats } from './src/features/horizon-model.js';
 import { createLocalStore } from './src/state/local-store.js';
 import { createBlankDay, normalizeDayState } from './src/state/day-state.js';
@@ -16,9 +17,10 @@ import { searchPlannerDays, searchSnippet } from './src/features/search.js';
 import { createWeekReviewFeature } from './src/features/week-review.js';
 import { createWorkspaceFeature } from './src/features/workspace.js';
 import { createDaySwipeNavigation } from './src/features/day-swipe.js';
+import { parseVisibleHour, renderPlanningWeekSettings, renderVisibleHourInputs, visibleHourChoices } from './src/features/settings-schedule.js';
 import { visualScale, computeFitLayout } from './src/features/fit.js';
 import { detectedWeekStart, activeWeekdays as getActiveWeekdays, isPlanningDay as isConfiguredPlanningDay, nextPlanningDateFrom as getNextPlanningDateFrom, previousPlanningDateFrom as getPreviousPlanningDateFrom, firstPlanningSlotAfter, planningWeekStart as getPlanningWeekStart, planningWeekDates as getPlanningWeekDates } from './src/domain/planning-calendar.js';
-import { elapsedMinutesForDate, durationLabel, clockTime, pad2, padHour, time, blockEndDateKey as getBlockEndDateKey, blockTimeRange as getBlockTimeRange } from './src/domain/schedule-time.js';
+import { elapsedMinutesForDate, durationLabel, clockTime, pad2, padHour, parseTimeValue, time, blockEndDateKey as getBlockEndDateKey, blockTimeRange as getBlockTimeRange } from './src/domain/schedule-time.js';
 import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview, blockNoteLineHtml, dayNoteLineHtml } from './src/domain/note-lines.js';
 (() => {
   const store = createLocalStore();
@@ -1056,27 +1058,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     renderBlockTimeControls();
   }
 
-  function parseTimeValue(raw) {
-    const clean = String(raw || '').trim().replace('.', ':');
-    let hour;
-    let minute;
-    if (/^\d{1,2}$/.test(clean)) {
-      hour = Number(clean);
-      minute = 0;
-    } else if (/^\d{3,4}$/.test(clean)) {
-      const padded = clean.padStart(4, '0');
-      hour = Number(padded.slice(0, 2));
-      minute = Number(padded.slice(2));
-    } else {
-      const match = clean.match(/^(\d{1,2}):(\d{1,2})$/);
-      if (!match) return null;
-      hour = Number(match[1]);
-      minute = Number(match[2]);
-    }
-    if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
-    return hour * 60 + minute;
-  }
-
   function commitTimeInput(which, { preserveDuration = true } = {}) {
     const isStart = which === 'start';
     const input = qs(isStart ? '[data-start-time]' : '[data-end-time]');
@@ -1156,11 +1137,11 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   }
 
   function openCalendarPopover(anchor, selectedKey, onSelect, options = {}) {
-    return openDatePopover(calendarUiContext(), anchor, selectedKey, onSelect, options);
+    return openDatePopover(calendarUiContext(), anchor, selectedKey, onSelect, { weekStartsOn: settings.weekStartsOn, ...options });
   }
 
   function openPeriodCalendarPopover(anchor, startKey, endKey, onSave, options = {}) {
-    return openDateRangePopover(calendarUiContext(), anchor, startKey, endKey, onSave, options);
+    return openDateRangePopover(calendarUiContext(), anchor, startKey, endKey, onSave, { weekStartsOn: settings.weekStartsOn, ...options });
   }
 
   function openBlockDateMenu(which, anchor) {
@@ -1454,22 +1435,19 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     return palette.find(p => !used.has(p.value))?.value || palette[settings.categories.length % palette.length].value;
   }
 
-  function renderSettingsHours() {
-    const startButton = qs('[data-setting-start-hour]');
-    const endButton = qs('[data-setting-end-hour]');
-    if (!startButton || !endButton) return;
-    startButton.innerHTML = `<span class="select-trigger__value">${time(startHour() * 60)}</span>${chevronSvg()}`;
-    endButton.innerHTML = `<span class="select-trigger__value">${time(endHour() * 60)}</span>${chevronSvg()}`;
+  function renderSettingsHours() { renderVisibleHourInputs({ qs, time, startHour: startHour(), endHour: endHour() }); }
+
+  function commitSettingHourInput(kind) {
+    const isStart = kind === 'start';
+    const input = qs(isStart ? '[data-setting-start-time]' : '[data-setting-end-time]');
+    const value = parseVisibleHour(input?.value, { allow24: !isStart, parseTimeValue });
+    if (value == null || (isStart ? value >= endHour() : value <= startHour())) { renderSettingsHours(); return false; }
+    if (isStart) settings.startHour = value; else settings.endHour = value;
+    saveSettings({ rerenderSettings: false });
+    return true;
   }
 
-  function renderPlanningWeek() {
-    const active = new Set(activeWeekdays());
-    qsa('[data-planning-day]').forEach(button => {
-      const selected = active.has(Number(button.dataset.planningDay));
-      button.classList.toggle('is-selected', selected);
-      button.setAttribute('aria-pressed', String(selected));
-    });
-  }
+  function renderPlanningWeek() { renderPlanningWeekSettings({ qs, qsa, activeDays: activeWeekdays(), weekStartsOn: settings.weekStartsOn, weekdayNames, esc, chevronSvg }); }
 
   function togglePlanningDay(day) {
     const active = new Set(activeWeekdays());
@@ -1484,17 +1462,28 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
 
   function openSettingHourMenu(kind) {
     const isStart = kind === 'start';
+    commitSettingHourInput(kind);
     const button = qs(isStart ? '[data-setting-start-hour]' : '[data-setting-end-hour]');
-    const values = isStart
-      ? Array.from({ length: endHour() }, (_, i) => i).filter(v => v < endHour())
-      : Array.from({ length: 24 - startHour() }, (_, i) => startHour() + 1 + i);
+    const anchor = button?.closest('.time-combo') || button;
+    const values = visibleHourChoices(kind, startHour(), endHour());
     const selected = isStart ? startHour() : endHour();
-    openListPopover(button, values.map(v => ({ value: v, label: time(v * 60) })), selected, item => {
+    openListPopover(anchor, values.map(v => ({ value: v, label: time(v * 60) })), selected, item => {
       if (isStart) settings.startHour = Number(item.value);
       else settings.endHour = Number(item.value);
       if (settings.endHour <= settings.startHour) settings.endHour = Math.min(24, settings.startHour + 1);
       saveSettings({ rerenderSettings: false });
-    }, { compact: true, matchWidth: true, alignSelected: true, timeMenu: true });
+    }, { compact: true, minWidth: 116, matchWidth: true, alignSelected: true, timeMenu: true });
+  }
+
+  function openWeekStartMenu() {
+    const button = qs('[data-week-starts-on]');
+    if (!button) return;
+    const items = weekdayNames.map((label, value) => ({ value, label }));
+    openListPopover(button, items, settings.weekStartsOn, item => {
+      settings.weekStartsOn = Number(item.value);
+      settings.weekStartsOnExplicit = true;
+      saveSettings({ rerenderSettings: false });
+    }, { compact: true, matchWidth: true });
   }
 
   function isStandaloneApp() {
@@ -2746,7 +2735,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     if (!state?.endedAt) return;
     let transfers = Array.isArray(state.closeTransfers) ? state.closeTransfers : [];
 
-    // v12 and earlier did not persist exact transfer ids. Reconstruct conservative transfer records
+    // Older saved state did not persist exact transfer ids. Reconstruct conservative transfer records
     // from the source day so reopening an older closed day does not knowingly duplicate its work.
     if (!transfers.length && (state.triaged || []).length) {
       const sourceForKey = key => {
@@ -2886,7 +2875,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
         ? item.startDate
         : (!hasExplicitStartField && item?.month != null ? `${year}-${String(fallbackMonth + 1).padStart(2,'0')}-01` : '');
       let startDate = legacyDate;
-      // v28 briefly inferred the first day of the selected month for new
+      // A legacy migration briefly inferred the first day of the selected month for new
       // unscheduled adventures. Treat those legacy "idea" records as
       // genuinely unscheduled again; a manually chosen date always switches
       // the item to planned.
@@ -3619,8 +3608,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     doc.body.innerHTML = `
       <div class="pip-shell">
         <header class="pip-topbar">
-          <div class="pip-date"><span>${date.toLocaleDateString(undefined, { weekday: 'long' })}</span><h1>${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</h1></div>
-          <nav class="pip-date-nav" aria-label="Day navigation"><button class="pip-nav-icon" data-pip-prev aria-label="Previous day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button class="pip-nav-icon" data-pip-next aria-label="Next day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button><button class="pip-now" data-pip-now>Now</button></nav>
+          <div class="pip-date-wrap"><button class="pip-date" type="button" data-pip-date aria-label="Choose date"><span>${date.toLocaleDateString(undefined, { weekday: 'long' })}</span><h1>${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</h1></button></div>
+          <nav class="pip-date-nav" aria-label="Day navigation"><button class="pip-nav-icon" data-pip-prev aria-label="Previous day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button class="pip-now" data-pip-now>Now</button><button class="pip-nav-icon" data-pip-next aria-label="Next day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></nav>
           <time>${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
         </header>
 
@@ -3649,6 +3638,14 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     doc.querySelector('[data-pip-prev]').onclick = () => { shiftDate(-1); renderPip(); };
     doc.querySelector('[data-pip-next]').onclick = () => { shiftDate(1); renderPip(); };
     doc.querySelector('[data-pip-now]').onclick = () => { goToNow(); renderPip(); };
+    doc.querySelector('[data-pip-date]').onclick = event => openPipDatePicker({
+      doc,
+      anchor: event.currentTarget,
+      selectedKey: ymd(date),
+      weekStartsOn: settings.weekStartsOn,
+      minKey: '2026-01-01',
+      onSelect: value => { date = dateFromKey(value); load(); renderPip(); }
+    });
     doc.querySelectorAll('[data-pip-block]').forEach(card => card.onclick = event => { if (event.target.closest('input')) return; const block = state.blocks.find(item => item.id === card.dataset.pipBlock); if (block) { window.focus(); openBlockModal(block); } });
     doc.querySelectorAll('[data-b]').forEach(input => input.onchange = () => { const block = state.blocks.find(item => item.id === input.dataset.b); if (!block) return; setBlockDone(block, input.checked); renderItems(); renderBlocks(); renderStats(); save(); renderPip(); });
     doc.querySelectorAll('[data-p]').forEach(input => input.onchange = () => { const priority = state.priorities[+input.dataset.p]; if (!priority) return; priority.done = input.checked; state.blocks.filter(block => block.linkedType === 'priority' && block.linkedId === priority.id).forEach(block => setBlockDone(block, priority.done)); renderItems(); renderBlocks(); renderStats(); save(); renderPip(); });
@@ -3830,7 +3827,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qs('[data-pip]').addEventListener('click', pip);
   qs('[data-journal-open]').addEventListener('click', () => { journalPage = 0; renderJournal(); openModal(qs('[data-journal-modal]')); });
   qs('[data-open-work-open]').addEventListener('click', openUnresolvedModal);
-  qs('[data-horizon-open]').addEventListener('click', () => openHorizon('year', date));
+  qsa('[data-horizon-open]').forEach(button => button.addEventListener('click', () => { const mobileMenu = qs('[data-mobile-more-menu]'); if (mobileMenu) mobileMenu.hidden = true; openHorizon('year', date); }));
   qs('.horizon-scroll')?.addEventListener('scroll', () => closeAllPopovers(), { passive: true });
   qs('[data-settings-open]').addEventListener('click', () => { renderCategorySettings(); renderSettingsHours(); renderPlanningWeek(); openModal(qs('[data-settings-modal]')); });
   qs('[data-end-day-open]').addEventListener('click', handleEndDayButton);
@@ -3927,6 +3924,11 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qsa('[data-duration]').forEach(button => button.addEventListener('click', () => applyDuration(Number(button.dataset.duration))));
   qs('[data-setting-start-hour]').addEventListener('click', () => openSettingHourMenu('start'));
   qs('[data-setting-end-hour]').addEventListener('click', () => openSettingHourMenu('end'));
+  qs('[data-setting-start-time]')?.addEventListener('blur', () => commitSettingHourInput('start'));
+  qs('[data-setting-end-time]')?.addEventListener('blur', () => commitSettingHourInput('end'));
+  qs('[data-setting-start-time]')?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); commitSettingHourInput('start'); } });
+  qs('[data-setting-end-time]')?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); commitSettingHourInput('end'); } });
+  qs('[data-week-starts-on]')?.addEventListener('click', openWeekStartMenu);
   qsa('[data-planning-day]').forEach(button => button.addEventListener('click', () => togglePlanningDay(Number(button.dataset.planningDay))));
   qsa('[data-onboarding-go]').forEach(button => button.addEventListener('click', () => { onboardingStep = Number(button.dataset.onboardingGo) || 1; renderOnboardingStep(); }));
   qsa('[data-onboarding-day]').forEach(button => button.addEventListener('click', () => {
