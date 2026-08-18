@@ -2,14 +2,17 @@ import { qs, qsa } from './src/lib/dom.js';
 import { esc, escAttr, linkLabel, normalizeUrl, safeUrl } from './src/lib/text.js';
 import { clamp, uid } from './src/lib/utils.js';
 import { atNoon, ymdKey, dateFromKey, addDaysKey, daysBetweenKeys, weekdayNames } from './src/lib/dates.js';
-import { snap, minTaskSlots, scheduleTopPad, scheduleBottomPad, PROJECT_GITHUB_URL, GITHUB_SPONSOR_URL, SOCIAL_X_URL, SOCIAL_LINKEDIN_URL, CLOUD_API_URL, palette, defaultCategories } from './src/config.js';
+import { snap, minTaskSlots, scheduleTopPad, scheduleBottomPad, PROJECT_GITHUB_URL, GITHUB_SPONSOR_URL, SOCIAL_X_URL, SOCIAL_LINKEDIN_URL, CLOUD_API_URL, GOOGLE_CLIENT_ID, palette, defaultCategories } from './src/config.js';
 import { createPrintFeature } from './src/features/print.js';
 import { pipStyles } from './src/features/pip-styles.js';
 import { openPipDatePicker } from './src/features/pip-date-picker.js';
 import { rangeLabel, horizonCountdown, rangeOverlapsMonth, dayInRange, habitQuarterForMonth, habitChecked, habitQuarterBounds, habitActivityStats } from './src/features/horizon-model.js';
 import { createLocalStore } from './src/state/local-store.js';
+import { createSyncLedger } from './src/sync/ledger.js';
+import { createPersonalSyncFeature } from './src/features/personal-sync.js';
 import { createBlankDay, normalizeDayState } from './src/state/day-state.js';
 import { normalizePlannerSettings } from './src/state/settings-state.js';
+import { buildPlannerBackup, formatStorageBytes } from './src/state/planner-backup.js';
 import { openDatePopover, openDateRangePopover } from './src/ui/calendar-popover.js';
 import { createStatsFeature } from './src/features/stats.js';
 import { createWeekFeature } from './src/features/week.js';
@@ -23,7 +26,8 @@ import { detectedWeekStart, activeWeekdays as getActiveWeekdays, isPlanningDay a
 import { elapsedMinutesForDate, durationLabel, clockTime, pad2, padHour, parseTimeValue, time, blockEndDateKey as getBlockEndDateKey, blockTimeRange as getBlockTimeRange } from './src/domain/schedule-time.js';
 import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview, blockNoteLineHtml, dayNoteLineHtml } from './src/domain/note-lines.js';
 (() => {
-  const store = createLocalStore();
+  const syncLedger = createSyncLedger(window.localStorage);
+  const store = createLocalStore(window.localStorage, { onMutation: syncLedger.recordMutation });
   let date = atNoon(new Date());
   let state;
   let settings = loadSettings();
@@ -94,6 +98,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   const activeWeekdays = () => getActiveWeekdays(settings);
   const isPlanningDay = inputDate => isConfiguredPlanningDay(inputDate, settings);
   const nextPlanningDateFrom = (inputDate, options) => getNextPlanningDateFrom(inputDate, settings, options);
+  const defaultEndDayTarget = () => ymd(date) < ymd(new Date()) ? nextPlanningDateFrom(new Date(), { includeCurrent: true }) : nextPlanningDateFrom(date);
   const previousPlanningDateFrom = (inputDate, options) => getPreviousPlanningDateFrom(inputDate, settings, options);
   const planningWeekStart = inputDate => getPlanningWeekStart(inputDate, settings);
   const planningWeekDates = inputDate => getPlanningWeekDates(inputDate, settings);
@@ -2160,7 +2165,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
         bytes += new Blob([key, value]).size;
         if (/^daily-planner:\d{4}-\d{2}-\d{2}$/.test(key)) days += 1;
       });
-      output.textContent = `${formatBytes(bytes)} · ${days} saved ${days === 1 ? 'day' : 'days'}`;
+      output.textContent = `${formatStorageBytes(bytes)} · ${days} saved ${days === 1 ? 'day' : 'days'}`;
     } catch (_) {
       output.textContent = 'Browser storage';
     }
@@ -2225,35 +2230,21 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     }
   }
 
-  function formatBytes(bytes) {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
-
-  function nextPlannerDate() { return nextPlanningDateFrom(date); }
-
-  function defaultEndDayTarget() {
-    const today = atNoon(new Date());
-    if (ymd(date) < ymd(today)) return nextPlanningDateFrom(today, { includeCurrent: true });
-    return nextPlanningDateFrom(date);
-  }
-
-  function plannerBackup() {
-    const days = {};
-    store.keys('daily-planner:').forEach(key => {
-      if (key === 'daily-planner:settings') return;
-      const day = key.replace('daily-planner:', '');
-      const raw = store.get(key);
-      try { days[day] = JSON.parse(raw); } catch (_) { days[day] = raw; }
-    });
-    let savedSettings = null;
-    try { savedSettings = store.readJSON('daily-planner:settings'); } catch (_) {}
-    return { app: 'Daily Planner', version: 13, exportedAt: new Date().toISOString(), settings: savedSettings, days };
-  }
+  const plannerBackup = () => buildPlannerBackup(store);
 
   function exportPlannerBackup() {
     download(`daily-planner-backup-${ymd(new Date())}.json`, JSON.stringify(plannerBackup(), null, 2), 'application/json');
+  }
+
+  function flushPlannerForSync() {
+    clearTimeout(saveTimer); clearTimeout(settingsTimer);
+    store.writeJSON(storageKey(), state); persistSettings(); updateStorageUsage();
+  }
+
+  function reloadPlannerAfterSync() {
+    settings = loadSettings(); load();
+    renderCategorySettings(); renderSettingsHours(); renderPlanningWeek();
+    updateStorageUsage(); renderPip();
   }
 
   function resetPlannerData() {
@@ -4109,11 +4100,20 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   if (printHost) { printHost.textContent = 'planner.bemorin.com'; printHost.href = 'https://planner.bemorin.com'; }
   checkLocalStorage();
   setupHelpFaq();
+  const personalSyncFeature = createPersonalSyncFeature({
+    store,
+    ledger: syncLedger,
+    googleClientId: GOOGLE_CLIENT_ID,
+    buildBackup: plannerBackup,
+    flushLocal: flushPlannerForSync,
+    reloadFromStorage: reloadPlannerAfterSync
+  });
   createWorkspaceFeature({ apiUrl: CLOUD_API_URL }).load();
   setMobileView('plan');
   renderCategorySettings();
   renderSettingsHours();
   renderPlanningWeek();
   renderInstallSetting(); load();
+  personalSyncFeature.load();
   requestAnimationFrame(maybeOpenOnboarding);
 })();

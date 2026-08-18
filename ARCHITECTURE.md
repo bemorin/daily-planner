@@ -24,11 +24,21 @@ app.js                   application coordinator and shared interaction shell
   │   └─ utils.js
   ├─ src/state/
   │   └─ local-store.js
+  ├─ src/sync/
+  │   ├─ document.js
+  │   ├─ engine.js
+  │   ├─ google-drive.js
+  │   ├─ hash.js
+  │   ├─ ledger.js
+  │   ├─ merge.js
+  │   ├─ records.js
+  │   └─ recovery-store.js
   ├─ src/ui/
   │   └─ calendar-popover.js
   └─ src/features/
       ├─ fit.js
       ├─ horizon-model.js
+      ├─ personal-sync.js
       ├─ pip-styles.js
       ├─ print.js
       ├─ search.js
@@ -79,7 +89,7 @@ The screen cascade intentionally uses a single `!important`: `[hidden] { display
 
 ## Data model
 
-Planner data is stored in `localStorage`.
+Planner data is stored locally first. The working planner records live in `localStorage`; optional recovery snapshots use IndexedDB; optional Google Drive sync mirrors the current Personal sync document to the user's own Drive app-data space.
 
 - `daily-planner:settings` stores categories, visible hours, planning days, onboarding state, Unresolved work, and Horizon data.
 - `daily-planner:YYYY-MM-DD` stores one day.
@@ -101,6 +111,24 @@ closeTransfers[]
 ```
 
 Normalization happens when data is loaded so older local records can continue to work as fields evolve.
+
+
+## Personal sync invariants
+
+Personal sync does not turn Google Drive into the runtime database. The local planner remains usable before, during, and after sync.
+
+The first protocol uses stable top-level record boundaries:
+
+```text
+settings
+day:YYYY-MM-DD
+```
+
+For each record, the client keeps the content hash last confirmed on both sides. A sync compares that base hash with the current local and remote hashes. Local-only changes are pushed, remote-only changes are pulled, identical changes are accepted, and divergent concurrent changes stop as a conflict instead of silently picking a winner.
+
+Deletions are represented as tombstones in the local sync ledger so a deleted day cannot reappear merely because another device still has an older copy. Before remote changes are applied, the client attempts to keep a small rolling recovery snapshot in IndexedDB.
+
+Google Drive is only a transport adapter. The sync engine itself is provider-independent so OneDrive or another Personal transport can implement the same `read()` / `write()` contract later.
 
 ## Schedule invariants
 
@@ -150,7 +178,7 @@ Feature modules receive explicit callbacks/context from `app.js` rather than imp
 
 User-authored text inserted into HTML templates must pass through the existing escaping helpers. URLs are normalized before being exposed as links.
 
-The public runtime configuration deliberately contains no owner-specific social or repository URLs. Production builds may inject them through environment variables without changing source files. An optional `CLOUD_API_URL` may also be injected; when it is absent, the workspace feature performs no cloud request and the planner remains purely local.
+The public runtime configuration deliberately contains no owner-specific social or repository URLs. Production builds may inject them through environment variables without changing source files. Optional `CLOUD_API_URL` and `GOOGLE_CLIENT_ID` values may also be injected. When the Google client ID is absent, Personal sync renders nothing and makes no Google request; when the cloud API URL is absent, the workspace feature makes no organization request.
 
 ## Build and release verification
 
@@ -184,6 +212,6 @@ Current examples are planning-calendar rules, schedule-time formatting, and note
 
 ## Cloud service boundary
 
-Cloud functionality is intentionally outside the local planner runtime. A separate private service owns the server-side organization model and will later own authentication, synchronization, backups, billing, and third-party server integrations. The public client depends only on an API contract. The first client boundary is deliberately small: if `/v1/me` exposes organizations, the UI can reveal a workspace selector; Personal remains the default private planner and organization selection never reuses Personal data as team data.
+Enterprise cloud functionality is intentionally outside the Personal planner runtime. A separate private service owns the server-side organization model, authentication, shared organization data, billing, and future team services. Personal sync is different: the public client can synchronize directly with the user's own cloud storage through a provider adapter, without routing Personal planner data through Daily Planner Cloud. The first Enterprise client boundary remains deliberately small: if `/v1/me` exposes organizations, the UI can reveal a workspace selector; Personal remains the default private planner and organization selection never reuses Personal data as team data.
 
 The proposed boundary is described in [`docs/CLOUD_BOUNDARY.md`](./docs/CLOUD_BOUNDARY.md).

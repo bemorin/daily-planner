@@ -33,3 +33,13 @@ test('local store reports write availability', () => {
   const store = createLocalStore(new MemoryStorage());
   assert.equal(store.canWrite(), true);
 });
+
+
+test('local store can track planner mutations and mute remote applications', () => {
+  const mutations = [];
+  const store = createLocalStore(new MemoryStorage(), { onMutation: mutation => mutations.push(mutation) });
+  store.writeJSON('daily-planner:2026-08-16', { focus: 'Local' });
+  store.withoutMutationTracking(() => store.writeJSON('daily-planner:2026-08-16', { focus: 'Remote' }));
+  store.remove('daily-planner:2026-08-16');
+  assert.deepEqual(mutations.map(item => item.type), ['set', 'remove']);
+});

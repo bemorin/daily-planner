@@ -12,6 +12,7 @@ export const GITHUB_SPONSOR_URL = runtimeValue('GITHUB_SPONSOR_URL');
 export const SOCIAL_X_URL = runtimeValue('SOCIAL_X_URL');
 export const SOCIAL_LINKEDIN_URL = runtimeValue('SOCIAL_LINKEDIN_URL');
 export const CLOUD_API_URL = runtimeValue('CLOUD_API_URL');
+export const GOOGLE_CLIENT_ID = runtimeValue('GOOGLE_CLIENT_ID');
 // Public/project links are deployment configuration, not repository defaults.
 
 

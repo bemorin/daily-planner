@@ -13,21 +13,22 @@ daily-planner/                 public, source-available
 ├─ offline/PWA behavior
 ├─ import/export
 ├─ optional workspace client boundary
-├─ sync client contract       future
-└─ UI for optional account    future
+├─ personal sync protocol
+├─ Google Drive personal sync adapter
+└─ UI for optional account / company workspace
 
 daily-planner-cloud/           private
 ├─ authentication
-├─ sync API
-├─ conflict resolution
-├─ encrypted backups
+├─ organization sync API
+├─ team conflict resolution
+├─ organization backups
 ├─ billing / entitlements
 ├─ email / account operations
 ├─ calendar integrations
 └─ deployment / monitoring
 ```
 
-The private service should not be implemented as secret JavaScript injected into the public client. Code shipped to a browser is inspectable. The durable boundary is an API: the public client knows how to request synchronization, while the private service owns how accounts, persistence, operations, and billing are implemented.
+The private service should not be implemented as secret JavaScript injected into the public client. Code shipped to a browser is inspectable. The durable Enterprise boundary is an API: the public client knows how to request organization data, while the private service owns accounts, organization persistence, operations, and billing. Personal sync is a different path: the public client can synchronize directly with the user's own cloud storage without sending Personal planner data through Daily Planner Cloud.
 
 
 ## Workspace boundary
@@ -49,10 +50,10 @@ Selecting an organization must never reinterpret the Personal planner as company
 
 ## Likely paid service value
 
-An official hosted service could eventually provide:
+An official hosted Enterprise service could eventually provide:
 
-- multi-device synchronization;
-- automatic encrypted backups;
+- organization and team synchronization;
+- centrally managed backups;
 - restore/history;
 - account recovery;
 - calendar integrations;
@@ -63,7 +64,7 @@ Those are service and infrastructure benefits. The local planner should not be i
 
 ## Before implementation
 
-The first engineering task is not authentication or billing. It is defining a sync-safe local data model and protocol:
+The Personal sync path starts with a sync-safe local data model and protocol:
 
 - stable entity IDs;
 - revision/version metadata;

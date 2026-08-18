@@ -130,11 +130,13 @@ The production service worker caches the application shell so the planner can re
 
 ## Storage and privacy
 
-Planner data is stored in `localStorage` under `daily-planner:` keys.
+Planner data is stored in `localStorage` under `daily-planner:` keys. Personal use remains local-first: no account or network connection is required.
 
-There is no server-side planner database. Clearing site data, private browsing, or privacy tools that purge browser storage can remove local data. Use **Backup all data** for history you want to keep.
+A deployment can optionally configure Google Drive personal sync. That path stores one hidden current-state sync document in the user's own Drive `appDataFolder`; Daily Planner does not need a server-side Personal planner database. The sync protocol works at stable planner-record boundaries, tracks deletions as tombstones, and refuses to silently overwrite a record that changed independently on both devices.
 
-The app tests whether browser storage is writable and warns when local persistence is unavailable.
+Before remote changes are applied, the browser attempts to keep a small rolling set of local recovery snapshots in IndexedDB. Those snapshots stay on that device. **Backup all data** remains the explicit portable backup/restore path.
+
+The app tests whether browser storage is writable and warns when local persistence is unavailable. See [`docs/PERSONAL_SYNC.md`](./docs/PERSONAL_SYNC.md) for the sync contract and deployment setup.
 
 ## Import, export, and print
 
@@ -212,7 +214,7 @@ Because of that interaction surface, the repository verifies releases in two lay
 
 Daily Planner stays local-first: using the Personal workspace never requires an account or internet connection. The public client now contains only the **workspace boundary** for an optional private service. If a deployment provides `DAILY_PLANNER_CLOUD_API_URL` and an authenticated profile exposes organizations, a workspace selector can reveal **Personal** plus those company workspaces. Personal planner data is never reinterpreted as company data.
 
-The private service remains a separate repository and owns server-side authentication, organizations, shared data, future synchronization, billing, and Enterprise operations. See [`docs/CLOUD_BOUNDARY.md`](./docs/CLOUD_BOUNDARY.md).
+The private service remains a separate repository and owns server-side authentication, organizations, shared company data, Enterprise synchronization, billing, and Enterprise operations. Personal Google Drive sync is deliberately separate and does not pass through the private service. See [`docs/CLOUD_BOUNDARY.md`](./docs/CLOUD_BOUNDARY.md).
 
 ## Verification
 

@@ -1,11 +1,25 @@
-export function createLocalStore(storage = window.localStorage) {
+export function createLocalStore(storage = window.localStorage, { onMutation = null } = {}) {
+  let mutationDepth = 0;
   const safe = (fallback, fn) => {
     try { return fn(); } catch (_) { return fallback; }
   };
 
+  const notify = mutation => {
+    if (mutationDepth || typeof onMutation !== 'function') return;
+    try { onMutation(mutation); } catch (_) {}
+  };
+
   const get = key => safe(null, () => storage.getItem(key));
-  const set = (key, value) => safe(false, () => { storage.setItem(key, value); return true; });
-  const remove = key => safe(false, () => { storage.removeItem(key); return true; });
+  const set = (key, value) => safe(false, () => {
+    storage.setItem(key, value);
+    notify({ type: 'set', key: String(key) });
+    return true;
+  });
+  const remove = key => safe(false, () => {
+    storage.removeItem(key);
+    notify({ type: 'remove', key: String(key) });
+    return true;
+  });
   const readJSON = (key, fallback = null) => {
     const raw = get(key);
     if (raw == null) return fallback;
@@ -31,6 +45,10 @@ export function createLocalStore(storage = window.localStorage) {
     storage.removeItem(key);
     return true;
   });
+  const withoutMutationTracking = fn => {
+    mutationDepth += 1;
+    try { return fn(); } finally { mutationDepth -= 1; }
+  };
 
-  return { get, set, remove, readJSON, writeJSON, keys, removePrefix, canWrite };
+  return { get, set, remove, readJSON, writeJSON, keys, removePrefix, canWrite, withoutMutationTracking };
 }

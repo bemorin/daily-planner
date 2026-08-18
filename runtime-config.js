@@ -5,5 +5,6 @@ globalThis.__DAILY_PLANNER_CONFIG__ = Object.freeze({
   GITHUB_SPONSOR_URL: '',
   SOCIAL_X_URL: '',
   SOCIAL_LINKEDIN_URL: '',
-  CLOUD_API_URL: ''
+  CLOUD_API_URL: '',
+  GOOGLE_CLIENT_ID: ''
 });

@@ -475,6 +475,36 @@
           </div>
         </section>
 
+        <section class="settings-group" data-personal-sync hidden>
+          <div class="settings-group__head">
+            <div>
+              <h3>Personal sync</h3>
+              <p>Keep this planner available on your devices without creating a Daily Planner account. The current sync state lives in your own Google Drive app-data space.</p>
+            </div>
+          </div>
+          <div class="personal-sync-card">
+            <div class="personal-sync-card__main">
+              <div class="personal-sync-provider-mark" aria-hidden="true">G</div>
+              <div>
+                <strong data-personal-sync-status>Not connected</strong>
+                <span data-personal-sync-detail>Your planner stays local until you choose to connect it.</span>
+              </div>
+            </div>
+            <div class="personal-sync-card__actions">
+              <button class="secondary-button" type="button" data-personal-sync-primary>Connect Google Drive</button>
+              <button class="text-button" type="button" data-personal-sync-disconnect hidden>Disconnect</button>
+            </div>
+          </div>
+          <div class="personal-sync-conflicts" data-personal-sync-conflict-actions hidden>
+            <span>Changes were made to the same planner record on both sides.</span>
+            <div>
+              <button class="secondary-button" type="button" data-personal-sync-use-remote>Use Google Drive</button>
+              <button class="primary-button" type="button" data-personal-sync-keep-local>Keep this device</button>
+            </div>
+          </div>
+          <p class="personal-sync-recovery" data-personal-sync-recovery>Recovery snapshots are created on this device before remote changes are applied.</p>
+        </section>
+
         <section class="settings-group">
           <div class="settings-group__head">
             <div>
@@ -830,7 +860,7 @@
         <header class="modal__header">
           <p class="modal__eyebrow">Daily Planner</p>
           <h2 id="help-title">Plan outcomes, then protect the time.</h2>
-          <p>This planner is local-first: your daily plans stay in this browser unless you export them.</p>
+          <p>This planner is local-first: your daily plans stay on this device unless you explicitly enable personal sync or export them.</p>
         </header>
 
         <div class="help-content">
@@ -839,7 +869,7 @@
             <div class="github-support__actions"><a class="secondary-button" data-github-link hidden href="https://github.com/" target="_blank" rel="noopener">View on GitHub</a><a class="primary-button" data-github-sponsor hidden href="https://github.com/sponsors" target="_blank" rel="noopener">Sponsor on GitHub</a></div>
           </section>
           <section class="storage-card help-priority-card">
-            <div class="storage-card__copy"><h3>Data on this device</h3><p>The planner stores its settings and daily plans in browser <code>localStorage</code>. Clearing site data can remove it. Private browsing usually keeps it only for that private session, and privacy tools can block site storage.</p><p class="storage-safety" data-storage-safety>Checking local saving…</p></div>
+            <div class="storage-card__copy"><h3>Data on this device</h3><p>The planner stores its settings and daily plans locally in the browser. Clearing site data can remove them. Optional personal sync can mirror the current planner state to your own cloud storage; local recovery snapshots stay on this device.</p><p class="storage-safety" data-storage-safety>Checking local saving…</p></div>
             <div class="storage-card__side"><strong data-storage-usage>Calculating…</strong><button class="secondary-button storage-import-button" type="button" data-import-open>Import backup</button><button class="danger-link-button" type="button" data-reset-open>Reset local data</button></div>
           </section>
 
