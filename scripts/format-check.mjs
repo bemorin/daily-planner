@@ -3,7 +3,7 @@ import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const ignored = new Set(['dist', 'node_modules', '.git']);
+const ignored = new Set(['dist', 'node_modules', '.git', '.planner-dev']);
 const textExtensions = /\.(?:js|mjs|css|html|md|json|webmanifest|yml|yaml)$/;
 
 async function walk(dir) {

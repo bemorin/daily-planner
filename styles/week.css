@@ -542,3 +542,9 @@
   color: var(--ink);
 }
 .week-review-section--unresolved .week-review-list p:first-child { padding-top: 4px; }
+
+/* 1.19: titles of blocks that start above the visible area stay readable,
+   just under the sticky day header (46px + border). */
+.week-time-block { overflow: hidden; overflow: clip; }
+.week-time-block:not(.is-micro) .week-time-block__copy { position: sticky; top: 52px; background: inherit; }
+.week-time-block.is-now-done { box-shadow: inset 3px 0 0 var(--block-color), inset 0 0 0 1.5px color-mix(in srgb, var(--current-time) 50%, transparent); }

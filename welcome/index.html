@@ -1,0 +1,1145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Daily Planner — free, private planner for your day and year</title>
+  <meta name="description" content="Plan what matters, close the day and keep the year in view. Free, no account, works offline: your plans stay in your browser. Daily Planner Plus adds a guided year plan and a one-page year in review, and makes a year-end gift for your team.">
+  <link rel="canonical" href="https://planner.bemorin.com/welcome/">
+  <meta name="theme-color" content="#f6f3ed" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Daily Planner">
+  <meta property="og:title" content="Daily Planner — plan what matters, close the day, keep the year in view">
+  <meta property="og:description" content="A free, local-first planner for your day, your week and your year. No account, works offline, and your plans stay in your browser.">
+  <meta property="og:url" content="https://planner.bemorin.com/welcome/">
+  <meta property="og:image" content="https://planner.bemorin.com/welcome/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Daily Planner: the Day view with a main outcome ticked and a square of the year painted.">
+  <meta property="og:locale" content="en_US">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Daily Planner — plan what matters, close the day, keep the year in view">
+  <meta name="twitter:description" content="A free, local-first planner for your day, your week and your year. No account, works offline, and your plans stay in your browser.">
+  <meta name="twitter:image" content="https://planner.bemorin.com/welcome/og.png">
+  <meta name="twitter:image:alt" content="Daily Planner: the Day view with a main outcome ticked and a square of the year painted.">
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../apple-touch-icon.png">
+  <script>
+    /* Before first paint: when motion is welcome, replicas start on the first
+       frame of their animation and sections below the fold wait to rise in.
+       landing.js adds `js-ready`; if it never runs, the page falls back to its
+       final, fully visible state. */
+    (function () {
+      var root = document.documentElement;
+      if (!window.matchMedia || !('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      root.classList.add('js-anim');
+      window.setTimeout(function () { if (!root.classList.contains('js-ready')) root.classList.remove('js-anim'); }, 4000);
+    })();
+  </script>
+  <link rel="stylesheet" href="./landing.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Daily Planner",
+    "url": "https://planner.bemorin.com/",
+    "description": "A free, local-first planner for choosing what matters each day, closing the day without losing unfinished work, and keeping the year in view.",
+    "applicationCategory": "ProductivityApplication",
+    "operatingSystem": "Web, iOS, Android, macOS, Windows",
+    "image": "https://planner.bemorin.com/welcome/og.png",
+    "author": { "@type": "Person", "name": "Ben Morin", "url": "https://bemorin.com/" },
+    "offers": [
+      { "@type": "Offer", "name": "Daily Planner", "description": "The planner, free for everyone.", "price": "0", "priceCurrency": "EUR" },
+      { "@type": "Offer", "name": "Daily Planner Plus", "description": "A one-time unlock: Plan your year, Your year in review and colours for the painted year.", "price": "29", "priceCurrency": "EUR" }
+    ]
+  }
+  </script>
+  <script src="../runtime-config.js"></script>
+  <script type="module" src="./landing.js"></script>
+</head>
+<body>
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m6.5 12.5 3.3 3.3 7.7-8"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-sunset" viewBox="0 0 24 24"><path d="M4 15.5h16"/><path d="M6.2 15.5a5.8 5.8 0 0 1 11.6 0"/><path d="M12 4.2v2.1M5.9 6.7l1.5 1.5M18.1 6.7l-1.5 1.5M3.6 11.1h2.1M18.3 11.1h2.1"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/></symbol>
+    <symbol id="i-week" viewBox="0 0 24 24"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M8 12h2M12 12h2M16 12h1M8 16h2M12 16h2M16 16h1"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 21c3.6 0 6-2.4 6-5.6 0-3.9-3.1-5.7-3.9-9.4-2 1.4-2.9 3.3-2.9 5.1-1-.7-1.7-1.9-1.9-3.1C7.4 9.6 6 11.9 6 15.4 6 18.6 8.4 21 12 21Z"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4Z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20.5h7M9.5 17h5v3.5h-5z"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5.5 21V3.5"/><path d="M5.5 4.5h12l-2.3 4 2.3 4h-12"/></symbol>
+    <symbol id="i-mountain" viewBox="0 0 24 24"><path d="M2.5 19.5h19"/><path d="m4.5 19.5 6-10.5 4.2 7.2"/><path d="m12.8 13.2 2.6-4.2 5.1 10.5"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+    <symbol id="i-sync" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 13a8 8 0 0 0 14.6 4.5"/><path d="M5 3v4h4M19 21v-4h-4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.5 15.5 4.1 4.1"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m14.8 9.2-1.7 3.9-3.9 1.7 1.7-3.9 3.9-1.7Z"/></symbol>
+    <symbol id="i-journal" viewBox="0 0 24 24"><path d="M5 4.5h11.5A2.5 2.5 0 0 1 19 7v12.5H7.5A2.5 2.5 0 0 1 5 17V4.5Z"/><path d="M5 17a2.5 2.5 0 0 1 2.5-2.5H19M9 8h6M9 11h4"/></symbol>
+    <symbol id="i-noaccount" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5.5 19.5a6.5 6.5 0 0 1 9.6-5.7M4 4l16 16"/></symbol>
+    <symbol id="i-offline" viewBox="0 0 24 24"><path d="M4.5 10.6a11 11 0 0 1 3.3-2M12.6 7.5a11 11 0 0 1 6.9 3.1M7.6 14a6 6 0 0 1 4.6-1.5M12 18.5h.01M4 4l16 16"/></symbol>
+    <symbol id="i-install" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="12.5" rx="2"/><path d="M12 8.5v5.5M9.5 11.5 12 14l2.5-2.5M8.5 20h7"/></symbol>
+    <symbol id="i-devices" viewBox="0 0 24 24"><rect x="2.5" y="5" width="13" height="9.5" rx="1.6"/><path d="M1.5 17.5h15"/><rect x="16.5" y="8.5" width="5.5" height="11" rx="1.4"/></symbol>
+    <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4.5 7 7.5 6 7.5-6"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6v5.5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9V6l7-2.5Z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
+    <symbol id="i-gift" viewBox="0 0 24 24"><path d="M4.5 11.5h15v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-8ZM3.5 7.5h17v4h-17zM12 7.5v13"/><path d="M12 7.5c-1.3-2.7-4.6-3.5-5.1-1.6-.4 1.5 2.4 1.6 5.1 1.6Zm0 0c1.3-2.7 4.6-3.5 5.1-1.6.4 1.5-2.4 1.6-5.1 1.6Z"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3.5 12.2V4.5a1 1 0 0 1 1-1h7.7l8.3 8.3a1.4 1.4 0 0 1 0 2l-6.2 6.2a1.4 1.4 0 0 1-2 0l-8.8-7.8Z"/><circle cx="8" cy="8" r="1.4"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.3 2.4 3.4 5.2 3.4 8.5s-1.1 6.1-3.4 8.5c-2.3-2.4-3.4-5.2-3.4-8.5s1.1-6.1 3.4-8.5Z"/></symbol>
+    <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 9V3.5h10V9"/><rect x="3.5" y="9" width="17" height="8" rx="2"/><path d="M7 14h10v6.5H7z"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3.5 13.5 6 5.5h12l2.5 8v5a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1v-5Z"/><path d="M3.5 13.5h5l1 2h5l1-2h5"/></symbol>
+    <symbol id="i-stats" viewBox="0 0 24 24"><path d="M5 19.5V11M12 19.5V5M19 19.5v-6"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5c.5 4.3 2.2 6 6.5 6.5-4.3.5-6 2.2-6.5 6.5-.5-4.3-2.2-6-6.5-6.5 4.3-.5 6-2.2 6.5-6.5Z"/><path d="M18.5 15.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5Z"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5.5 19.5a6.5 6.5 0 0 1 13 0"/></symbol>
+    <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.2-1-1.6-1-2.6 0-1 .8-1.7 1.8-1.7h2.2a3.7 3.7 0 0 0 3.7-3.7c0-4.3-3.8-7.3-8.5-7.3Z"/><circle cx="7.8" cy="11.2" r="1"/><circle cx="10.6" cy="7.6" r="1"/><circle cx="15" cy="7.9" r="1"/></symbol>
+    <symbol id="i-pip" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="14" rx="2"/><rect x="11.5" y="10.5" width="7" height="5.5" rx="1"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7L6 20v-3.6a2 2 0 0 1-1.5-1.9Z"/></symbol>
+  </svg>
+
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top" data-top>
+    <div class="wrap top__inner">
+      <a class="brand" href="#top" aria-label="Daily Planner, back to top">
+        <img src="../favicon.svg" alt="" width="28" height="28">
+        <span>Daily Planner</span>
+      </a>
+      <nav class="top__nav" aria-label="Sections">
+        <a href="#how">How it works</a>
+        <a href="#year">Your year</a>
+        <a href="#plus">Plus</a>
+        <a href="#teams">Teams</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <div class="top__actions">
+        <a class="top__teams" href="#teams">Teams</a>
+        <a class="btn btn--primary btn--sm" href="../" data-cta="app">Open the planner</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="wrap hero__grid">
+        <div class="hero__copy">
+          <h1 id="hero-title"><span>Plan what matters.</span> <span>Close the day.</span> <span>Keep the year in view.</span></h1>
+          <p class="lead">Daily Planner is a calm planner for your day, your week and your year. It’s free, needs no account and works offline. Your plans stay in your browser, not on our servers.</p>
+          <div class="cta-row" data-hero-ctas>
+            <a class="btn btn--primary" href="../" data-cta="app">Open the planner — it’s free</a>
+            <a class="btn btn--ghost" href="#teams">Give it to your team</a>
+          </div>
+          <p class="hero__note">Works on phone and computer. Install it as an app if you like.</p>
+        </div>
+
+        <figure class="hero__visual">
+          <div class="rp-scale">
+            <div class="rp rp--day s-mit s-block s-closed" data-scene="day" data-final="s-mit s-block s-closed" data-first-frame aria-hidden="true">
+              <div class="rp-window">
+                <div class="rp-bar"><i></i><i></i><i></i><span>planner.bemorin.com</span></div>
+                <div class="rp-top">
+                  <span class="rp-iconbtn"><svg class="i"><use href="#i-week"/></svg></span>
+                  <span class="rp-date"><small>Friday</small><b>October 9, 2026</b></span>
+                  <span class="rp-nav"><svg class="i"><use href="#i-left"/></svg><b>Now</b><svg class="i"><use href="#i-right"/></svg></span>
+                  <span class="rp-tools"><svg class="i"><use href="#i-search"/></svg><svg class="i"><use href="#i-journal"/></svg><svg class="i"><use href="#i-compass"/></svg></span>
+                </div>
+                <div class="rp-day">
+                  <div class="rp-plan">
+                    <p class="rp-h">Keep in mind</p>
+                    <p class="rp-focus"><span data-type data-speed="44">Protect the morning for deep work</span><em>e.g. Don’t let urgency drive the decision</em></p>
+                    <p class="rp-h">Most important outcome</p>
+                    <div class="rp-row rp-row--mit rp-tick"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Send the proposal to Claire</span></div>
+                    <p class="rp-h">Other important outcomes</p>
+                    <div class="rp-row"><span class="rp-check"></span><span class="rp-txt">Draft the offsite agenda</span></div>
+                    <div class="rp-row"><span class="rp-check"></span><span class="rp-txt">Review the hiring brief</span></div>
+                    <p class="rp-h rp-optional">Tasks</p>
+                    <div class="rp-row rp-row--task rp-optional is-done"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Call the bank</span></div>
+                    <div class="rp-row rp-row--task rp-optional"><span class="rp-check"></span><span class="rp-txt">Book physio</span></div>
+                  </div>
+                  <div class="rp-sched">
+                    <div class="rp-sched__head"><b>Schedule</b><span class="rp-closebtn"><svg class="i"><use href="#i-sunset"/></svg>Close day</span></div>
+                    <div class="rp-hours" style="--n:8">
+                      <span style="--h:0"><b>08:00</b></span><span style="--h:1"><b>09:00</b></span><span style="--h:2"><b>10:00</b></span><span style="--h:3"><b>11:00</b></span><span style="--h:4"><b>12:00</b></span><span style="--h:5"><b>13:00</b></span><span style="--h:6"><b>14:00</b></span><span style="--h:7"><b>15:00</b></span><span style="--h:8"><b>16:00</b></span>
+                      <div class="rp-block rp-block--new" style="--s:1;--d:1.5;--c:var(--c-deep)"><b>Proposal — final pass</b><small>Deep work · 1h 30m</small></div>
+                      <div class="rp-block rp-block--short" style="--s:3;--d:.5;--c:var(--c-admin)"><b>Team standup</b><small>11:00–11:30</small></div>
+                      <div class="rp-block rp-block--short" style="--s:4.5;--d:.75;--c:var(--c-health)"><b>Run</b><small>Health · 45m</small></div>
+                      <div class="rp-block" style="--s:6;--d:1.5;--c:var(--c-deep)"><b>Offsite agenda</b><small>Deep work · 1h 30m</small></div>
+                      <div class="rp-now" style="--s:7.6"><span>15:36</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="rp-pop rp-pop--closed">
+                <div class="rp-pop__head"><span>October, painted</span><b><svg class="i"><use href="#i-flame"/></svg><span><span data-count="20" data-from="19">20</span>-day streak</span></b></div>
+                <div class="rp-month" data-month></div>
+                <p class="rp-pop__foot"><svg class="i"><use href="#i-trophy"/></svg>Trophy unlocked: <b>A month, unbroken</b></p>
+              </div>
+            </div>
+          </div>
+          <figcaption>A day in the planner: one thing to keep in mind, one main outcome, a schedule. Closing the day paints a square of your year.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="how" aria-labelledby="how-title">
+      <div class="wrap">
+        <div class="section__intro" data-reveal-each>
+          <h2 id="how-title">One small loop, every day</h2>
+          <p class="lead">Plan in the morning, work from your schedule, close the day in the evening. It takes a few minutes, and nothing unfinished gets lost.</p>
+        </div>
+        <ol class="loop" data-reveal-each>
+          <li><span class="loop__n">1</span><h3>Plan</h3><p>Write one thing to keep in mind, choose the most important outcome and up to two others, then give them time on your schedule.</p></li>
+          <li><span class="loop__n">2</span><h3>Do</h3><p>Work from the schedule. Tick outcomes, tasks and time blocks as they get done.</p></li>
+          <li><span class="loop__n">3</span><h3>Close</h3><p>Review what got done and decide where every unfinished item goes. Then keep a memory and a lesson from the day.</p></li>
+        </ol>
+
+        <div class="split split--visual-first close-split">
+          <div class="split__visual" data-reveal>
+            <div class="rp-scale rp-scale--close">
+              <div class="rp rp--close s-save s-forget s-closed" data-scene="close" data-final="s-save s-forget s-closed" aria-hidden="true">
+                <div class="rp-panel">
+                  <p class="rp-eyebrow">Close day</p>
+                  <p class="rp-title">Close the day without losing unfinished work.</p>
+                  <div class="rp-summary">
+                    <span><small>Done</small><b>4</b></span>
+                    <span><small>Still open</small><b>3</b></span>
+                    <span class="rp-summary__to"><small>Carry to</small><b>Mon, Oct 12</b><i><svg class="i"><use href="#i-down"/></svg></i></span>
+                  </div>
+                  <div class="rp-reflect">
+                    <span><small>What made today worth remembering?</small><em class="rp-field"><span data-type data-speed="38">Lunch outside with the team</span></em></span>
+                    <span><small>What did today teach me?</small><em class="rp-field"><span data-type data-speed="38">Ask for help before noon, not after</span></em></span>
+                  </div>
+                  <p class="rp-listhead"><span>Carry forward</span><span>Mon, Oct 12</span></p>
+                  <div class="rp-items">
+                    <div class="rp-item">
+                      <span class="rp-item__body"><b>Draft the offsite agenda</b><small>Other outcome · Unscheduled</small></span>
+                      <span class="rp-triage"><span class="rp-tri rp-tri--date is-on"><svg class="i"><use href="#i-check"/></svg>Mon, Oct 12<svg class="i"><use href="#i-down"/></svg></span><span class="rp-tri">Save</span><span class="rp-tri rp-tri--forget">Forget</span></span>
+                    </div>
+                    <div class="rp-item rp-item--save">
+                      <span class="rp-item__body"><b>Learn the new invoicing tool</b><small>Task · Unscheduled · Moved 2×</small></span>
+                      <span class="rp-triage"><span class="rp-tri rp-tri--date"><svg class="i"><use href="#i-check"/></svg>Mon, Oct 12<svg class="i"><use href="#i-down"/></svg></span><span class="rp-tri rp-tri--save">Save</span><span class="rp-tri rp-tri--forget">Forget</span></span>
+                    </div>
+                    <div class="rp-item rp-item--forget">
+                      <span class="rp-item__body"><b>Reorganise the shared drive</b><small>Task · Unscheduled</small></span>
+                      <span class="rp-triage"><span class="rp-tri rp-tri--date"><svg class="i"><use href="#i-check"/></svg>Mon, Oct 12<svg class="i"><use href="#i-down"/></svg></span><span class="rp-tri">Save</span><span class="rp-tri rp-tri--forget">Forget</span></span>
+                    </div>
+                  </div>
+                  <div class="rp-actions"><span>Cancel</span><span class="rp-primary">Close day</span></div>
+                </div>
+                <div class="rp-pop rp-pop--next">
+                  <p class="rp-eyebrow">Next planning day</p>
+                  <p class="rp-pop__title">Monday, October 12</p>
+                  <span class="rp-pop__field"><small>Keep in mind</small><em class="rp-field"><span data-type data-speed="40">Start with the offsite agenda</span></em></span>
+                  <span class="rp-pop__btn">Continue to weekly review</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="split__copy" data-reveal-each>
+            <h3 class="h3-lg">Close the day without losing unfinished work</h3>
+            <p>For each unfinished item, you choose:</p>
+            <dl class="choices">
+              <div><dt>Move</dt><dd>to a date you pick. A small “Moved 2×” badge shows what keeps slipping.</dd></div>
+              <div><dt>Save</dt><dd>kept without a date in Unresolved: out of the way, not forgotten.</dd></div>
+              <div><dt>Forget</dt><dd>removed from your active work. The day still remembers it.</dd></div>
+            </dl>
+            <p>Then write what made the day worth remembering and what it taught you; together they become your journal. Give the next planning day a little direction, and on Fridays carry on into a short weekly review.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--tint" id="week" aria-labelledby="week-title">
+      <div class="wrap split">
+        <div class="split__copy" data-reveal-each>
+          <h2 id="week-title">Your week, in blocks</h2>
+          <p class="lead">Week view puts your planning days side by side with their time blocks. It’s the same schedule as the Day view, so nothing needs copying.</p>
+          <ul class="ticks">
+            <li>Pick your planning days: Monday to Friday, or whichever days fit your life.</li>
+            <li>Click an empty slot to add a block, click a block to edit it.</li>
+            <li>Today keeps its current-time line; past days step back.</li>
+            <li>Print a one-page landscape week when you want it on paper.</li>
+          </ul>
+        </div>
+        <div class="split__visual" data-reveal>
+          <div class="rp-scale">
+            <div class="rp rp--week s-in" data-scene="week" data-final="s-in" aria-hidden="true">
+              <div class="rp-window">
+                <div class="rp-bar"><i></i><i></i><i></i><span>planner.bemorin.com</span></div>
+                <div class="rp-top">
+                  <span class="rp-iconbtn"><svg class="i"><use href="#i-cal"/></svg></span>
+                  <span class="rp-date"><small>Week 41</small><b>5–9 October 2026</b></span>
+                  <span class="rp-nav"><svg class="i"><use href="#i-left"/></svg><b>Now</b><svg class="i"><use href="#i-right"/></svg></span>
+                  <span class="rp-tools"><svg class="i"><use href="#i-search"/></svg><svg class="i"><use href="#i-journal"/></svg><svg class="i"><use href="#i-compass"/></svg></span>
+                </div>
+                <div class="rp-wk">
+                  <div class="rp-wk__head"><span></span><span class="rp-wk__d1">Mon <b>5</b></span><span class="rp-wk__d2">Tue <b>6</b></span><span>Wed <b>7</b></span><span>Thu <b>8</b></span><span class="is-today">Fri <b>9</b></span></div>
+                  <div class="rp-wk__body">
+                    <div class="rp-wk__hours"><span style="--h:0"><b>08:00</b></span><span style="--h:1"><b>09:00</b></span><span style="--h:2"><b>10:00</b></span><span style="--h:3"><b>11:00</b></span><span style="--h:4"><b>12:00</b></span><span style="--h:5"><b>13:00</b></span><span style="--h:6"><b>14:00</b></span><span style="--h:7"><b>15:00</b></span><span style="--h:8"><b>16:00</b></span></div>
+                    <div class="rp-wk__col rp-wk__d1 is-past">
+                      <div class="rp-wb" style="--s:1;--d:2;--c:var(--c-deep);--i:0"><b>Quarterly plan</b><small>Deep work</small></div>
+                      <div class="rp-wb" style="--s:4.5;--d:.75;--c:var(--c-health);--i:5"><b>Run</b></div>
+                      <div class="rp-wb" style="--s:6;--d:1;--c:var(--c-admin);--i:10"><b>Inbox zero</b></div>
+                    </div>
+                    <div class="rp-wk__col rp-wk__d2 is-past">
+                      <div class="rp-wb" style="--s:1;--d:1.5;--c:var(--c-deep);--i:1"><b>Proposal draft</b><small>Deep work</small></div>
+                      <div class="rp-wb rp-wb--short" style="--s:3;--d:.5;--c:var(--c-admin);--i:6"><b>Standup</b></div>
+                      <div class="rp-wb" style="--s:6.5;--d:1;--c:var(--c-learn);--i:11"><b>Spanish</b></div>
+                    </div>
+                    <div class="rp-wk__col is-past">
+                      <div class="rp-wb" style="--s:.5;--d:2.5;--c:var(--c-deep);--i:2"><b>Hiring brief</b><small>Deep work</small></div>
+                      <div class="rp-wb" style="--s:5;--d:1;--c:var(--c-personal);--i:7"><b>Lunch with Sam</b></div>
+                    </div>
+                    <div class="rp-wk__col is-past">
+                      <div class="rp-wb" style="--s:1;--d:1;--c:var(--c-admin);--i:3"><b>Budget review</b></div>
+                      <div class="rp-wb rp-wb--short" style="--s:3;--d:.5;--c:var(--c-admin);--i:8"><b>Standup</b></div>
+                      <div class="rp-wb" style="--s:4.5;--d:.75;--c:var(--c-health);--i:12"><b>Run</b></div>
+                      <div class="rp-wb" style="--s:6;--d:2;--c:var(--c-deep);--i:14"><b>Offsite plan</b><small>Deep work</small></div>
+                    </div>
+                    <div class="rp-wk__col is-today">
+                      <div class="rp-wb" style="--s:1;--d:1.5;--c:var(--c-deep);--i:4"><b>Proposal — final pass</b><small>Deep work</small></div>
+                      <div class="rp-wb rp-wb--short" style="--s:3;--d:.5;--c:var(--c-admin);--i:9"><b>Team standup</b></div>
+                      <div class="rp-wb" style="--s:4.5;--d:.75;--c:var(--c-health);--i:13"><b>Run</b></div>
+                      <div class="rp-wb" style="--s:6;--d:1.5;--c:var(--c-deep);--i:15"><b>Offsite agenda</b><small>Deep work</small></div>
+                      <div class="rp-now" style="--s:7.6"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="tools" aria-labelledby="tools-title">
+      <div class="wrap">
+        <div class="section__intro" data-reveal-each>
+          <h2 id="tools-title">Everything else in the planner, kept small</h2>
+          <p class="lead">Each day you close feeds three quiet tools: a journal of memories and lessons, one short list so nothing unfinished gets lost, and a clear view of where your time went. Nothing to set up.</p>
+        </div>
+        <div class="tools" data-reveal-each>
+          <article class="tool">
+            <div class="rp-scale tool__visual">
+              <div class="rp rp--tool rp--journal s-in s-new" data-scene="journal" data-final="s-in s-new" aria-hidden="true">
+                <div class="rp-sheet">
+                  <p class="rp-sheet__title">Journal</p>
+                  <div class="rp-jr rp-jr--head"><span></span><small>Best memory</small><small>Lesson learned</small></div>
+                  <div class="rp-jr__list">
+                    <div class="rp-jr__new"><div class="rp-jr__clip"><div class="rp-jr is-new"><time>Fri, Oct 9</time><b>Lunch outside with the team</b><span>Ask for help before noon, not after</span></div></div></div>
+                    <div class="rp-jr" style="--i:0"><time>Thu, Oct 8</time><b>Sam’s demo worked the first time</b><span>Write the agenda before the invite</span></div>
+                    <div class="rp-jr" style="--i:1"><time>Wed, Oct 7</time><b>A run along the river at sunrise</b><span>Short runs still count</span></div>
+                    <div class="rp-jr" style="--i:2"><time>Tue, Oct 6</time><b>Finished the hiring brief early</b><span>A rough draft beats a blank page</span></div>
+                    <div class="rp-jr" style="--i:3"><time>Mon, Oct 5</time><b>Dinner with my sister</b><span>Say no to the 6 pm call</span></div>
+                    <div class="rp-jr" style="--i:4"><time>Fri, Oct 2</time><b>Closed the quarter on time</b><span>Do the hard part first</span></div>
+                    <div class="rp-jr" style="--i:5"><time>Thu, Oct 1</time><b>First cold morning swim</b><span>Ask before assuming</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tool__copy">
+              <h3><svg class="i"><use href="#i-journal"/></svg>Journal</h3>
+              <p>Every closed day adds a line: the date, the best memory and the lesson. It becomes a diary you never had to sit down and write.</p>
+            </div>
+          </article>
+          <article class="tool">
+            <div class="rp-scale tool__visual">
+              <div class="rp rp--tool rp--unres s-plan" data-scene="unresolved" data-final="s-plan" aria-hidden="true">
+                <div class="rp-sheet">
+                  <span class="rp-eyebrow">Unresolved</span>
+                  <p class="rp-sheet__title">Decide what still deserves attention.</p>
+                  <div class="rp-seg">
+                    <span class="rp-seg__btn rp-seg__btn--needs">Needs attention<i><b class="n1">3</b><b class="n2">2</b></i></span>
+                    <span class="rp-seg__btn rp-seg__btn--later">Later<i><b class="n1">2</b><b class="n2">3</b></i></span>
+                  </div>
+                  <div class="rp-ow">
+                    <div class="rp-ow__list rp-ow__list--needs">
+                      <div class="rp-owr rp-owr--plan"><span class="rp-owr__main"><b>Reorganise the shared drive</b><small>Tue, Oct 6 <em>Moved 2×</em></small></span><span class="rp-owr__act"><span class="rp-ob rp-ob--plan"><span class="t1">Plan</span><span class="t2">Mon, Oct 12</span></span><span class="rp-ob">Save</span><span class="rp-ob">Forget</span></span></div>
+                      <div class="rp-owr rp-owr--save"><span class="rp-owr__main"><b>Call the accountant</b><small>Wed, Oct 7</small></span><span class="rp-owr__act"><span class="rp-ob">Plan</span><span class="rp-ob rp-ob--save">Save</span><span class="rp-ob">Forget</span></span></div>
+                      <div class="rp-owr"><span class="rp-owr__main"><b>Update the onboarding doc</b><small>Thu, Oct 8</small></span><span class="rp-owr__act"><span class="rp-ob">Plan</span><span class="rp-ob">Save</span><span class="rp-ob">Forget</span></span></div>
+                    </div>
+                    <div class="rp-ow__list rp-ow__list--later">
+                      <div class="rp-owr rp-owr--saved"><span class="rp-owr__main"><b>Call the accountant</b><small>Saved today</small></span><span class="rp-owr__act"><span class="rp-ob">Plan</span><span class="rp-ob">Forget</span></span></div>
+                      <div class="rp-owr"><span class="rp-owr__main"><b>Learn the new invoicing tool</b><small><em>Moved 2×</em></small></span><span class="rp-owr__act"><span class="rp-ob">Plan</span><span class="rp-ob">Forget</span></span></div>
+                      <div class="rp-owr"><span class="rp-owr__main"><b>Plan the garden for spring</b><small>Saved Sep 28</small></span><span class="rp-owr__act"><span class="rp-ob">Plan</span><span class="rp-ob">Forget</span></span></div>
+                    </div>
+                  </div>
+                  <div class="rp-ow__foot"><span>1 plan ready</span><span class="rp-primary">Confirm plans</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="tool__copy">
+              <h3><svg class="i"><use href="#i-inbox"/></svg>Unresolved</h3>
+              <p>Work that slipped waits in one short list, as Needs attention or Later. For each item: Plan it on a date, Save it, or Forget it.</p>
+            </div>
+          </article>
+          <article class="tool">
+            <div class="rp-scale tool__visual">
+              <div class="rp rp--tool rp--stats s-in s-elapsed" data-scene="stats" data-final="s-in s-elapsed" aria-hidden="true">
+                <div class="rp-sheet">
+                  <span class="rp-eyebrow">Schedule statistics</span>
+                  <p class="rp-sheet__title">How your scheduled time is distributed</p>
+                  <div class="rp-seg"><span class="rp-seg__btn is-on">Day</span><span class="rp-seg__btn">Week</span></div>
+                  <div class="rp-st__cards">
+                    <span><small>Elapsed schedule</small><b>4h 15m</b></span>
+                    <span><small>Scheduled</small><b>5h 45m</b></span>
+                  </div>
+                  <div class="rp-st__rows">
+                    <div class="rp-st" style="--c:var(--c-deep);--s:52.2;--e:52.2;--i:0"><span class="rp-st__head"><b><i></i>Deep work</b><small>3h elapsed · 3h scheduled</small></span><span class="rp-st__bar"><i class="sch"></i><i class="ela"></i></span></div>
+                    <div class="rp-st" style="--c:var(--c-personal);--s:17.4;--e:0;--i:1"><span class="rp-st__head"><b><i></i>Personal</b><small>0m elapsed · 1h scheduled</small></span><span class="rp-st__bar"><i class="sch"></i><i class="ela"></i></span></div>
+                    <div class="rp-st" style="--c:var(--c-health);--s:13;--e:13;--i:2"><span class="rp-st__head"><b><i></i>Health</b><small>45m elapsed · 45m scheduled</small></span><span class="rp-st__bar"><i class="sch"></i><i class="ela"></i></span></div>
+                    <div class="rp-st" style="--c:var(--c-admin);--s:8.7;--e:8.7;--i:3"><span class="rp-st__head"><b><i></i>Admin</b><small>30m elapsed · 30m scheduled</small></span><span class="rp-st__bar"><i class="sch"></i><i class="ela"></i></span></div>
+                    <div class="rp-st" style="--c:var(--c-learn);--s:8.7;--e:0;--i:4"><span class="rp-st__head"><b><i></i>Learning</b><small>0m elapsed · 30m scheduled</small></span><span class="rp-st__bar"><i class="sch"></i><i class="ela"></i></span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="tool__copy">
+              <h3><svg class="i"><use href="#i-stats"/></svg>Time stats</h3>
+              <p>See where the day went, by category: what you scheduled and what has already happened. Switch to Week for the bigger picture.</p>
+            </div>
+          </article>
+        </div>
+
+        <div class="minis" data-reveal-each>
+          <article class="mini">
+            <div class="rp-scale mini__visual">
+              <div class="rp rp--mini rp--search s-res" data-scene="search" data-final="s-res" aria-hidden="true">
+                <div class="rp-mini-sheet">
+                  <span class="rp-search"><svg class="i"><use href="#i-search"/></svg><span data-type data-speed="80">offsite</span></span>
+                  <div class="rp-res">
+                    <span style="--i:0"><small>Tue, Oct 6 · Outcome</small><b>Draft the <mark>offsite</mark> agenda</b></span>
+                    <span style="--i:1"><small>Thu, Oct 8 · Schedule</small><b><mark>Offsite</mark> plan</b></span>
+                    <span style="--i:2"><small>Fri, Oct 9 · Lesson</small><b>Book the <mark>offsite</mark> room early</b></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <h3><svg class="i"><use href="#i-search"/></svg>Search</h3>
+            <p>Find anything you wrote, on any day: outcomes, tasks, time blocks, notes, memories and lessons.</p>
+          </article>
+          <article class="mini">
+            <div class="rp-scale mini__visual">
+              <div class="rp rp--mini rp--pip" aria-hidden="true">
+                <div class="rp-desk">
+                  <span class="rp-desk__app"><i></i><i></i><i></i><i></i></span>
+                  <div class="rp-float">
+                    <span class="rp-float__bar"><b>Daily Planner</b><i></i></span>
+                    <span class="rp-float__seg"><span class="is-on">Plan</span><span>Schedule</span></span>
+                    <span class="rp-float__row is-done"><i><svg class="i"><use href="#i-check"/></svg></i>Send the proposal</span>
+                    <span class="rp-float__row"><i></i>Draft the agenda</span>
+                    <span class="rp-float__row"><i></i>Book physio</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <h3><svg class="i"><use href="#i-pip"/></svg>Floating mode</h3>
+            <p>Keep today’s plan and schedule in a small window on top of your other apps, where the browser supports it (Chrome and Edge on a computer).</p>
+          </article>
+          <article class="mini">
+            <div class="rp-scale mini__visual">
+              <div class="rp rp--mini rp--export" aria-hidden="true">
+                <div class="rp-paper">
+                  <span class="rp-paper__page"><b>Friday, October 9</b><i></i><i></i><i class="is-short"></i><i></i><i class="is-short"></i></span>
+                  <span class="rp-paper__actions"><span><svg class="i"><use href="#i-print"/></svg>Print</span><span><svg class="i"><use href="#i-export"/></svg>Markdown</span><span><svg class="i"><use href="#i-export"/></svg>Backup</span></span>
+                </div>
+              </div>
+            </div>
+            <h3><svg class="i"><use href="#i-print"/></svg>Print and export</h3>
+            <p>Print a day or a week on one page, export a day as Markdown, and back up everything to a file whenever you like.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--tint" id="year" aria-labelledby="year-title">
+      <div class="wrap">
+        <div class="section__intro" data-reveal-each>
+          <h2 id="year-title">Horizon: the year in view</h2>
+          <p class="lead">Days are where work happens; the year is where it adds up. Horizon keeps a few big things on one page you’ll actually open, with the whole year on a single ribbon and a line for today.</p>
+        </div>
+
+        <div class="rp-scale ribbon-wrap" data-reveal>
+          <div class="rp rp--ribbon s-in" data-scene="ribbon" data-final="s-in" aria-hidden="true">
+            <div class="rp-card">
+              <div class="rp-card__head">
+                <span><span class="rp-eyebrow">Year at a glance</span><b class="rp-title">Everything that gives the year its shape.</b></span>
+                <span class="rp-legend"><i class="k-misogi">Misogi</i><i class="k-milestone">Milestone</i><i class="k-adventure">Adventure</i><i class="k-keydate">Key date</i></span>
+              </div>
+              <div class="rp-rib">
+                <div class="rp-rib__months"><span></span><span>J<b>an</b></span><span>F<b>eb</b></span><span>M<b>ar</b></span><span>A<b>pr</b></span><span>M<b>ay</b></span><span>J<b>un</b></span><span>J<b>ul</b></span><span>A<b>ug</b></span><span>S<b>ep</b></span><span class="is-now">O<b>ct</b></span><span>N<b>ov</b></span><span>D<b>ec</b></span></div>
+                <div class="rp-rib__lane"><span class="rp-rib__label">Misogi</span><span class="rp-rib__track">
+                  <i class="m m--dia is-done" style="--x:29.3;--k:var(--milestone);--i:1"></i><i class="m m--dia is-done" style="--x:46.6;--k:var(--milestone);--i:2"></i><i class="m m--dia" style="--x:60;--k:var(--milestone);--i:3"></i><i class="m m--dot m--big" style="--x:81.1;--k:var(--misogi);--i:6"></i>
+                </span></div>
+                <div class="rp-rib__lane"><span class="rp-rib__label">Adventures</span><span class="rp-rib__track">
+                  <i class="m m--dot is-done" style="--x:19.7;--k:var(--adventure);--i:1"></i><i class="m m--dot is-done" style="--x:42.7;--k:var(--adventure);--i:2"></i><i class="m m--dot is-done" style="--x:54.2;--k:var(--adventure);--i:3"></i><i class="m m--dot" style="--x:88.8;--k:var(--adventure);--i:6"></i>
+                </span></div>
+                <div class="rp-rib__lane"><span class="rp-rib__label">Key dates</span><span class="rp-rib__track">
+                  <i class="m m--dot" style="--x:10.1;--k:var(--keydate);--i:0"></i><i class="m m--dot" style="--x:38.9;--k:var(--keydate);--i:2"></i><i class="m m--band" style="--x:58.6;--w:5.2;--k:var(--keydate);--i:3"></i><i class="m m--band" style="--x:97.8;--w:2;--k:var(--keydate);--i:7"></i>
+                </span></div>
+                <div class="rp-rib__lane"><span class="rp-rib__label">Habits</span><span class="rp-rib__quarters">
+                  <span style="--i:0"><b>Q1</b><em>Walk after lunch</em></span><span style="--i:1"><b>Q2</b><em>No phone in the bedroom</em></span><span style="--i:2"><b>Q3</b><em>Write three lines</em></span><span class="is-now" style="--i:3"><b>Q4</b><em>Stretch before bed</em></span>
+                </span></div>
+                <div class="rp-rib__today" style="--x:77"><span>Today</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="split split--visual-first year-split">
+          <div class="split__visual" data-reveal>
+            <div class="rp-scale">
+              <div class="rp rp--adv s-planned" data-scene="adventures" data-final="s-planned" aria-hidden="true">
+                <div class="rp-adv__head"><span><span class="rp-eyebrow rp-eyebrow--adv">Mini-adventures</span><b class="rp-title">Six memorable experiences, on the calendar.</b></span><span class="rp-adv__count"><b>4</b>/6</span></div>
+                <div class="rp-slots">
+                  <div class="rp-slot is-lived"><span class="rp-chip">✓ Lived</span><span class="rp-slot__t"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span>Sleep in a mountain hut</span><span class="rp-date-chip"><svg class="i"><use href="#i-cal"/></svg>14 Mar</span></div>
+                  <div class="rp-slot is-lived"><span class="rp-chip">✓ Lived</span><span class="rp-slot__t"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span>Swim in the sea before 8am</span><span class="rp-date-chip"><svg class="i"><use href="#i-cal"/></svg>6 Jun</span></div>
+                  <div class="rp-slot is-planned"><span class="rp-chip rp-chip--plan">Planned</span><span class="rp-slot__t"><span class="rp-check"></span>Cook for twelve people</span><span class="rp-date-chip"><svg class="i"><use href="#i-cal"/></svg>21 Nov</span></div>
+                  <div class="rp-slot rp-slot--flip"><span class="rp-chip rp-chip--idea">Idea</span><span class="rp-chip rp-chip--plan">Planned</span><span class="rp-slot__t"><span class="rp-check"></span>Learn to sail</span><span class="rp-date-chip rp-date-chip--ghost">Put it on the calendar</span><span class="rp-date-chip rp-date-chip--set"><svg class="i"><use href="#i-cal"/></svg>12 Dec</span></div>
+                  <div class="rp-slot is-empty"><svg class="i"><use href="#i-plus"/></svg>Add mini-adventure</div>
+                  <div class="rp-slot is-empty is-quiet"><svg class="i"><use href="#i-plus"/></svg>Slot 6</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="split__copy" data-reveal-each>
+            <ul class="kinds">
+              <li style="--k:var(--misogi)"><b>A Misogi.</b> One hard, year-defining challenge, with up to five milestones on the way.</li>
+              <li style="--k:var(--adventure)"><b>Six mini-adventures.</b> Small experiences that break the routine, from idea to planned to lived.</li>
+              <li style="--k:var(--accent)"><b>Three commitments.</b> What deserves a place in your year, in three plain sentences.</li>
+              <li style="--k:var(--habit)"><b>One winning habit per quarter.</b> Tick it when you close the day and watch it hold.</li>
+              <li style="--k:var(--keydate)"><b>A year map.</b> Key dates and periods, month by month, without filling the year with tasks.</li>
+            </ul>
+            <p class="print-note"><svg class="i"><use href="#i-print"/></svg><span><b>Your year on one page.</b> Print it from Horizon and keep it by your desk, where you’ll see it every day.</span></p>
+            <p class="credit">The Misogi, the mini-adventures and the one-habit-per-quarter rhythm come from <a href="https://jesseitzler.com/" rel="noopener">Jesse Itzler</a>.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="progress" aria-labelledby="progress-title">
+      <div class="wrap">
+        <div class="split split--visual-first">
+          <div class="split__visual" data-reveal>
+            <div class="rp-scale rp-scale--pad">
+              <div class="rp rp--progress s-in s-toast" data-scene="progress" data-final="s-in s-toast" aria-hidden="true">
+                <div class="rp-card">
+                  <div class="rp-stats">
+                    <span><small>Days closed</small><b data-count data-from="0" data-paint-total>0</b><em>This year</em></span>
+                    <span class="rp-stats__streak"><small>Current streak</small><b><svg class="i"><use href="#i-flame"/></svg><span data-count="20" data-from="0">20</span><i>days</i></b><em>Close today to keep it going</em></span>
+                    <span><small>Jokers this month</small><b class="rp-jokers"><i></i><i class="is-left"></i></b><em>1 of 2 left</em></span>
+                    <span><small>Trophies</small><b><span data-count="11" data-from="10">11</span><i>/20</i></b><em>Next: Thirty outcomes</em></span>
+                  </div>
+                  <div class="rp-paint" data-paint></div>
+                  <ul class="rp-paint__legend"><li class="l1">Closed</li><li class="l2">+ main outcome</li><li class="l3">+ winning habit</li><li class="lj">Joker used</li></ul>
+                </div>
+                <div class="rp-toast"><span class="rp-toast__badge"><svg class="i"><use href="#i-flame"/></svg></span><span><small>Trophy unlocked</small><b>A month, unbroken</b></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="split__copy" data-reveal-each>
+            <h2 id="progress-title">Watch your year paint itself</h2>
+            <p class="lead">Every day you close paints a square of the year: deeper when the main outcome got done, deepest when you also kept your winning habit.</p>
+            <ul class="ticks">
+              <li>A forgiving streak. It only counts your planning days, and two jokers a month cover the days life gets in the way.</li>
+              <li>Twenty trophies, all visible from day one with their progress. They’re earned by what you do in your life, not by time spent in the app.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="trophies" aria-hidden="true" data-reveal>
+          <div class="rp-scale">
+            <div class="rp rp--trophies s-in" data-scene="trophies" data-final="s-in">
+              <div class="rp-trophy is-unlocked" style="--t:var(--misogi)"><span class="rp-trophy__badge"><svg class="i"><use href="#i-flame"/></svg></span><span><b>A month, unbroken</b><small>Unlocked today</small></span></div>
+              <div class="rp-trophy" style="--t:var(--keydate);--p:.8"><span class="rp-trophy__badge"><svg class="i"><use href="#i-target"/></svg><i><svg class="i"><use href="#i-lock"/></svg></i></span><span><b>Thirty outcomes delivered</b><small>Close thirty days with the main outcome done.</small><span class="rp-meter"><i></i><em>24/30</em></span></span></div>
+              <div class="rp-trophy" style="--t:var(--adventure);--p:.6667"><span class="rp-trophy__badge"><svg class="i"><use href="#i-flag"/></svg><i><svg class="i"><use href="#i-lock"/></svg></i></span><span><b>Six adventures lived</b><small>Live all six mini-adventures.</small><span class="rp-meter"><i></i><em>4/6</em></span></span></div>
+              <div class="rp-trophy" style="--t:var(--misogi);--p:0"><span class="rp-trophy__badge"><svg class="i"><use href="#i-mountain"/></svg><i><svg class="i"><use href="#i-lock"/></svg></i></span><span><b>Misogi accomplished</b><small>Complete the challenge that defines your year.</small><span class="rp-meter"><i></i><em>0/1</em></span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--tint" id="yours" aria-labelledby="yours-title">
+      <div class="wrap split">
+        <div class="split__copy" data-reveal-each>
+          <h2 id="yours-title">Yours, on every device</h2>
+          <p class="lead">No sign-up and no subscription. Your plans live in your browser, and you decide where else they go.</p>
+          <ul class="features">
+            <li><svg class="i"><use href="#i-noaccount"/></svg><span><b>No account.</b> Open it and start; there’s nothing to sign up for.</span></li>
+            <li><svg class="i"><use href="#i-offline"/></svg><span><b>Works offline.</b> Once loaded, it opens without a connection.</span></li>
+            <li><svg class="i"><use href="#i-install"/></svg><span><b>Installs as an app</b> on iPhone, Android, Mac and Windows, straight from the browser.</span></li>
+            <li><svg class="i"><use href="#i-devices"/></svg><span><b>Free sync with your Google Drive.</b> One hidden file in your own Drive keeps your devices in step. Nothing is stored on our servers.</span></li>
+            <li><svg class="i"><use href="#i-export"/></svg><span><b>Export any time.</b> Back up everything to a file, export a day as Markdown, or print it.</span></li>
+          </ul>
+        </div>
+        <div class="split__visual" data-reveal>
+          <div class="rp-scale">
+            <div class="rp rp--sync s-tap s-sync s-done" data-scene="sync" data-final="s-tap s-done" aria-hidden="true">
+              <div class="rp-laptop">
+                <div class="rp-window">
+                  <div class="rp-bar"><i></i><i></i><i></i><span>planner.bemorin.com</span></div>
+                  <div class="rp-mini">
+                    <div class="rp-mini__plan">
+                      <p class="rp-h">Most important outcome</p>
+                      <div class="rp-row rp-row--mit rp-tick rp-tick--laptop"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Send the proposal to Claire</span></div>
+                      <p class="rp-h">Tasks</p>
+                      <div class="rp-row"><span class="rp-check"></span><span class="rp-txt">Book physio</span></div>
+                      <div class="rp-row"><span class="rp-check"></span><span class="rp-txt">Reply to Sam</span></div>
+                    </div>
+                    <div class="rp-mini__sched"><i style="--s:.4;--d:1.6;--c:var(--c-deep)"></i><i style="--s:2.4;--d:.6;--c:var(--c-admin)"></i><i style="--s:3.6;--d:1;--c:var(--c-health)"></i><i style="--s:5.2;--d:1.6;--c:var(--c-deep)"></i></div>
+                  </div>
+                </div>
+                <span class="rp-laptop__base"></span>
+              </div>
+              <span class="rp-syncdot"><svg class="i"><use href="#i-sync"/></svg><small>your Drive</small></span>
+              <div class="rp-phone">
+                <div class="rp-phone__screen">
+                  <span class="rp-phone__url">planner.bemorin.com</span>
+                  <p class="rp-h">Most important outcome</p>
+                  <div class="rp-row rp-row--mit rp-tick rp-tick--phone"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Send the proposal to Claire</span></div>
+                  <p class="rp-h">Tasks</p>
+                  <div class="rp-row"><span class="rp-check"></span><span class="rp-txt">Book physio</span></div>
+                  <div class="rp-row"><span class="rp-check"></span><span class="rp-txt">Reply to Sam</span></div>
+                  <span class="rp-finger"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="visual-note">Tick something on your phone; it shows up on your laptop through your own Google Drive.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section plus" id="plus" aria-labelledby="plus-title">
+      <div class="wrap">
+        <div class="section__intro" data-reveal-each>
+          <p class="kicker"><svg class="i"><use href="#i-spark"/></svg>Daily Planner Plus</p>
+          <h2 id="plus-title">Plan your year in one sitting. Review it on one page.</h2>
+          <p class="lead">Everything above stays free. Plus adds a few things for the year itself, for <span data-plus-price>€29</span>, paid once. No subscription.</p>
+        </div>
+
+        <div class="split split--visual-first plus-split">
+          <div class="split__visual" data-reveal>
+            <div class="rp-scale">
+              <div class="rp rp--yp s-1 s-2 s-3 s-4 s-5 s-6 s-7" data-scene="yearplan" data-final="s-1 s-2 s-3 s-4 s-5 s-6 s-7" aria-hidden="true">
+                <div class="rp-yp">
+                  <div class="rp-yp__head">
+                    <span><span class="rp-eyebrow rp-eyebrow--plus">Plus · Plan your year</span><b class="rp-title">2027, one step at a time</b></span>
+                    <span class="rp-yp__time">About 30 min</span>
+                  </div>
+                  <span class="rp-yp__bar"><i></i></span>
+                  <div class="rp-yp__body">
+                    <ol class="rp-yp__rail">
+                      <li class="yp-step yp-step--1"><i><svg class="i"><use href="#i-check"/></svg></i><span>Misogi</span></li>
+                      <li class="yp-step yp-step--2"><i><svg class="i"><use href="#i-check"/></svg></i><span>Milestones</span></li>
+                      <li class="yp-step yp-step--3"><i><svg class="i"><use href="#i-check"/></svg></i><span>Adventures</span></li>
+                      <li class="yp-step yp-step--4"><i><svg class="i"><use href="#i-check"/></svg></i><span>Commitments</span></li>
+                      <li class="yp-step yp-step--5"><i><svg class="i"><use href="#i-check"/></svg></i><span>Habits</span></li>
+                      <li class="yp-step yp-step--6"><i><svg class="i"><use href="#i-check"/></svg></i><span>Key dates</span></li>
+                      <li class="yp-step yp-step--7"><i><svg class="i"><use href="#i-check"/></svg></i><span>Print</span></li>
+                    </ol>
+                    <div class="rp-yp__panes">
+                      <div class="yp-pane yp-pane--1">
+                        <p class="yp-q">What one challenge would define your year?</p>
+                        <span class="rp-field yp-field"><span data-type data-speed="46">Walk the Camino de Santiago</span></span>
+                        <span class="yp-when"><small>When</small><span class="rp-date-chip yp-pop"><svg class="i"><use href="#i-cal"/></svg>May 3 – May 31</span></span>
+                        <p class="yp-hint">Hard enough that you’re not sure you can do it.</p>
+                      </div>
+                      <div class="yp-pane yp-pane--2">
+                        <p class="yp-q">Milestones on the way</p>
+                        <div class="yp-list">
+                          <span class="yp-row" style="--i:0"><i class="yp-dia"></i><b>Book the flights</b><em>Feb 2</em></span>
+                          <span class="yp-row" style="--i:1"><i class="yp-dia"></i><b>Walk 100 km in one week</b><em>Mar 21</em></span>
+                          <span class="yp-row" style="--i:2"><i class="yp-dia"></i><b>Test the gear on a weekend</b><em>Apr 11</em></span>
+                        </div>
+                      </div>
+                      <div class="yp-pane yp-pane--3">
+                        <p class="yp-q">Six mini-adventures</p>
+                        <div class="yp-tiles">
+                          <span style="--i:0">Sleep in a mountain hut</span>
+                          <span style="--i:1">Swim before 8am</span>
+                          <span style="--i:2">Cook for twelve people</span>
+                          <span style="--i:3">Learn to sail</span>
+                          <span style="--i:4">A night under the stars</span>
+                          <span style="--i:5">A day without a phone</span>
+                        </div>
+                      </div>
+                      <div class="yp-pane yp-pane--4">
+                        <p class="yp-q">Three commitments</p>
+                        <div class="yp-list">
+                          <span class="yp-row" style="--i:0"><i class="yp-num">1</i><b>Home for dinner four nights a week</b></span>
+                          <span class="yp-row" style="--i:1"><i class="yp-num">2</i><b>Read one book a month</b></span>
+                          <span class="yp-row" style="--i:2"><i class="yp-num">3</i><b>Fewer projects, done better</b></span>
+                        </div>
+                      </div>
+                      <div class="yp-pane yp-pane--5">
+                        <p class="yp-q">One winning habit per quarter</p>
+                        <div class="yp-quarters">
+                          <span style="--i:0"><b>Q1</b>Walk after lunch</span>
+                          <span style="--i:1"><b>Q2</b>No phone in the bedroom</span>
+                          <span style="--i:2"><b>Q3</b>Write three lines</span>
+                          <span style="--i:3"><b>Q4</b>Stretch before bed</span>
+                        </div>
+                      </div>
+                      <div class="yp-pane yp-pane--6">
+                        <p class="yp-q">Key dates and periods</p>
+                        <span class="yp-months"><i style="--x:18.8;--i:0"></i><i style="--x:46.8;--i:1"></i><i class="is-band" style="--x:58.6;--w:5;--i:2"></i><i style="--x:88.2;--i:3"></i></span>
+                        <div class="yp-list">
+                          <span class="yp-row" style="--i:0"><i class="yp-dot"></i><b>Team offsite in Lisbon</b><em>Mar 9 – 11</em></span>
+                          <span class="yp-row" style="--i:1"><i class="yp-dot"></i><b>Sam’s wedding</b><em>Jun 20</em></span>
+                          <span class="yp-row" style="--i:2"><i class="yp-dot"></i><b>Summer break</b><em>Aug 2 – 20</em></span>
+                        </div>
+                      </div>
+                      <div class="yp-pane yp-pane--7">
+                        <p class="yp-q">Your year is planned.</p>
+                        <div class="yp-sheet">
+                          <span class="yp-sheet__row"><small>Misogi</small><b>Walk the Camino de Santiago</b><em>May</em></span>
+                          <span class="yp-sheet__row"><small>Milestones</small><span class="yp-sheet__marks"><i class="yp-dia"></i><i class="yp-dia"></i><i class="yp-dia"></i></span><em>3</em></span>
+                          <span class="yp-sheet__row"><small>Adventures</small><span class="yp-sheet__marks"><i></i><i></i><i></i><i></i><i></i><i></i></span><em>6</em></span>
+                          <span class="yp-sheet__row"><small>Habits</small><span class="yp-sheet__qs"><i>Q1</i><i>Q2</i><i>Q3</i><i>Q4</i></span></span>
+                        </div>
+                        <span class="yp-print"><svg class="i"><use href="#i-print"/></svg>Print your year</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="split__copy" data-reveal-each>
+            <h3 class="h3-lg">Plan your year</h3>
+            <p>A guided session sets up Horizon for the whole year in about 30 minutes, one question at a time:</p>
+            <ol class="steps">
+              <li>Your Misogi, and when it happens</li>
+              <li>Milestones on the way</li>
+              <li>Six mini-adventures</li>
+              <li>Three commitments</li>
+              <li>A winning habit for each quarter</li>
+              <li>Key dates and periods</li>
+            </ol>
+            <p>It ends with <b>Print your year</b>: the whole plan on one page, for your desk.</p>
+          </div>
+        </div>
+
+        <div class="split plus-split">
+          <div class="split__copy" data-reveal-each>
+            <h3 class="h3-lg">Your year in review</h3>
+            <p>One page for a whole year: days closed, the painted year, your best streak, trophies unlocked, main outcomes done and where your time went. Then how the Misogi, the mini-adventures and the habits turned out, with a few memories and lessons from your journal.</p>
+            <p class="print-note"><svg class="i"><use href="#i-print"/></svg><span><b>Printable on one page.</b> Keep it with the year it describes, or next to the plan for the one ahead.</span></p>
+          </div>
+          <div class="split__visual" data-reveal>
+            <div class="rp-scale">
+              <div class="rp rp--review s-in s-bars s-notes" data-scene="review" data-final="s-in s-bars s-notes" aria-hidden="true">
+                <div class="rp-rv">
+                  <div class="rp-rv__head">
+                    <span><span class="rp-eyebrow rp-eyebrow--plus">Plus · Year in review</span><b class="rp-rv__title">2026, in review</b></span>
+                    <span class="rp-rv__print"><svg class="i"><use href="#i-print"/></svg>Print</span>
+                  </div>
+                  <div class="rp-rv__stats">
+                    <span><small>Days closed</small><b data-count data-from="0" data-review-closed>0</b></span>
+                    <span class="rp-rv__streak"><small>Best streak</small><b><svg class="i"><use href="#i-flame"/></svg><span data-count="34" data-from="0">34</span><i>days</i></b></span>
+                    <span><small>Trophies</small><b><span data-count="14" data-from="0">14</span><i>/20</i></b></span>
+                    <span><small>Main outcomes</small><b data-count data-from="0" data-review-mits>0</b></span>
+                  </div>
+                  <div class="rp-paint rp-rv__paint" data-review-paint></div>
+                  <div class="rp-rv__cols">
+                    <div>
+                      <p class="rp-rv__h">Where the time went</p>
+                      <div class="rp-rv__bars">
+                        <span style="--c:var(--c-deep);--w:100;--i:0"><b>Deep work</b><i></i><em>412h</em></span>
+                        <span style="--c:var(--c-admin);--w:57;--i:1"><b>Admin</b><i></i><em>236h</em></span>
+                        <span style="--c:var(--c-personal);--w:41;--i:2"><b>Personal</b><i></i><em>168h</em></span>
+                        <span style="--c:var(--c-health);--w:29;--i:3"><b>Health</b><i></i><em>121h</em></span>
+                        <span style="--c:var(--c-learn);--w:16;--i:4"><b>Learning</b><i></i><em>64h</em></span>
+                      </div>
+                    </div>
+                    <div>
+                      <p class="rp-rv__h">Horizon</p>
+                      <div class="rp-rv__hz">
+                        <span style="--k:var(--misogi);--i:0"><i></i><b>Misogi</b><em>Run a marathon · done</em></span>
+                        <span style="--k:var(--adventure);--i:1"><i></i><b>Mini-adventures</b><em>5 of 6 lived</em></span>
+                        <span style="--k:var(--habit);--i:2"><i></i><b>Winning habits</b><em>3 of 4 quarters kept</em></span>
+                        <span style="--k:var(--accent);--i:3"><i></i><b>Commitments</b><em>Read at the start of each month</em></span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="rp-rv__notes">
+                    <p class="rp-rv__h">Memories and lessons</p>
+                    <span style="--i:0"><time>Mar 14</time><b>A night in the mountain hut</b><em>A rough draft beats a blank page</em></span>
+                    <span style="--i:1"><time>Sep 27</time><b>Crossing the finish line with Sam</b><em>Short runs still count</em></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="plus-more" data-reveal-each>
+          <article class="plus-card plus-card--paint">
+            <div class="rp-scale plus-card__visual">
+              <div class="rp rp--pal" data-scene="palettes" data-final="" aria-hidden="true">
+                <div class="rp-pal">
+                  <div class="rp-pal__grid" data-palette-grid></div>
+                  <div class="rp-pal__swatches">
+                    <span class="sw sw--terracotta"><i></i>Terracotta</span>
+                    <span class="sw sw--ocean"><i></i>Ocean</span>
+                    <span class="sw sw--forest"><i></i>Forest</span>
+                    <span class="sw sw--plum"><i></i>Plum</span>
+                    <span class="sw sw--graphite"><i></i>Graphite</span>
+                    <span class="sw sw--sunset"><i></i>Sunset</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="plus-card__copy">
+              <h3><svg class="i"><use href="#i-palette"/></svg>Colours for your painted year</h3>
+              <p>Five more palettes for the year that paints itself: Ocean, Forest, Plum, Graphite and Sunset. Terracotta stays free.</p>
+            </div>
+          </article>
+          <div class="plus-more__side">
+            <article class="plus-card">
+              <h3><svg class="i"><use href="#i-spark"/></svg>Future Plus features, included</h3>
+              <p>What’s added to Plus later is yours too, at no extra cost.</p>
+            </article>
+            <article class="plus-card">
+              <h3><svg class="i"><use href="#i-devices"/></svg>Paid once, on all your devices</h3>
+              <p>No subscription. Plus is saved in your planner’s settings, so Google Drive sync and backups carry it to your other devices.</p>
+            </article>
+          </div>
+        </div>
+
+        <div class="plus-buy" data-reveal>
+          <div class="plus-buy__price"><b data-plus-price>€29</b><span>once, for life</span></div>
+          <p class="plus-buy__note">Every Plus feature for one person. No subscription, nothing to renew.</p>
+          <div class="plus-buy__act">
+            <div class="plus-cta" data-plus-cta><button class="btn btn--primary" type="button" disabled>Coming soon</button></div>
+            <a class="plus-buy__alt" href="#teams">Giving it to a team?<svg class="i"><use href="#i-arrow"/></svg></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section teams" id="teams" aria-labelledby="teams-title">
+      <div class="wrap">
+        <div class="band" data-reveal>
+          <div class="band__grid">
+            <div class="band__copy">
+              <p class="band__kicker"><svg class="i"><use href="#i-gift"/></svg>Team gift</p>
+              <h2 id="teams-title">The year-end gift your team will use all year.</h2>
+              <p class="lead">Give everyone Daily Planner Plus. You forward one link; each person who opens it gets Plus for life on their own planner. No accounts to create, no names collected.</p>
+              <div class="promise">
+                <svg class="i"><use href="#i-shield"/></svg>
+                <p><b>Every planner stays private.</b> Each person plans in their own planner, in their own browser. The company never sees it: there’s no team account, no manager dashboard and no list of who activated the gift.</p>
+              </div>
+            </div>
+            <ul class="why" data-reveal-each>
+              <li><svg class="i"><use href="#i-gift"/></svg><span><b>Useful all year.</b> A gift people open every morning, instead of another object for the drawer.</span></li>
+              <li><svg class="i"><use href="#i-link"/></svg><span><b>One link to forward.</b> By email, Slack or Teams, with a message ready to send. Nothing to install.</span></li>
+              <li><svg class="i"><use href="#i-globe"/></svg><span><b>Made for remote and international teams.</b> Everyone activates it wherever they are, on their own device.</span></li>
+              <li><svg class="i"><use href="#i-tag"/></svg><span><b>From about <span data-min-per-person>€5</span> per person.</b> One price for the company, paid once, with an invoice.</span></li>
+            </ul>
+          </div>
+
+          <div class="seats" id="seats">
+            <div class="seats__head">
+              <h3>How seats work</h3>
+              <p>A seat is one activation of Plus. You never assign seats to names.</p>
+            </div>
+            <div class="seats__grid">
+              <div class="rp-scale seats__visual">
+                <div class="rp rp--gift s-open s-on s-seat" data-scene="gift" data-final="s-open s-on s-seat" aria-hidden="true">
+                  <div class="rp-gf">
+                    <div class="rp-gf__card rp-gf__msg">
+                      <span class="rp-gf__label"><svg class="i"><use href="#i-chat"/></svg>Team chat</span>
+                      <span class="rp-gf__who"><i>PT</i><b>People team</b><small>09:12</small></span>
+                      <p>Our year-end gift to all of you: Daily Planner Plus. Open the link to activate it.</p>
+                      <span class="rp-gf__link"><svg class="i"><use href="#i-link"/></svg>planner.bemorin.com/?gift=K7QM-4T9X-PZ2R</span>
+                    </div>
+                    <span class="rp-gf__arrow"><svg class="i"><use href="#i-arrow"/></svg></span>
+                    <div class="rp-gf__card rp-gf__dialog">
+                      <span class="rp-gf__label"><svg class="i"><use href="#i-user"/></svg>Each person’s planner</span>
+                      <span class="rp-gf__badge"><svg class="i"><use href="#i-gift"/></svg></span>
+                      <small class="rp-gf__from">A gift from</small>
+                      <b class="rp-gf__org">Acme Studio</b>
+                      <p class="rp-gf__note">“Thank you for this year. Plan the next one well.”</p>
+                      <span class="rp-gf__btn"><span class="t1">Activate Plus</span><span class="t2"><svg class="i"><use href="#i-check"/></svg>Plus is active</span></span>
+                      <em class="rp-gf__fine">No account needed</em>
+                    </div>
+                    <span class="rp-gf__arrow"><svg class="i"><use href="#i-arrow"/></svg></span>
+                    <div class="rp-gf__card rp-gf__seats">
+                      <span class="rp-gf__label"><svg class="i"><use href="#i-gift"/></svg>Your manage page</span>
+                      <small class="rp-gf__from">Seats used</small>
+                      <b class="rp-gf__count"><span data-count="32" data-from="31">32</span><i>/ 50</i></b>
+                      <span class="rp-gf__meter"><i></i></span>
+                      <em class="rp-gf__fine">No names, no accounts</em>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <ol class="seats__steps" data-reveal-each>
+                <li><span class="seats__n">1</span><span><b>One gift link.</b> After payment you get a single link to forward, with a message ready to send.</span></li>
+                <li><span class="seats__n">2</span><span><b>One person, one seat.</b> Each person who opens it activates Plus for life on their own planner. Each activation uses one seat.</span></li>
+                <li><span class="seats__n">3</span><span><b>You see the count.</b> Your manage page shows how many seats are used, and lets you edit the message people see with the gift.</span></li>
+                <li><span class="seats__n">4</span><span><b>No names, no accounts.</b> Nobody signs up and nobody is listed, so there’s nothing to assign or take back.</span></li>
+              </ol>
+            </div>
+            <p class="seats__fine">The link can be activated for 12 months. A small margin covers people who set the planner up again on a new device.</p>
+          </div>
+
+          <div class="band__actions">
+            <a class="btn btn--light" href="#pricing">See prices</a>
+            <a class="btn btn--outline-light" href="#teams" data-manager-mail><svg class="i"><use href="#i-mail"/></svg>Send this to my manager</a>
+            <button class="btn btn--text-light" type="button" data-manager-copy><svg class="i"><use href="#i-copy"/></svg>Copy message</button>
+            <a class="btn btn--text-light" href="#request" data-request="question">Ask a question</a>
+            <p class="band__status" data-copy-status role="status" aria-live="polite"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="pricing" aria-labelledby="pricing-title">
+      <div class="wrap">
+        <div class="pricing__head">
+          <div class="section__intro" data-reveal-each>
+            <h2 id="pricing-title">Free to use. Paid once for more.</h2>
+            <p class="lead">The planner is free, with every feature above. Plus and the team gift are one-time payments: no subscription, nothing to renew.</p>
+          </div>
+          <div class="cur" role="group" aria-label="Currency" data-currency hidden>
+            <button type="button" data-cur="EUR" aria-pressed="true">€ EUR</button>
+            <button type="button" data-cur="USD" aria-pressed="false">$ USD</button>
+          </div>
+        </div>
+        <div class="prices" data-reveal-each>
+          <article class="price price--personal" aria-labelledby="price-personal">
+            <h3 id="price-personal">Personal</h3>
+            <p class="price__big">Free, forever</p>
+            <p class="price__sub">Everything in the planner, for as long as you use it.</p>
+            <ul class="squares">
+              <li>Day and Week views with time blocks</li>
+              <li>Close day, Unresolved, the journal and time stats</li>
+              <li>Horizon: Misogi, mini-adventures, commitments, habits and year map</li>
+              <li>Progress: the painted year, the streak and twenty trophies</li>
+              <li>Search, floating mode, export, backup and print</li>
+              <li>Works offline and installs as an app</li>
+              <li>Free sync through your own Google Drive</li>
+            </ul>
+            <a class="btn btn--ghost" href="../" data-cta="app">Open the planner</a>
+          </article>
+          <article class="price price--plus" aria-labelledby="price-plus">
+            <h3 id="price-plus"><svg class="i"><use href="#i-spark"/></svg>Plus</h3>
+            <p class="price__big"><span data-plus-price>€29</span> <small>once</small></p>
+            <p class="price__sub">For one person, for life. No subscription.</p>
+            <ul class="squares">
+              <li>Plan your year: a guided session of about 30 minutes</li>
+              <li>Your year in review, printable on one page</li>
+              <li>Five more colours for your painted year</li>
+              <li>Plus features added later, included</li>
+              <li>Carried to your other devices by sync and backups</li>
+            </ul>
+            <div class="plus-cta" data-plus-cta><button class="btn btn--primary" type="button" disabled>Coming soon</button></div>
+          </article>
+          <article class="price price--team" aria-labelledby="price-team">
+            <h3 id="price-team"><svg class="i"><use href="#i-gift"/></svg>Team gift</h3>
+            <p class="price__big">Plus for everyone</p>
+            <p class="price__sub">One price for the company, by number of people. <a href="#seats">How seats work</a></p>
+            <div class="tiers" data-tiers>
+              <noscript><p class="tiers__fallback">From €195 for up to 10 people to €4,995 for up to 1,000 people, paid once. Larger organisations are quoted.</p></noscript>
+            </div>
+            <p class="price__note" data-pricing-note>One-time payment. Invoice included. No subscription. No VAT is added.</p>
+            <div class="talk" data-talk hidden></div>
+          </article>
+        </div>
+
+        <div class="band request" id="request" data-form-panel data-reveal>
+          <form class="team-form" data-team-form novalidate aria-labelledby="request-title">
+            <div class="team-form__head">
+              <p class="band__kicker"><svg class="i"><use href="#i-mail"/></svg>Invoice, quote or question</p>
+              <h3 id="request-title" tabindex="-1" data-form-title>Get it by invoice</h3>
+              <p data-form-intro>Tell us where to send the invoice. You’ll get it by email, then the gift link once it’s paid.</p>
+            </div>
+            <fieldset class="kind-seg" data-kind-group>
+              <legend class="sr-only">What do you need?</legend>
+              <label><input type="radio" name="kind" value="invoice" checked><span>Invoice</span></label>
+              <label><input type="radio" name="kind" value="quote"><span>Quote</span></label>
+              <label><input type="radio" name="kind" value="question"><span>Question</span></label>
+            </fieldset>
+            <p class="kind-note" data-kind-note role="status" hidden></p>
+            <div class="fields">
+              <label class="field"><span>Work email</span><input type="email" name="email" autocomplete="email" required maxlength="254" placeholder="you@company.com" aria-describedby="err-email"><small class="field__err" id="err-email"></small></label>
+              <label class="field"><span>Your name</span><input type="text" name="name" autocomplete="name" required maxlength="80" aria-describedby="err-name"><small class="field__err" id="err-name"></small></label>
+              <label class="field"><span>Company</span><input type="text" name="company" autocomplete="organization" required maxlength="120" aria-describedby="err-company"><small class="field__err" id="err-company"></small></label>
+              <label class="field"><span>Plan</span><select name="plan" data-plan-select aria-describedby="err-plan">
+                <option value="up-to-10">Up to 10 people</option>
+                <option value="up-to-50" selected>Up to 50 people</option>
+                <option value="up-to-100">Up to 100 people</option>
+                <option value="up-to-500">Up to 500 people</option>
+                <option value="up-to-1000">Up to 1,000 people</option>
+                <option value="over-1000">More than 1,000 people</option>
+              </select><small class="field__err" id="err-plan"></small></label>
+              <label class="field"><span>Number of people</span><input type="number" name="teamSize" inputmode="numeric" required min="2" max="100000" step="1" placeholder="e.g. 40" aria-describedby="err-teamSize"><small class="field__err" id="err-teamSize"></small></label>
+              <label class="field"><span>When to send it</span><select name="timing">
+                <option value="december-2026" selected>Before the holidays (December 2026)</option>
+                <option value="january-2027">January 2027</option>
+                <option value="q1-2027">Later in Q1 2027</option>
+                <option value="later">Later</option>
+              </select></label>
+              <label class="field field--wide"><span data-message-label>Anything else? <em>Optional</em></span><textarea name="message" rows="3" maxlength="1000" aria-describedby="err-message message-count"></textarea><small class="field__err" id="err-message"></small><small class="field__count" id="message-count" data-message-count>0/1000</small></label>
+            </div>
+            <div class="hp" aria-hidden="true"><label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+            <label class="consent" data-consent-row><input type="checkbox" name="consent" required aria-describedby="err-consent"><span>You may email me about this request.</span></label>
+            <small class="field__err field__err--consent" id="err-consent"></small>
+            <p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request. <a href="#privacy">How requests are handled</a></p>
+            <p class="form-error" data-form-error role="alert" hidden></p>
+            <div class="team-form__actions">
+              <button class="btn btn--light" type="submit" data-form-submit disabled>Request the invoice</button>
+            </div>
+            <p class="form-off" data-form-off hidden>Requests open when this site’s API is switched on.</p>
+            <noscript><p class="form-off">Sending a request needs JavaScript.</p></noscript>
+          </form>
+          <div class="form-done" data-form-done hidden tabindex="-1">
+            <svg class="i"><use href="#i-check"/></svg>
+            <div>
+              <p data-form-done-text>Thanks, your request is in. You’ll get a reply by email.</p>
+              <button class="btn btn--text-light" type="button" data-form-again>Send another request</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--tint" id="faq" aria-labelledby="faq-title">
+      <div class="wrap faq">
+        <div class="faq__intro" data-reveal-each>
+          <h2 id="faq-title">Questions</h2>
+          <p>Something missing? The planner’s own Help page explains every feature and shortcut, or <a href="#request" data-request="question">ask a question</a>.</p>
+        </div>
+        <div class="faq__groups" data-faq data-reveal-each>
+          <div class="faq__group">
+            <h3 class="faq__label">The planner</h3>
+            <div class="faq__list">
+              <details class="qa" name="faq">
+                <summary>Do I need an account?</summary>
+                <div class="qa__a"><p>No. Open the planner and start. There’s no sign-up, no email and no password.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>Is it really free?</summary>
+                <div class="qa__a"><p>Yes. Everything in the planner except the Plus features is free, for as long as you use it: no trial, no account and no card. Plus is an optional one-time purchase, and companies can give it to their people. That’s what pays for the planner.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>Where is my data stored?</summary>
+                <div class="qa__a"><p>In your browser, on your device. It isn’t sent to our servers. You can back up everything to a file at any time and restore it in another browser.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>Does it work offline?</summary>
+                <div class="qa__a"><p>Yes. Once the planner has loaded, it reopens without a connection, which is especially handy when it’s installed as an app.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>Is Google Drive sync safe?</summary>
+                <div class="qa__a"><p>It’s optional. When you connect your Google account, the planner can only reach its own hidden sync file in your Drive, not your other files. Your plans travel between your devices and your Drive; nothing is stored on our servers. Before applying changes from another device, the planner keeps a few recovery snapshots on your device.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>Which devices does it work on?</summary>
+                <div class="qa__a"><p>Any recent browser on iPhone, iPad, Android, Mac, Windows or Linux. To install it as an app, use Install in Chrome or Edge, or Share → Add to Home Screen on iPhone and iPad.</p></div>
+              </details>
+            </div>
+          </div>
+          <div class="faq__group">
+            <h3 class="faq__label">Daily Planner Plus</h3>
+            <div class="faq__list">
+              <details class="qa" name="faq">
+                <summary>What does Plus add?</summary>
+                <div class="qa__a">
+                  <ul class="qa__list">
+                    <li><b>Plan your year.</b> A guided session that sets up Horizon for the year in about 30 minutes: your Misogi and when it happens, milestones, six mini-adventures, three commitments, a habit per quarter and key dates. It ends with your year printed on one page.</li>
+                    <li><b>Your year in review.</b> One printable page: days closed, the painted year, your best streak, trophies, main outcomes done, time by category, how the Misogi, adventures and habits went, and a few memories and lessons from your journal.</li>
+                    <li><b>Colours for your painted year.</b> Five more palettes. Terracotta stays free.</li>
+                    <li><b>What comes next.</b> Plus features added later are included.</li>
+                  </ul>
+                </div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>Is Plus a subscription?</summary>
+                <div class="qa__a"><p>No. You pay <span data-plus-price>€29</span> once and keep Plus for life, with the Plus features added later. It’s saved in your planner’s settings, so Google Drive sync and backups carry it to your other devices.</p></div>
+              </details>
+            </div>
+          </div>
+          <div class="faq__group">
+            <h3 class="faq__label">Team gift</h3>
+            <div class="faq__list">
+              <details class="qa" name="faq">
+                <summary>How do seats work?</summary>
+                <div class="qa__a"><p>You get one gift link. Each person who opens it activates Plus for life on their own planner, and each activation uses one seat. Your manage page shows how many seats are used and lets you change the message people see. Nobody signs up and no names are collected, so seats aren’t assigned to people: whoever opens the link first gets one. Share it only with the people it’s for. A small margin covers people who set the planner up again on a new device.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>Does the company see what people plan?</summary>
+                <div class="qa__a"><p>No. Each person plans in their own planner, in their own browser. The gift only unlocks Plus: there’s no team account, no dashboard and no list of who activated it, so there’s nothing for the company, or for us, to look at.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>Can we pay by invoice?</summary>
+                <div class="qa__a"><p data-faq-pay>Yes. Choose a team size and send the request: you’ll receive an invoice to pay by bank transfer, then the gift link once it’s paid. It’s one payment, with no subscription.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>Which currencies do you charge in?</summary>
+                <div class="qa__a"><p>Euros in the euro area and US dollars elsewhere, with the same numbers. The page picks one from your browser’s region; the EUR / USD switch above the prices changes it.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>How long does the gift link work?</summary>
+                <div class="qa__a"><p>People can activate it for 12 months after it’s created. Once someone has activated Plus, it stays on their planner for life.</p></div>
+              </details>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="final" aria-labelledby="final-title" data-final-cta>
+      <div class="wrap final__inner" data-reveal-each>
+        <div class="final__mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i class="is-rest"></i><i class="is-rest"></i></div>
+        <h2 id="final-title">Start with today.</h2>
+        <p class="lead">Open the planner, write one thing to keep in mind, and choose the outcome that would make today count.</p>
+        <div class="cta-row">
+          <a class="btn btn--primary" href="../" data-cta="app">Open the planner — it’s free</a>
+          <a class="btn btn--ghost" href="#teams">Give it to your team</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot__inner">
+      <div class="foot__brand">
+        <img src="../favicon.svg" alt="" width="24" height="24" loading="lazy" decoding="async">
+        <span><b>Daily Planner</b> By <a href="https://bemorin.com/" rel="noopener">Ben Morin</a></span>
+      </div>
+      <nav class="foot__links" aria-label="Footer">
+        <a href="../" data-cta="app">Open the planner</a>
+        <a href="#plus">Plus</a>
+        <a href="#teams">Teams</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#request" data-request="question">Ask a question</a>
+        <span class="foot__social" data-social hidden></span>
+      </nav>
+      <nav class="foot__legal" aria-label="Legal">
+        <a href="https://bemorin.com/privacy" rel="noopener">Privacy</a>
+        <a href="https://bemorin.com/terms" rel="noopener">Terms</a>
+        <a href="https://bemorin.com/cookies" rel="noopener">Cookies</a>
+      </nav>
+    </div>
+    <div class="wrap foot__privacy" id="privacy" data-privacy hidden>
+      <h2>What this page counts and stores</h2>
+      <p>This page counts a few anonymous events per day, such as page views and button clicks, without any identifier: no cookies, and no IP address stored. If you send a request, what you submit (email, name, company, plan, number of people, timing and message) is stored only to reply to you, and deleted on request.</p>
+    </div>
+  </footer>
+
+  <div class="dock" data-dock>
+    <a class="btn btn--primary" href="../" data-cta="app">Open the planner — it’s free</a>
+  </div>
+</body>
+</html>

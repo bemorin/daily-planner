@@ -34,10 +34,15 @@ app.js                   application coordinator and shared interaction shell
   │   ├─ records.js
   │   └─ recovery-store.js
   ├─ src/ui/
-  │   └─ calendar-popover.js
+  │   ├─ calendar-popover.js
+  │   ├─ motion.js         animation presets; no-ops under reduced motion
+  │   └─ theme.js          per-device System / Light / Dark preference
+  ├─ src/vendor/
+  │   └─ motion.js         vendored Motion (mini animate, stagger, spring)
   └─ src/features/
       ├─ fit.js
       ├─ horizon-model.js
+      ├─ horizon-view.js     Horizon sections, overview ribbon, Add chooser
       ├─ personal-sync.js
       ├─ pip-styles.js
       ├─ print.js
@@ -80,8 +85,11 @@ styles/
 ├─ settings.css    settings-specific UI
 ├─ horizon.css     Horizon / Year map
 ├─ workspace.css   optional Personal / Enterprise workspace shell
+├─ theme.css       dark tokens, Appearance control, motion hand-off, focus rings
 └─ print.css       print-only output
 ```
+
+Dark mode is token-based: `theme.css` redefines the `:root` colour tokens for `prefers-color-scheme: dark` (unless the visitor chose Light) and for an explicit `data-theme="dark"`. Both are scoped to `@media screen`, so printed pages keep the light print stylesheet. New components should use the tokens rather than literal colours.
 
 The production build concatenates them in the order declared by `styles.css`. That order is part of the current cascade contract and should not be changed casually.
 
@@ -116,6 +124,8 @@ Normalization happens when data is loaded so older local records can continue to
 ## Personal sync invariants
 
 Personal sync does not turn Google Drive into the runtime database. The local planner remains usable before, during, and after sync.
+
+Local mutations always commit to `localStorage` first. When Google Drive is connected, dirty records are batched and uploaded opportunistically after a short idle pause, with a maximum wait so work does not remain unsynced indefinitely — but only while a usable in-memory Google access token already exists. Automatic sync never calls Google Identity Services `requestAccessToken()` and therefore never opens OAuth UI. Returning to the app, regaining connectivity, closing the day, and **Sync now** (with a usable token) are additional sync points. **Connect** / **Reconnect** are the only interactive authorization gestures. There is no continuous polling and no write-after-every-edit to Drive.
 
 The first protocol uses stable top-level record boundaries:
 
@@ -174,11 +184,31 @@ The app currently uses direct DOM rendering rather than a virtual DOM. This keep
 
 Feature modules receive explicit callbacks/context from `app.js` rather than importing mutable application state directly. New modules should follow the same rule.
 
+## Motion policy
+
+Motion is a presentation layer, never a state transition. `src/ui/motion.js` exposes a handful of presets (dialog enter/exit, popover, panel change, list item enter/exit, height toggle, indicator slide). Each one resolves when the animation settles, clears the inline styles it wrote, and does nothing when the system prefers reduced motion or the browser lacks the Web Animations API. While Motion is active the root carries `has-motion`, which removes the CSS transitions of the components it animates (CSS transitions outrank Web Animations in the cascade). Animate only where movement explains something — arrival, change of place, addition or removal — and keep exits shorter than entrances.
+
+## Horizon view
+
+`src/features/horizon-view.js` renders only the active Horizon section and binds its interactions; `app.js` still owns year-data normalization, persistence and the shared Horizon popovers, and passes them in through an explicit context object. `buildHorizonModel()` is a pure derivation (events, upcoming items, per-section progress) and is unit-tested.
+
+## Progress, setup and owner API
+
+`src/features/progress-model.js` is a pure derivation of the painted year, the streak (planning days only, two jokers a month, today pending until closed) and the trophies from saved days and Horizon data; it is unit-tested and memoised briefly by `app.js`. `progress-view.js` renders it for Horizon, the Overview card and the Close-day summary.
+
+First-run setup (`onboarding.js`), the install dialog (`install.js`), the Google Drive sync guide and waitlist (`sync-guide.js`) and versioned feedback (`feedback.js`) are self-contained features that receive their dependencies from `app.js`.
+
+`src/lib/planner-api.js` is the only client of the optional owner API and does nothing while `PLANNER_API_URL` is blank. The API itself lives in `server/planner-api.js` (a fetch-style router with a pluggable store), served by `functions/api/[[path]].js` on Cloudflare Pages with D1 (`server/d1-store.js`, `migrations/`) and by `scripts/serve.mjs` locally with a JSON file. The owner dashboard is static (`admin/`); it exchanges the admin token and an optional TOTP code for a signed 8-hour session (`server/admin-auth.js`) and reads the API with it. `src/features/privacy.js` builds the Privacy notice from the configuration, so it appears exactly when something is sent. The landing page (`welcome/`) is a separate static page that imports `src/config.js` and `src/lib/planner-api.js` and nothing else from the planner. See [`docs/FEEDBACK_AND_WAITLIST.md`](./docs/FEEDBACK_AND_WAITLIST.md).
+
+## Daily Planner Plus
+
+`src/lib/plus.js` verifies licences (`DP1.<payload>.<signature>`, ECDSA P-256) with the public key from the runtime configuration and keeps the licence in the planner's settings, so sync and backups carry it. `src/features/plus-dialog.js` holds the Plus dialog, the gift welcome sheet and the `?gift=`, `?purchase=` and `?license=` entry flows. The Plus features — `year-plan.js` (Plan your year), `year-review.js` (Your year in review) and `paint-palettes.js` — live inside Horizon and receive `ctx.plus` from `app.js`; without Plus they stay visible with a badge and open the Plus dialog. On the server, `server/licenses.js` signs licences, `server/gifts.js` handles gift links and seats (one conditional `UPDATE` so redemptions can't exceed the limit), `server/stripe.js` reads Checkout Sessions, and `server/email.js` sends through Resend.
+
 ## Safety boundaries
 
 User-authored text inserted into HTML templates must pass through the existing escaping helpers. URLs are normalized before being exposed as links.
 
-The public runtime configuration deliberately contains no owner-specific social or repository URLs. Production builds may inject them through environment variables without changing source files. Optional `CLOUD_API_URL` and `GOOGLE_CLIENT_ID` values may also be injected. When the Google client ID is absent, Personal sync renders nothing and makes no Google request; when the cloud API URL is absent, the workspace feature makes no organization request.
+The public runtime configuration deliberately contains no owner-specific social or repository URLs. Production builds may inject them through environment variables without changing source files. Optional `CLOUD_API_URL`, `GOOGLE_CLIENT_ID` and `PLANNER_API_URL` values may also be injected. When the Google client ID is absent, Personal sync renders nothing and makes no Google request; when the cloud API URL is absent, the workspace feature makes no organization request; when the planner API URL is absent, no count, waitlist or feedback request is made.
 
 ## Build and release verification
 

@@ -14,6 +14,8 @@ Read [`ARCHITECTURE.md`](./ARCHITECTURE.md). In particular, do not treat a large
 - Keep Day and Week as views over the same schedule data.
 - Escape user-authored content before inserting it into HTML templates.
 - Do not add `!important` as a routine specificity fix.
+- Use colour tokens (`var(--ink)`, `var(--surface)`, …) instead of literal colours so Light and Dark stay in step.
+- Animate through the presets in `src/ui/motion.js`, and only where movement explains a change; never make state depend on an animation finishing.
 - Do not add owner-specific URLs or deployment credentials to source files.
 - Keep code-quality changes separate from UX/product changes whenever possible.
 
@@ -27,7 +29,8 @@ Put logic in the narrowest existing domain that owns it:
 - reusable UI primitive → `src/ui/`;
 - Day schedule styles → `styles/schedule.css`;
 - Week styles → `styles/week.css`;
-- Horizon styles → `styles/horizon.css`.
+- Horizon styles → `styles/horizon.css`;
+- theme tokens, motion hand-off and focus rings → `styles/theme.css`.
 
 `app.js` should coordinate shared state and cross-feature lifecycle. New isolated behavior should not automatically be added there.
 

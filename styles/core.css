@@ -113,7 +113,7 @@ a { color: inherit; }
 .topbar {
   min-height: 60px;
   display: grid;
-  grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
   align-items: center;
   gap: 12px;
   padding: 0 0 11px;
@@ -136,7 +136,7 @@ a { color: inherit; }
 .modal__eyebrow {
   margin: 0 0 3px;
   color: var(--faint);
-  font-size: .61rem;
+  font-size: .64rem;
   font-weight: 660;
   text-transform: uppercase;
   letter-spacing: .078em;
@@ -744,7 +744,7 @@ body.has-modal { overflow: hidden; }
 .select-trigger:focus-visible {
   outline: 0;
   border-color: var(--line-strong);
-  background: #fff;
+  background: var(--surface-strong);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 4%, transparent);
 }
 
@@ -785,7 +785,7 @@ body.has-modal { overflow: hidden; }
 .primary-button { background: var(--ink); color: var(--paper); }
 
 .primary-button:hover,
-.primary-button:focus-visible { outline: 0; background: #302c27; }
+.primary-button:focus-visible { outline: 0; background: color-mix(in srgb, var(--ink) 86%, var(--paper)); }
 
 .secondary-button { border: 1px solid var(--line); background: var(--surface-strong); color: var(--muted); }
 
@@ -1439,10 +1439,12 @@ textarea,
 
 .app-tooltip-float {
   position: fixed;
-  z-index: 800;
+  /* Tooltips only show for the active dialog's controls, so they sit above dialogs. */
+  z-index: calc(var(--z-popover) + 10);
+  /* As wide as its words need, never wider than 260px or the viewport; longer labels wrap inside the box. */
   width: max-content;
-  max-width: min(190px, calc(100vw - 16px));
-  padding: 5px 7px;
+  max-width: min(260px, calc(100vw - 16px));
+  padding: 5px 8px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: color-mix(in srgb, var(--surface-strong) 98%, transparent);
@@ -1450,15 +1452,18 @@ textarea,
   box-shadow: 0 8px 22px rgba(25,22,17,.10);
   font-size: .61rem;
   font-weight: 560;
-  line-height: 1.2;
-  white-space: nowrap;
+  line-height: 1.35;
+  white-space: normal;
+  text-wrap: balance;
   pointer-events: none;
   opacity: 0;
   transform: translateY(-2px);
   transition: opacity 100ms ease, transform 130ms cubic-bezier(.22,1,.36,1);
 }
 
+.app-tooltip-float[data-placement="above"] { transform: translateY(2px); }
 .app-tooltip-float.is-visible { opacity: 1; transform: translateY(0); }
+.app-tooltip-float > span { min-width: 0; overflow-wrap: break-word; }
 
 .pane-scroll,
 .left { overflow-x: clip; }
@@ -1699,12 +1704,17 @@ textarea,
 .mobile-more-wrap { display: none; }
 
 
-@media (max-width: 790px) {
-  .topbar { grid-template-columns: minmax(54px, 1fr) auto minmax(0,1fr); }
+@media (max-width: 1080px) {
+  /* Collapse secondary header actions into More before the middle nav loses space. */
   .header-secondary { display: none; }
+  .mobile-more-wrap { display: flex; }
+  .actions { gap: 1px; }
+}
+
+@media (max-width: 790px) {
+  .topbar { grid-template-columns: max-content minmax(0, 1fr) max-content; }
   .expanded-view-button { display: none; }
   .header-horizon-action { display: none; }
-  .mobile-more-wrap { display: flex; }
   .actions { gap: 0; }
   .date-nav { min-width: 0; }
 }
@@ -2422,7 +2432,7 @@ h3,
 
 .reset-warning span { color: var(--muted); font-size: .68rem; line-height: 1.45; }
 
-.primary-button--danger { background: var(--danger); color: #fff; }
+.primary-button--danger { background: var(--danger); color: var(--paper); }
 
 .primary-button--danger:hover,
 .primary-button--danger:focus-visible { background: color-mix(in srgb, var(--danger) 88%, #000); }
@@ -2445,7 +2455,7 @@ h3,
 
 .section-head { align-items: baseline; }
 
-.section-guidance { margin: 0 0 0 auto; max-width: 46%; color: var(--faint); font-size: .62rem; line-height: 1.35; text-align: right; }
+.section-guidance { margin: 0 0 0 auto; max-width: 46%; color: var(--faint); font-size: .67rem; line-height: 1.4; text-align: right; }
 
 .focus-input {
   width: 100%;
@@ -2811,7 +2821,7 @@ div.open-work-row__main { cursor: default; }
 
 /* Tooltip shortcuts should read as real keycaps. */
 
-.app-tooltip-float kbd { min-width: 20px; text-align: center; }
+.app-tooltip-float kbd { flex: none; min-width: 20px; text-align: center; }
 
 /* Open Work sits beside Journal/Stats in the global action sequence. */
 

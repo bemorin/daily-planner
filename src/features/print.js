@@ -1,3 +1,5 @@
+import { buildYearPrintModel, renderYearPrint } from './year-print.js';
+
 export function createPrintFeature(ctx) {
   let printTitleBefore = document.title;
 
@@ -94,6 +96,17 @@ export function createPrintFeature(ctx) {
     return sheet;
   }
 
+  /** One landscape page for a Horizon year (see year-print.js). */
+  function buildYearSheet(year) {
+    removePrintSheet();
+    const sheet = document.createElement('section');
+    sheet.className = 'print-sheet print-sheet--year';
+    sheet.dataset.printSheet = 'true';
+    sheet.innerHTML = renderYearPrint(buildYearPrintModel(ctx.yearPrintData(year)));
+    document.body.append(sheet);
+    return sheet;
+  }
+
   function setPrintTitle() {
     const rangeView = ctx.getPlannerRangeView();
     if (rangeView === 'week') {
@@ -113,14 +126,20 @@ export function createPrintFeature(ctx) {
     ctx.updateNow();
   }
 
-  function preparePrint() {
+  // While Horizon is open, printing (button, P or the browser's own command) prints its year.
+  function preparePrint(year = ctx.getPrintYear?.() || null) {
     ctx.hideAppTooltip();
     ctx.closePopover();
-    ctx.updatePrintSizing();
     printTitleBefore = document.title;
-    if (ctx.getPlannerRangeView() === 'week') ctx.renderWeekSchedule();
-    setPrintTitle();
-    buildPrintSheet();
+    if (year) {
+      document.title = `Daily Planner - year-${year}`;
+      buildYearSheet(year);
+    } else {
+      ctx.updatePrintSizing();
+      if (ctx.getPlannerRangeView() === 'week') ctx.renderWeekSchedule();
+      setPrintTitle();
+      buildPrintSheet();
+    }
     document.body.classList.add('is-printing');
   }
 
@@ -129,9 +148,14 @@ export function createPrintFeature(ctx) {
     requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
   }
 
+  function printYear(year) {
+    preparePrint(year);
+    requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+  }
+
   function handleBeforePrint() {
     if (!document.body.classList.contains('is-printing') || !document.querySelector('[data-print-sheet]')) preparePrint();
   }
 
-  return { printPlanner, buildPrintSheet, cleanupPrintMode, handleBeforePrint };
+  return { printPlanner, printYear, buildPrintSheet, buildYearSheet, cleanupPrintMode, handleBeforePrint };
 }

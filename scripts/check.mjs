@@ -4,7 +4,7 @@ import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const ignoredDirs = new Set(['dist', 'node_modules', '.git']);
+const ignoredDirs = new Set(['dist', 'node_modules', '.git', '.planner-dev']);
 
 async function walk(dir) {
   const files = [];
@@ -31,10 +31,13 @@ const forbidden = [
   new RegExp(['bike', 'shop', 'network'].join('[-_ ]*'), 'i'),
   new RegExp(['M', 'IT License'].join(''), 'i')
 ];
+// Third-party notices legitimately reproduce other projects' license texts.
+const thirdPartyNotices = new Set(['THIRD_PARTY_NOTICES.md']);
 for (const file of textFiles) {
   const rel = relative(root, file);
   const text = await fs.readFile(file, 'utf8');
   for (const pattern of forbidden) {
+    if (thirdPartyNotices.has(rel.replaceAll('\\', '/')) && pattern.source.includes('IT License')) continue;
     if (pattern.test(text)) failures.push(`${rel}: contains forbidden legacy text matching ${pattern}`);
   }
 }
@@ -78,12 +81,15 @@ for (const modulePath of modulePaths) {
   if (!sw.includes(`'./${modulePath}'`)) failures.push(`sw.js: CORE cache is missing ./${modulePath}`);
 }
 
+const appConfig = await fs.readFile(resolve(root, 'src/config.js'), 'utf8');
+if (!appConfig.includes(`export const APP_VERSION = '${releaseVersion}';`)) failures.push(`src/config.js: APP_VERSION must match package version ${releaseVersion}`);
+
 const license = await fs.readFile(resolve(root, 'LICENSE'), 'utf8');
 if (!license.includes('PolyForm Perimeter License 1.0.1')) failures.push('LICENSE: expected PolyForm Perimeter 1.0.1');
 if (!license.includes('Required Notice: Copyright 2026 Ben Morin.')) failures.push('LICENSE: missing required copyright notice');
 
 const runtimeConfig = await fs.readFile(resolve(root, 'runtime-config.js'), 'utf8');
-for (const key of ['PROJECT_GITHUB_URL', 'GITHUB_SPONSOR_URL', 'SOCIAL_X_URL', 'SOCIAL_LINKEDIN_URL', 'GOOGLE_CLIENT_ID']) {
+for (const key of ['PROJECT_GITHUB_URL', 'GITHUB_SPONSOR_URL', 'SOCIAL_X_URL', 'SOCIAL_LINKEDIN_URL', 'GOOGLE_CLIENT_ID', 'PLANNER_API_URL', 'PLUS_PUBLIC_KEY', 'PLUS_CHECKOUT_URL']) {
   if (!runtimeConfig.includes(`${key}: ''`)) failures.push(`runtime-config.js: ${key} must remain blank in the public source`);
 }
 

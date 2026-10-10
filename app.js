@@ -2,11 +2,26 @@ import { qs, qsa } from './src/lib/dom.js';
 import { esc, escAttr, linkLabel, normalizeUrl, safeUrl } from './src/lib/text.js';
 import { clamp, uid } from './src/lib/utils.js';
 import { atNoon, ymdKey, dateFromKey, addDaysKey, daysBetweenKeys, weekdayNames } from './src/lib/dates.js';
-import { snap, minTaskSlots, scheduleTopPad, scheduleBottomPad, PROJECT_GITHUB_URL, GITHUB_SPONSOR_URL, SOCIAL_X_URL, SOCIAL_LINKEDIN_URL, CLOUD_API_URL, GOOGLE_CLIENT_ID, palette, defaultCategories } from './src/config.js';
+import { APP_VERSION, snap, minTaskSlots, scheduleTopPad, scheduleBottomPad, PROJECT_GITHUB_URL, GITHUB_SPONSOR_URL, SOCIAL_X_URL, SOCIAL_LINKEDIN_URL, CLOUD_API_URL, GOOGLE_CLIENT_ID, palette, defaultCategories } from './src/config.js';
 import { createPrintFeature } from './src/features/print.js';
 import { pipStyles } from './src/features/pip-styles.js';
 import { openPipDatePicker } from './src/features/pip-date-picker.js';
 import { rangeLabel, horizonCountdown, rangeOverlapsMonth, dayInRange, habitQuarterForMonth, habitChecked, habitQuarterBounds, habitActivityStats } from './src/features/horizon-model.js';
+import { createHorizonView } from './src/features/horizon-view.js';
+import { modalEnter, modalExit, popoverEnter, panelEnter, resetMotion } from './src/ui/motion.js';
+import { createThemeController } from './src/ui/theme.js';
+import { createAppTooltips } from './src/ui/tooltip.js';
+import { createOnboarding } from './src/features/onboarding.js';
+import { createInstallFeature } from './src/features/install.js';
+import { createSyncGuide } from './src/features/sync-guide.js';
+import { createFeedbackFeature } from './src/features/feedback.js';
+import { createPrivacyNotice } from './src/features/privacy.js';
+import { createCategoryManager } from './src/features/category-manager.js';
+import { createPlusFeature } from './src/features/plus-dialog.js';
+import { adoptPlus, connectPlus, hasPlus, keepPlus, onPlusChange, plusSettingsFrom, refreshPlus } from './src/lib/plus.js';
+import { buildProgressModel, newlyUnlocked } from './src/features/progress-model.js';
+import { markTrophiesSeen, readSeenTrophies, renderDayClosedProgress } from './src/features/progress-view.js';
+import { trackEvent } from './src/lib/planner-api.js';
 import { createLocalStore } from './src/state/local-store.js';
 import { createSyncLedger } from './src/sync/ledger.js';
 import { createPersonalSyncFeature } from './src/features/personal-sync.js';
@@ -27,13 +42,20 @@ import { elapsedMinutesForDate, durationLabel, clockTime, pad2, padHour, parseTi
 import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview, blockNoteLineHtml, dayNoteLineHtml } from './src/domain/note-lines.js';
 (() => {
   const syncLedger = createSyncLedger(window.localStorage);
-  const store = createLocalStore(window.localStorage, { onMutation: syncLedger.recordMutation });
+  let personalSyncFeature = null;
+  const store = createLocalStore(window.localStorage, {
+    onMutation: mutation => { syncLedger.recordMutation(mutation); personalSyncFeature?.noteLocalChange?.(); }
+  });
   let date = atNoon(new Date());
   let state;
   let settings = loadSettings();
+  // Plus lives in the settings (so sync and backups carry it); src/lib/plus.js verifies it.
+  connectPlus({ read: () => settings, write: fields => { Object.assign(settings, fields); persistSettings(); } });
   let saveTimer;
   let settingsTimer;
   let activeModal = null;
+  // A dialog opened with { stack: true } returns to the one beneath it (and the control that opened it) when it closes.
+  const stackedReturns = new WeakMap();
   let activePopover = null;
   let blockDraft = null;
   let blockTimeDraft = { startDate: '', startMinutes: 9 * 60, endDate: '', endMinutes: 10 * 60, categoryId: '' };
@@ -48,9 +70,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   let confirmationReturnScrollTop = 0;
   let openWorkReturnModal = null;
   let openWorkReturnScrollTop = 0;
-  let tooltipNode = null;
-  let tooltipTarget = null;
-  let tooltipSuppressUntil = 0;
+  const appTooltips = createAppTooltips({ getActiveModal: () => activeModal });
+  const hideAppTooltip = () => appTooltips.hide();
   let endDayTargetDate = null;
   let endDayActions = new Map();
   let journalPage = 0;
@@ -65,13 +86,9 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   let horizonYear = date.getFullYear();
   let horizonMonth = date.getMonth();
   let plannerRangeView = 'day';
-  let horizonSelectedYearDay = '';
-  let horizonHabitStatsIndex = null;
   let pendingConfirmAction = null;
   let categoryAddContext = 'settings';
-  let deferredInstallPrompt = null;
-  let onboardingStep = 1;
-  let onboardingDraftDays = new Set([1,2,3,4,5]);
+  let progressCache = { year: null, at: 0, model: null };
 
   // ---------------------------------------------------------------------------
   // Runtime state and date helpers
@@ -109,10 +126,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
 
   function loadSettings() {
     try {
-      return normalizePlannerSettings(store.readJSON('daily-planner:settings'), {
-        detectedWeekStart: detectedWeekStart(),
-        currentYear: new Date().getFullYear()
-      });
+      const raw = store.readJSON('daily-planner:settings');
+      return { ...normalizePlannerSettings(raw, { detectedWeekStart: detectedWeekStart(), currentYear: new Date().getFullYear() }), ...plusSettingsFrom(raw) };
     } catch (_) {
       return normalizePlannerSettings(null, { detectedWeekStart: detectedWeekStart(), currentYear: new Date().getFullYear() });
     }
@@ -121,6 +136,9 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   function persistSettings() {
     try { store.writeJSON('daily-planner:settings', settings); } catch (_) {}
   }
+
+  // After an import, a sync or a reset: a licence already on this device is never dropped.
+  const reloadSettings = () => { const previous = settings; settings = loadSettings(); if (keepPlus(settings, previous)) persistSettings(); refreshPlus(); };
 
   function saveSettings({ rerenderSettings = true } = {}) {
     persistSettings();
@@ -289,7 +307,10 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     state.tasks.forEach((item, index) => tasks.append(createItemRow(item, 'task', index, 'Concrete action')));
     const addTask = qs('[data-task-add-toggle]');
     if (addTask) addTask.hidden = state.tasks.some(item => !item.text.trim());
+    // Rows are measured while detached; size them again once they're laid out.
+    requestAnimationFrame(regrowItemFields);
   }
+  function regrowItemFields() { qsa('.item-input, [data-focus]').forEach(autoGrowInlineField); }
   function createItemRow(item, type, index, placeholder) {
     const row = document.createElement(type === 'task' ? 'li' : 'div');
     const scheduled = linkedBlock(type, item.id);
@@ -476,7 +497,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       const blockHeight = Math.max(30, minutesToPx(shownDuration));
       const titleLines = block.duration <= 30 ? 1 : clamp(Math.floor((blockHeight - 28) / 16), 2, 5);
       const noteLines = block.duration > 60 ? clamp(Math.floor((blockHeight - (56 + titleLines * 14)) / 14), 0, 5) : 0;
-      el.className = `time-block${done ? ' done' : ''}${densityClass}${currentBlock ? ' is-current' : ''}`;
+      el.className = `time-block${done ? ' done' : ''}${densityClass}${currentBlock ? (done ? ' is-now-done' : ' is-current') : ''}`;
       el.dataset.blockId = block.id;
       el.style.top = `${minutesToPx(block.start - visibleStartMinutes())}px`;
       el.style.height = `${blockHeight}px`;
@@ -1182,6 +1203,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   function refreshBlockCategoryTrigger() {
     const button = qs('[data-block-category]');
     if (!button) return;
+    // A category deleted while the block was being edited leaves the draft uncategorized.
+    if (blockTimeDraft.categoryId && !categoryFor(blockTimeDraft.categoryId)) blockTimeDraft.categoryId = '';
     const cat = categoryFor(blockTimeDraft.categoryId);
     button.innerHTML = cat
       ? `<span class="select-trigger__value"><span class="category-dot" style="background:${cat.color}"></span>${esc(cat.name)}</span>${chevronSvg()}`
@@ -1349,67 +1372,22 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   // Categories, settings, install prompt, and onboarding
   // ---------------------------------------------------------------------------
 
-  function renderCategorySettings() {
-    const wrap = qs('[data-category-settings]');
-    if (!wrap) return;
-    wrap.innerHTML = '';
-
-    const buildActiveRow = category => {
-      const row = document.createElement('div');
-      row.className = 'category-setting';
-      row.innerHTML = `
-        <button class="color-trigger color-trigger--compact is-swatch-only" type="button" data-category-color aria-label="Choose color" data-tooltip="Choose color"><span style="background:${category.color}"></span><strong></strong></button>
-        <input class="category-name" value="${escAttr(category.name)}" maxlength="40" aria-label="Category name">
-        <button class="task-action category-archive" type="button" aria-label="Archive category" data-tooltip="Archive"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v13H4zM3 4h18v3H3zM9 11h6"/></svg></button>
-        <button class="task-action category-remove" type="button" aria-label="Delete category" data-tooltip="Delete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg></button>`;
-      qs('.category-name', row).addEventListener('input', e => { category.name = e.target.value.trimStart(); saveSettingsDebounced(); });
-      qs('[data-category-color]', row).addEventListener('click', e => openColorPopover(e.currentTarget, category.color, selected => { category.color = selected.value; saveSettings(); }));
-      qs('.category-archive', row).addEventListener('click', () => {
-        category.archived = true; category.archivedAt = ymd(new Date()); persistSettings(); renderCategorySettings(); refreshBlockCategoryTrigger(); renderStats();
-      });
-      qs('.category-remove', row).addEventListener('click', () => {
-        settings.categories = settings.categories.filter(c => c.id !== category.id);
-        state.blocks.filter(b => b.categoryId === category.id).forEach(b => { b.categoryId = ''; });
-        saveSettings(); save();
-      });
-      return row;
-    };
-
-    const active = settings.categories.filter(category => !category.archived);
-    active.forEach(category => wrap.append(buildActiveRow(category)));
-    if (active.length < palette.length) {
-      const add = document.createElement('button');
-      add.type = 'button';
-      add.className = 'category-setting category-setting--add';
-      add.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add category</span>`;
-      add.addEventListener('click', () => openAddCategoryModal({ context: 'settings' }));
-      wrap.append(add);
-    }
-
-    const archived = settings.categories.filter(category => category.archived);
-    if (archived.length) {
-      const divider = document.createElement('div');
-      divider.className = 'archived-categories-head';
-      divider.innerHTML = `<div><span>Archived</span><small>Hidden from new blocks, preserved in past statistics.</small></div><strong>${archived.length}</strong>`;
-      wrap.append(divider);
-      archived.forEach(category => {
-        const row = document.createElement('div');
-        row.className = 'category-setting category-setting--archived';
-        row.innerHTML = `<span class="archived-category-swatch" style="background:${category.color}"></span><span class="archived-category-name">${esc(category.name)}</span><button class="task-action category-restore" type="button" aria-label="Restore category" data-tooltip="Restore"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v13H4zM3 4h18v3H3zM8 13h8M12 9v8"/></svg></button><button class="task-action category-remove" type="button" aria-label="Delete category" data-tooltip="Delete"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg></button>`;
-        qs('.category-restore', row).addEventListener('click', () => { category.archived = false; category.archivedAt = ''; persistSettings(); renderCategorySettings(); refreshBlockCategoryTrigger(); renderStats(); });
-        qs('.category-remove', row).addEventListener('click', () => { settings.categories = settings.categories.filter(c => c.id !== category.id); saveSettings(); renderCategorySettings(); });
-        wrap.append(row);
-      });
-    }
-  }
+  const categoryManager = createCategoryManager({
+    getSettings: () => settings, getState: () => state, palette, today: () => ymd(new Date()),
+    persistSettings, saveSettings: () => saveSettings(), saveSettingsDebounced, save, refreshBlockCategoryTrigger, renderStats,
+    openColorPopover, openAddCategory: context => openAddCategoryModal({ context }), openModal, closeModal
+  });
+  const renderCategorySettings = () => categoryManager.render();
 
   function openAddCategoryModal({ context = 'settings' } = {}) {
     categoryAddContext = context;
-    categoryReturnModal = activeModal && !activeModal.matches('[data-category-modal]') ? activeModal : null;
+    // From the Manage dialog it stacks (block editor → Manage → Add) and unwinds one level at a time.
+    const stack = context === 'manage';
+    categoryReturnModal = !stack && activeModal && !activeModal.matches('[data-category-modal]') ? activeModal : null;
     categoryDraftColor = '';
     qs('[data-new-category-name]').value = '';
     renderNewCategoryColorTrigger();
-    openModal(qs('[data-category-modal]'), qs('[data-new-category-name]'));
+    openModal(qs('[data-category-modal]'), qs('[data-new-category-name]'), { stack });
   }
 
   function renderNewCategoryColorTrigger() {
@@ -1429,6 +1407,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     const category = { id: uid('category'), name, color, archived: false, archivedAt: '' };
     settings.categories.push(category);
     if (categoryAddContext === 'block') blockTimeDraft.categoryId = category.id;
+    if (categoryAddContext === 'manage') categoryManager.focusCategory(category.id);
     closeModal(qs('[data-category-modal]'));
     saveSettings();
     if (categoryAddContext === 'block') refreshBlockCategoryTrigger();
@@ -1491,96 +1470,40 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     }, { compact: true, matchWidth: true });
   }
 
-  function isStandaloneApp() {
-    return window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone === true;
-  }
-
-  function renderInstallSetting() {
-    const install = qs('[data-install-app]');
-    const status = qs('[data-install-status]');
-    const guidance = qs('[data-install-guidance]');
-    const installed = isStandaloneApp();
-    const ua = navigator.userAgent || '';
-    const isiOS = /iPad|iPhone|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const isSafari = /Safari/i.test(ua) && !/Chrome|CriOS|Edg|OPR|FxiOS/i.test(ua);
-    if (install) install.hidden = installed || !deferredInstallPrompt;
-    if (status) status.hidden = !installed;
-    if (!guidance) return;
-    if (installed) guidance.textContent = 'Daily Planner is installed on this device.';
-    else if (deferredInstallPrompt) guidance.textContent = 'This browser can install Daily Planner directly. Use the button below.';
-    else if (isiOS && isSafari) guidance.textContent = 'In Safari, tap Share, then Add to Home Screen.';
-    else guidance.textContent = 'Use your browser menu and choose Install app or Add to Home Screen when that option is available.';
-  }
-
-  async function installPlannerApp() {
-    if (!deferredInstallPrompt) return false;
-    const prompt = deferredInstallPrompt;
-    deferredInstallPrompt = null;
-    try {
-      await prompt.prompt();
-      const choice = await prompt.userChoice;
-      renderInstallSetting();
-      return choice?.outcome === 'accepted';
-    } catch (_) {
-      renderInstallSetting();
-      return false;
-    }
-  }
-
   function maybePromptInstallOrSupport() {
     if (activeModal) return;
-    if (!settings.installPromptShown && settings.closeDayCount >= 5 && deferredInstallPrompt && !isStandaloneApp()) {
-      settings.installPromptShown = true;
-      persistSettings();
-      openModal(qs('[data-install-modal]'));
-      return;
-    }
+    if (!settings.installPromptShown && installFeature.maybePrompt()) return;
     if (!settings.sponsorPromptShown && settings.closeDayCount >= 10 && String(GITHUB_SPONSOR_URL || '').trim()) {
       settings.sponsorPromptShown = true;
       persistSettings();
       const link = qs('[data-sponsor-confirm]');
       if (link) link.href = GITHUB_SPONSOR_URL;
       openModal(qs('[data-sponsor-modal]'));
+      return;
     }
+    feedbackFeature.maybePrompt({ closeDayCount: settings.closeDayCount });
   }
 
-  function renderOnboardingStep() {
-    const introStep = qs('[data-onboarding-step="1"]');
-    if (introStep) {
-      qsa('.onboarding-principles, .onboarding-listicle, [data-onboarding-principles]', introStep).forEach(node => node.remove());
-    }
-    qsa('[data-onboarding-step]').forEach(step => { step.hidden = Number(step.dataset.onboardingStep) !== onboardingStep; });
-    qsa('[data-onboarding-progress]').forEach(segment => {
-      const index = Number(segment.dataset.onboardingProgress);
-      segment.classList.toggle('is-complete', index < onboardingStep);
-      segment.classList.toggle('is-active', index === onboardingStep);
-    });
-    if (onboardingStep !== 2) return;
-    qsa('[data-onboarding-day]').forEach(button => {
-      const selected = onboardingDraftDays.has(Number(button.dataset.onboardingDay));
-      button.classList.toggle('is-selected', selected);
-      button.setAttribute('aria-pressed', String(selected));
-    });
-    const start = qs('[data-onboarding-start-hour]');
-    const end = qs('[data-onboarding-end-hour]');
-    if (start) start.innerHTML = `<span class="select-trigger__value">${time(startHour() * 60)}</span>${chevronSvg()}`;
-    if (end) end.innerHTML = `<span class="select-trigger__value">${time(endHour() * 60)}</span>${chevronSvg()}`;
+  /** Progress (painted year, streak, trophies) is derived from stored days; memoised briefly per render. */
+  function progressFor(year = horizonYear) {
+    const now = Date.now();
+    if (progressCache.model && progressCache.year === year && now - progressCache.at < 400) return progressCache.model;
+    const model = buildProgressModel({ year, today: new Date(), planningDays: activeWeekdays(), getRecord: key => (key === ymd(date) ? state : store.readJSON(`daily-planner:${key}`)), yearData: horizonYearData(year) });
+    progressCache = { year, at: now, model };
+    return model;
   }
 
-  function openOnboardingHourMenu(kind) {
-    const isStart = kind === 'start';
-    const button = qs(isStart ? '[data-onboarding-start-hour]' : '[data-onboarding-end-hour]');
-    const currentStart = startHour();
-    const currentEnd = endHour();
-    const values = isStart
-      ? Array.from({ length: currentEnd }, (_, i) => i)
-      : Array.from({ length: 24 - currentStart }, (_, i) => currentStart + 1 + i);
-    openListPopover(button, values.map(v => ({ value: v, label: time(v * 60) })), isStart ? currentStart : currentEnd, item => {
-      if (isStart) settings.startHour = Number(item.value);
-      else settings.endHour = Number(item.value);
-      if (settings.endHour <= settings.startHour) settings.endHour = Math.min(24, settings.startHour + 1);
-      renderOnboardingStep();
-    }, { compact: true, matchWidth: true, alignSelected: true, timeMenu: true });
+  function renderClosedDayProgress() {
+    const wrap = qs('[data-day-closed-progress]');
+    if (!wrap) return;
+    const year = date.getFullYear();
+    progressCache.model = null;
+    const model = progressFor(year);
+    const fresh = newlyUnlocked(model, readSeenTrophies(year), ymd(date));
+    markTrophiesSeen(year, model.unlocked.map(trophy => trophy.id));
+    wrap.innerHTML = renderDayClosedProgress(model, ymd(date), fresh);
+    wrap.hidden = false;
+    if (fresh.length) trackEvent('trophy_unlocked');
   }
 
   function seedFirstBlockAfterOnboarding() {
@@ -1612,14 +1535,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     state = targetState;
     plannerRangeView = 'day';
     initialScheduleScrollDone = false;
-  }
-
-  function maybeOpenOnboarding() {
-    if (settings.onboardingComplete) return;
-    onboardingStep = 1;
-    onboardingDraftDays = new Set(Array.isArray(settings.planningDays) && settings.planningDays.length ? settings.planningDays : [1,2,3,4,5]);
-    renderOnboardingStep();
-    openModal(qs('[data-onboarding-modal]'));
   }
 
   async function registerPwa() {
@@ -1670,14 +1585,20 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     closePopover();
     const stackOverCurrent = !!options.stack && activeModal && activeModal !== modal;
     if (activeModal && activeModal !== modal && !stackOverCurrent) closeModal(activeModal, false);
-    if (stackOverCurrent) modal.dataset.stackedOver = 'true'; else delete modal.dataset.stackedOver;
+    // Re-opening the dialog that is already on top keeps its stack (a double Enter must not orphan the one underneath).
+    if (stackOverCurrent) { modal.dataset.stackedOver = 'true'; stackedReturns.set(modal, { parent: activeModal, opener: document.activeElement }); } else if (activeModal !== modal) { delete modal.dataset.stackedOver; stackedReturns.delete(modal); }
     activeModal = modal;
     modal.hidden = false;
     document.body.classList.add('has-modal');
+    // Never leave typing focus in the page behind a dialog (Safari doesn't move focus to a clicked button).
+    if (!focusTarget && document.activeElement && document.activeElement !== document.body && !modal.contains(document.activeElement)) document.activeElement.blur?.();
     const scroll = qs('.modal__scroll', modal);
     if (scroll && !options.preserveScroll) scroll.scrollTop = 0;
     requestAnimationFrame(() => {
       modal.classList.add('is-open');
+      // A panel that left with an exit animation keeps its last frame inline;
+      // returning dialogs (preserveScroll) reappear without an entrance, so reset it.
+      if (options.preserveScroll) resetMotion(qs('.modal__panel', modal)); else modalEnter(qs('.modal__panel', modal));
       setTimeout(() => focusTarget?.focus({ preventScroll: true }), 80);
     });
   }
@@ -1689,7 +1610,11 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     const confirmReturn = restore && modal.matches('[data-confirm-modal]') ? confirmationReturnModal : null;
     const openWorkReturn = restore && modal.matches('[data-open-work-modal]') ? openWorkReturnModal : null;
     const returnModal = categoryReturn || confirmReturn || openWorkReturn;
+    const stacked = restore && !returnModal ? stackedReturns.get(modal) : null;
+    const stackParent = stacked?.parent?.classList.contains('is-open') && !stacked.parent.hidden ? stacked.parent : null;
+    stackedReturns.delete(modal);
     modal.classList.remove('is-open');
+    modalExit(qs('.modal__panel', modal));
     setTimeout(() => {
       modal.hidden = true;
       if (returnModal) {
@@ -1710,9 +1635,9 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
         });
       }
     }, 180);
-    if (activeModal === modal) activeModal = null;
+    if (activeModal === modal) activeModal = stackParent;
     if (!qsa('.modal.is-open').length && !returnModal) document.body.classList.remove('has-modal');
-    if (restore && !returnModal) qs('[data-app]')?.focus?.({ preventScroll: true });
+    if (restore && !returnModal) (stackParent ? (stackParent.contains(stacked.opener) ? stacked.opener : qs('.modal__panel', stackParent)) : qs('[data-app]'))?.focus?.({ preventScroll: true });
   }
 
   function toggleModalShortcut(selector, openAction) {
@@ -1852,20 +1777,15 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       const maxScroll = Math.max(0, popover.scrollHeight - popover.clientHeight);
       popover.scrollTop = clamp(selectedCenter - anchorCenterInPopover, 0, maxScroll);
     }
-    requestAnimationFrame(() => popover.classList.add('is-open'));
+    requestAnimationFrame(() => { popover.classList.add('is-open'); if (!popover.matches('.hz-add-menu')) popoverEnter(popover, { above: top < rect.top }); });
   }
 
   function closePopover() {
     if (!activePopover) return;
-    const clearsYearDay = activePopover.el?.dataset?.clearsHorizonYearDay === 'true';
     const parent = activePopover.parent || null;
     activePopover.anchor?.setAttribute('aria-expanded', 'false');
     activePopover.el.remove();
     activePopover = parent;
-    if (clearsYearDay) {
-      horizonSelectedYearDay = '';
-      qsa('[data-horizon-year-day].is-selected-day').forEach(cell => cell.classList.remove('is-selected-day'));
-    }
   }
 
   function closeAllPopovers() {
@@ -1957,6 +1877,12 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       date = direction < 0 ? previousPlanningDateFrom(date) : nextPlanningDateFrom(date);
     }
     load();
+    animatePlannerChange(direction);
+  }
+
+  // Direction-aware settle so moving through days and weeks keeps its spatial sense.
+  function animatePlannerChange(direction = 0) {
+    [qs('[data-left-pane]'), qs('[data-schedule-scroll]')].forEach(el => { if (el?.offsetParent) panelEnter(el, { direction, distance: 14 }); });
   }
 
   function toggleWeekView() {
@@ -1965,6 +1891,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     if (plannerRangeView === 'week' && innerWidth <= 760) setMobileView('schedule');
     initialScheduleScrollDone = false;
     render();
+    animatePlannerChange(0);
   }
 
   function isToday() { return ymd(date) === ymd(new Date()); }
@@ -2219,7 +2146,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       });
       if (pendingImport.settings && typeof pendingImport.settings === 'object') store.writeJSON('daily-planner:settings', pendingImport.settings);
       pendingImport = null;
-      settings = loadSettings();
+      reloadSettings();
       closeModal(qs('[data-import-modal]'));
       load();
       renderCategorySettings();
@@ -2242,7 +2169,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   }
 
   function reloadPlannerAfterSync() {
-    settings = loadSettings(); load();
+    reloadSettings(); load();
     renderCategorySettings(); renderSettingsHours(); renderPlanningWeek();
     updateStorageUsage(); renderPip();
   }
@@ -2251,7 +2178,9 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     clearTimeout(saveTimer);
     clearTimeout(settingsTimer);
     store.removePrefix('daily-planner:');
-    settings = loadSettings();
+    store.withoutMutationTracking(() => store.remove('daily-planner-ui:trophies-seen'));
+    progressCache.model = null;
+    reloadSettings();
     date = atNoon(new Date());
     state = createBlankDay();
     closeModal(qs('[data-reset-modal]'));
@@ -2260,7 +2189,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     renderPlanningWeek();
     render();
     renderPip();
-    requestAnimationFrame(maybeOpenOnboarding);
+    requestAnimationFrame(() => onboarding.maybeOpen());
   }
 
   // ---------------------------------------------------------------------------
@@ -2440,8 +2369,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
         <div class="end-day-item__body"><strong>${esc(title || 'Untitled block')}</strong><span class="end-day-item__meta"><span>${esc(label)}</span>${meta ? `<span>${esc(meta)}</span>` : ''}${carriedCount ? `<span class="carry-badge">Moved ${carriedCount}×</span>` : ''}</span></div>
         <div class="end-day-triage" role="group" aria-label="Choose what happens to ${escAttr(title || 'this item')}">
           <button type="button" class="end-day-triage__date${action.mode === 'date' ? ' is-selected' : ''}" data-end-action-date data-key="${escAttr(key)}">${action.mode === 'date' ? checkSvg() : '<span class="date-choice-spacer" aria-hidden="true"></span>'}<span>${esc(dateLabel)}</span>${chevronSvg()}</button>
-          <button type="button" class="${action.mode === 'later' ? 'is-selected' : ''}" data-end-action="later" data-key="${escAttr(key)}">Keep</button>
-          <button type="button" class="end-day-triage__drop${action.mode === 'drop' ? ' is-selected' : ''}" data-end-action="drop" data-key="${escAttr(key)}">Drop</button>
+          <button type="button" class="${action.mode === 'later' ? 'is-selected' : ''}" data-end-action="later" data-key="${escAttr(key)}" data-tooltip="Save it in Unresolved, without a date">Save</button>
+          <button type="button" class="end-day-triage__drop${action.mode === 'drop' ? ' is-selected' : ''}" data-end-action="drop" data-key="${escAttr(key)}" data-tooltip="Take it off your plate — its day keeps the history">Forget</button>
         </div>
       </div>`;
     }).join('');
@@ -2614,6 +2543,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     title.textContent = 'The week is closed.';
     copy.textContent = `You have already given ${nextLabel} a little direction. Now look back at what moved, what carried forward, and where your scheduled time went.`;
     if (prep) prep.hidden = true;
+    qs('[data-day-closed-progress]').hidden = true;
     summary.hidden = false;
     summary.innerHTML = renderWeekReviewSummary(review);
     prepare.hidden = false;
@@ -2649,6 +2579,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       prepare.textContent = `Open ${nextLabel}`;
       done.hidden = false;
     }
+    renderClosedDayProgress();
     openModal(qs('[data-day-closed-modal]'));
   }
 
@@ -2714,6 +2645,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       targetStates.forEach((targetState, targetKey) => persistStateForDate(dateFromKey(targetKey), targetState));
       persistSettings();
     } catch (_) {}
+    personalSyncFeature?.syncNow?.({ interactive: false, reason: 'close-day' });
     closeModal(qs('[data-end-day-modal]'));
     updateEndDayButton();
     updateStorageUsage();
@@ -2927,11 +2859,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     horizonMonth = targetDate.getMonth();
     renderHorizon();
     openModal(qs('[data-horizon-modal]'));
-  }
-
-  function shiftHorizonYear(delta) {
-    horizonYear = Math.max(horizonMinYear(), horizonYear + delta);
-    renderHorizon();
+    horizonView.onOpen();
   }
 
   function horizonOpenItems(limit = 4) {
@@ -2940,69 +2868,33 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     return [...needs, ...later].filter(item => item.text?.trim()).sort((a, b) => b.count - a.count).slice(0, limit);
   }
 
-  function toggleHabitForDay(data, dayKey, index) {
-    const current = new Set(Array.isArray(data.habitChecks?.[dayKey]) ? data.habitChecks[dayKey] : []);
-    if (current.has(index)) current.delete(index); else current.add(index);
-    data.habitChecks[dayKey] = [...current].sort();
-    persistSettings();
-  }
+  function renderHorizon(options) { horizonView.render(options); }
 
-  function renderHorizon() {
-    qs('.horizon-floating-editor-host')?.remove();
-    const content = qs('[data-horizon-content]');
-    const nav = qs('[data-horizon-nav]');
-    if (!content || !nav) return;
-    renderHorizonUnified(content, nav);
-  }
-
-  function renderHabitHeatmap(stats) {
-    const dayMap = new Map(stats.days.map(day => [day.key, day.done]));
-    const gridStart = atNoon(stats.start);
-    gridStart.setDate(gridStart.getDate() - gridStart.getDay());
-    const gridEnd = atNoon(stats.end);
-    gridEnd.setDate(gridEnd.getDate() + (6 - gridEnd.getDay()));
-    const todayKey = ymd(new Date());
-    const cells = [];
-    for (let d = atNoon(gridStart); d <= gridEnd; d.setDate(d.getDate() + 1)) {
-      const key = ymd(d);
-      const inQuarter = d >= stats.start && d <= stats.end;
-      const isFuture = key > todayKey;
-      const isUntracked = inQuarter && d < stats.trackingStart;
-      const done = dayMap.get(key) === true;
-      const cls = !inQuarter ? ' is-outside' : isFuture ? ' is-future' : isUntracked ? ' is-untracked' : done ? ' is-done' : ' is-missed';
-      const dayLabel = d.toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short'});
-      const statusLabel = !inQuarter ? '' : isFuture ? ' · Future' : isUntracked ? ' · Not tracked' : done ? ' · Done' : ' · Not done';
-      const tooltip = `${dayLabel}${statusLabel}`;
-      cells.push(`<span class="habit-heat-cell${cls}" data-tooltip="${escAttr(tooltip)}" aria-label="${escAttr(tooltip)}"></span>`);
-    }
-    return `<div class="habit-heatmap" style="--heat-weeks:${Math.ceil(cells.length/7)}">${cells.join('')}</div>`;
-  }
-
-  function openHorizonYearDayEditor(anchor, dayKey) {
-    horizonSelectedYearDay = dayKey;
-    qsa('[data-horizon-year-day]').forEach(cell => cell.classList.toggle('is-selected-day', cell.dataset.horizonYearDay === dayKey));
-    closePopover();
-    const d = dateFromKey(dayKey);
-    const yearData = horizonYearData(d.getFullYear());
-    const keyDates = horizonYearKeyDates(d.getFullYear()).filter(item => dayInRange(dayKey,item.startDate,item.endDate) && item.text.trim());
-    const adventures = yearData.miniAdventures.filter(item => dayInRange(dayKey,item.startDate,item.endDate) && item.text.trim());
-    const misogi = yearData.misogi.trim() && dayInRange(dayKey,yearData.misogiStartDate,yearData.misogiEndDate) ? yearData.misogi.trim() : '';
-    const popover = document.createElement('div');
-    popover.className = 'app-popover horizon-year-day-editor';
-    popover.dataset.clearsHorizonYearDay = 'true';
-    popover.innerHTML = `<div class="horizon-year-day-editor__head"><span>${esc(d.toLocaleDateString(undefined,{weekday:'short'}))}</span><strong>${esc(d.toLocaleDateString(undefined,{day:'numeric',month:'long'}))}</strong></div>
-      ${(misogi||adventures.length||keyDates.length)?`<div class="horizon-year-day-editor__existing">${misogi?`<p><span>Misogi</span><strong>${esc(misogi)}</strong></p>`:''}${adventures.map(item=>`<p><span>Mini-adventure</span><strong>${esc(item.text)}</strong></p>`).join('')}${keyDates.map(item=>`<p><span>Key date</span><strong>${esc(item.text)}</strong></p>`).join('')}</div>`:''}
-      <label class="horizon-year-day-editor__field"><span>Key date</span><input data-year-quick-keydate maxlength="180" placeholder="What is worth protecting?"></label>
-      <div class="horizon-year-day-editor__actions"><button type="button" class="text-button" data-year-quick-cancel>Cancel</button><button type="button" class="primary-button" data-year-quick-save>Save</button></div>`;
-    qs('[data-year-quick-cancel]',popover).addEventListener('click',closePopover);
-    qs('[data-year-quick-save]',popover).addEventListener('click',()=>{
-      const text=qs('[data-year-quick-keydate]',popover).value.trim(); if(!text)return;
-      horizonMonthData(d.getFullYear(),d.getMonth()).anchors.push({id:uid('keydate'),text,startDate:dayKey,endDate:''});
-      persistSettings(); closePopover(); renderHorizon();
-    });
-    showPopover(anchor,popover,{width:320});
-    requestAnimationFrame(()=>qs('[data-year-quick-keydate]',popover)?.focus({preventScroll:true}));
-  }
+  const horizonView = createHorizonView({
+    getYear: () => horizonYear,
+    getMonth: () => horizonMonth,
+    minYear: horizonMinYear,
+    shiftYear: delta => { horizonYear = Math.max(horizonMinYear(), horizonYear + delta); },
+    yearData: horizonYearData,
+    keyDates: horizonYearKeyDates,
+    persist: persistSettings,
+    confirm: requestConfirmation,
+    openCalendar: openCalendarPopover,
+    openPeriod: openPeriodCalendarPopover,
+    openEvent: openHorizonYearEventPopover,
+    openNewKeyDate: openNewKeyDatePopover,
+    showPopover,
+    closeAllPopovers,
+    autoGrow: autoGrowInlineField,
+    progress: progressFor,
+    printYear: () => printFeature.printYear(horizonYear),
+    plus: { active: hasPlus, unlock: feature => plusFeature.open({ feature }) },
+    readDay: key => (key === ymd(date) ? state : store.readJSON(`daily-planner:${key}`)),
+    categoryFor: id => { const category = categoryFor(id); return category ? { id: category.id, name: category.name, color: category.color } : null; },
+    categories: () => settings.categories.map(category => ({ ...category })),
+    track: trackEvent,
+    openDay: dayKey => { closeModal(qs('[data-horizon-modal]')); date = dateFromKey(dayKey); plannerRangeView = 'day'; load(); }
+  });
 
   function openHorizonYearEventPopover(anchor, kind, id, ownerMonth = '') {
     closeAllPopovers();
@@ -3088,6 +2980,11 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       saveButton.disabled = !draftStart || !hasTitle;
     };
     titleInput.addEventListener('input', sync);
+    titleInput.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' || !titleInput.value.trim()) return;
+      event.preventDefault();
+      if (draftStart) saveButton.click(); else periodButton.click();
+    });
     periodButton?.addEventListener('click', event => {
       if (!titleInput.value.trim()) return;
       openPeriodCalendarPopover(event.currentTarget, draftStart, draftEnd, (startDate, endDate) => {
@@ -3111,200 +3008,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     });
     showPopover(anchor, popover, { width: 360 });
     requestAnimationFrame(() => titleInput?.focus({ preventScroll: true }));
-  }
-
-  function renderHorizonUnified(content, nav) {
-    const data = horizonYearData(horizonYear);
-    const minYear = horizonMinYear();
-    nav.innerHTML = `<span class="horizon-screen-kicker">Horizon</span>`;
-
-    const current = new Date();
-    const currentYearKey = ymd(current);
-    const monthNames = Array.from({ length: 12 }, (_, month) => new Date(horizonYear, month, 1).toLocaleDateString(undefined, { month: 'short' }));
-    const allKeyDates = horizonYearKeyDates(horizonYear).filter(item => item.text?.trim());
-
-    const meaningfulRows = data.meaningful.map((text, index) => {
-      const placeholders = [
-        'Something worth making room for',
-        'Another thing that matters',
-        'One more, if it truly matters'
-      ];
-      return `<article class="horizon-meaningful-row" data-meaningful-row="${index}">
-        <div class="horizon-meaningful-field-row"><input class="horizon-meaningful-input" type="text" data-meaningful-text="${index}" value="${escAttr(text)}" placeholder="${escAttr(placeholders[index])}" maxlength="180"><button class="task-action horizon-meaningful-clear" type="button" data-meaningful-clear="${index}" aria-label="Clear commitment" data-tooltip="Clear" ${text.trim() ? '' : 'hidden'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg></button></div>
-      </article>`;
-    }).join('');
-
-    const allYearEvents = [];
-    if (data.misogi.trim() && data.misogiStartDate) allYearEvents.push({ kind: 'misogi', id: 'misogi', text: data.misogi.trim(), startDate: data.misogiStartDate, endDate: data.misogiEndDate || data.misogiStartDate, done: data.misogiDone });
-    data.misogiMilestones.filter(item => item.text?.trim() && item.date).forEach(item => allYearEvents.push({ kind: 'milestone', id: item.id, text: item.text.trim(), startDate: item.date, endDate: item.date, done: item.done }));
-    data.miniAdventures.filter(item => item.text?.trim() && item.startDate).forEach(item => allYearEvents.push({ kind: 'adventure', id: item.id, text: item.text.trim(), startDate: item.startDate, endDate: item.endDate || item.startDate, done: !!item.done || item.status === 'done' }));
-    allKeyDates.forEach(item => allYearEvents.push({ kind: 'keydate', id: item.id, ownerMonth: item.ownerMonth, text: item.text.trim(), startDate: item.startDate, endDate: item.endDate || item.startDate, done: false }));
-    const kindOrder = { misogi: 0, milestone: 1, adventure: 2, keydate: 3 };
-    allYearEvents.sort((a, b) => a.startDate.localeCompare(b.startDate) || (kindOrder[a.kind] ?? 9) - (kindOrder[b.kind] ?? 9));
-
-    const eventKindLabel = kind => ({ misogi: 'Misogi', milestone: 'Milestone', adventure: 'Mini-adventure', keydate: 'Key date' }[kind] || 'Event');
-    const cutoff = horizonYear === current.getFullYear() ? currentYearKey : `${horizonYear}-01-01`;
-    const nextEvent = allYearEvents.find(event => !event.done && event.endDate >= cutoff) || null;
-
-    const misogiMilestoneDone = data.misogiMilestones.filter(item => item.text.trim() && item.done).length;
-    const misogiMilestoneTotal = data.misogiMilestones.filter(item => item.text.trim()).length;
-    const milestoneRows = data.misogiMilestones.map(item => `<div class="horizon-milestone-row${item.done ? ' done' : ''}" data-milestone-id="${escAttr(item.id)}"><input class="check" type="checkbox" data-milestone-done="${escAttr(item.id)}" ${item.done ? 'checked' : ''} aria-label="Mark milestone complete"><input type="text" data-milestone-text="${escAttr(item.id)}" value="${escAttr(item.text)}" placeholder="A proof point that shows real progress" maxlength="180"><button type="button" data-milestone-date="${escAttr(item.id)}">${esc(item.date ? formatDateButton(item.date) : 'Plan')}${chevronSvg()}</button><button type="button" class="horizon-milestone-remove" data-milestone-remove="${escAttr(item.id)}" aria-label="Remove milestone">×</button></div>`).join('');
-
-    const adventureCards = [];
-    data.miniAdventures.forEach(item => {
-      const done = !!item.done || item.status === 'done';
-      const countdown = horizonCountdown(item.startDate, item.endDate, done);
-      adventureCards.push(`<article class="horizon-adventure-card${done ? ' is-done' : ''}" data-mini-adventure-card="${escAttr(item.id)}">
-        <div class="horizon-adventure-title-row"><input class="check" type="checkbox" data-adventure-done="${escAttr(item.id)}" ${done ? 'checked' : ''} aria-label="Mark mini-adventure complete"><input class="horizon-adventure-title" type="text" data-adventure-text="${escAttr(item.id)}" value="${escAttr(item.text)}" placeholder="An experience worth protecting" maxlength="180"><button class="horizon-card-remove task-action" type="button" data-remove-adventure="${escAttr(item.id)}" aria-label="Remove mini-adventure" data-tooltip="Remove" ${item.text.trim() || item.startDate ? '' : 'hidden'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg></button></div>
-        <div class="horizon-item-meta"><small class="horizon-countdown">${esc(countdown)}</small><div class="horizon-item-period">${item.startDate ? `<time>${esc(rangeLabel(item.startDate,item.endDate))}</time>` : '<span class="horizon-adventure-unplanned">Put it on the calendar</span>'}<button class="task-action" type="button" data-adventure-period="${escAttr(item.id)}" aria-label="Choose mini-adventure dates" data-tooltip="Choose dates">${calendarSvg()}</button></div></div>
-      </article>`);
-    });
-    if (data.miniAdventures.length < 6) adventureCards.push(`<button type="button" class="horizon-adventure-add" data-add-mini-adventure><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add mini-adventure</span></button>`);
-    const adventureNamed = data.miniAdventures.filter(item => item.text.trim()).length;
-    const adventurePlanned = data.miniAdventures.filter(item => item.text.trim() && item.startDate).length;
-
-    const currentQuarter = Math.floor(current.getMonth() / 3);
-    const todayKeyForHabits = ymd(current);
-    const habitRows = data.habits.map((habit,index) => {
-      const stats = habitActivityStats(data,index,horizonYear);
-      const quarterEnded = horizonYear < current.getFullYear() || (horizonYear === current.getFullYear() && index < currentQuarter);
-      const disabled = quarterEnded && !habit.trim();
-      const startedKey = data.habitStartedAt?.[index] || '';
-      const tracked = !!habit.trim() && (stats.done > 0 || (!!startedKey && startedKey < todayKeyForHabits));
-      const expanded = horizonHabitStatsIndex === index && !!habit.trim();
-      const inputState = disabled ? 'disabled' : '';
-      return `<article class="horizon-habit-card${habit ? ' has-value' : ''}${disabled ? ' is-locked' : ''}${tracked ? ' is-tracked' : ''}${expanded ? ' is-expanded' : ''}" data-habit-row="${index}">
-        <div class="horizon-habit-card__head"><span class="horizon-habit-quarter">Q${index + 1}</span><input type="text" data-habit-direct="${index}" data-habit-tracked="${tracked ? 'true' : 'false'}" value="${escAttr(habit)}" placeholder="${disabled ? 'Quarter complete' : 'Choose one habit'}" maxlength="180" ${inputState}></div>
-        <div class="horizon-habit-compact-stats"><strong>${stats.percent}%</strong><span>Day ${stats.quarterDay}/${stats.quarterDays}</span><span>${stats.longest}d streak</span></div>
-        <button type="button" class="horizon-habit-summary" data-habit-stats="${index}" aria-expanded="${expanded}" ${habit ? '' : 'disabled'}><span>${expanded ? 'Hide activity' : 'See activity'}</span>${chevronSvg()}</button>
-        <div class="horizon-habit-details" aria-hidden="${expanded ? 'false' : 'true'}"><div class="horizon-habit-details__inner">${renderHabitHeatmap(stats)}<div class="horizon-habit-metrics"><span>${stats.done} done</span><span>${stats.missed} not done</span><span>${stats.longest}d longest streak</span></div></div></div>
-      </article>`;
-    }).join('');
-
-    const yearMap = monthNames.map((name, month) => {
-      const daysInMonth = new Date(horizonYear, month + 1, 0).getDate();
-      const monthStart = `${horizonYear}-${String(month + 1).padStart(2,'0')}-01`;
-      const monthEnd = `${horizonYear}-${String(month + 1).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
-      const events = allYearEvents.filter(event => event.startDate <= monthEnd && event.endDate >= monthStart);
-      const monthIsCurrent = horizonYear === current.getFullYear() && month === current.getMonth();
-      const hasListedEvents = events.length > 0;
-      return `<article class="horizon-year-map-month${monthIsCurrent ? ' is-current' : ''}${hasListedEvents ? ' has-listed-events' : ' is-empty'}" data-year-map-month="${month}">
-        <div class="horizon-year-map-month__head"><span>${esc(name)}</span>${hasListedEvents ? `<button type="button" class="horizon-year-map-month__add" data-horizon-month-add="${month}" aria-label="Add a key date to ${escAttr(name)}"><span>Add a key date</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>` : ''}</div>
-        <div class="horizon-year-map-month__events">${hasListedEvents ? events.map(event => `<button type="button" class="horizon-year-map-event horizon-year-map-event--${event.kind}${event.done ? ' is-done' : ''}" data-horizon-year-event="${escAttr(event.kind)}" data-event-id="${escAttr(event.id)}" data-owner-month="${Number.isInteger(event.ownerMonth) ? event.ownerMonth : ''}"><time>${esc(rangeLabel(event.startDate,event.endDate))}</time><strong>${esc(event.text)}</strong><span>${esc(eventKindLabel(event.kind))}</span></button>`).join('') : `<button type="button" class="horizon-year-map-empty-add" data-horizon-month-add="${month}" aria-label="Add a key date to ${escAttr(name)}"><span>Add a key date</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>`}</div>
-      </article>`;
-    }).join('');
-
-    content.innerHTML = `<div class="horizon-unified">
-      <section class="horizon-year-bar">
-        <div class="horizon-year-bar__main"><span>Selected year</span><div class="horizon-period-with-nav"><button class="icon-button" type="button" data-horizon-prev aria-label="Previous year" ${horizonYear<=minYear?'disabled':''}>${chevronLeftSvg()}</button><button class="icon-button" type="button" data-horizon-next aria-label="Next year">${chevronRightSvg()}</button><h2>${horizonYear}</h2></div></div>
-        <div class="horizon-year-bar__next">${nextEvent ? `<span>Next on the horizon</span><strong>${esc(nextEvent.text)}</strong><time>${esc(rangeLabel(nextEvent.startDate,nextEvent.endDate))}</time>` : '<span>Next on the horizon</span><strong>Give the year something worth anticipating.</strong>'}</div>
-      </section>
-
-      <section class="horizon-misogi-card">
-        <div class="horizon-misogi-card__primary">
-          <div class="horizon-compass-head"><div><span>Misogi</span><h3>Your year-defining challenge.</h3><p>One hard thing that makes the year unmistakably yours.</p></div></div>
-          <div class="horizon-misogi-entry"><input class="check" type="checkbox" data-misogi-done ${data.misogiDone ? 'checked' : ''} aria-label="Mark Misogi complete"><textarea rows="1" data-horizon-misogi placeholder="What will stretch you beyond your usual limits?">${esc(data.misogi)}</textarea><button class="task-action horizon-misogi-clear" type="button" data-misogi-clear aria-label="Clear Misogi" data-tooltip="Clear" ${data.misogi.trim() || data.misogiStartDate ? '' : 'hidden'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg></button></div>
-          <div class="horizon-item-meta horizon-misogi-meta"><span class="horizon-countdown">${esc(horizonCountdown(data.misogiStartDate,data.misogiEndDate,data.misogiDone))}</span><div class="horizon-item-period">${data.misogiStartDate ? `<time>${esc(rangeLabel(data.misogiStartDate,data.misogiEndDate))}</time>` : '<span>Put it on the calendar</span>'}<button class="task-action" type="button" data-misogi-period aria-label="Choose Misogi dates" data-tooltip="Choose dates">${calendarSvg()}</button></div></div>
-        </div>
-        <div class="horizon-misogi-card__milestones">
-          <div class="horizon-mini-heading"><div><span>Milestones</span><small>Proof points, not a project plan.</small></div>${misogiMilestoneTotal ? `<strong>${misogiMilestoneDone}/${misogiMilestoneTotal}</strong>` : ''}</div>
-          ${data.misogi.trim() ? `<div class="horizon-milestone-list">${milestoneRows}</div>${data.misogiMilestones.length<5?`<button type="button" class="horizon-add-row" data-add-misogi-milestone>+ Add milestone</button>`:''}` : '<p class="horizon-empty-guidance">Name the challenge first. Then add 3–5 moments that would prove you are on track.</p>'}
-        </div>
-      </section>
-
-      <section class="horizon-program-section horizon-adventures-section">
-        <div class="horizon-program-head"><div><span>Mini-adventures</span><h3>Put six memorable experiences on the calendar.</h3><p>Small enough to happen. Different enough to break the routine.</p></div><div class="horizon-program-progress"><strong>${adventurePlanned} / 6</strong><span>on the calendar${adventureNamed > adventurePlanned ? ` · ${adventureNamed-adventurePlanned} unplanned` : ''}</span></div></div>
-        <div class="horizon-adventure-grid horizon-adventure-grid--compass">${adventureCards.join('')}</div>
-      </section>
-
-      <section class="horizon-program-section horizon-meaningful-section">
-        <div class="horizon-program-head"><div><span>What would make this year meaningful?</span><h3>Keep three commitments worth making real.</h3><p>Results, relationships, places, or experiences — not a second task list.</p></div></div>
-        <div class="horizon-meaningful-list">${meaningfulRows}</div>
-      </section>
-
-      <section class="horizon-winning-section"><div class="horizon-program-head"><div><span>Winning habits</span><h3>One practice per quarter.</h3><p>Keep the habit visible; open the activity only when you need the evidence.</p></div></div><div class="horizon-habit-list horizon-habit-list--cards">${habitRows}</div></section>
-
-      <section class="horizon-year-map-section"><div class="horizon-section-heading"><div><span>Year map</span><h3>The commitments and moments shaping the year.</h3></div></div><div class="horizon-year-map">${yearMap}</div></section>
-
-    </div>`;
-
-    const directDate = (button, currentValue, fallback, onSelect, minKey=`${horizonYear}-01-01`) => {
-      if (!button) return;
-      button.addEventListener('click', () => openCalendarPopover(button, currentValue || fallback, value => { onSelect(value); persistSettings(); renderHorizon(); }, { minKey, maxKey:`${horizonYear}-12-31`, align:'end' }));
-    };
-
-    qs('[data-horizon-prev]',content)?.addEventListener('click',()=>shiftHorizonYear(-1));
-    qs('[data-horizon-next]',content)?.addEventListener('click',()=>shiftHorizonYear(1));
-    qsa('[data-horizon-month-add]',content).forEach(button=>button.addEventListener('click',event=>{
-      event.stopPropagation();
-      const month=clamp(Number(button.dataset.horizonMonthAdd),0,11);
-      const key=`${horizonYear}-${String(month+1).padStart(2,'0')}-01`;
-      openNewKeyDatePopover(button,key,{preselect:false});
-    }));
-
-    const misogi=qs('[data-horizon-misogi]',content);
-    autoGrowInlineField(misogi);
-    misogi?.addEventListener('input',()=>{data.misogi=misogi.value;autoGrowInlineField(misogi);persistSettings();});
-    misogi?.addEventListener('change',()=>renderHorizon());
-    qs('[data-misogi-period]',content)?.addEventListener('click',event=>openPeriodCalendarPopover(event.currentTarget,data.misogiStartDate,data.misogiEndDate,(startDate,endDate)=>{data.misogiStartDate=startDate;data.misogiEndDate=endDate||'';persistSettings();renderHorizon();},{minKey:`${horizonYear}-01-01`,maxKey:`${horizonYear}-12-31`,fallbackKey:`${horizonYear}-${String(horizonMonth+1).padStart(2,'0')}-01`,align:'end'}));
-    qs('[data-misogi-done]',content)?.addEventListener('change',event=>{data.misogiDone=event.currentTarget.checked;persistSettings();renderHorizon();});
-    qs('[data-misogi-clear]',content)?.addEventListener('click',()=>requestConfirmation({eyebrow:'Clear Misogi',title:'Clear this Misogi?',message:'The challenge, its dates and its milestones will be removed from Horizon. Your historical daily plans are not changed.',confirmLabel:'Clear',action:()=>{data.misogi='';data.misogiStartDate='';data.misogiEndDate='';data.misogiDone=false;data.misogiMilestones=[];persistSettings();renderHorizon();}}));
-
-    qs('[data-add-misogi-milestone]',content)?.addEventListener('click',()=>{ if(data.misogiMilestones.length>=5)return; data.misogiMilestones.push({id:uid('milestone'),text:'',done:false,date:''}); persistSettings(); renderHorizon(); requestAnimationFrame(()=>qs('[data-milestone-text]:last-of-type',qs('[data-horizon-content]'))?.focus()); });
-    qsa('[data-milestone-text]',content).forEach(input=>input.addEventListener('input',()=>{const item=data.misogiMilestones.find(x=>x.id===input.dataset.milestoneText);if(item){item.text=input.value;persistSettings();}}));
-    qsa('[data-milestone-done]',content).forEach(input=>input.addEventListener('change',()=>{const item=data.misogiMilestones.find(x=>x.id===input.dataset.milestoneDone);if(item){item.done=input.checked;persistSettings();renderHorizon();}}));
-    qsa('[data-milestone-date]',content).forEach(button=>{const item=data.misogiMilestones.find(x=>x.id===button.dataset.milestoneDate);if(!item)return;directDate(button,item.date,`${horizonYear}-${String(horizonMonth+1).padStart(2,'0')}-01`,value=>{item.date=value;});});
-    qsa('[data-milestone-remove]',content).forEach(button=>button.addEventListener('click',()=>{data.misogiMilestones=data.misogiMilestones.filter(x=>x.id!==button.dataset.milestoneRemove);persistSettings();renderHorizon();}));
-
-    qs('[data-add-mini-adventure]',content)?.addEventListener('click',()=>{ if(data.miniAdventures.length>=6)return; const id=uid('adventure'); data.miniAdventures.push({id,text:'',startDate:'',endDate:'',month:horizonMonth,status:'idea',done:false,nextStep:''}); persistSettings(); renderHorizon(); requestAnimationFrame(()=>qs(`[data-adventure-text="${CSS.escape(id)}"]`,qs('[data-horizon-content]'))?.focus()); });
-    qsa('[data-adventure-text]',content).forEach(input=>{input.addEventListener('input',()=>{const item=data.miniAdventures.find(x=>x.id===input.dataset.adventureText);if(item){item.text=input.value;persistSettings();}});input.addEventListener('change',()=>renderHorizon());});
-    qsa('[data-adventure-done]',content).forEach(input=>input.addEventListener('change',()=>{const item=data.miniAdventures.find(x=>x.id===input.dataset.adventureDone);if(item){item.done=input.checked;item.status=input.checked?'done':(item.startDate?'planned':'idea');persistSettings();renderHorizon();}}));
-    qsa('[data-remove-adventure]',content).forEach(button=>button.addEventListener('click',()=>{const id=button.dataset.removeAdventure;const item=data.miniAdventures.find(x=>x.id===id);if(!item)return;requestConfirmation({eyebrow:'Remove mini-adventure',title:'Remove this mini-adventure?',message:'It will disappear from Horizon. Existing daily plans are not changed.',confirmLabel:'Remove',action:()=>{data.miniAdventures=data.miniAdventures.filter(x=>x.id!==id);persistSettings();renderHorizon();}});}));
-    qsa('[data-adventure-period]',content).forEach(button=>button.addEventListener('click',()=>{const item=data.miniAdventures.find(x=>x.id===button.dataset.adventurePeriod);if(!item)return;openPeriodCalendarPopover(button,item.startDate,item.endDate,(startDate,endDate)=>{item.startDate=startDate;item.endDate=endDate||'';item.month=dateFromKey(startDate).getMonth();item.status=item.done?'done':'planned';persistSettings();renderHorizon();},{minKey:`${horizonYear}-01-01`,maxKey:`${horizonYear}-12-31`,fallbackKey:`${horizonYear}-${String(horizonMonth+1).padStart(2,'0')}-01`,align:'end'});}));
-
-    qsa('[data-meaningful-text]',content).forEach(input=>{input.addEventListener('input',()=>{const index=Number(input.dataset.meaningfulText);data.meaningful[index]=input.value;const clear=qs(`[data-meaningful-clear="${index}"]`,content);if(clear)clear.hidden=!input.value.trim();persistSettings();});});
-    qsa('[data-meaningful-clear]',content).forEach(button=>button.addEventListener('click',()=>{const index=Number(button.dataset.meaningfulClear);if(!data.meaningful[index]?.trim())return;requestConfirmation({eyebrow:'Year commitment',title:'Clear this commitment?',message:'This removes the commitment from Horizon. Your daily plans are not changed.',confirmLabel:'Clear',action:()=>{data.meaningful[index]='';persistSettings();renderHorizon();}});}));
-
-    qsa('[data-habit-direct]',content).forEach(input => {
-      input.addEventListener('focus', () => { input.dataset.habitOriginal = data.habits[Number(input.dataset.habitDirect)] || ''; });
-      input.addEventListener('change', () => {
-        const index = Number(input.dataset.habitDirect);
-        const previous = data.habits[index] || '';
-        const next = input.value.trim();
-        if (next === previous.trim()) { input.value = previous; return; }
-        const stats = habitActivityStats(data, index, horizonYear);
-        const tracked = !!previous.trim() && (stats.done > 0 || stats.elapsed > 0);
-        const applyReplacement = () => {
-          data.habits[index] = next;
-          data.habitStartedAt[index] = next ? ymd(new Date()) : '';
-          const todayKey = ymd(new Date());
-          if (Array.isArray(data.habitChecks?.[todayKey])) data.habitChecks[todayKey] = data.habitChecks[todayKey].filter(value => Number(value) !== index);
-          persistSettings();
-          renderHorizon();
-        };
-        if (tracked) {
-          input.value = previous;
-          requestConfirmation({
-            eyebrow: `Winning habit · Q${index + 1}`,
-            title: 'Start tracking a different habit?',
-            message: 'Previous check-ins stay in your saved history, but they will not count toward the new habit. Tracking for the new habit starts today.',
-            confirmLabel: 'Start new habit',
-            action: applyReplacement
-          });
-        } else applyReplacement();
-      });
-    });
-    qsa('[data-habit-stats]',content).forEach(button=>button.addEventListener('click',()=>{const index=Number(button.dataset.habitStats);const card=button.closest('[data-habit-row]');const opening=!card.classList.contains('is-expanded');qsa('[data-habit-row].is-expanded',content).forEach(other=>{if(other!==card){other.classList.remove('is-expanded');const otherButton=qs('[data-habit-stats]',other);otherButton?.setAttribute('aria-expanded','false');const otherLabel=qs('span',otherButton);if(otherLabel)otherLabel.textContent='See activity';qs('.horizon-habit-details',other)?.setAttribute('aria-hidden','true');}});card.classList.toggle('is-expanded',opening);button.setAttribute('aria-expanded',String(opening));const label=qs('span',button);if(label)label.textContent=opening?'Hide activity':'See activity';qs('.horizon-habit-details',card)?.setAttribute('aria-hidden',String(!opening));horizonHabitStatsIndex=opening?index:null;}));
-
-    qsa('[data-horizon-year-event]',content).forEach(button=>button.addEventListener('click',event=>{
-      event.stopPropagation();
-      const kind=button.dataset.horizonYearEvent;
-      if(kind==='milestone'){
-        const field=qs(`[data-milestone-text="${CSS.escape(button.dataset.eventId)}"]`,content);
-        field?.scrollIntoView({behavior:'smooth',block:'center'}); requestAnimationFrame(()=>field?.focus({preventScroll:true})); return;
-      }
-      openHorizonYearEventPopover(button,kind,button.dataset.eventId,button.dataset.ownerMonth);
-    }));
   }
 
   function chevronLeftSvg() { return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>'; }
@@ -3410,16 +3113,16 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       const age = ageMeta(origin, count);
       const planKey = pendingPlanKey({ mode: 'need', origin: candidate.originDay, key: candidate.key });
       const pending = openWorkPendingPlans.get(planKey);
-      return `<article class="open-work-row${pending ? ' has-pending-plan' : ''}"><button class="open-work-row__main" type="button" data-open-origin="${escAttr(candidate.originDay)}"><strong>${esc(text)}</strong><span class="open-work-meta"><time>${esc(formatDateButton(candidate.originDay))}</time>${age.count ? `<span class="carry-badge">Moved ${age.count}×</span>` : ''}</span></button><div class="open-work-row__actions"><button type="button" class="${pending ? 'is-planned' : ''}" data-open-plan="need" data-origin="${escAttr(candidate.originDay)}" data-key="${escAttr(candidate.key)}">${pending ? esc(formatDateButton(pending.dateKey)) : 'Plan'}</button><button type="button" data-open-later data-origin="${escAttr(candidate.originDay)}" data-key="${escAttr(candidate.key)}">Keep</button><button type="button" data-open-drop="need" data-origin="${escAttr(candidate.originDay)}" data-key="${escAttr(candidate.key)}">Drop</button></div></article>`;
+      return `<article class="open-work-row${pending ? ' has-pending-plan' : ''}"><button class="open-work-row__main" type="button" data-open-origin="${escAttr(candidate.originDay)}"><strong>${esc(text)}</strong><span class="open-work-meta"><time>${esc(formatDateButton(candidate.originDay))}</time>${age.count ? `<span class="carry-badge">Moved ${age.count}×</span>` : ''}</span></button><div class="open-work-row__actions"><button type="button" class="${pending ? 'is-planned' : ''}" data-open-plan="need" data-origin="${escAttr(candidate.originDay)}" data-key="${escAttr(candidate.key)}">${pending ? esc(formatDateButton(pending.dateKey)) : 'Plan'}</button><button type="button" data-open-later data-origin="${escAttr(candidate.originDay)}" data-key="${escAttr(candidate.key)}" data-tooltip="Save for later, without a date">Save</button><button type="button" data-open-drop="need" data-origin="${escAttr(candidate.originDay)}" data-key="${escAttr(candidate.key)}" data-tooltip="Remove from Unresolved — its day keeps the history">Forget</button></div></article>`;
     };
     const renderLater = item => {
       const age = ageMeta(item.originDay, item.carriedCount);
       const planKey = pendingPlanKey({ mode: 'later', openId: item.id });
       const pending = openWorkPendingPlans.get(planKey);
-      return `<article class="open-work-row${pending ? ' has-pending-plan' : ''}"><div class="open-work-row__main"><strong>${esc(item.text)}</strong><span class="open-work-meta">${age.count ? `<span class="carry-badge">Moved ${age.count}×</span>` : ''}</span></div><div class="open-work-row__actions"><button type="button" class="${pending ? 'is-planned' : ''}" data-open-plan="later" data-open-id="${escAttr(item.id)}">${pending ? esc(formatDateButton(pending.dateKey)) : 'Plan'}</button><button type="button" data-open-drop="later" data-open-id="${escAttr(item.id)}">Drop</button></div></article>`;
+      return `<article class="open-work-row${pending ? ' has-pending-plan' : ''}"><div class="open-work-row__main"><strong>${esc(item.text)}</strong><span class="open-work-meta">${age.count ? `<span class="carry-badge">Moved ${age.count}×</span>` : ''}</span></div><div class="open-work-row__actions"><button type="button" class="${pending ? 'is-planned' : ''}" data-open-plan="later" data-open-id="${escAttr(item.id)}">${pending ? esc(formatDateButton(pending.dateKey)) : 'Plan'}</button><button type="button" data-open-drop="later" data-open-id="${escAttr(item.id)}" data-tooltip="Remove from Unresolved">Forget</button></div></article>`;
     };
     const rows = openWorkView === 'needs' ? needs.map(renderNeed) : later.map(renderLater);
-    const empty = openWorkView === 'needs' ? 'Nothing unfinished from past days.' : 'Nothing deliberately kept for later.';
+    const empty = openWorkView === 'needs' ? 'Nothing unfinished from past days.' : 'Nothing saved for later.';
     wrap.innerHTML = rows.length ? `<div class="open-work-list">${rows.join('')}</div>` : `<div class="open-work-empty">${empty}</div>`;
 
     const footer = qs('[data-open-work-footer]');
@@ -3531,7 +3234,9 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     qs, getState: () => state, getDate: () => date, getPlannerRangeView: () => plannerRangeView,
     visibleStartMinutes, visibleEndMinutes, layoutBlocks, categoryFor, isBlockDone, time, esc,
     planningWeekDates, isoWeekNumber, loadStateForDate, ymd, atNoon, updatePrintSizing,
-    renderWeekSchedule, hideAppTooltip, closePopover, updateNow
+    renderWeekSchedule, hideAppTooltip, closePopover, updateNow,
+    getPrintYear: () => (qs('[data-horizon-modal]')?.hidden === false ? horizonYear : null),
+    yearPrintData: year => ({ year, data: horizonYearData(year), keyDates: horizonYearKeyDates(year), weekStartsOn: settings.weekStartsOn, progress: progressFor(year), today: new Date() })
   });
   const { printPlanner, cleanupPrintMode } = printFeature;
 
@@ -3562,6 +3267,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     pipWindow = await documentPictureInPicture.requestWindow({ width: 420, height: 600 });
     pipWindow.document.title = 'Daily Planner · Floating';
     pipWindow.document.head.innerHTML = `<meta name="viewport" content="width=device-width,initial-scale=1"><style>${pipStyles()}</style>`;
+    themeController.mirrorTo(pipWindow.document);
     pipWindow.addEventListener('pagehide', () => { pipWindow = null; });
     renderPip();
   }
@@ -3663,45 +3369,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     doc.querySelectorAll('[data-t-calendar]').forEach(button => button.onclick = () => openScheduleFor('task', +button.dataset.tCalendar));
   }
 
-  function hideAppTooltip() {
-    tooltipTarget = null;
-    tooltipNode?.remove();
-    tooltipNode = null;
-  }
-
-  function showAppTooltip(target) {
-    if (Date.now() < tooltipSuppressUntil) return;
-    if (!matchMedia('(hover: hover) and (pointer: fine)').matches) return;
-    if (activeModal && !activeModal.contains(target)) return;
-    if (!target?.dataset?.tooltip || target.disabled || target.getAttribute('aria-expanded') === 'true') return;
-    if (tooltipTarget === target) return;
-    hideAppTooltip();
-    tooltipTarget = target;
-    const tip = document.createElement('div');
-    tip.className = 'app-tooltip-float';
-    tip.setAttribute('role', 'tooltip');
-    const label = document.createElement('span');
-    label.textContent = target.dataset.tooltip;
-    tip.append(label);
-    if (target.dataset.tooltipKey) {
-      const key = document.createElement('kbd');
-      key.textContent = target.dataset.tooltipKey;
-      tip.append(key);
-    }
-    document.body.append(tip);
-    const rect = target.getBoundingClientRect();
-    const tipRect = tip.getBoundingClientRect();
-    const gap = 7;
-    let left = rect.left + rect.width / 2 - tipRect.width / 2;
-    left = clamp(left, 8, innerWidth - tipRect.width - 8);
-    let top = rect.bottom + gap;
-    if (top + tipRect.height > innerHeight - 8) top = rect.top - tipRect.height - gap;
-    tip.style.left = `${left}px`;
-    tip.style.top = `${Math.max(8, top)}px`;
-    requestAnimationFrame(() => tip.classList.add('is-visible'));
-    tooltipNode = tip;
-  }
-
   function setMobileView(view) {
     qs('[data-workspace]').dataset.mobileActive = view;
     qsa('[data-mobile-view]').forEach(btn => {
@@ -3709,6 +3376,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       btn.classList.toggle('is-active', active);
       btn.setAttribute('aria-selected', String(active));
     });
+    if (view === 'plan') requestAnimationFrame(regrowItemFields);
   }
 
   function focusOrCreateTaskSlot() {
@@ -3819,7 +3487,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qs('[data-journal-open]').addEventListener('click', () => { journalPage = 0; renderJournal(); openModal(qs('[data-journal-modal]')); });
   qs('[data-open-work-open]').addEventListener('click', openUnresolvedModal);
   qsa('[data-horizon-open]').forEach(button => button.addEventListener('click', () => { const mobileMenu = qs('[data-mobile-more-menu]'); if (mobileMenu) mobileMenu.hidden = true; openHorizon('year', date); }));
-  qs('.horizon-scroll')?.addEventListener('scroll', () => closeAllPopovers(), { passive: true });
+  qs('[data-horizon-scroll]')?.addEventListener('scroll', () => closeAllPopovers(), { passive: true });
   qs('[data-settings-open]').addEventListener('click', () => { renderCategorySettings(); renderSettingsHours(); renderPlanningWeek(); openModal(qs('[data-settings-modal]')); });
   qs('[data-end-day-open]').addEventListener('click', handleEndDayButton);
   qs('[data-end-day-form]').addEventListener('submit', completeEndDay);
@@ -3904,6 +3572,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qs('[data-block-done]').addEventListener('click', () => { blockDoneDraft = !blockDoneDraft; renderBlockDoneToggle(); });
   qs('[data-toggle-end-date]').addEventListener('click', () => { blockEndDateExplicit = true; renderBlockTimeControls(); });
   qs('[data-block-category]').addEventListener('click', openBlockCategoryMenu);
+  qs('[data-block-category-manage]')?.addEventListener('click', () => categoryManager.open());
   qs('[data-start-date]').addEventListener('click', e => openBlockDateMenu('start', e.currentTarget));
   qs('[data-end-date]').addEventListener('click', e => openBlockDateMenu('end', e.currentTarget));
   qs('[data-start-time-menu]').addEventListener('click', e => openBlockTimeMenu('start', e.currentTarget.closest('.time-combo')));
@@ -3921,27 +3590,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qs('[data-setting-end-time]')?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); commitSettingHourInput('end'); } });
   qs('[data-week-starts-on]')?.addEventListener('click', openWeekStartMenu);
   qsa('[data-planning-day]').forEach(button => button.addEventListener('click', () => togglePlanningDay(Number(button.dataset.planningDay))));
-  qsa('[data-onboarding-go]').forEach(button => button.addEventListener('click', () => { onboardingStep = Number(button.dataset.onboardingGo) || 1; renderOnboardingStep(); }));
-  qsa('[data-onboarding-day]').forEach(button => button.addEventListener('click', () => {
-    const day = Number(button.dataset.onboardingDay);
-    if (onboardingDraftDays.has(day)) { if (onboardingDraftDays.size > 1) onboardingDraftDays.delete(day); }
-    else onboardingDraftDays.add(day);
-    renderOnboardingStep();
-  }));
-  qs('[data-onboarding-start-hour]')?.addEventListener('click', () => openOnboardingHourMenu('start'));
-  qs('[data-onboarding-end-hour]')?.addEventListener('click', () => openOnboardingHourMenu('end'));
-  qs('[data-onboarding-finish]')?.addEventListener('click', () => {
-    settings.planningDays = [...onboardingDraftDays].sort((a,b)=>a-b);
-    settings.onboardingComplete = true;
-    seedFirstBlockAfterOnboarding();
-    persistSettings();
-    closeModal(qs('[data-onboarding-modal]'));
-    render();
-    requestAnimationFrame(() => qs('[data-focus]')?.focus({ preventScroll: true }));
-  });
-  qs('[data-install-app]')?.addEventListener('click', installPlannerApp);
-  qs('[data-install-confirm]')?.addEventListener('click', async () => { const accepted = await installPlannerApp(); closeModal(qs('[data-install-modal]')); if (accepted) renderInstallSetting(); });
-  qsa('[data-install-later]').forEach(button => button.addEventListener('click', () => closeModal(qs('[data-install-modal]'))));
   qsa('[data-sponsor-later]').forEach(button => button.addEventListener('click', () => closeModal(qs('[data-sponsor-modal]'))));
   qs('[data-sponsor-confirm]')?.addEventListener('click', () => closeModal(qs('[data-sponsor-modal]')));
   qs('[data-category-form]').addEventListener('submit', addCategoryFromForm);
@@ -3975,16 +3623,9 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qs('[data-mobile-settings]').addEventListener('click', () => { qs('[data-mobile-more-menu]').hidden = true; renderCategorySettings(); renderSettingsHours(); renderPlanningWeek(); openModal(qs('[data-settings-modal]')); });
   qs('[data-mobile-help]').addEventListener('click', () => { qs('[data-mobile-more-menu]').hidden = true; updateStorageUsage(); openModal(qs('[data-help-modal]')); });
 
-  window.addEventListener('beforeinstallprompt', event => {
-    event.preventDefault();
-    deferredInstallPrompt = event;
-    renderInstallSetting();
-    if (!activeModal && settings.closeDayCount >= 5 && !settings.installPromptShown) setTimeout(maybePromptInstallOrSupport, 350);
-  });
-  window.addEventListener('appinstalled', () => { deferredInstallPrompt = null; renderInstallSetting(); });
   registerPwa();
 
-  document.addEventListener('pointerdown', e => { if (e.target.closest?.('button, a, [role="button"]')) { tooltipSuppressUntil = Date.now() + 700; hideAppTooltip(); } }, true);
+  appTooltips.bind();
   document.addEventListener('click', e => {
     if (!e.target.closest('.action-popover-wrap')) {
       qs('[data-export-menu]').hidden = true;
@@ -4035,18 +3676,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     const action = shortcuts[key];
     if (action) { e.preventDefault(); action(); }
   });
-  document.addEventListener('mouseover', e => {
-    const target = e.target.closest?.('[data-tooltip]');
-    if (target && !target.contains(e.relatedTarget)) showAppTooltip(target);
-  });
-  document.addEventListener('mouseout', e => {
-    const target = e.target.closest?.('[data-tooltip]');
-    if (target && !target.contains(e.relatedTarget)) hideAppTooltip();
-  });
-  document.addEventListener('focusin', e => { const target = e.target.closest?.('[data-tooltip]'); if (target) showAppTooltip(target); });
-  document.addEventListener('focusout', e => { if (e.target.closest?.('[data-tooltip]')) hideAppTooltip(); });
-  document.addEventListener('scroll', hideAppTooltip, true);
-  window.addEventListener('resize', () => { hideAppTooltip(); closePopover(); applyExpandedView(); renderScheduleRange(); updateNow(); requestAnimationFrame(fitHeaderDate); });
+  window.addEventListener('resize', () => { hideAppTooltip(); closePopover(); applyExpandedView(); renderScheduleRange(); updateNow(); requestAnimationFrame(fitHeaderDate); requestAnimationFrame(regrowItemFields); });
   window.addEventListener('beforeprint', printFeature.handleBeforePrint);
   window.addEventListener('afterprint', cleanupPrintMode);
   setInterval(() => { updateNow(); renderStats(); renderPip(); }, 30000);
@@ -4098,9 +3728,10 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qsa('[data-year]').forEach(el => { el.textContent = new Date().getFullYear(); });
   const printHost = qs('[data-print-domain]');
   if (printHost) { printHost.textContent = 'planner.bemorin.com'; printHost.href = 'https://planner.bemorin.com'; }
+  const themeController = createThemeController({ onChange: () => { if (pipWindow && !pipWindow.closed) themeController.mirrorTo(pipWindow.document); } });
   checkLocalStorage();
   setupHelpFaq();
-  const personalSyncFeature = createPersonalSyncFeature({
+  personalSyncFeature = createPersonalSyncFeature({
     store,
     ledger: syncLedger,
     googleClientId: GOOGLE_CLIENT_ID,
@@ -4109,11 +3740,30 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     reloadFromStorage: reloadPlannerAfterSync
   });
   createWorkspaceFeature({ apiUrl: CLOUD_API_URL }).load();
+  const installFeature = createInstallFeature({ openModal, closeModal, getCloseDayCount: () => settings.closeDayCount, wasPrompted: () => !!settings.installPromptShown, markPrompted: () => { settings.installPromptShown = true; persistSettings(); } });
+  const privacyNotice = createPrivacyNotice({ openModal, closeModal });
+  const syncGuide = createSyncGuide({ openModal, closeModal, openPrivacy: privacyNotice.open, driveAvailable: () => !!GOOGLE_CLIENT_ID, openDriveSettings: () => { renderCategorySettings(); renderSettingsHours(); renderPlanningWeek(); openModal(qs('[data-settings-modal]')); requestAnimationFrame(() => { const section = qs('[data-personal-sync]'); section?.scrollIntoView({ behavior: 'smooth', block: 'center' }); section?.classList.add('is-spotlit'); qs('[data-personal-sync-primary]')?.focus({ preventScroll: true }); setTimeout(() => section?.classList.remove('is-spotlit'), 2400); }); } });
+  const feedbackFeature = createFeedbackFeature({ openModal, closeModal, openPrivacy: privacyNotice.open });
+  const plusFeature = createPlusFeature({ openModal, closeModal, getActiveModal: () => activeModal, openPrivacy: privacyNotice.open, flush: flushPlannerForSync });
+  onPlusChange(() => horizonView.refreshPlus());
+  // Another tab activated Plus (a gift or purchase link opened there): take the licence before this tab saves over it.
+  window.addEventListener('storage', event => { if (event.key === 'daily-planner:settings' && adoptPlus(settings, event.newValue)) refreshPlus(); });
+  const onboarding = createOnboarding({ settings: () => settings, persistSettings, startHour, endHour, time, chevronSvg, openListPopover, openModal, closeModal, seedFirstBlock: seedFirstBlockAfterOnboarding, afterFinish: () => { render(); requestAnimationFrame(() => qs('[data-focus]')?.focus({ preventScroll: true })); }, openInstall: () => installFeature.open() });
+  const fromMenu = action => () => { const menu = qs('[data-mobile-more-menu]'); if (menu) menu.hidden = true; action(); };
+  qsa('[data-install-open]').forEach(button => button.addEventListener('click', fromMenu(() => installFeature.open())));
+  qsa('[data-sync-guide-open]').forEach(button => button.addEventListener('click', fromMenu(() => syncGuide.open())));
+  qsa('[data-plus-open]').forEach(button => button.addEventListener('click', fromMenu(() => plusFeature.open())));
+  qsa('[data-feedback-open]').forEach(button => { button.hidden = !feedbackFeature.available(); button.addEventListener('click', fromMenu(() => feedbackFeature.open())); });
+  const helpFeedback = qs('[data-help-feedback]');
+  if (helpFeedback) helpFeedback.hidden = !feedbackFeature.available();
+  qsa('[data-app-version]').forEach(node => { node.textContent = APP_VERSION; });
   setMobileView('plan');
   renderCategorySettings();
   renderSettingsHours();
   renderPlanningWeek();
-  renderInstallSetting(); load();
+  load();
   personalSyncFeature.load();
-  requestAnimationFrame(maybeOpenOnboarding);
+  feedbackFeature.noteVersionSeen();
+  // Gift, purchase and licence links open above first-run setup and return to it.
+  requestAnimationFrame(() => { onboarding.maybeOpen(); plusFeature.handleLaunch(); });
 })();

@@ -1,0 +1,232 @@
+/* Daily Planner Plus: the dialog, its gift and celebration sheets, and the
+   Settings / More entries. Colours come from the theme tokens, so dark mode
+   follows; the Horizon kind colours are reused with light-theme fallbacks. */
+
+.modal--plus .modal__panel { width: min(600px, 100%); }
+
+.plus-dialog { --plus-accent: var(--hz-misogi, #a5522e); --plus-green: var(--hz-habit, #4f7350); }
+
+.plus-header { margin-bottom: 16px; }
+
+.plus-header h2 { max-width: 30ch; text-wrap: balance; }
+
+.plus-header > p:not(.modal__eyebrow) { max-width: 52ch; }
+
+.plus-eyebrow { display: inline-flex; align-items: center; gap: 6px; }
+
+.plus-mark { width: 18px; height: 18px; display: inline-grid; place-items: center; color: var(--plus-accent); }
+
+.plus-mark svg,
+.plus-feature__icon svg,
+.plus-status svg,
+.plus-teams__icon svg,
+.plus-sheet__mark svg,
+.plus-gift__mark svg,
+.plus-celebrate__mark svg,
+.plus-entry__icon svg { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.plus-mark svg { width: 16px; height: 16px; }
+
+.plus-status { width: fit-content; display: inline-flex; align-items: center; gap: 7px; margin: 12px 0 0; padding: 6px 12px 6px 9px; border-radius: 999px; background: color-mix(in srgb, var(--plus-green) 13%, var(--surface-strong)); color: color-mix(in srgb, var(--plus-green) 82%, var(--ink)); font-size: .76rem; font-weight: 650; }
+
+.plus-status svg { width: 16px; height: 16px; flex: 0 0 auto; stroke-width: 2.2; }
+
+.plus-status--header { margin: -4px 0 14px; }
+
+/* What Plus adds */
+
+.plus-features { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+
+.plus-feature { --plus-kind: var(--accent); display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: start; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-strong); }
+
+.plus-feature--year-plan { --plus-kind: var(--hz-adventure, #2f6d70); }
+
+.plus-feature--year-review { --plus-kind: var(--hz-keydate, #5d4f8f); }
+
+.plus-feature--paint-palettes { --plus-kind: var(--hz-misogi, #a5522e); }
+
+.plus-feature--later { --plus-kind: var(--faint); border-style: dashed; background: transparent; }
+
+.plus-feature__icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 11px; background: color-mix(in srgb, var(--plus-kind) 13%, var(--surface-strong)); color: var(--plus-kind); }
+
+.plus-feature__icon svg { width: 20px; height: 20px; }
+
+.plus-feature__icon .icon-fill { fill: currentColor; stroke: none; }
+
+.plus-feature strong { display: block; padding-top: 1px; font-size: .86rem; font-weight: 680; letter-spacing: -.01em; }
+
+.plus-feature small { display: block; margin-top: 3px; color: var(--muted); font-size: .74rem; line-height: 1.5; }
+
+.plus-feature.is-focus { border-color: color-mix(in srgb, var(--plus-kind) 55%, var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--plus-kind) 14%, transparent); }
+
+.plus-features--compact { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; text-align: left; }
+
+.plus-features--compact .plus-feature { grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; }
+
+.plus-features--compact .plus-feature__icon { width: 30px; height: 30px; border-radius: 9px; }
+
+.plus-features--compact .plus-feature__icon svg { width: 17px; height: 17px; }
+
+.plus-features--compact .plus-feature strong { padding: 0; font-size: .72rem; line-height: 1.3; }
+
+/* Price, Get Plus, gift code */
+
+.plus-buy { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; padding: 14px 14px 14px 18px; border-radius: 14px; background: var(--soft); }
+
+.plus-price { display: grid; gap: 1px; }
+
+.plus-price strong { font-size: 1.6rem; font-weight: 720; line-height: 1.1; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+
+.plus-price span { color: var(--muted); font-size: .74rem; font-weight: 600; }
+
+.plus-buy .primary-button { min-width: 132px; min-height: 40px; padding-inline: 20px; font-size: .8rem; }
+
+.plus-soon { display: inline-flex; align-items: center; min-height: 34px; padding: 0 14px; border: 1px dashed var(--line-strong); border-radius: 999px; color: var(--muted); font-size: .76rem; font-weight: 650; }
+
+.plus-redeem { margin-top: 10px; }
+
+.plus-redeem summary { width: fit-content; display: inline-flex; align-items: center; gap: 6px; padding: 4px 2px; border-radius: 6px; color: var(--muted); font-size: .78rem; font-weight: 620; list-style: none; cursor: pointer; }
+
+.plus-redeem summary::-webkit-details-marker { display: none; }
+
+.plus-redeem summary::after { content: ""; width: 6px; height: 6px; margin: -3px 0 0 2px; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+
+.plus-redeem[open] summary::after { margin-top: 3px; transform: rotate(-135deg); }
+
+.plus-redeem summary:hover,
+.plus-redeem summary:focus-visible { outline: 0; color: var(--ink); }
+
+.plus-redeem summary:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+
+.plus-redeem__form { display: flex; gap: 8px; margin-top: 8px; }
+
+.plus-redeem__form input,
+.plus-link input { min-width: 0; flex: 1 1 auto; min-height: 38px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-strong); color: var(--ink); outline: 0; font: inherit; font-size: .8rem; font-weight: 560; }
+
+.plus-redeem__form input:focus,
+.plus-link input:focus { border-color: var(--line-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 5%, transparent); }
+
+.plus-redeem__form input.is-invalid { border-color: color-mix(in srgb, var(--danger) 55%, var(--line)); }
+
+.plus-redeem__form input::placeholder { color: color-mix(in srgb, var(--muted) 60%, transparent); }
+
+.plus-redeem__form .secondary-button,
+.plus-link .secondary-button { min-height: 38px; flex: 0 0 auto; padding-inline: 14px; }
+
+.plus-inline-error { margin: 8px 0 0; padding: 9px 12px; border-radius: 10px; background: color-mix(in srgb, var(--danger) 10%, var(--surface-strong)); color: var(--danger); font-size: .78rem; line-height: 1.45; }
+
+.plus-note { margin: 14px 0 0; padding: 11px 13px; border-radius: 12px; background: var(--soft); color: var(--muted); font-size: .8rem; line-height: 1.55; }
+
+.plus-note a { color: var(--ink); font-weight: 620; }
+
+.plus-teams { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: .78rem; line-height: 1.45; }
+
+.plus-teams__icon { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; background: var(--soft); color: var(--ink); }
+
+.plus-teams__icon svg { width: 17px; height: 17px; }
+
+.plus-teams a { color: var(--ink); font-weight: 650; text-decoration-color: color-mix(in srgb, var(--accent) 65%, transparent); text-underline-offset: 3px; }
+
+.plus-dialog .privacy-footnote { margin-top: 14px; }
+
+/* Sheets: a gift, a problem explained, a purchase confirmed, loading */
+
+.plus-sheet,
+.plus-gift { display: grid; justify-items: center; gap: 10px; padding: 18px 6px 4px; text-align: center; }
+
+.plus-sheet h2,
+.plus-gift h2 { max-width: 26ch; margin: 0; font-size: 1.38rem; letter-spacing: -.03em; line-height: 1.2; text-wrap: balance; }
+
+.plus-sheet > p:not(.modal__eyebrow),
+.plus-gift > p:not(.modal__eyebrow) { max-width: 46ch; margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.6; }
+
+.plus-sheet .modal__eyebrow,
+.plus-gift .modal__eyebrow { margin: 4px 0 -4px; }
+
+.plus-sheet__mark,
+.plus-gift__mark { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 999px; background: var(--soft); color: var(--muted); }
+
+.plus-sheet--gift .plus-sheet__mark,
+.plus-gift__mark { background: color-mix(in srgb, var(--plus-accent) 13%, var(--surface-strong)); color: var(--plus-accent); }
+
+.plus-sheet__mark svg,
+.plus-gift__mark svg { width: 27px; height: 27px; }
+
+.plus-sheet__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; }
+
+.plus-sheet__actions .primary-button,
+.plus-sheet__actions .secondary-button { min-height: 40px; padding-inline: 18px; font-size: .78rem; }
+
+.plus-gift__message { position: relative; max-width: 44ch; margin: 6px 0 2px; padding: 14px 18px; border-radius: 14px; background: var(--soft); color: var(--ink); font-size: .9rem; font-style: normal; line-height: 1.6; white-space: pre-line; overflow-wrap: anywhere; text-align: left; }
+
+.plus-gift__message cite { display: block; margin-top: 6px; color: var(--muted); font-size: .76rem; font-style: normal; font-weight: 650; white-space: normal; }
+
+.plus-gift .plus-features { width: 100%; margin-top: 4px; }
+
+.plus-gift .plus-note { margin: 0; text-align: left; }
+
+.plus-gift .plus-inline-error { width: 100%; margin: 0; text-align: left; }
+
+.plus-gift .plus-sheet__actions .primary-button { min-width: 160px; }
+
+.plus-fine { margin: 2px 0 0; color: var(--faint); font-size: .72rem; line-height: 1.5; }
+
+.plus-fine a { color: var(--muted); font-weight: 620; }
+
+.plus-link { width: 100%; display: flex; gap: 8px; margin-top: 4px; }
+
+.plus-link input { font-size: .76rem; font-variant-numeric: tabular-nums; }
+
+.plus-sheet--loading { min-height: 220px; align-content: center; }
+
+.plus-sheet--loading h2 { color: var(--muted); font-size: .98rem; font-weight: 620; letter-spacing: -.01em; }
+
+.plus-spinner { width: 30px; height: 30px; border: 2.5px solid var(--line); border-top-color: var(--plus-accent); border-radius: 999px; animation: plus-spin 800ms linear infinite; }
+
+@keyframes plus-spin { to { transform: rotate(360deg); } }
+
+/* Celebration: the dots rest invisible; motion.js burst() sends them out once. */
+
+.plus-celebrate { padding-top: 26px; }
+
+.plus-celebrate__badge { position: relative; width: 76px; height: 76px; display: grid; place-items: center; margin-bottom: 10px; }
+
+.plus-celebrate__mark { position: relative; z-index: 1; width: 76px; height: 76px; display: grid; place-items: center; border-radius: 999px; background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--plus-accent) 22%, var(--surface-strong)), color-mix(in srgb, var(--plus-accent) 10%, var(--surface-strong)) 70%); color: var(--plus-accent); box-shadow: 0 0 0 7px color-mix(in srgb, var(--plus-accent) 7%, transparent); }
+
+.plus-celebrate__mark svg { width: 36px; height: 36px; stroke-width: 1.5; }
+
+.plus-burst { position: absolute; inset: 0; pointer-events: none; }
+
+.plus-burst__dot { position: absolute; left: calc(50% - 3.5px); top: calc(50% - 3.5px); width: 7px; height: 7px; border-radius: 999px; background: var(--plus-accent); opacity: 0; }
+
+.plus-burst__dot--1 { background: var(--hz-adventure, #2f6d70); border-radius: 2px; }
+
+.plus-burst__dot--2 { background: var(--hz-milestone, #b97a46); }
+
+.plus-burst__dot--3 { background: var(--hz-keydate, #5d4f8f); width: 5px; height: 5px; }
+
+.plus-celebrate .plus-status { margin-top: 2px; }
+
+/* Settings card and More menu */
+
+.plus-entry__icon { background: color-mix(in srgb, var(--hz-misogi, #a5522e) 12%, var(--surface-strong)); color: var(--hz-misogi, #a5522e); }
+
+.plus-entry.is-active .plus-entry__icon { background: color-mix(in srgb, var(--hz-habit, #4f7350) 14%, var(--surface-strong)); color: var(--hz-habit, #4f7350); }
+
+.mobile-plus-action svg { color: var(--hz-misogi, #a5522e); }
+
+.reset-plus-note { margin: 10px 0 0; color: var(--muted); font-size: .76rem; }
+
+@media (max-width: 560px) {
+  .plus-features--compact { grid-template-columns: minmax(0, 1fr); }
+  .plus-redeem__form,
+  .plus-link { flex-direction: column; }
+  .plus-buy { padding: 14px; }
+  .plus-buy .primary-button { flex: 1 1 100%; }
+  .plus-sheet h2,
+  .plus-gift h2 { font-size: 1.24rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plus-spinner { animation: none; border-color: var(--line-strong); }
+}

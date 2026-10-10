@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Your team gift — Daily Planner</title>
+  <meta name="description" content="Manage a Daily Planner team gift: the gift link, the seats used and the message people see.">
+  <meta name="robots" content="noindex, nofollow">
+  <!-- The address carries the manage key: never send it to another site. -->
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#f6f3ed" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+  <link rel="stylesheet" href="../landing.css">
+  <script src="../../runtime-config.js"></script>
+  <script type="module" src="./thanks.js"></script>
+</head>
+<body class="manage-page">
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m6.5 12.5 3.3 3.3 7.7-8"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4.5 7 7.5 6 7.5-6"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7L6 20v-3.6a2 2 0 0 1-1.5-1.9Z"/></symbol>
+    <symbol id="i-gift" viewBox="0 0 24 24"><path d="M4.5 11.5h15v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-8ZM3.5 7.5h17v4h-17zM12 7.5v13"/><path d="M12 7.5c-1.3-2.7-4.6-3.5-5.1-1.6-.4 1.5 2.4 1.6 5.1 1.6Zm0 0c1.3-2.7 4.6-3.5 5.1-1.6.4 1.5-2.4 1.6-5.1 1.6Z"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5.5 19.5a6.5 6.5 0 0 1 13 0"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5c.5 4.3 2.2 6 6.5 6.5-4.3.5-6 2.2-6.5 6.5-.5-4.3-2.2-6-6.5-6.5 4.3-.5 6-2.2 6.5-6.5Z"/><path d="M18.5 15.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5Z"/></symbol>
+  </svg>
+
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top">
+    <div class="wrap top__inner">
+      <a class="brand" href="../" aria-label="Daily Planner, about the planner">
+        <img src="../../favicon.svg" alt="" width="28" height="28">
+        <span>Daily Planner</span>
+      </a>
+      <div class="top__actions">
+        <a class="btn btn--primary btn--sm" href="../../">Open the planner</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="manage">
+    <div class="wrap manage__wrap">
+      <section class="manage__loading" data-view="loading">
+        <span class="spinner" aria-hidden="true"></span>
+        <p role="status" data-loading-text>Getting your gift…</p>
+      </section>
+
+      <section class="manage__error" data-view="error" hidden>
+        <p class="kicker"><svg class="i"><use href="#i-gift"/></svg>Team gift</p>
+        <h1 tabindex="-1" data-error-title>Something went wrong</h1>
+        <p class="lead" data-error-text></p>
+        <div class="cta-row">
+          <button class="btn btn--primary" type="button" data-retry hidden>Try again</button>
+          <a class="btn btn--primary" href="../../" data-plus-open hidden>Open your planner</a>
+          <a class="btn btn--ghost" href="../?ask=question#request" data-ask>Ask a question</a>
+          <a class="btn btn--ghost" href="../#teams" data-about hidden>About the team gift</a>
+        </div>
+      </section>
+
+      <section data-view="ready" hidden>
+        <div class="manage__head">
+          <p class="kicker"><svg class="i"><use href="#i-gift"/></svg>Team gift</p>
+          <h1 tabindex="-1" data-ready-title>Your gift is ready</h1>
+          <p class="lead">Forward the link below to your people. Each person who opens it activates Daily Planner Plus for life on their own planner. No accounts, no names collected.</p>
+        </div>
+
+        <div class="manage__grid">
+          <div class="mg-card mg-link">
+            <h2><svg class="i"><use href="#i-link"/></svg>Your gift link</h2>
+            <div class="mg-link__row">
+              <input type="text" readonly data-gift-url aria-label="Gift link" spellcheck="false">
+              <button class="btn btn--primary" type="button" data-copy-link><svg class="i"><use href="#i-copy"/></svg>Copy link</button>
+            </div>
+            <p class="mg-status" data-link-status role="status"></p>
+            <p class="mg-fine">Share it only with the people it’s for: whoever opens it uses a seat.</p>
+          </div>
+
+          <div class="mg-card mg-seats">
+            <div class="mg-card__head">
+              <h2><svg class="i"><use href="#i-user"/></svg>Seats used</h2>
+              <button class="btn btn--ghost btn--sm" type="button" data-refresh><svg class="i"><use href="#i-refresh"/></svg>Refresh</button>
+            </div>
+            <p class="mg-seats__count"><b data-redeemed>0</b><span>of <span data-seats>0</span></span></p>
+            <span class="mg-meter" aria-hidden="true"><i data-meter></i></span>
+            <p class="mg-fine" data-seats-note></p>
+            <p class="mg-status" data-seats-status role="status"></p>
+          </div>
+
+          <form class="mg-card mg-message" data-message-form novalidate>
+            <h2><svg class="i"><use href="#i-spark"/></svg>What people see</h2>
+            <p class="mg-fine">Shown with the gift when someone opens the link.</p>
+            <label class="mg-field"><span>From</span><input type="text" name="org" maxlength="80" required autocomplete="organization" aria-describedby="org-hint"><small id="org-hint">Shown as “A gift from …”</small></label>
+            <label class="mg-field"><span>Message</span><textarea name="message" rows="3" maxlength="280" aria-describedby="message-count"></textarea><small id="message-count" data-message-count>0/280</small></label>
+            <div class="mg-actions">
+              <button class="btn btn--primary btn--sm" type="submit" data-save>Save</button>
+              <p class="mg-status" data-message-status role="status"></p>
+            </div>
+            <p class="mg-fine" data-message-locked hidden>To change the message, open this page from the manage link in your email.</p>
+          </form>
+
+          <div class="mg-card mg-forward">
+            <h2><svg class="i"><use href="#i-mail"/></svg>Ready to forward</h2>
+            <div class="mg-msgs">
+              <div class="mg-msg">
+                <div class="mg-msg__head"><b><svg class="i"><use href="#i-mail"/></svg>Email</b><button class="btn btn--ghost btn--sm" type="button" data-copy="email"><svg class="i"><use href="#i-copy"/></svg>Copy</button></div>
+                <pre data-forward="email"></pre>
+              </div>
+              <div class="mg-msg">
+                <div class="mg-msg__head"><b><svg class="i"><use href="#i-chat"/></svg>Slack or Teams</b><button class="btn btn--ghost btn--sm" type="button" data-copy="chat"><svg class="i"><use href="#i-copy"/></svg>Copy</button></div>
+                <pre data-forward="chat"></pre>
+              </div>
+            </div>
+            <p class="mg-status" data-forward-status role="status"></p>
+          </div>
+        </div>
+
+        <div class="mg-own">
+          <div>
+            <h2>Your own planner</h2>
+            <p>To get Plus yourself, open the gift link too: it uses one seat, like everyone else’s.</p>
+          </div>
+          <a class="btn btn--ghost" href="../../">Open your own planner<svg class="i"><use href="#i-arrow"/></svg></a>
+        </div>
+        <p class="mg-fine mg-keep">Bookmark this page to come back to it. Keep its address to yourself: it lets you change the message.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot__inner">
+      <div class="foot__brand">
+        <img src="../../favicon.svg" alt="" width="24" height="24" loading="lazy" decoding="async">
+        <span><b>Daily Planner</b> By <a href="https://bemorin.com/" rel="noopener">Ben Morin</a></span>
+      </div>
+      <nav class="foot__links" aria-label="Footer">
+        <a href="../../">Open the planner</a>
+        <a href="../#teams">Team gift</a>
+        <a href="../?ask=question#request">Ask a question</a>
+      </nav>
+      <nav class="foot__legal" aria-label="Legal">
+        <a href="https://bemorin.com/privacy" rel="noopener">Privacy</a>
+        <a href="https://bemorin.com/terms" rel="noopener">Terms</a>
+        <a href="https://bemorin.com/cookies" rel="noopener">Cookies</a>
+      </nav>
+    </div>
+  </footer>
+</body>
+</html>

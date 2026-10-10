@@ -1,14 +1,21 @@
 import { defaultCategories, palette } from '../config.js';
 import { clamp, uid } from '../lib/utils.js';
 
+// Colours and ids end up in style and data attributes, so anything that is not a
+// plain hex colour or a simple id (an edited backup, a hand-written sync file)
+// is replaced rather than trusted.
+const HEX_COLOR_RE = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const CATEGORY_ID_RE = /^[\w.:-]{1,80}$/;
+
 function categoriesFrom(raw) {
-  if (raw?.categories?.length) {
-    return raw.categories.map((category, index) => ({
-      id: category.id || uid('category'),
-      name: category.name || 'Category',
-      color: category.color || palette[index % palette.length].value,
+  const list = Array.isArray(raw?.categories) ? raw.categories.filter(category => category && typeof category === 'object') : [];
+  if (list.length) {
+    return list.map((category, index) => ({
+      id: typeof category.id === 'string' && CATEGORY_ID_RE.test(category.id) ? category.id : uid('category'),
+      name: String(category.name || '') || 'Category',
+      color: typeof category.color === 'string' && HEX_COLOR_RE.test(category.color.trim()) ? category.color.trim() : palette[index % palette.length].value,
       archived: !!category.archived,
-      archivedAt: category.archivedAt || ''
+      archivedAt: typeof category.archivedAt === 'string' ? category.archivedAt : ''
     }));
   }
   return defaultCategories.map(category => ({ ...category, archived: false, archivedAt: '' }));

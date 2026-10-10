@@ -7,3 +7,6 @@ coverage/
 
 # Personal deployment / release notes are intentionally not public.
 OWNER_NOTES.md
+
+# Local data written by the dev server (waitlist, feedback, counts).
+.planner-dev/
