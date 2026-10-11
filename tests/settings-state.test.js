@@ -2,6 +2,24 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createDefaultSettings, normalizePlannerSettings } from '../src/state/settings-state.js';
 
+test('category colours and ids from storage are plain values, never markup', () => {
+  const settings = normalizePlannerSettings({
+    categories: [
+      { id: 'deep-work', name: 'Deep work', color: '#5F7084' },
+      { id: 'x" onmouseover="alert(1)', name: 'Odd', color: 'red"><img src=x onerror=alert(1)>' },
+      { id: 'short', name: '', color: ' #abc ' },
+      null,
+      'not a category'
+    ]
+  }, { detectedWeekStart: 1, currentYear: 2026 });
+  assert.equal(settings.categories.length, 3);
+  assert.deepEqual(settings.categories[0], { id: 'deep-work', name: 'Deep work', color: '#5F7084', archived: false, archivedAt: '' });
+  assert.match(settings.categories[1].id, /^category-/);
+  assert.match(settings.categories[1].color, /^#[0-9a-f]{6}$/i);
+  assert.equal(settings.categories[2].color, '#abc');
+  assert.equal(settings.categories[2].name, 'Category');
+});
+
 test('default settings preserve first-run behavior', () => {
   const settings = createDefaultSettings({ detectedWeekStart: 0, currentYear: 2026 });
   assert.equal(settings.startHour, 8);

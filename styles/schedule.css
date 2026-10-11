@@ -489,6 +489,9 @@
 .time-menu-button:focus-visible { outline: 0; color: var(--ink); background: var(--soft); }
 .time-menu-button svg {   fill: none; stroke: currentColor; stroke-width: 1.55; stroke-linecap: round; stroke-linejoin: round; }
 .block-category-trigger { font-size: .78rem; }
+/* "Manage" sits in the label row without making it taller than its neighbour's label. */
+.block-category-field .form-field-label-row { min-height: 0; }
+.block-category-field .inline-field-action { margin-block: -4px; }
 .block-category-trigger .select-trigger__value { font-size: inherit; }
 .block-notes-field { order: 20; }
 .block-notes-field textarea { min-height: 128px; }
@@ -723,7 +726,7 @@
   top: 2px;
   width: 4px;
   height: 8px;
-  border: solid #fff;
+  border: solid var(--surface-strong);
   border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg);
 }
@@ -747,3 +750,13 @@
 .block-notes-editor > .block-note-line--check { display: grid; grid-template-columns: 20px minmax(0,1fr); gap: 7px; }
 .block-notes-editor > .block-note-line--check > span { display: block; width: auto; min-width: 0; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
 
+
+/* 1.19: a block that starts above the visible part of the schedule keeps its
+   title and check on screen while any of it is visible. `clip` (not `hidden`)
+   so the block isn't a scroll container and the sticky row can follow. */
+.time-block,
+.time-block.is-current { overflow: hidden; overflow: clip; }
+.time-block:not(.is-micro) .time-block__top { position: sticky; z-index: 1; top: 6px; background: inherit; }
+
+/* Finished while still on the clock: done styling plus a quiet "now" ring. */
+.time-block.is-now-done { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--current-time) 50%, transparent); }

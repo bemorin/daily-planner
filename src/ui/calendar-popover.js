@@ -8,11 +8,39 @@ function weekLabels(weekStartsOn) {
   return Array.from({ length: 7 }, (_, index) => labels[(weekStartsOn + index) % 7]);
 }
 
+/**
+ * Number of day cells needed to show a month: only the weeks that contain at
+ * least one day of that month (5 or 6 rows, never a trailing week that belongs
+ * entirely to the next month).
+ */
+export function monthGridCellCount(year, month, weekStartsOn = 1) {
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const offset = (firstWeekday - normalizedWeekStart(weekStartsOn) + 7) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  return Math.ceil((offset + daysInMonth) / 7) * 7;
+}
+
 function monthGridStart(ctx, monthStart, weekStartsOn) {
   const offset = (monthStart.getDay() - weekStartsOn + 7) % 7;
   const gridStart = ctx.atNoon(new Date(monthStart));
   gridStart.setDate(gridStart.getDate() - offset);
   return gridStart;
+}
+
+/**
+ * Month grids are 4–6 rows tall, so changing month can change the popover's
+ * height after it was positioned. Keep it attached to its anchor: a popover
+ * shown above the anchor grows upward, one shown below stays inside the window.
+ */
+function keepPlaced(popover, anchor, renderMonth) {
+  const before = popover.offsetHeight;
+  renderMonth();
+  const delta = popover.offsetHeight - before;
+  if (!delta || !popover.isConnected || !popover.style.top) return;
+  const top = parseFloat(popover.style.top) || 0;
+  const above = anchor && top < anchor.getBoundingClientRect().top;
+  const next = above ? top - delta : Math.min(top, window.innerHeight - popover.offsetHeight - 10);
+  popover.style.top = `${Math.max(10, next)}px`;
 }
 
 export function openDatePopover(ctx, anchor, selectedKey, onSelect, options = {}) {
@@ -49,7 +77,7 @@ export function openDatePopover(ctx, anchor, selectedKey, onSelect, options = {}
     next.disabled = nextDisabled;
     const grid = ctx.qs('.calendar-popover__grid', popover);
     const todayKey = ctx.ymd(new Date());
-    for (let index = 0; index < 42; index += 1) {
+    for (let index = 0, cells = monthGridCellCount(monthStart.getFullYear(), monthStart.getMonth(), weekStartsOn); index < cells; index += 1) {
       const day = ctx.atNoon(new Date(gridStart));
       day.setDate(day.getDate() + index);
       const key = ctx.ymd(day);
@@ -68,8 +96,8 @@ export function openDatePopover(ctx, anchor, selectedKey, onSelect, options = {}
       });
       grid.append(button);
     }
-    prev.addEventListener('click', event => { event.stopPropagation(); view = prevMonth; render(); });
-    next.addEventListener('click', event => { event.stopPropagation(); view = nextMonth; render(); });
+    prev.addEventListener('click', event => { event.stopPropagation(); view = prevMonth; keepPlaced(popover, anchor, render); });
+    next.addEventListener('click', event => { event.stopPropagation(); view = nextMonth; keepPlaced(popover, anchor, render); });
   };
 
   render();
@@ -122,7 +150,7 @@ export function openDateRangePopover(ctx, anchor, startKey, endKey, onSave, opti
     next.disabled = nextDisabled;
     const grid = ctx.qs('.calendar-popover__grid', popover);
     const todayKey = ctx.ymd(new Date());
-    for (let index = 0; index < 42; index += 1) {
+    for (let index = 0, cells = monthGridCellCount(monthStart.getFullYear(), monthStart.getMonth(), weekStartsOn); index < cells; index += 1) {
       const day = ctx.atNoon(new Date(gridStart));
       day.setDate(day.getDate() + index);
       const key = ctx.ymd(day);
@@ -142,8 +170,8 @@ export function openDateRangePopover(ctx, anchor, startKey, endKey, onSave, opti
       });
       grid.append(button);
     }
-    prev.addEventListener('click', event => { event.stopPropagation(); view = prevMonth; render(); });
-    next.addEventListener('click', event => { event.stopPropagation(); view = nextMonth; render(); });
+    prev.addEventListener('click', event => { event.stopPropagation(); view = prevMonth; keepPlaced(popover, anchor, render); });
+    next.addEventListener('click', event => { event.stopPropagation(); view = nextMonth; keepPlaced(popover, anchor, render); });
     ctx.qs('[data-period-secondary]', popover)?.addEventListener('click', event => { event.stopPropagation(); if (hasPeriod) { draftEnd = ''; render(); } else ctx.closePopover(); });
     ctx.qs('[data-period-save]', popover)?.addEventListener('click', event => {
       event.stopPropagation();

@@ -61,9 +61,25 @@ The browser calls the Drive API directly. Personal planner data therefore does n
 
 After a user explicitly connects Google Drive, the app remembers that sync is enabled on that device.
 
-On a later launch it attempts a silent Google authorization (`prompt: none`). If Google can issue a token without showing account or consent UI, the planner syncs automatically. If not, the planner stays fully local and leaves **Sync now** available for an explicit user gesture.
+Automatic sync — including startup, idle batching, focus/visibility, online, hide, and Close day — runs **only while a usable in-memory Google access token already exists**. Those paths never call Google Identity Services `requestAccessToken()`, so they cannot open OAuth popups, account choosers, or consent windows in the background.
 
-This is intentional: a browser-only token flow should not manufacture a hidden refresh-token backend just to make the word “automatic” technically true.
+If the access token is missing or expired, the planner stays fully local, keeps dirty state, and shows a quiet **Reconnect Google Drive** action. Only that explicit user gesture (or the first **Connect Google Drive**) may invoke interactive Google authorization.
+
+## Opportunistic sync
+
+Local edits always write to `localStorage` immediately. Google Drive is not updated on every keystroke.
+
+When sync is connected and local records are dirty, the client batches uploads **when a usable access token is already available**:
+
+- idle wait of about 50 seconds after the latest change;
+- maximum wait of about 2 minutes from the first dirty change, even if editing continues;
+- checks when the app starts, becomes visible/focused again, or regains network;
+- a best-effort attempt when the app becomes hidden;
+- a sync attempt after Close day.
+
+If no usable token is available, those triggers do nothing interactive: local edits continue, dirty state remains, and the UI asks the user to reconnect.
+
+**Sync now** uses the current in-memory token only. **Reconnect Google Drive** is the explicit control that may open Google authorization. There is no continuous polling and no backend.
 
 ## Recovery snapshots
 

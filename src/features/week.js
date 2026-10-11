@@ -1,6 +1,11 @@
+import { agendaDay } from './day-summary.js';
+import { dayHeadPlan, dayLabel, renderWeekAgenda } from './week-agenda.js';
+
 /**
  * Week schedule rendering and interaction.
  * Keeps the week-only DOM, hover/add behavior, and mobile auto-scroll out of app.js.
+ * Each day header also carries that day's plan (most important outcome and
+ * counts), and the phone's Plan tab gets the same week as an agenda.
  */
 export function createWeekFeature(ctx) {
   let autoScrollKey = '';
@@ -27,8 +32,11 @@ export function createWeekFeature(ctx) {
       blocks.forEach(block => {
         const top = Number.parseFloat(block.style.top) || block.offsetTop || 0;
         const height = Number.parseFloat(block.style.height) || block.offsetHeight || 0;
-        const isCurrent = lineY >= top && lineY < top + height;
+        const onClock = lineY >= top && lineY < top + height;
+        // A block finished early stays calm: done styling plus a quiet "now" ring.
+        const isCurrent = onClock && !block.classList.contains('done');
         block.classList.toggle('is-current', isCurrent);
+        block.classList.toggle('is-now-done', onClock && !isCurrent);
         if (isCurrent) {
           block.style.setProperty('--week-now-in-block', `${lineY - top}px`);
           currentBlocks.push(block);
@@ -130,8 +138,12 @@ export function createWeekFeature(ctx) {
       const key = ctx.ymd(day);
       const current = key === todayKey;
       const past = key < todayKey;
-      return `<button type="button" class="week-day-head${current ? ' is-today' : ''}${past ? ' is-past' : ''}" data-week-open-day="${key}"><span>${ctx.esc(day.toLocaleDateString(undefined, { weekday: 'short' }))}</span><strong>${day.getDate()}</strong></button>`;
+      const info = agendaDay(ctx.loadStateForDate(day), { key, todayKey });
+      return `<button type="button" class="week-day-head${current ? ' is-today' : ''}${past ? ' is-past' : ''}" data-week-open-day="${key}" aria-label="${ctx.escAttr(dayLabel(day, info))}"><span class="week-day-head__date"><span>${ctx.esc(day.toLocaleDateString(undefined, { weekday: 'short' }))}</span><strong>${day.getDate()}</strong></span>${dayHeadPlan(info)}</button>`;
     }).join('');
+    // An empty week says how blocks are added here: click (or tap) a time in a day.
+    const emptyHint = ctx.qs('[data-week-empty-hint]');
+    if (emptyHint) emptyHint.hidden = !days.every(day => !(ctx.loadStateForDate(day).blocks || []).length);
 
     const columns = days.map(day => {
       const key = ctx.ymd(day);
@@ -159,7 +171,7 @@ export function createWeekFeature(ctx) {
         const currentBlock = currentDay && nowMinutes >= block.start && nowMinutes < block.start + block.duration;
         const categoryName = category?.name || 'Uncategorized';
         const categoryColor = category?.color || '#746e67';
-        return `<div class="week-time-block${micro ? ' is-micro' : ''}${done ? ' done' : ''}${currentBlock ? ' is-current' : ''}" data-week-open-block="${key}" data-week-block-id="${ctx.escAttr(block.id)}" role="button" tabindex="0" style="top:${top}px;height:${height}px;left:calc(${layout.col * (100 / layout.cols)}% + ${layout.col ? 2 : 0}px);width:calc(${100 / layout.cols}% - ${layout.cols > 1 ? 4 : 3}px);--block-color:${categoryColor}"><div class="week-time-block__copy"><strong>${ctx.esc(block.title || 'Untitled block')}</strong><div class="week-time-block__meta"><span class="week-time-block__category"><i style="background:${categoryColor}"></i><span class="week-time-block__category-name">${ctx.esc(categoryName)}</span></span><span class="week-time-block__separator" aria-hidden="true">·</span><span class="week-time-block__time">${ctx.time(block.start)}–${ctx.time(block.start + block.duration)}</span></div></div><input class="check week-time-block__check" type="checkbox" data-week-block-check="${key}" data-week-block-check-id="${ctx.escAttr(block.id)}" ${done ? 'checked' : ''} aria-label="Mark block done"><div class="resize week-time-block__resize" data-week-block-resize="${key}" data-week-block-resize-id="${ctx.escAttr(block.id)}" aria-hidden="true"></div></div>`;
+        return `<div class="week-time-block${micro ? ' is-micro' : ''}${done ? ' done' : ''}${currentBlock ? (done ? ' is-now-done' : ' is-current') : ''}" data-week-open-block="${key}" data-week-block-id="${ctx.escAttr(block.id)}" role="button" tabindex="0" style="top:${top}px;height:${height}px;left:calc(${layout.col * (100 / layout.cols)}% + ${layout.col ? 2 : 0}px);width:calc(${100 / layout.cols}% - ${layout.cols > 1 ? 4 : 3}px);--block-color:${categoryColor}"><div class="week-time-block__copy"><strong>${ctx.esc(block.title || 'Untitled block')}</strong><div class="week-time-block__meta"><span class="week-time-block__category"><i style="background:${categoryColor}"></i><span class="week-time-block__category-name">${ctx.esc(categoryName)}</span></span><span class="week-time-block__separator" aria-hidden="true">·</span><span class="week-time-block__time">${ctx.time(block.start)}–${ctx.time(block.start + block.duration)}</span></div></div><input class="check week-time-block__check" type="checkbox" data-week-block-check="${key}" data-week-block-check-id="${ctx.escAttr(block.id)}" ${done ? 'checked' : ''} aria-label="Mark block done"><div class="resize week-time-block__resize" data-week-block-resize="${key}" data-week-block-resize-id="${ctx.escAttr(block.id)}" aria-hidden="true"></div></div>`;
       }).join('');
       const line = currentDay && nowVisible
         ? `<div class="week-now-line" style="top:${nowY}px"><span>${ctx.time(nowMinutes)}</span></div>`
@@ -168,6 +180,7 @@ export function createWeekFeature(ctx) {
     }).join('');
 
     wrap.innerHTML = `<div class="week-schedule-head"><span class="week-gutter-head"><small>Week</small><strong>${weekNo}</strong></span>${dayHeaders}</div><div class="week-schedule-body" style="--week-days:${days.length};height:${totalHeight}px"><div class="week-hour-gutter">${hourLabels}</div>${columns}</div>`;
+    renderWeekAgenda(ctx, days, todayKey);
 
     bindNowLineGuard(wrap);
 

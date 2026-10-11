@@ -10,7 +10,7 @@ The planner runs in the browser, stores its data locally, works without an accou
 
 - **Day** keeps one intention, one main outcome, up to two other outcomes, supporting tasks, notes, and a time-blocked schedule in one place.
 - **Week** shows the configured planning days side by side without the Day plan column.
-- **Close day** decides what is done, what moves to a date, what stays unresolved, and what is dropped.
+- **Close day** decides what is done, what moves to a date, what is saved in Unresolved, and what is forgotten.
 - **Unresolved** keeps unfinished work visible without turning it into a large backlog system.
 - **Journal** keeps the day’s memory and lesson attached to the date they belong to.
 - **Horizon** keeps longer-term direction visible through a Misogi, Mini-adventures, Winning Habits, annual commitments, and significant dates.
@@ -21,7 +21,7 @@ A new browser gets a three-step setup:
 
 1. a short introduction to the planning method;
 2. the days and visible hours to use in the planner;
-3. a compact explanation of the Plan → Work → Journal → Close → Horizon loop.
+3. a compact explanation of the daily loop: Plan → Do → Close → Decide.
 
 The setup is intentionally short. Everything else is introduced when it becomes useful.
 
@@ -53,8 +53,8 @@ Planning days define Week columns and Day-view previous/next navigation. They do
 Close day reviews unfinished work and lets each item be:
 
 - planned to a date;
-- **Kept** without a date in Unresolved;
-- **Dropped** from active work while remaining part of the historical day.
+- **Saved** without a date in Unresolved;
+- **Forgotten** — taken off active work while remaining part of the historical day.
 
 Moved work keeps its `Moved n×` history. A closed day can be reopened, which reverses the transfers created by that close before the day is closed again.
 
@@ -71,19 +71,25 @@ After closing a day, the next planning day can be given a little direction witho
 Unresolved deliberately stays small:
 
 - **Needs attention** — unfinished work from past days that has not already been placed elsewhere;
-- **Later** — work deliberately kept without a date.
+- **Later** — work deliberately saved without a date.
 
 Planning from Unresolved is staged and confirmed instead of moving items immediately.
 
 ## Horizon
 
-Horizon is the strategic layer, not another task manager.
+Horizon is the strategic layer, not another task manager. A section rail keeps each part one click (or one key, `1`–`7`) away:
 
+- **Overview** — a year-at-a-glance ribbon that puts the Misogi, milestones, mini-adventures, key dates and quarterly habits on one timeline with a Today marker, the next upcoming moments, and one tile per section.
 - **Misogi** — one year-defining challenge with an optional date or period, completion, and up to five milestones.
-- **Mini-adventures** — up to six experiences with optional dates or periods.
-- **Winning Habits** — one habit per quarter, with completion rate, streaks, and an expandable activity view.
-- **Three annual commitments** — simple statements about what deserves a place in the year.
-- **Year map** — significant dates and periods, without filling the year with daily tasks.
+- **Mini-adventures** — six slots for experiences, each an Idea, Planned (dated) or Lived.
+- **Commitments** — three simple statements about what deserves a place in the year.
+- **Winning habits** — one habit per quarter, with completion rate, streaks, and an expandable activity view.
+- **Year map** — significant dates and periods month by month, without filling the year with daily tasks. Click anywhere in a month to add a key date there.
+- **Progress** — the year painting itself: one square per closed day (deeper when the main outcome was done, deepest when the winning habit was kept), a forgiving streak that only counts planning days and gives two jokers a month, and a trophy room where every trophy is visible with its progress from day one.
+
+The **Add** button (or `+`) opens one chooser for every Horizon element — key date, mini-adventure, milestone (or the Misogi itself), commitment and winning habit — and shows how many of each are left.
+
+The Misogi and the rhythm of mini-adventures and quarterly habits come from [Jesse Itzler](https://jesseitzler.com/).
 
 Replacing a Winning Habit starts a new tracking window. Earlier check-ins stay saved but are not counted in the statistics of the new habit.
 
@@ -112,13 +118,17 @@ Categories classify scheduled time and power the statistics.
 - archived categories remain available for historical data but disappear from new-block pickers;
 - Misogi and Mini-adventures do not automatically become categories.
 
+## Appearance
+
+Settings → **Appearance** follows the device (System) or keeps the planner Light or Dark. The choice belongs to the browser it was made in: it is not part of backups, exports or sync. Interface motion is skipped automatically when the operating system asks for reduced motion.
+
 ## Floating mode
 
 When Document Picture-in-Picture is supported, the planner can stay in a compact floating window with editable **Plan / Schedule** views.
 
 ## Install as an app
 
-Daily Planner is a Progressive Web App on supported browsers.
+Daily Planner is a Progressive Web App on supported browsers. **More → Install the app** (also in Settings → Your devices, Help, and the last step of setup) shows the steps for the browser in use, or installs in one click where the browser allows it.
 
 - **Chrome / Edge / other Chromium browsers:** use the browser’s **Install app** action when it appears in the address bar or browser menu.
 - **Safari on iPhone / iPad:** use **Share → Add to Home Screen**.
@@ -131,6 +141,8 @@ The production service worker caches the application shell so the planner can re
 ## Storage and privacy
 
 Planner data is stored in `localStorage` under `daily-planner:` keys. Personal use remains local-first: no account or network connection is required.
+
+A deployment can optionally switch on a small owner API (`PLANNER_API_URL`) for the account-sync waitlist, feedback by app version and anonymous daily counts of a few product moments. Planner content is never sent, counts carry no identifier, and with the checked-in blank value the planner makes no such request. When the API is on, a **Privacy** notice (Settings, Help, setup, and the waitlist and feedback forms) lists exactly what this copy counts and stores, and lets each device switch the counts off. It also receives team kit requests from the landing page, and the owner dashboard at `/admin/` supports two-factor sign-in. See [`docs/FEEDBACK_AND_WAITLIST.md`](./docs/FEEDBACK_AND_WAITLIST.md).
 
 A deployment can optionally configure Google Drive personal sync. That path stores one hidden current-state sync document in the user's own Drive `appDataFolder`; Daily Planner does not need a server-side Personal planner database. The sync protocol works at stable planner-record boundaries, tracks deletions as tombstones, and refuses to silently overwrite a record that changed independently on both devices.
 
@@ -164,19 +176,46 @@ The in-app **How it works** modal contains the complete shortcut reference. Comm
 - `H` — How it works;
 - `T` — add a schedule task;
 - `D` — close / reopen day;
-- `//` — checkbox line in Notes.
+- `//` — checkbox line in Notes;
+- `1`–`6` / `+` — Horizon sections / add to Horizon (while Horizon is open).
+
+## Landing page
+
+`welcome/` is the public landing page (served at `/welcome/`): animated replicas of the planner, Daily Planner Plus, the team gift, pricing in EUR or USD, and an FAQ. `welcome/thanks/` is where a company gets its gift link after paying. The page reuses the planner's runtime configuration, makes no request when `PLANNER_API_URL` is blank, and takes every price from `src/lib/pricing.js`, the file the planner and the owner API use too.
+
+## Daily Planner Plus
+
+The planner is free. **Plus** is a one-time unlock, for life, that adds new features: **Plan your year** (a guided session that sets up Horizon), **Your year in review** (one printable page), and colours for the painted year. Companies can give Plus to their people as a team gift: one link, each person who opens it activates Plus, no accounts and no names collected. Licences are signed by the owner API and verified on the device; a copy built without `DAILY_PLANNER_PLUS_PUBLIC_KEY` cannot activate Plus. Payments go through Creem, the merchant of record (it charges VAT and sends receipts and invoices); setup is in [`docs/FEEDBACK_AND_WAITLIST.md`](./docs/FEEDBACK_AND_WAITLIST.md).
 
 ## Local development
 
 No package installation or framework is required for normal development.
 
-### Windows
+### Windows — one double-click
 
-```powershell
-py -m http.server 8080
+Double-click **`Start Daily Planner.bat`**. It starts a local server on `http://localhost:8080` and opens the planner in your default browser; close the window to stop it. It uses Node.js when available and falls back to Python.
+
+```text
+Start Daily Planner.bat            start and open the planner
+Start Daily Planner.bat shortcut   add a "Daily Planner" shortcut to the desktop
+Start Daily Planner.bat dist       serve the production build (builds it first if needed)
+Start Daily Planner.bat lan        also reachable from a phone on the same Wi-Fi
 ```
 
-### macOS / Linux
+Browsers keep planner data per address, so the launcher always uses port 8080 — the same address as `py -m http.server 8080` — and simply reopens the planner if it is already running.
+
+### Any platform
+
+```bash
+npm start            # node scripts/serve.mjs --open
+npm run serve:dist   # production build
+npm run start:api    # also run the owner API and dashboard (/admin/, token "dev")
+npm run start:api:fake # the same, printing emails and with pretend Creem payments
+npm run admin:secret # print a fresh ADMIN_TOKEN and two-factor secret for production
+npm run plus:keys    # print a fresh Plus signing key and its public key
+```
+
+or, without Node:
 
 ```bash
 python3 -m http.server 8080
@@ -200,7 +239,7 @@ You do **not** need to run the build command after every source edit while devel
 
 ## Architecture
 
-The runtime is deliberately vanilla HTML, CSS, and JavaScript modules. `app.js` coordinates shared application state while focused modules own Week rendering, stats, search, print, fit geometry, planning-calendar rules, schedule-time formatting, note-line parsing, Horizon domain calculations, storage, and reusable calendar popovers. Source CSS is split by domain and combined only for production.
+The runtime is deliberately vanilla HTML, CSS, and JavaScript modules. The only third-party runtime code is a small vendored build of [Motion](https://motion.dev) (`src/vendor/motion.js`, see [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md)) used for interface transitions. `app.js` coordinates shared application state while focused modules own Week rendering, stats, search, print, fit geometry, planning-calendar rules, schedule-time formatting, note-line parsing, Horizon domain calculations, storage, and reusable calendar popovers. Source CSS is split by domain and combined only for production.
 
 The full runtime map, data invariants, persistence model, and refactoring policy live in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 

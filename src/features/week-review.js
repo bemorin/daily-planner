@@ -80,7 +80,7 @@ export function createWeekReviewFeature({
     const metrics = `<div class="week-review-metrics">
       <div><span>Main outcomes</span><strong>${review.mainDone}<small> / ${review.mainTotal || 0}</small></strong><em>completed</em></div>
       <div><span>Carried forward</span><strong>${review.carried}</strong><em>items</em></div>
-      <div><span>Dropped</span><strong>${review.dropped}</strong><em>items</em></div>
+      <div><span>Forgotten</span><strong>${review.dropped}</strong><em>items</em></div>
     </div>`;
     const time = review.categories.length ? `<section class="week-review-section week-review-time">
       <div class="week-review-section__head"><span>Where your scheduled time went</span><strong>${durationLabel(total)}</strong></div>

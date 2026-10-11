@@ -57,7 +57,7 @@
 .color-trigger:focus-visible {
   outline: 0;
   border-color: var(--line-strong);
-  background: #fff;
+  background: var(--surface-strong);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 4%, transparent);
 }
 .color-trigger > span {
@@ -200,105 +200,12 @@
 .planning-days-picker button.is-selected { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .planning-days-picker button.is-selected small { color: color-mix(in srgb, var(--paper) 70%, transparent); }
 
-.app-install-setting {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px 12px;
-}
-.app-install-setting > div { min-width: 0; display: grid; gap: 2px; }
-.app-install-setting > div span { color: var(--faint); font-size: .64rem; }
-.app-install-setting > div strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .76rem; font-weight: 620; }
-.app-installed-note { color: var(--muted); font-size: .72rem; }
-
-.modal--onboarding .modal__panel { width: min(540px, calc(100vw - 24px)); padding: 0; overflow: hidden; }
-.onboarding-step { display: grid; gap: 18px; padding: clamp(28px, 5vw, 44px); }
-.onboarding-step > h2 { margin: -4px 0 0; font-size: clamp(1.22rem, 2.25vw, 1.56rem); line-height: 1.06; letter-spacing: -.035em; text-wrap: pretty; }
-.onboarding-step > p:not(.modal__eyebrow) { margin: -6px 0 0; color: var(--muted); font-size: .88rem; line-height: 1.55; }
-.onboarding-personal {
-  max-width: 34rem;
-  margin: -5px 0 4px;
-  color: var(--muted);
-  font-size: .84rem;
-  line-height: 1.6;
-}
-.onboarding-primary { width: 100%; min-height: 46px; margin-top: 4px; }
-.onboarding-field { display: grid; gap: 8px; }
-.onboarding-field > span { color: var(--muted); font-size: .72rem; font-weight: 650; }
-.onboarding-field > small { color: var(--faint); font-size: .64rem; }
-.onboarding-hours { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 8px; }
-.onboarding-hours > span { color: var(--faint); }
-.onboarding-hours .select-trigger { position: relative; justify-content: center; text-align: center; }
-.onboarding-hours .select-trigger__value { width: 100%; justify-content: center; }
-.onboarding-hours .select-trigger .select-chevron { position: absolute; right: 9px; }
-
 @media (max-width: 620px) {
   .planning-days-picker { gap: 4px; }
   .planning-days-picker button { min-height: 44px; }
   .planning-days-picker button small { display: none; }
-  .app-install-setting { grid-template-columns: 1fr; }
-  .app-install-setting .secondary-button { width: 100%; }
 }
 
-/* installation is an action with device-specific guidance, not a timezone setting. */
-.app-install-setting {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-.app-install-setting > p {
-  min-width: 0;
-  margin: 0;
-  color: var(--muted);
-  font-size: .72rem;
-  line-height: 1.5;
-  text-wrap: pretty;
-}
-.app-installed-note { justify-self: end; }
-@media (max-width: 620px) {
-  .app-install-setting { grid-template-columns: 1fr; }
-  .app-install-setting .secondary-button { width: 100%; }
-  .app-installed-note { justify-self: start; }
-}
-
-/* three-step first run ------------------------------------------------ */
-.modal--onboarding .modal__panel { width: min(580px, calc(100vw - 24px)); }
-.onboarding-progress {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  padding: 18px clamp(28px, 5vw, 44px) 0;
-}
-.onboarding-progress { --progress-color: #9a704e; }
-.onboarding-progress span {
-  height: 2px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--progress-color) 26%, var(--line));
-  opacity: .62;
-  transition: background 180ms ease, opacity 180ms ease, transform 180ms ease;
-}
-.onboarding-progress span.is-complete { background: var(--progress-color); opacity: .72; }
-.onboarding-progress span.is-active { background: var(--progress-color); opacity: 1; transform: scaleY(1.5); }
-.onboarding-step { padding-top: 24px; }
-.onboarding-step--how { gap: 20px; }
-.onboarding-how-list {
-  display: grid;
-  gap: 0;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-.onboarding-how-list > div {
-  display: grid;
-  grid-template-columns: minmax(110px, .38fr) minmax(0, 1fr);
-  gap: 18px;
-  padding: 11px 0;
-  border-bottom: 1px solid var(--line);
-}
-.onboarding-how-list > div:last-child { border-bottom: 0; }
-.onboarding-how-list strong { color: var(--ink); font-size: .78rem; font-weight: 650; }
-.onboarding-how-list span { color: var(--muted); font-size: .78rem; line-height: 1.45; text-wrap: pretty; }
-@media (max-width: 520px) {
-  .onboarding-how-list > div { grid-template-columns: 1fr; gap: 3px; }
-}
 
 /* Displayed hours reuse the Add/Edit time control; Settings owns only the two-column layout. */
 .hours-setting {
@@ -350,8 +257,8 @@
 .personal-sync-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 14px;
+  align-items: start;
+  gap: 10px 14px;
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -372,29 +279,81 @@
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--surface-strong);
-  font-size: .78rem;
-  font-weight: 760;
+}
+.personal-sync-provider-mark img {
+  width: 22px;
+  height: 22px;
+  display: block;
 }
 .personal-sync-card__main > div:last-child { min-width: 0; display: grid; gap: 2px; }
 .personal-sync-card__main strong { font-size: .77rem; }
 .personal-sync-card__main span { color: var(--muted); font-size: .66rem; line-height: 1.45; }
-.personal-sync-card__actions { display: flex; align-items: center; gap: 8px; }
-.personal-sync-card__actions .secondary-button { min-height: 38px; white-space: nowrap; }
+.personal-sync-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.personal-sync-card__actions .secondary-button,
+.personal-sync-card__actions .primary-button { min-height: 38px; white-space: nowrap; }
+.personal-sync-disconnect {
+  order: -1;
+  padding: 0;
+  min-height: auto;
+  font-size: .66rem;
+  color: var(--faint);
+}
+.personal-sync-disconnect:hover,
+.personal-sync-disconnect:focus-visible { color: var(--ink); }
 .personal-sync-recovery { margin: 7px 2px 0; color: var(--faint); font-size: .62rem; line-height: 1.45; }
 .personal-sync-conflicts {
+  grid-column: 1 / -1;
   display: grid;
-  gap: 9px;
-  margin-top: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--line-strong);
-  border-radius: 10px;
-  background: var(--surface-strong);
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
-.personal-sync-conflicts > span { color: var(--muted); font-size: .66rem; line-height: 1.45; }
-.personal-sync-conflicts > div { display: flex; justify-content: flex-end; gap: 8px; }
+.personal-sync-conflicts > span {
+  color: var(--muted);
+  font-size: .66rem;
+  line-height: 1.45;
+  font-weight: 650;
+}
+.personal-sync-conflicts__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.personal-sync-conflicts__actions .secondary-button,
+.personal-sync-conflicts__actions .primary-button { min-height: 40px; }
 
 @media (max-width: 560px) {
   .personal-sync-card { grid-template-columns: 1fr; }
-  .personal-sync-card__actions { justify-content: flex-end; }
-  .personal-sync-conflicts > div { display: grid; grid-template-columns: 1fr 1fr; }
+  .personal-sync-card__actions {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 8px 12px;
+  }
+  .personal-sync-disconnect {
+    order: 0;
+    justify-self: start;
+  }
+  .personal-sync-card__actions [data-personal-sync-primary] {
+    justify-self: stretch;
+    width: 100%;
+  }
+  .personal-sync-conflicts__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
 }
+
+/* Manage categories: the Settings list, one column, stacked over the block editor. */
+.modal--categories .category-settings { grid-template-columns: minmax(0, 1fr); }
+.modal--categories .modal__panel:focus { outline: none; }
+.modal--categories .modal__actions { margin-top: 1rem; }

@@ -6,5 +6,7 @@ globalThis.__DAILY_PLANNER_CONFIG__ = Object.freeze({
   SOCIAL_X_URL: '',
   SOCIAL_LINKEDIN_URL: '',
   CLOUD_API_URL: '',
-  GOOGLE_CLIENT_ID: ''
+  GOOGLE_CLIENT_ID: '',
+  PLANNER_API_URL: '',
+  PLUS_PUBLIC_KEY: ''
 });

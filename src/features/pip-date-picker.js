@@ -59,7 +59,8 @@ export function openPipDatePicker({ doc, anchor, selectedKey, weekStartsOn = 1, 
       <div class="pip-date-picker__grid"></div>`;
 
     const grid = popover.querySelector('.pip-date-picker__grid');
-    for (let index = 0; index < 42; index += 1) {
+    const cells = Math.ceil((offset + new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate()) / 7) * 7;
+    for (let index = 0; index < cells; index += 1) {
       const day = new Date(gridStart);
       day.setDate(day.getDate() + index);
       const key = localDateKey(day);

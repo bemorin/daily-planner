@@ -13,6 +13,8 @@ Use this checklist for public releases.
 - [ ] Confirm Week drag, cross-day move, and bottom resize for any release touching schedule interaction.
 - [ ] Confirm Search opens, returns results, and closes.
 - [ ] Confirm Journal, Unresolved, Horizon, Time stats, Settings, and How it works open and close.
+- [ ] For Horizon changes, confirm every section, the Add chooser, and the year switcher at desktop and phone widths.
+- [ ] For style changes, check Light and Dark (Settings → Appearance) and the system reduced-motion setting.
 - [ ] Confirm Add/Edit block works.
 - [ ] Confirm Fit app to width toggles both ways.
 - [ ] Confirm mobile header actions and Week sticky hour gutter for any responsive change.

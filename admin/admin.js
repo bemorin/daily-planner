@@ -1,0 +1,1271 @@
+// Owner dashboard for the planner API (server/planner-api.js).
+// Sign-in exchanges the admin token (plus an authenticator code when two-factor
+// is on) for a signed 8-hour session (POST admin/session). Only that session is
+// kept, in sessionStorage for this tab, and sent as a Bearer header; the token
+// itself is never stored. Every value rendered here is escaped. Secret values
+// (Resend, Creem, Plus signing key) never reach this page: the Setup card
+// only says whether they are set. Trends (./trends-view.js) read the daily
+// series once per sign-in and again on Refresh.
+
+import { createTrendsView } from './trends-view.js';
+import { dayOf, normalizeSeries, seriesWindow } from './trends.js';
+
+const SESSION_KEY = 'daily-planner-owner-session';
+const LEGACY_TOKEN_KEY = 'daily-planner-owner-token';
+const API = (() => {
+  const configured = globalThis.__DAILY_PLANNER_CONFIG__?.PLANNER_API_URL;
+  return (typeof configured === 'string' && configured.trim() ? configured.trim() : '../api').replace(/\/+$/, '');
+})();
+
+const $ = (selector, root = document) => root.querySelector(selector);
+const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+// A reply link only for plain addresses: nothing that could add ?bcc= or a body to the draft.
+const mailLink = email => (/^[^\s?&=%/#@]+@[a-z0-9.-]+$/i.test(String(email || '')) ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : `<span>${esc(email)}</span>`);
+const number = value => new Intl.NumberFormat().format(Number(value) || 0);
+const percent = (part, whole) => (whole ? `${Math.round(part / whole * 100)}%` : '—');
+const plural = (count, word) => `${word}${Number(count) === 1 ? '' : 's'}`;
+const when = iso => (iso ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
+const stars = rating => (rating ? `<span class="owner-stars" aria-label="${rating} out of 5">${'★'.repeat(rating)}<span>${'★'.repeat(5 - rating)}</span></span>` : '<span class="owner-stars"><span>No rating</span></span>');
+
+const TIMING_LABELS = { 'december-2026': 'December 2026', 'january-2027': 'January 2027', 'q1-2027': 'Q1 2027', later: 'Later' };
+const PLAN_LABELS = { 'up-to-10': 'Up to 10 people', 'up-to-50': 'Up to 50 people', 'up-to-100': 'Up to 100 people', 'up-to-500': 'Up to 500 people', 'up-to-1000': 'Up to 1,000 people', 'over-1000': 'Over 1,000 people' };
+const KIND_LABELS = { invoice: 'Invoice', quote: 'Quote', talk: 'Talk', question: 'Question' };
+const APP_CONFIG = globalThis.__DAILY_PLANNER_CONFIG__ || {};
+const CURRENCIES = [{ value: 'EUR', label: 'EUR (€)' }, { value: 'USD', label: 'USD ($)' }, { value: '', label: 'No currency' }];
+const GIFT_STATUS_LABELS = { available: 'Open', claimed: 'Fully claimed', expired: 'Expired', inactive: 'Switched off' };
+const day = iso => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
+const PERIODS = [{ value: '7', label: '7 days' }, { value: '30', label: '30 days' }, { value: '90', label: '90 days' }, { value: '365', label: '12 months' }];
+const CHECK_SVG = '<svg class="option-check" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m6.5 12.5 3.3 3.3 7.7-8"/></svg>';
+const people = count => `${number(count)} ${Number(count) === 1 ? 'person' : 'people'}`;
+const SIGNED_OUT_MESSAGE = 'Your session has ended. Please sign in again.';
+const SIGN_IN_FAILED_MESSAGE = 'Sign-in failed. Check the token and the code, then try again.';
+const UPDATE_API_MESSAGE = 'Update the API to see trends: this one does not answer admin/series yet (added in 1.21).';
+const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', manual: 'Invoice / manual' };
+
+class ApiError extends Error {
+  constructor(kind, message = '') {
+    super(message || kind);
+    this.kind = kind;
+  }
+}
+
+// App-style dropdown (the planner's .select-trigger + .app-popover list):
+// a button with aria-haspopup="listbox" opens a list of options. Arrow keys,
+// Home/End, Enter/Space, Escape, Tab and a click outside all behave like a
+// native select. Only one list is open at a time.
+let openDropdown = null;
+
+function createDropdown(trigger, { items = [], value = '', onChange = () => {} } = {}) {
+  const valueLabel = $('.select-trigger__value', trigger);
+  const listId = `${trigger.id}-list`;
+  let options = items;
+  let current = String(value);
+  let popover = null;
+
+  const render = () => {
+    const item = options.find(option => option.value === current);
+    valueLabel.textContent = item ? item.label : '';
+  };
+
+  function place() {
+    const rect = trigger.getBoundingClientRect();
+    popover.style.minWidth = `${Math.round(rect.width)}px`;
+    const box = popover.getBoundingClientRect();
+    const left = Math.min(rect.left, innerWidth - box.width - 8);
+    const below = rect.bottom + 6;
+    const top = below + box.height > innerHeight - 8 && rect.top - box.height - 6 > 8 ? rect.top - box.height - 6 : below;
+    popover.style.left = `${Math.max(8, left)}px`;
+    popover.style.top = `${Math.max(8, top)}px`;
+  }
+
+  const optionButtons = () => [...popover.querySelectorAll('[role="option"]')];
+
+  function focusOption(index) {
+    const buttons = optionButtons();
+    if (!buttons.length) return;
+    buttons[Math.max(0, Math.min(buttons.length - 1, index))].focus();
+  }
+
+  function close({ restoreFocus = false } = {}) {
+    if (!popover) return;
+    popover.remove();
+    popover = null;
+    openDropdown = null;
+    trigger.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', onOutside, true);
+    removeEventListener('resize', onViewportChange);
+    removeEventListener('scroll', onViewportChange, true);
+    if (restoreFocus) trigger.focus();
+  }
+
+  function choose(next) {
+    const changed = next !== current;
+    current = next;
+    render();
+    close({ restoreFocus: true });
+    if (changed) onChange(current);
+  }
+
+  function onOutside(event) {
+    if (!popover?.contains(event.target) && !trigger.contains(event.target)) close();
+  }
+
+  function onViewportChange(event) {
+    if (event.type === 'scroll' && popover?.contains(event.target)) return;
+    close();
+  }
+
+  function onListKey(event) {
+    const buttons = optionButtons();
+    const index = buttons.indexOf(document.activeElement);
+    if (event.key === 'ArrowDown') { event.preventDefault(); focusOption(index + 1); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); focusOption(index - 1); }
+    else if (event.key === 'Home' || event.key === 'PageUp') { event.preventDefault(); focusOption(0); }
+    else if (event.key === 'End' || event.key === 'PageDown') { event.preventDefault(); focusOption(buttons.length - 1); }
+    else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (index >= 0) choose(options[index].value);
+    } else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close({ restoreFocus: true }); }
+    // Tab leaves from the trigger, so focus moves on as it would from a select.
+    else if (event.key === 'Tab') close({ restoreFocus: true });
+  }
+
+  function open(focus = 'selected') {
+    if (popover) return;
+    openDropdown?.close();
+    popover = document.createElement('div');
+    popover.className = 'app-popover app-popover--list is-compact owner-popover';
+    popover.id = listId;
+    popover.setAttribute('role', 'listbox');
+    popover.setAttribute('aria-labelledby', trigger.getAttribute('aria-labelledby') || trigger.id);
+    popover.innerHTML = options.map((option, index) => {
+      const selected = option.value === current;
+      return `<button class="popover-option${selected ? ' is-selected' : ''}" type="button" role="option" tabindex="-1" aria-selected="${selected}" data-index="${index}"><span>${esc(option.label)}</span>${selected ? CHECK_SVG : ''}</button>`;
+    }).join('');
+    popover.addEventListener('click', event => {
+      const button = event.target.closest('[role="option"]');
+      if (button) choose(options[Number(button.dataset.index)].value);
+    });
+    popover.addEventListener('keydown', onListKey);
+    document.body.append(popover);
+    trigger.setAttribute('aria-expanded', 'true');
+    trigger.setAttribute('aria-controls', listId);
+    openDropdown = api;
+    place();
+    document.addEventListener('pointerdown', onOutside, true);
+    addEventListener('resize', onViewportChange);
+    addEventListener('scroll', onViewportChange, true);
+    const selectedIndex = Math.max(0, options.findIndex(option => option.value === current));
+    focusOption(focus === 'first' ? 0 : focus === 'last' ? options.length - 1 : selectedIndex);
+    requestAnimationFrame(() => popover?.classList.add('is-open'));
+  }
+
+  trigger.addEventListener('click', () => { if (popover) close({ restoreFocus: true }); else open(); });
+  trigger.addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      open();
+    } else if (event.key === 'Escape' && popover) {
+      event.preventDefault();
+      close({ restoreFocus: true });
+    }
+  });
+
+  const api = {
+    get value() { return current; },
+    setItems(next, fallback = '') {
+      options = next;
+      if (!options.some(option => option.value === current)) current = fallback;
+      render();
+      if (popover) close();
+    },
+    close
+  };
+  render();
+  return api;
+}
+
+function readSession() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null');
+    if (typeof saved?.session === 'string' && Number(saved.expiresAt) > Date.now() + 5000) return { session: saved.session, expiresAt: Number(saved.expiresAt) };
+  } catch (_) {}
+  return null;
+}
+
+// An earlier dashboard kept the raw token in this tab; never leave it behind.
+try { sessionStorage.removeItem(LEGACY_TOKEN_KEY); } catch (_) {}
+
+let session = readSession();
+let expiryTimer = 0;
+// The session the trends series was last read for: once per sign-in, and on Refresh.
+let seriesSession = null;
+const trends = createTrendsView($('[data-owner-trends]'));
+
+function scheduleExpiry() {
+  clearTimeout(expiryTimer);
+  if (session) expiryTimer = setTimeout(() => signOut(SIGNED_OUT_MESSAGE), Math.max(0, session.expiresAt - Date.now()));
+}
+
+function saveSession(value) {
+  session = value;
+  try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(value)); } catch (_) {}
+  scheduleExpiry();
+}
+
+function clearSession() {
+  session = null;
+  clearTimeout(expiryTimer);
+  try { sessionStorage.removeItem(SESSION_KEY); } catch (_) {}
+}
+
+async function call(path, { auth = true, ...options } = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (auth && session) headers.authorization = `Bearer ${session.session}`;
+  let response;
+  try {
+    response = await fetch(`${API}/${path}`, { ...options, headers, cache: 'no-store' });
+  } catch (_) {
+    throw new ApiError('offline');
+  }
+  if (response.ok) return response;
+  const body = await response.json().catch(() => null);
+  if (response.status === 401) throw new ApiError('unauthorized');
+  if (response.status === 503 && body?.error) throw new ApiError('setup', body.error);
+  // A static server (or a host without the Functions) has no JSON answer.
+  if (!body && [404, 405, 501].includes(response.status)) throw new ApiError('offline', `HTTP ${response.status}`);
+  throw new ApiError('failed', `${body?.error || 'Request failed'} (HTTP ${response.status}).`);
+}
+
+async function jsonOf(response) {
+  try { return await response.json(); } catch (_) { throw new ApiError('offline', 'the answer was not JSON'); }
+}
+
+// Unauthenticated call: a running, configured API answers 401; a missing
+// binding or secret answers 503; anything else means there is no API here.
+async function probe() {
+  try {
+    await jsonOf(await call('admin/summary?days=1', { auth: false }));
+  } catch (error) {
+    if (error.kind === 'unauthorized') return;
+    throw error;
+  }
+  throw new ApiError('offline', 'unexpected answer');
+}
+
+function setNotice(message = '') {
+  const notice = $('[data-owner-notice]');
+  notice.hidden = !message;
+  notice.textContent = message;
+}
+
+function show(view) {
+  $('[data-owner-checking]').hidden = view !== 'checking';
+  $('[data-owner-unavailable]').hidden = view !== 'unavailable';
+  $('[data-owner-login]').hidden = view !== 'login';
+  $('[data-owner-body]').hidden = view !== 'dashboard';
+  $('[data-owner-actions]').hidden = view !== 'dashboard';
+}
+
+function showLogin(message = '') {
+  show('login');
+  const error = $('[data-owner-error]');
+  error.hidden = !message;
+  error.textContent = message;
+  $('[data-owner-login] input[name="token"]').focus();
+}
+
+function showUnavailable(error) {
+  const target = new URL(`${API}/`, location.href).href;
+  const setup = error.kind === 'setup';
+  $('[data-owner-unavailable-title]').textContent = setup ? 'The owner API isn’t set up yet.' : 'The owner API isn’t running here.';
+  $('[data-owner-unavailable-detail]').textContent = setup
+    ? `The API at ${target} answered: “${error.message}”`
+    : `Nothing answered at ${target}${error.message && error.message !== 'offline' ? ` (${error.message})` : ''}, so this page is being served without the API.`;
+  show('unavailable');
+}
+
+function clearRendered() {
+  ['[data-owner-kpis]', '[data-owner-funnel]', '[data-owner-team-funnel]', '[data-owner-teams]', '[data-owner-waitlist]', '[data-owner-versions]', '[data-owner-feedback]', '[data-owner-signals]',
+    '[data-owner-gifts]', '[data-owner-gift-created]', '[data-owner-gift-panel]', '[data-owner-plus-stats]', '[data-owner-plus-funnel]', '[data-owner-license-created]', '[data-owner-license-list]', '[data-owner-setup]',
+    '[data-owner-reviews]']
+    .forEach(selector => { $(selector).innerHTML = ''; });
+  trends.clear();
+  seriesSession = null;
+  ['[data-owner-gift-created]', '[data-owner-gift-panel]', '[data-owner-license-created]'].forEach(selector => { $(selector).hidden = true; });
+  giftRows = [];
+  giftPanel = null;
+  $('[data-owner-session]').textContent = '';
+  openDropdown?.close();
+  hideAnnounceConfirm();
+  showAnnounceResult('');
+  showResult('[data-owner-gift-result]', '');
+  showResult('[data-owner-license-result]', '');
+}
+
+function signOut(message = '') {
+  clearSession();
+  clearRendered();
+  setNotice('');
+  showLogin(message);
+}
+
+function handleError(error) {
+  if (error?.kind === 'unauthorized') { signOut(SIGNED_OUT_MESSAGE); return; }
+  if (error?.kind === 'offline' || error?.kind === 'setup') { showUnavailable(error); return; }
+  $('[data-owner-checking]').hidden = true;
+  setNotice(error?.message || 'Something went wrong.');
+}
+
+function untilLabel(ms) {
+  const date = new Date(ms);
+  const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return date.toDateString() === new Date().toDateString() ? time : `${date.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`;
+}
+
+const totalOf = (rows, name) => rows.filter(row => row.name === name).reduce((sum, row) => sum + Number(row.count || 0), 0);
+
+function teamTotals(summary) {
+  if (summary.teamRequestTotals) return summary.teamRequestTotals;
+  const rows = summary.teamRequests || [];
+  return { count: rows.length, seats: rows.reduce((sum, row) => sum + Number(row.teamSize || 0), 0) };
+}
+
+function renderKpis(summary, days) {
+  const rows = summary.eventTotals;
+  const sinceWeek = new Date(Date.now() - 7 * 86400000).toISOString();
+  const lastWeek = summary.waitlist.filter(row => row.createdAt >= sinceWeek).length;
+  const reachedEnd = totalOf(rows, 'sync_guide_step_3');
+  const joined = totalOf(rows, 'waitlist_joined');
+  const teams = teamTotals(summary);
+  const latest = summary.feedbackByVersion[0];
+  const feedbackTotal = summary.feedbackByVersion.reduce((sum, row) => sum + Number(row.count || 0), 0);
+  $('[data-owner-kpis]').innerHTML = [
+    ['Waitlist sign-ups', number(summary.waitlist.length), `${number(lastWeek)} in the last 7 days`],
+    ['Still joined after seeing Drive', percent(joined, reachedEnd), `${number(joined)} of ${number(reachedEnd)} who finished the Drive guide · ${days} days`],
+    ['Team kit requests', number(teams.count), summary.teamRequestsUnavailable ? 'Table missing — apply migration 0002' : `${number(teams.seats)} ${plural(teams.seats, 'seat')} requested in total`],
+    ['Feedback received', number(feedbackTotal), latest ? `Latest version ${esc(latest.appVersion)}: ${number(latest.count)} ${plural(latest.count, 'response')}` : 'None yet'],
+    ['Average rating, latest version', latest?.avgRating != null ? Number(latest.avgRating).toFixed(1) : '—', latest ? `${number(latest.rated)} ${plural(latest.rated, 'rating')} on ${esc(latest.appVersion)}` : 'No ratings yet']
+  ].map(([label, value, note]) => `<div class="owner-kpi"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join('');
+}
+
+// Stages take one hue, lighter to darker in order (the same ramp as the
+// Trends funnels); a side branch stays grey. Values and shares are text.
+function funnelHtml(steps, baseLabel, insight) {
+  const base = steps[0].value;
+  const max = Math.max(1, ...steps.map(step => step.value));
+  const stages = steps.filter(step => !step.branch).length;
+  let stage = -1;
+  const row = step => {
+    if (!step.branch) stage += 1;
+    const tone = step.branch ? 'owner-funnel__bar--branch' : `trend-tone-${stages > 1 ? Math.round(stage * 4 / (stages - 1)) + 1 : 5}`;
+    return `<div class="owner-funnel__row${step.branch ? ' owner-funnel__row--branch' : ''}" title="${esc(`${step.label}: ${step.value} (${percent(step.value, base)} of ${baseLabel})`)}">
+      <span class="owner-funnel__label">${esc(step.label)}</span>
+      <span class="owner-funnel__value">${number(step.value)}<small>${percent(step.value, base)}</small></span>
+      <span class="owner-funnel__track"><span class="owner-funnel__bar ${tone}" style="width:${Math.min(100, Math.round(step.value / max * 100))}%"></span></span>
+    </div>`;
+  };
+  return `${steps.map(row).join('')}${insight}`;
+}
+
+function renderFunnel(summary, days) {
+  const rows = summary.eventTotals;
+  const value = name => totalOf(rows, name);
+  const opened = value('sync_guide_opened');
+  const reached = value('sync_guide_step_3');
+  const driveChosen = value('drive_connect_clicked');
+  const joined = value('waitlist_joined');
+  const steps = [
+    { label: 'Opened “Sync on all my devices”', value: opened },
+    { label: 'Reached step 2 (other device)', value: value('sync_guide_step_2') },
+    { label: 'Finished the Google Drive guide', value: reached },
+    { label: '↳ Chose “Set up Google Drive sync”', value: driveChosen, branch: true },
+    { label: 'Opened the waitlist form', value: value('waitlist_form_opened') },
+    { label: 'Joined the waitlist', value: joined }
+  ];
+  const insight = opened
+    ? `<p class="owner-insight">Over the last ${days} days, <strong>${number(reached)}</strong> people saw the whole free Google Drive route. <strong>${number(driveChosen)}</strong> went on to set it up and <strong>${number(joined)}</strong> still joined the waitlist (${percent(joined, reached)}).</p>`
+    : '<p class="owner-insight">No one has opened the sync guide in this period yet.</p>';
+  $('[data-owner-funnel]').innerHTML = funnelHtml(steps, 'openings', insight);
+}
+
+function renderTeamFunnel(summary, days) {
+  const rows = summary.eventTotals;
+  const visits = totalOf(rows, 'landing_viewed');
+  const sent = totalOf(rows, 'team_request_sent');
+  const manager = totalOf(rows, 'manager_email_opened');
+  const steps = [
+    { label: 'Landing page visits', value: visits },
+    { label: 'Clicked toward Teams', value: totalOf(rows, 'landing_cta_teams') },
+    { label: 'Opened the team kit form', value: totalOf(rows, 'team_form_opened') },
+    { label: 'Sent a request', value: sent },
+    { label: '↳ Sent it to a manager', value: manager, branch: true }
+  ];
+  const insight = visits
+    ? `<p class="owner-insight">Over the last ${days} days, <strong>${number(visits)}</strong> landing ${plural(visits, 'visit')} led to <strong>${number(sent)}</strong> team kit ${plural(sent, 'request')} (${percent(sent, visits)}). An email to a manager was opened <strong>${number(manager)}</strong> ${plural(manager, 'time')}.</p>`
+    : '<p class="owner-insight">No landing page visits were counted in this period yet.</p>';
+  $('[data-owner-team-funnel]').innerHTML = funnelHtml(steps, 'visits', insight);
+}
+
+function renderTeams(summary) {
+  const target = $('[data-owner-teams]');
+  const caption = $('[data-owner-teams-caption]');
+  if (summary.teamRequestsUnavailable) {
+    caption.textContent = 'Teams who asked for the team kit.';
+    target.innerHTML = '<p class="owner-empty">The <code>team_requests</code> table does not exist yet. Apply <code>migrations/0002_team_requests.sql</code> to the D1 database (see <code>docs/FEEDBACK_AND_WAITLIST.md</code>).</p>';
+    return;
+  }
+  const rows = summary.teamRequests || [];
+  const totals = teamTotals(summary);
+  caption.textContent = totals.count > rows.length
+    ? `Latest ${number(rows.length)} of ${number(totals.count)} requests (export CSV for all). Reply by email; delete on request.`
+    : 'Teams who asked for the team kit. Reply by email; delete on request.';
+  target.innerHTML = rows.length
+    ? `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Date</th><th>Company</th><th class="num">Team size</th><th>Plan</th><th>Currency</th><th>Request</th><th>Timing</th><th>Name</th><th>Email</th><th>Message</th><th>Source</th><th></th></tr></thead><tbody>${rows.map(row => `<tr><td class="owner-nowrap">${esc(when(row.createdAt))}</td><td><b>${esc(row.company)}</b></td><td class="num">${number(row.teamSize)}</td><td class="owner-nowrap">${esc(PLAN_LABELS[row.plan] || row.plan || '—')}</td><td>${esc(row.currency || '—')}</td><td>${esc(KIND_LABELS[row.kind] || row.kind || '—')}</td><td class="owner-nowrap">${esc(TIMING_LABELS[row.timing] || row.timing)}</td><td>${esc(row.name || '—')}</td><td>${mailLink(row.email)}</td><td class="owner-message">${esc(row.message || '')}</td><td>${esc(row.source || '')}</td><td><button class="text-button text-button--danger" type="button" data-owner-delete-team="${Number(row.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
+    : '<p class="owner-empty">No team kit requests yet.</p>';
+}
+
+function renderVersions(summary) {
+  const rows = summary.feedbackByVersion;
+  $('[data-owner-versions]').innerHTML = rows.length
+    ? `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Version</th><th class="num">Responses</th><th class="num">Ratings</th><th>Average</th><th>Last</th></tr></thead><tbody>${rows.map(row => `<tr><td><b>${esc(row.appVersion)}</b></td><td class="num">${number(row.count)}</td><td class="num">${number(row.rated)}</td><td>${row.avgRating != null ? `${stars(Math.round(row.avgRating))} ${Number(row.avgRating).toFixed(1)}` : '—'}</td><td>${esc(when(row.lastAt))}</td></tr>`).join('')}</tbody></table></div>`
+    : '<p class="owner-empty">No feedback yet.</p>';
+  versionFilter.setItems([{ value: '', label: 'All versions' }, ...rows.map(row => ({ value: String(row.appVersion), label: String(row.appVersion) }))]);
+}
+
+async function renderFeedback() {
+  const version = versionFilter.value;
+  const { rows } = await jsonOf(await call(`admin/feedback${version ? `?version=${encodeURIComponent(version)}` : ''}`));
+  $('[data-owner-feedback-caption]').textContent = `${rows.length} ${plural(rows.length, 'item')}${version ? ` for ${version}` : ''}`;
+  $('[data-owner-feedback]').innerHTML = rows.length
+    ? `<div class="owner-feedback-list">${rows.map(row => `<article class="owner-feedback"><div class="owner-feedback__meta"><b>${esc(row.appVersion)}</b>${stars(row.rating)}<span>${esc(row.kind)}</span><span>${esc(row.platform)}</span><span>${esc(when(row.createdAt))}</span>${row.email ? mailLink(row.email) : ''}<button class="text-button text-button--danger owner-feedback__delete" type="button" data-owner-delete-feedback="${Number(row.id)}">Delete</button></div>${row.message ? `<p>${esc(row.message)}</p>` : ''}</article>`).join('')}</div>`
+    : '<p class="owner-empty">Nothing here yet.</p>';
+}
+
+function renderWaitlist(summary) {
+  const rows = summary.waitlist;
+  $('[data-owner-waitlist]').innerHTML = rows.length
+    ? `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Email</th><th>Devices</th><th>Note</th><th>Version</th><th>Joined</th><th></th></tr></thead><tbody>${rows.map(row => `<tr><td>${esc(row.email)}</td><td>${esc(String(row.devices || '').split(',').filter(Boolean).join(', ') || '—')}</td><td>${esc(row.note || '')}</td><td>${esc(row.appVersion || '')}</td><td>${esc(when(row.createdAt))}</td><td><button class="text-button text-button--danger" type="button" data-owner-delete="${Number(row.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
+    : '<p class="owner-empty">No sign-ups yet.</p>';
+}
+
+// Waitlist announcement (POST admin/waitlist/announce). The server sends
+// oldest sign-ups first, up to the daily limit, and deletes each address it
+// sent; this panel only explains, confirms and reports.
+let announceState = { configured: false, testAvailable: false, count: 0, allowance: 0, limit: 100, perSend: 1000 };
+let announceBusy = false;
+const announceForm = $('[data-owner-announce]');
+
+function prefillAnnouncement() {
+  const planner = new URL('../', location.href).href;
+  announceForm.elements.subject.value = 'Account sync is ready in Daily Planner';
+  announceForm.elements.text.value = `Hi,\n\nYou asked us to email you once when Daily Planner could keep your plans in sync across your devices with an account. It is ready.\n\nOpen the planner and choose “Sync on all my devices” to turn it on:\n${planner}\n\nThank you for waiting,\nBen`;
+}
+
+function showAnnounceResult(message, isError = false) {
+  const result = $('[data-owner-announce-result]');
+  result.hidden = !message;
+  result.textContent = message;
+  result.classList.toggle('is-error', !!isError);
+}
+
+function hideAnnounceConfirm() {
+  $('[data-owner-announce-confirm]').hidden = true;
+  $('[data-owner-announce-actions]').hidden = false;
+}
+
+// One press sends at most this many (oldest first), within the daily limit.
+const announceBatch = () => Math.min(announceState.count, announceState.allowance, announceState.perSend);
+
+function renderAnnounce(summary) {
+  const limit = Number(summary.emailDailyLimit ?? 100);
+  const sentToday = Number(summary.emailsSentToday) || 0;
+  const count = summary.waitlist.length;
+  const allowance = Math.max(0, limit - sentToday);
+  const perSend = Number(summary.emailsPerSend) || 1000;
+  announceState = { configured: !!summary.emailConfigured, testAvailable: !!summary.emailTestAvailable, count, allowance, limit, perSend };
+  const status = $('[data-owner-announce-status]');
+  const send = $('[data-owner-announce-send]');
+  const testButton = $('[data-owner-announce-test]');
+  const batch = announceBatch();
+  if (!announceState.configured) {
+    status.innerHTML = 'Email isn’t set up yet. In Cloudflare Pages → Settings → Variables and secrets, add the secret <code>RESEND_API_KEY</code> and <code>EMAIL_FROM</code> (an address on a domain verified in Resend, see Setup), plus <code>OWNER_EMAIL</code> for test sends, then redeploy. Until then, export the CSV, email everyone yourself and delete the rows.';
+  } else {
+    const parts = [`Sent through Resend, oldest sign-ups first, at most ${number(limit)} emails per day (UTC; every email counts: tests, team notifications and gift emails included).`];
+    if (sentToday) parts.push(`${number(sentToday)} sent today.`);
+    if (count > batch && batch > 0) parts.push(allowance > batch && count > perSend ? `Up to ${number(perSend)} per send: press Send again for the next ones.` : `${people(count - batch)} will have to wait until tomorrow.`);
+    if (!announceState.testAvailable) parts.push('Set OWNER_EMAIL to send yourself a test.');
+    status.textContent = parts.join(' ');
+  }
+  testButton.disabled = announceBusy || !announceState.testAvailable;
+  send.disabled = announceBusy || !announceState.configured || !batch;
+  send.textContent = !announceState.configured || count === 0 ? (count === 0 ? 'No one to email yet' : 'Send to everyone')
+    : allowance === 0 ? 'Daily limit reached — send tomorrow'
+      : `Send to ${people(batch)}`;
+  if (send.disabled) hideAnnounceConfirm();
+}
+
+function readAnnouncement() {
+  const subject = announceForm.elements.subject.value.trim();
+  const text = announceForm.elements.text.value.trim();
+  if (!subject || !text) {
+    showAnnounceResult('Add a subject and a message first.', true);
+    (subject ? announceForm.elements.text : announceForm.elements.subject).focus();
+    return null;
+  }
+  return { subject, text };
+}
+
+function setAnnounceBusy(busy) {
+  announceBusy = busy;
+  announceForm.setAttribute('aria-busy', String(busy));
+  [...announceForm.querySelectorAll('button')].forEach(button => { button.disabled = busy; });
+  if (!busy) {
+    $('[data-owner-announce-test]').disabled = !announceState.testAvailable;
+    $('[data-owner-announce-send]').disabled = !announceState.configured || !announceBatch();
+  }
+}
+
+function announceResultText(result) {
+  const limit = number(result.dailyLimit ?? announceState.limit);
+  if (!result.sent && result.limitReached) return `Nothing sent: today’s limit of ${limit} emails is used up. Send the rest tomorrow.`;
+  if (!result.sent && !result.remaining) return 'No one is on the waitlist.';
+  const head = `Sent to ${people(result.sent)}`;
+  if (!result.remaining) return `${head} · the waitlist is now empty.`;
+  return result.limitReached
+    ? `${head} · ${number(result.remaining)} left — send the rest tomorrow (daily limit ${limit}).`
+    : `${head} · ${number(result.remaining)} left — press Send again to continue.`;
+}
+
+async function sendAnnouncement(test) {
+  const message = readAnnouncement();
+  if (!message || announceBusy) return;
+  hideAnnounceConfirm();
+  setAnnounceBusy(true);
+  showAnnounceResult(test ? 'Sending a test…' : 'Sending…');
+  let reload = false;
+  try {
+    const result = await jsonOf(await call('admin/waitlist/announce', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...message, test }) }));
+    if (test) showAnnounceResult('Test sent to your OWNER_EMAIL address. Check the inbox (and the spam folder).');
+    else showAnnounceResult(`${announceResultText(result)}${result.error ? ` ${result.error}` : ''}`, !!result.error);
+    reload = true;
+  } catch (error) {
+    if (error.kind === 'unauthorized') { setAnnounceBusy(false); handleError(error); return; }
+    showAnnounceResult(error.kind === 'offline' ? 'The API could not be reached. Nothing was confirmed as sent; refresh before trying again.' : error.message, true);
+    reload = !test;
+  }
+  setAnnounceBusy(false);
+  if (reload) await load();
+}
+
+// ---- Shared bits for the Plus cards -------------------------------------------
+
+function showResult(selector, message, isError = false) {
+  const result = $(selector);
+  if (!result) return;
+  result.hidden = !message;
+  result.textContent = message;
+  result.classList.toggle('is-error', !!isError);
+}
+
+function money(amount, currency) {
+  if (amount == null || amount === '') return '';
+  const value = Number(amount) / 100;
+  try {
+    return currency ? new Intl.NumberFormat(undefined, { style: 'currency', currency, maximumFractionDigits: Number.isInteger(value) ? 0 : 2 }).format(value) : number(value);
+  } catch (_) {
+    return `${value} ${currency}`;
+  }
+}
+
+/** Copy text; the button says "Copied" for a moment. Falls back to a hidden textarea. */
+async function copyText(text, button) {
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(text);
+    copied = true;
+  } catch (_) {
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.setAttribute('readonly', '');
+    area.className = 'owner-offscreen';
+    document.body.append(area);
+    area.select();
+    try { copied = document.execCommand('copy'); } catch (_) {}
+    area.remove();
+  }
+  if (!button) return;
+  if (!button.dataset.label) button.dataset.label = button.textContent;
+  button.textContent = copied ? 'Copied' : 'Copy failed';
+  clearTimeout(Number(button.dataset.timer));
+  button.dataset.timer = String(setTimeout(() => { button.textContent = button.dataset.label; }, 1600));
+}
+
+/** An http(s) address to link to, or ''. */
+function webUrl(value) {
+  try {
+    const url = new URL(String(value || ''), location.href);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+const copyRow = (label, value) => `<div class="owner-copy-row"><span>${esc(label)}</span><input type="text" readonly value="${esc(value)}" aria-label="${esc(label)}" spellcheck="false"><button class="secondary-button" type="button" data-owner-copy="${esc(value)}">Copy</button></div>`;
+
+// Mutations from the Plus cards: errors stay in the card instead of replacing
+// the dashboard, except an ended session, which signs out as everywhere else.
+async function sendJson(path, method, body) {
+  return jsonOf(await call(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) }));
+}
+
+function failureText(error) {
+  return error?.kind === 'offline' ? 'The API could not be reached. Check your connection and try again.' : (error?.message || 'Something went wrong.');
+}
+
+// ---- Team gifts ---------------------------------------------------------------
+
+let giftRows = [];
+let giftPanel = null; // { mode: 'edit' | 'delete', code }
+let giftBusy = false;
+let emailReady = false;
+const giftForm = $('[data-owner-gift-form]');
+const currencyPicker = createDropdown($('[data-owner-gift-currency]'), { items: CURRENCIES, value: 'EUR' });
+
+function updateGiftEmailSwitch() {
+  const toggle = giftForm.elements.sendEmail;
+  toggle.disabled = !emailReady;
+  if (!emailReady) toggle.checked = false;
+  $('[data-owner-gift-email-hint]').textContent = emailReady
+    ? 'Sent once: the gift link, the manage link and a message they can forward to their team.'
+    : 'Email isn’t set up (see Setup), so copy the links instead.';
+}
+
+function giftRowHtml(row) {
+  const status = row.status !== 'available' ? `<span class="owner-pill owner-pill--${esc(row.status)}">${esc(GIFT_STATUS_LABELS[row.status] || row.status)}</span>` : '';
+  const message = row.message ? `<small class="owner-small owner-quote">“${esc(row.message)}”</small>` : '';
+  const buyer = row.buyerEmail ? `<small class="owner-small">${mailLink(row.buyerEmail)}${row.emailedAt ? ` · emailed ${esc(day(row.emailedAt))}` : ''}</small>` : '';
+  const note = row.note ? `<small class="owner-small">${esc(row.note)}</small>` : '';
+  const amount = row.amount != null ? `<small class="owner-small">${esc(money(row.amount, row.currency))}</small>` : '';
+  return `<tr>
+    <td class="owner-nowrap"><code>${esc(row.code)}</code></td>
+    <td class="owner-gift-org"><b>${esc(row.org)}</b>${message}${buyer}${note}</td>
+    <td class="num owner-nowrap"><b>${number(row.redeemed)}</b> / ${number(row.seats)}<small class="owner-small">up to ${number(row.limit)}</small>${status}</td>
+    <td class="owner-nowrap">${esc(day(row.createdAt))}</td>
+    <td class="owner-nowrap">${esc(day(row.expiresAt))}</td>
+    <td class="owner-nowrap">${esc(SOURCE_LABELS[row.source] || row.source || SOURCE_LABELS.manual)}${amount}</td>
+    <td><input class="privacy-switch" type="checkbox" role="switch" data-owner-gift-active="${esc(row.code)}"${row.active ? ' checked' : ''} aria-label="Gift link for ${esc(row.org)} is active"></td>
+    <td><div class="owner-row-actions">
+      <button class="text-button" type="button" data-owner-copy="${esc(row.url)}">Copy link</button>
+      <button class="text-button" type="button" data-owner-copy="${esc(row.manageUrl)}"${row.manageUrl ? '' : ' disabled'}>Copy manage link</button>
+      <button class="text-button" type="button" data-owner-gift-edit="${esc(row.code)}">Edit</button>
+      ${(row.source || 'manual') === 'manual' ? `<button class="text-button text-button--danger" type="button" data-owner-gift-delete="${esc(row.code)}">Delete</button>` : ''}
+    </div></td>
+  </tr>`;
+}
+
+function renderGifts(summary) {
+  const target = $('[data-owner-gifts]');
+  const caption = $('[data-owner-gifts-caption]');
+  emailReady = !!summary.emailConfigured;
+  updateGiftEmailSwitch();
+  const intro = 'One link per company. Each activation unlocks Plus for life on one planner; links can be activated for 12 months.';
+  if (summary.plusUnavailable) {
+    giftRows = [];
+    caption.textContent = intro;
+    target.innerHTML = '<p class="owner-empty">The <code>gifts</code> and <code>purchases</code> tables do not exist yet. Apply <code>migrations/0003_plus.sql</code> to the D1 database (see <code>docs/FEEDBACK_AND_WAITLIST.md</code>).</p>';
+    renderGiftPanel();
+    return;
+  }
+  giftRows = Array.isArray(summary.gifts) ? summary.gifts : [];
+  const totals = summary.giftTotals || { count: 0, seats: 0, redeemed: 0, paid: 0 };
+  caption.textContent = totals.count
+    ? `${number(totals.count)} ${plural(totals.count, 'gift')} · ${number(totals.redeemed)} of ${number(totals.seats)} seats activated · ${number(totals.paid)} bought online. ${intro}`
+    : intro;
+  target.innerHTML = giftRows.length
+    ? `<div class="owner-scroll"><table class="owner-table owner-gifts"><thead><tr><th>Code</th><th>Company</th><th class="num">Activated</th><th>Created</th><th>Expires</th><th>Source</th><th>Active</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${giftRows.map(giftRowHtml).join('')}</tbody></table></div>`
+    : '<p class="owner-empty">No gifts yet. Create one above for an invoice; gifts bought online appear here on their own.</p>';
+  renderGiftPanel();
+}
+
+function renderGiftPanel() {
+  const panel = $('[data-owner-gift-panel]');
+  const row = giftPanel && giftRows.find(item => item.code === giftPanel.code);
+  if (!row) {
+    giftPanel = null;
+    panel.hidden = true;
+    panel.innerHTML = '';
+    delete panel.dataset.key;
+    return;
+  }
+  // Keep what the owner is typing when the dashboard refreshes underneath.
+  const key = `${giftPanel.mode}:${row.code}`;
+  if (panel.dataset.key === key && !panel.hidden) return;
+  panel.dataset.key = key;
+  panel.hidden = false;
+  if (giftPanel.mode === 'delete') {
+    panel.innerHTML = `<div class="owner-confirm" role="group" aria-labelledby="owner-gift-delete-text">
+      <p id="owner-gift-delete-text">Delete the gift for <b>${esc(row.org)}</b> (<code>${esc(row.code)}</code>, ${number(row.redeemed)} of ${number(row.seats)} activated)? The link stops working at once; people who already activated it keep Plus. This can’t be undone.</p>
+      <div class="owner-actions"><button class="primary-button owner-danger" type="button" data-owner-gift-delete-confirm>Yes, delete this gift</button><button class="text-button" type="button" data-owner-gift-panel-cancel>Cancel</button></div>
+      <p class="owner-result" data-owner-gift-panel-result role="status" hidden></p>
+    </div>`;
+    $('[data-owner-gift-panel-cancel]', panel).focus();
+    return;
+  }
+  panel.innerHTML = `<form class="owner-subform" data-owner-gift-edit-form aria-labelledby="owner-gift-edit-title" novalidate>
+    <div class="owner-subform__head"><h3 id="owner-gift-edit-title">Edit the gift <code>${esc(row.code)}</code></h3><p>Changes show at once to everyone who opens the link.</p></div>
+    <div class="owner-form-grid">
+      <label class="form-field"><span>Company</span><input name="org" maxlength="80" autocomplete="off" value="${esc(row.org)}" required></label>
+      <label class="form-field"><span>Seats <em>${number(row.redeemed)} activated so far</em></span><input name="seats" type="number" inputmode="numeric" min="1" max="100000" step="1" value="${Number(row.seats)}" required></label>
+      <label class="form-field form-field--full"><span>Message to the team</span><textarea name="message" rows="3" maxlength="280">${esc(row.message)}</textarea></label>
+      <label class="form-field form-field--full"><span>Private note</span><input name="note" maxlength="500" autocomplete="off" value="${esc(row.note)}"></label>
+    </div>
+    <div class="owner-actions"><button class="primary-button" type="submit">Save changes</button><button class="text-button" type="button" data-owner-gift-panel-cancel>Cancel</button></div>
+    <p class="owner-result" data-owner-gift-panel-result role="status" hidden></p>
+  </form>`;
+  $('input[name="org"]', panel).focus();
+}
+
+function openGiftPanel(mode, code) {
+  giftPanel = { mode, code };
+  const panel = $('[data-owner-gift-panel]');
+  delete panel.dataset.key;
+  renderGiftPanel();
+  panel.scrollIntoView({ block: 'nearest' });
+}
+
+function closeGiftPanel() {
+  const code = giftPanel?.code;
+  giftPanel = null;
+  renderGiftPanel();
+  const button = code && [...document.querySelectorAll('[data-owner-gift-edit]')].find(item => item.dataset.ownerGiftEdit === code);
+  button?.focus();
+}
+
+function parseAmount(text) {
+  const clean = String(text || '').replace(/[\s  ]/g, '').replace(',', '.');
+  if (!clean) return { amount: null };
+  if (!/^\d{1,9}(?:\.\d{1,2})?$/.test(clean)) return { error: 'Write the amount like 595 or 595.50.' };
+  return { amount: Math.round(Number(clean) * 100) };
+}
+
+function readSeats(input) {
+  const seats = Number(input.value);
+  return Number.isInteger(seats) && seats >= 1 && seats <= 100000 ? seats : 0;
+}
+
+function renderGiftCreated(result) {
+  const created = $('[data-owner-gift-created]');
+  const gift = result.gift;
+  const emailed = result.emailed ? ` · emailed to ${esc(gift.buyerEmail)}` : '';
+  created.innerHTML = `<p><b>Gift created for ${esc(gift.org)}</b> · ${people(gift.seats)} (up to ${number(gift.limit)} activations) · until ${esc(day(gift.expiresAt))}${emailed}</p>
+    ${copyRow('Gift link', result.url)}
+    ${copyRow('Manage link', result.manageUrl)}
+    <p class="owner-hint">The gift link is for the company to share with its people. The manage link is for the buyer only: it shows the activations and lets them change the company name and the message.</p>`;
+  created.hidden = false;
+}
+
+giftForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  if (giftBusy) return;
+  const fields = giftForm.elements;
+  const org = fields.org.value.trim();
+  const seats = readSeats(fields.seats);
+  const { amount, error: amountError } = parseAmount(fields.amount.value);
+  const currency = currencyPicker.value;
+  const buyerEmail = fields.buyerEmail.value.trim();
+  const sendEmail = fields.sendEmail.checked;
+  const problem = !org ? ['Add the company name.', fields.org]
+    : !seats ? ['Seats must be a whole number between 1 and 100,000.', fields.seats]
+      : amountError ? [amountError, fields.amount]
+        : amount != null && !currency ? ['Choose the currency of the amount.', $('[data-owner-gift-currency]')]
+          : sendEmail && !buyerEmail ? ['Add the buyer’s email address to email the link.', fields.buyerEmail]
+            : null;
+  if (problem) { showResult('[data-owner-gift-result]', problem[0], true); problem[1].focus(); return; }
+  giftBusy = true;
+  $('[data-owner-gift-submit]').disabled = true;
+  showResult('[data-owner-gift-result]', sendEmail ? 'Creating the gift and emailing the buyer…' : 'Creating the gift…');
+  try {
+    const result = await sendJson('admin/gifts', 'POST', { org, seats, message: fields.message.value, note: fields.note.value, currency, amount, buyerEmail, sendEmail });
+    giftForm.reset();
+    updateGiftEmailSwitch();
+    renderGiftCreated(result);
+    showResult('[data-owner-gift-result]', result.emailError ? `Gift created, but the email was not sent: ${result.emailError}` : '', !!result.emailError);
+    await load();
+  } catch (error) {
+    if (error.kind === 'unauthorized') handleError(error);
+    else showResult('[data-owner-gift-result]', failureText(error), true);
+  } finally {
+    giftBusy = false;
+    $('[data-owner-gift-submit]').disabled = false;
+  }
+});
+
+$('[data-owner-gifts]').addEventListener('click', event => {
+  const edit = event.target.closest('[data-owner-gift-edit]');
+  if (edit) { openGiftPanel('edit', edit.dataset.ownerGiftEdit); return; }
+  const remove = event.target.closest('[data-owner-gift-delete]');
+  if (remove) openGiftPanel('delete', remove.dataset.ownerGiftDelete);
+});
+
+$('[data-owner-gifts]').addEventListener('change', async event => {
+  const toggle = event.target.closest('[data-owner-gift-active]');
+  if (!toggle) return;
+  const active = toggle.checked;
+  toggle.disabled = true;
+  try {
+    await sendJson(`admin/gifts/${encodeURIComponent(toggle.dataset.ownerGiftActive)}`, 'PATCH', { active });
+    showResult('[data-owner-gift-result]', '');
+    await load();
+  } catch (error) {
+    toggle.checked = !active;
+    toggle.disabled = false;
+    if (error.kind === 'unauthorized') handleError(error);
+    else showResult('[data-owner-gift-result]', `The gift was not ${active ? 'switched on' : 'switched off'}. ${failureText(error)}`, true);
+  }
+});
+
+$('[data-owner-gift-panel]').addEventListener('click', async event => {
+  if (event.target.closest('[data-owner-gift-panel-cancel]')) { closeGiftPanel(); return; }
+  const confirm = event.target.closest('[data-owner-gift-delete-confirm]');
+  if (!confirm || !giftPanel) return;
+  confirm.disabled = true;
+  try {
+    await call(`admin/gifts/${encodeURIComponent(giftPanel.code)}`, { method: 'DELETE' });
+  } catch (error) {
+    // "failed" here is usually a 404: already deleted. Just refresh.
+    if (error.kind !== 'failed') {
+      confirm.disabled = false;
+      if (error.kind === 'unauthorized') handleError(error);
+      else showResult('[data-owner-gift-panel-result]', failureText(error), true);
+      return;
+    }
+  }
+  giftPanel = null;
+  renderGiftPanel();
+  await load();
+});
+
+$('[data-owner-gift-panel]').addEventListener('submit', async event => {
+  event.preventDefault();
+  const form = event.target.closest('[data-owner-gift-edit-form]');
+  if (!form || !giftPanel) return;
+  const fields = form.elements;
+  const org = fields.org.value.trim();
+  const seats = readSeats(fields.seats);
+  if (!org) { showResult('[data-owner-gift-panel-result]', 'Add the company name.', true); fields.org.focus(); return; }
+  if (!seats) { showResult('[data-owner-gift-panel-result]', 'Seats must be a whole number between 1 and 100,000.', true); fields.seats.focus(); return; }
+  const submit = form.querySelector('[type="submit"]');
+  submit.disabled = true;
+  try {
+    await sendJson(`admin/gifts/${encodeURIComponent(giftPanel.code)}`, 'PATCH', { org, seats, message: fields.message.value, note: fields.note.value });
+    giftPanel = null;
+    renderGiftPanel();
+    await load();
+  } catch (error) {
+    submit.disabled = false;
+    if (error.kind === 'unauthorized') handleError(error);
+    else showResult('[data-owner-gift-panel-result]', failureText(error), true);
+  }
+});
+
+// ---- Plus ---------------------------------------------------------------------
+
+function renderPlus(summary, days) {
+  const plus = summary.plus || {};
+  const totals = summary.giftTotals || {};
+  const missing = !!summary.plusUnavailable;
+  const value = count => (missing ? '—' : number(count));
+  $('[data-owner-plus-stats]').innerHTML = [
+    ['Individual purchases', value(plus.purchases), 'Bought online'],
+    ['Gift activations', value(totals.redeemed), `${number(totals.count)} ${plural(totals.count, 'gift')} · ${number(totals.seats)} seats`],
+    ['Licences made here', value(plus.manualLicenses), 'Support and giveaways']
+  ].map(([label, figure, note]) => `<div class="owner-stat"><span>${esc(label)}</span><strong>${figure}</strong><small>${esc(note)}</small></div>`).join('');
+  const rows = summary.eventTotals;
+  const opened = totalOf(rows, 'plus_modal_opened');
+  const steps = [
+    { label: 'Opened the Plus details', value: opened },
+    { label: 'Went to buy Plus', value: totalOf(rows, 'plus_checkout_clicked') },
+    { label: 'Unlocked Plus (any way)', value: totalOf(rows, 'plus_unlocked') }
+  ];
+  const giftsOpened = totalOf(rows, 'gift_opened');
+  const giftsRedeemed = totalOf(rows, 'gift_redeemed');
+  const insight = `<p class="owner-insight">Over the last ${days} days, <strong>${number(giftsOpened)}</strong> ${Number(giftsOpened) === 1 ? 'person' : 'people'} opened a gift link and <strong>${number(giftsRedeemed)}</strong> activated one. <strong>${number(totalOf(rows, 'year_plan_completed'))}</strong> finished planning a year; a year in review was opened <strong>${number(totalOf(rows, 'year_review_opened'))}</strong> ${plural(totalOf(rows, 'year_review_opened'), 'time')}.</p>`;
+  $('[data-owner-plus-funnel]').innerHTML = funnelHtml(steps, 'openings', insight);
+  const licences = Array.isArray(plus.recentLicenses) ? plus.recentLicenses : [];
+  $('[data-owner-license-list]').innerHTML = licences.length
+    ? `<div class="owner-list"><h3>Latest licences made here</h3><ul>${licences.map(item => `<li><span>${esc(when(item.createdAt))}</span><span>${esc(item.note || 'No note')}</span><code>${esc(item.id)}</code></li>`).join('')}</ul></div>`
+    : '';
+}
+
+const licenseForm = $('[data-owner-license-form]');
+licenseForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const submit = $('[data-owner-license-submit]');
+  if (submit.disabled) return;
+  submit.disabled = true;
+  showResult('[data-owner-license-result]', 'Creating a licence…');
+  try {
+    const result = await sendJson('admin/licenses', 'POST', { note: licenseForm.elements.note.value });
+    licenseForm.reset();
+    const created = $('[data-owner-license-created]');
+    const link = webUrl(result.url);
+    created.innerHTML = `<div class="owner-copy-row owner-copy-row--plain"><span>Licence link</span><input type="text" readonly value="${esc(result.url)}" aria-label="Licence link" spellcheck="false"></div>
+      <div class="owner-actions">${link ? `<a class="secondary-button owner-link-button" href="${esc(link)}" target="_blank" rel="noopener">Open in the planner</a>` : ''}<button class="secondary-button" type="button" data-owner-copy="${esc(result.url)}">Copy link</button></div>
+      <p class="owner-hint">Opening this link on a device unlocks Plus there — handy to see the planner as a Plus user. Whoever opens it gets Plus for life on that planner, so send it privately.</p>`;
+    created.hidden = false;
+    showResult('[data-owner-license-result]', '');
+    await load();
+  } catch (error) {
+    if (error.kind === 'unauthorized') handleError(error);
+    else showResult('[data-owner-license-result]', failureText(error), true);
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+// ---- Setup --------------------------------------------------------------------
+
+const SETUP_STATES = { ok: 'Ready', warn: 'Check', missing: 'Not set' };
+const PAYMENT_ITEMS = [['plus', 'Plus'], ['gift', 'Team gift']];
+const PAYMENT_CURRENCIES = ['EUR', 'USD'];
+
+// Creem: the API key, one product per item and currency, and the webhook.
+function paymentsItem(payments) {
+  const products = payments.products || {};
+  const cell = (item, currency) => {
+    const id = String(products[item]?.[currency] || '');
+    return id
+      ? `<td><span class="owner-check" aria-hidden="true">✓</span><span class="sr-only">Set: </span><code>${esc(id)}</code></td>`
+      : `<td class="owner-missing">missing · <code>CREEM_${item.toUpperCase()}_${currency}</code></td>`;
+  };
+  const allProducts = PAYMENT_ITEMS.every(([item]) => PAYMENT_CURRENCIES.every(currency => products[item]?.[currency]));
+  const table = `<div class="owner-scroll"><table class="owner-table owner-mini"><thead><tr><th>Product</th>${PAYMENT_CURRENCIES.map(currency => `<th>${currency}</th>`).join('')}</tr></thead><tbody>${PAYMENT_ITEMS.map(([item, label]) => `<tr><th scope="row">${label}</th>${PAYMENT_CURRENCIES.map(currency => cell(item, currency)).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const mode = payments.mode === 'live' ? 'live mode' : payments.mode === 'test' ? 'test mode: no real payments, and buying is switched off on the public address — test on your project’s .pages.dev address' : '';
+  const key = payments.apiKeySet
+    ? `<p>API key set${mode ? ` · ${mode}` : ''} (<code>CREEM_API_KEY</code>).</p>`
+    : '<p>Set the secret <code>CREEM_API_KEY</code> (Creem → Developers → API keys), then redeploy. Until then nothing can be bought online.</p>';
+  const webhook = payments.webhookSecretSet
+    ? '<p>Webhook signing secret set (<code>CREEM_WEBHOOK_SECRET</code>).</p>'
+    : '<p>Webhook signing secret not set (<code>CREEM_WEBHOOK_SECRET</code>). Recommended: without it, a purchase is recorded only when the buyer comes back to the site after paying.</p>';
+  const url = payments.webhookUrl
+    ? `${copyRow('Webhook URL', payments.webhookUrl)}<p>Creem → Developers → Webhooks: add this URL with the event <code>checkout.completed</code>, then paste the signing secret into <code>CREEM_WEBHOOK_SECRET</code>.</p>`
+    : '';
+  const error = payments.error ? `<p class="owner-setup__error">${esc(payments.error)}</p>` : '';
+  const state = !payments.configured ? 'missing' : (payments.error || !allProducts || !payments.webhookSecretSet || payments.mode === 'test') ? 'warn' : 'ok';
+  return { title: 'Payments (Creem)', state, html: `${key}${error}<p>Product ids (one-time products, one per item and currency):</p>${table}${webhook}${url}` };
+}
+
+function setupItems(summary) {
+  const setup = summary.setup;
+  const base = setup.publicBaseUrl || 'https://planner.bemorin.com';
+  const items = [];
+  const email = setup.email || {};
+  items.push(email.configured
+    ? { title: 'Email (Resend)', state: 'ok', html: `<p>Sending as ${esc(email.from)}, at most ${number(email.dailyLimit)} emails a day (<code>EMAIL_DAILY_LIMIT</code>; Resend’s free plan allows 100 a day, 3,000 a month).</p>` }
+    : {
+      title: 'Email (Resend)',
+      state: 'missing',
+      html: `<p>Set the secret <code>RESEND_API_KEY</code>${email.apiKeySet ? ' (set)' : ''} and <code>EMAIL_FROM</code>${email.fromSet ? ' (set, but not a valid address)' : ''}, e.g. <code>Ben Morin &lt;hello@bemorin.com&gt;</code>, then redeploy.</p>
+        <p>In Resend → Domains, add your domain. Resend lists DNS records (DKIM and SPF, plus MX for bounces): add each one in Cloudflare → your domain → DNS as “DNS only”, then wait until Resend shows “Verified”. Create the API key with “Sending access” only.</p>`
+    });
+  items.push(email.ownerEmail
+    ? { title: 'Owner email', state: 'ok', html: `<p>Team requests and test sends go to ${esc(email.ownerEmail)}; gift buyers’ replies too.</p>` }
+    : { title: 'Owner email', state: 'missing', html: '<p>Set <code>OWNER_EMAIL</code> to get team request notifications and test sends, and to receive replies from gift buyers.</p>' });
+
+  const plus = setup.plus || {};
+  if (plus.configured) {
+    const appKey = String(APP_CONFIG.PLUS_PUBLIC_KEY || '').trim();
+    const matches = appKey === plus.publicKey;
+    const app = matches ? 'The app on this site has the matching public key.'
+      : appKey ? 'The app on this site has a different public key: licences made here won’t unlock Plus in it. Set the build variable to the key above and redeploy.'
+        : 'The app on this site has no public key yet, so Plus can’t be activated in it. Set the build variable to the key above and redeploy.';
+    items.push({ title: 'Plus licences', state: matches ? 'ok' : 'warn', html: `<p><code>PLUS_SIGNING_KEY</code> is set. Public key for the app build (<code>DAILY_PLANNER_PLUS_PUBLIC_KEY</code>):</p>${copyRow('Public key', plus.publicKey)}<p>${esc(app)}</p>` });
+  } else {
+    items.push({
+      title: 'Plus licences',
+      state: 'missing',
+      html: plus.keySet
+        ? '<p><code>PLUS_SIGNING_KEY</code> is set but is not a base64 PKCS#8 P-256 private key. Run <code>npm run plus:keys</code> for a new pair.</p>'
+        : '<p>Run <code>npm run plus:keys</code>. Add <code>PLUS_SIGNING_KEY</code> as an encrypted secret and <code>DAILY_PLANNER_PLUS_PUBLIC_KEY</code> as a build variable, then redeploy. Until then, gifts and licences can’t be created.</p>'
+    });
+  }
+
+  items.push(paymentsItem(setup.payments || {}));
+
+  items.push({ title: 'Links in emails', state: 'ok', html: `<p>They start with ${esc(base)}${setup.publicBaseUrlSet ? ' (<code>PUBLIC_BASE_URL</code>)' : ', the default. Set <code>PUBLIC_BASE_URL</code> to change it'}.</p>` });
+  const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql', summary.reviewsUnavailable && '0004_creem_reviews.sql'].filter(Boolean);
+  items.push(missingTables.length
+    ? { title: 'Database', state: 'missing', html: `<p>Apply ${missingTables.map(file => `<code>migrations/${file}</code>`).join(' and ')} to the D1 database.</p>` }
+    : { title: 'Database', state: 'ok', html: '<p>All tables are in place.</p>' });
+  items.push(setup.twoFactor
+    ? { title: 'Owner sign-in', state: 'ok', html: '<p>Two-factor sign-in is on.</p>' }
+    : { title: 'Owner sign-in', state: 'warn', html: '<p>Only the admin token protects this page. Run <code>npm run admin:secret</code> and set <code>ADMIN_TOTP_SECRET</code> to also require an authenticator code.</p>' });
+  return items;
+}
+
+// ---- Reviews -------------------------------------------------------------------
+
+const quoteOf = row => `“${String(row.text || '').trim()}” — ${String(row.name || '').trim() || 'Anonymous'}`;
+
+function reviewHtml(row) {
+  const name = String(row.name || '').trim();
+  return `<article class="owner-review">
+    <div class="owner-review__meta">${stars(row.rating)}<span>${esc(row.appVersion)}</span><span>${esc(day(row.createdAt))}</span></div>
+    <blockquote class="owner-review__text">${esc(row.text)}</blockquote>
+    <p class="owner-review__name">${name ? `— ${esc(name)}` : '<span>Anonymous</span>'}</p>
+    <div class="owner-review__actions"><button class="text-button" type="button" data-owner-copy="${esc(quoteOf(row))}">Copy as quote</button><button class="text-button text-button--danger" type="button" data-owner-delete-review="${Number(row.id)}" data-owner-review-name="${esc(name || 'Anonymous')}">Delete</button></div>
+  </article>`;
+}
+
+function renderReviews(summary) {
+  const target = $('[data-owner-reviews]');
+  const caption = $('[data-owner-reviews-caption]');
+  if (summary.reviewsUnavailable) {
+    caption.textContent = 'Reviews people agreed to have quoted.';
+    target.innerHTML = '<p class="owner-empty">Run migration 0004 to collect reviews: apply <code>migrations/0004_creem_reviews.sql</code> to the D1 database.</p>';
+    return;
+  }
+  const rows = Array.isArray(summary.reviews) ? summary.reviews : [];
+  caption.textContent = rows.length
+    ? `${rows.length === 50 ? 'The newest 50' : `${number(rows.length)} ${plural(rows.length, 'review')}`}, sent from the planner with permission to quote them. Delete any you would not quote.`
+    : 'Reviews people agreed to have quoted.';
+  target.innerHTML = rows.length ? `<div class="owner-reviews">${rows.map(reviewHtml).join('')}</div>` : '<p class="owner-empty">No reviews yet.</p>';
+}
+
+function renderSetup(summary) {
+  const target = $('[data-owner-setup]');
+  if (!summary.setup) {
+    target.innerHTML = '<li class="owner-empty">This API does not report its setup yet. Redeploy it.</li>';
+    return;
+  }
+  target.innerHTML = setupItems(summary).map(item => `<li class="owner-setup__item is-${item.state}"><span class="owner-setup__mark" aria-hidden="true"></span><div class="owner-setup__body"><p class="owner-setup__title"><b>${esc(item.title)}</b><span>${SETUP_STATES[item.state]}</span></p>${item.html}</div></li>`).join('');
+}
+
+document.addEventListener('click', event => {
+  const button = event.target.closest('[data-owner-copy]');
+  if (button) copyText(button.dataset.ownerCopy, button);
+});
+
+function renderSignals(summary) {
+  const labels = {
+    onboarding_completed: 'Finished onboarding',
+    install_modal_opened: 'Opened “Install the app”',
+    install_accepted: 'Installed from the prompt',
+    feedback_prompt_shown: 'Saw the “rate this version” card',
+    feedback_opened: 'Opened feedback',
+    feedback_sent: 'Sent feedback',
+    trophy_unlocked: 'Days with a trophy unlocked',
+    landing_viewed: 'Landing page visits',
+    landing_cta_app: 'Landing → opened the planner',
+    landing_cta_teams: 'Landing → clicked toward Teams',
+    team_form_opened: 'Opened the team kit form',
+    team_request_sent: 'Sent a team kit request',
+    manager_email_opened: 'Opened the email to a manager',
+    plus_modal_opened: 'Opened the Plus details',
+    plus_checkout_clicked: 'Went to buy Plus',
+    plus_unlocked: 'Unlocked Plus',
+    gift_opened: 'Opened a gift link',
+    gift_redeemed: 'Activated a gift',
+    year_plan_completed: 'Finished planning a year',
+    year_review_opened: 'Opened a year in review',
+    pack_checkout_clicked: 'Landing → went to buy a team gift',
+    gift_link_copied: 'Copied a team gift link',
+    plus_viewed: 'Landing → scrolled to Plus',
+    teams_viewed: 'Landing → scrolled to the team gift',
+    pricing_viewed: 'Landing → scrolled to the prices',
+    review_sent: 'Left a review that may be quoted'
+  };
+  const versions = [...new Set(summary.eventTotals.map(row => row.appVersion))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+  const body = Object.entries(labels).map(([name, label]) => `<tr><td>${esc(label)}</td><td class="num"><b>${number(totalOf(summary.eventTotals, name))}</b></td>${versions.map(version => `<td class="num">${number(summary.eventTotals.filter(row => row.name === name && row.appVersion === version).reduce((sum, row) => sum + row.count, 0))}</td>`).join('')}</tr>`).join('');
+  $('[data-owner-signals]').innerHTML = `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Signal</th><th class="num">Total</th>${versions.map(version => `<th class="num">${esc(version)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+// The daily series behind Trends: { series } or { message } (an older API has no
+// admin/series), or { error } when the session has ended.
+async function fetchSeries() {
+  const { from, to } = seriesWindow(dayOf(new Date()));
+  try {
+    const series = normalizeSeries(await jsonOf(await call(`admin/series?from=${from}&to=${to}`)));
+    return series ? { series } : { message: UPDATE_API_MESSAGE };
+  } catch (error) {
+    if (error.kind === 'unauthorized') return { error };
+    if (error.kind === 'offline' || /HTTP 40[45]\)/.test(error.message)) return { message: UPDATE_API_MESSAGE };
+    return { message: `Trends could not be loaded. ${failureText(error)}` };
+  }
+}
+
+async function showSeries(pending, forSession) {
+  const result = await pending;
+  if (!session || session.session !== forSession) return;
+  if (result.error) { handleError(result.error); return; }
+  if (result.series) {
+    seriesSession = forSession;
+    trends.show(result.series);
+  } else {
+    trends.unavailable(result.message);
+  }
+}
+
+async function load({ series: refreshSeries = false } = {}) {
+  if (!session) { await start(); return; }
+  const days = Number(periodPicker.value) || 90;
+  const forSession = session.session;
+  const pending = refreshSeries === true || seriesSession !== forSession ? fetchSeries() : null;
+  if (pending) trends.refreshing();
+  try {
+    const summary = await jsonOf(await call(`admin/summary?days=${days}`));
+    if (!session) return;
+    setNotice('');
+    show('dashboard');
+    $('[data-owner-session]').textContent = `Signed in until ${untilLabel(session.expiresAt)}`;
+    $('[data-owner-sub]').textContent = `Private. Updated ${when(summary.generatedAt)} · counts since ${summary.sinceDay}.`;
+    renderKpis(summary, days);
+    renderFunnel(summary, days);
+    renderTeamFunnel(summary, days);
+    renderTeams(summary);
+    renderGifts(summary);
+    renderPlus(summary, days);
+    renderSetup(summary);
+    renderWaitlist(summary);
+    renderAnnounce(summary);
+    renderVersions(summary);
+    renderSignals(summary);
+    renderReviews(summary);
+    if (pending) await showSeries(pending, forSession);
+    await renderFeedback();
+  } catch (error) {
+    handleError(error);
+    if (pending && session) await showSeries(pending, forSession);
+  }
+}
+
+async function start() {
+  setNotice('');
+  show('checking');
+  if (session) { scheduleExpiry(); await load(); return; }
+  try {
+    await probe();
+    showLogin();
+  } catch (error) {
+    handleError(error);
+  }
+}
+
+async function download(path, filename) {
+  try {
+    const response = await call(path);
+    const url = URL.createObjectURL(await response.blob());
+    Object.assign(document.createElement('a'), { href: url, download: filename }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    handleError(error);
+  }
+}
+
+async function remove(path) {
+  try {
+    await call(path, { method: 'DELETE' });
+  } catch (error) {
+    // "failed" here is usually a 404: already removed. Just refresh.
+    if (error.kind !== 'failed') { handleError(error); return; }
+  }
+  await load();
+}
+
+const loginForm = $('[data-owner-login]');
+const codeInput = $('input[name="code"]', loginForm);
+codeInput.addEventListener('input', () => {
+  const digits = codeInput.value.replace(/\D/g, '').slice(0, 6);
+  if (digits !== codeInput.value) codeInput.value = digits;
+});
+
+loginForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const data = new FormData(loginForm);
+  const token = String(data.get('token') || '').trim();
+  const code = String(data.get('code') || '').replace(/\D/g, '');
+  const error = $('[data-owner-error]');
+  if (!token) { showLogin('Enter the admin token.'); return; }
+  if (code && code.length !== 6) { showLogin('The authenticator code has 6 digits.'); return; }
+  const submit = $('[data-owner-submit]');
+  submit.disabled = true;
+  submit.textContent = 'Signing in…';
+  error.hidden = true;
+  try {
+    const body = await jsonOf(await call('admin/session', { auth: false, method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token, code }) }));
+    const expiresAt = Date.parse(body?.expiresAt);
+    if (typeof body?.session !== 'string' || !Number.isFinite(expiresAt)) throw new ApiError('failed', 'The API answered without a session.');
+    loginForm.reset();
+    saveSession({ session: body.session, expiresAt });
+    await load();
+  } catch (failure) {
+    if (failure.kind === 'unauthorized') showLogin(SIGN_IN_FAILED_MESSAGE);
+    else if (failure.kind === 'failed') showLogin(failure.message);
+    else handleError(failure);
+  } finally {
+    submit.disabled = false;
+    submit.textContent = 'Open dashboard';
+  }
+});
+
+const periodPicker = createDropdown($('[data-owner-days]'), { items: PERIODS, value: '90', onChange: () => load() });
+const versionFilter = createDropdown($('[data-owner-version-filter]'), { items: [{ value: '', label: 'All versions' }], value: '', onChange: () => renderFeedback().catch(handleError) });
+
+$('[data-owner-refresh]').addEventListener('click', () => load({ series: true }));
+$('[data-owner-retry]').addEventListener('click', start);
+$('[data-owner-signout]').addEventListener('click', () => signOut());
+$('[data-owner-waitlist-csv]').addEventListener('click', event => { event.preventDefault(); download('admin/waitlist?format=csv', 'daily-planner-waitlist.csv'); });
+$('[data-owner-teams-csv]').addEventListener('click', event => { event.preventDefault(); download('admin/teams?format=csv', 'daily-planner-team-requests.csv'); });
+$('[data-owner-feedback-csv]').addEventListener('click', event => {
+  event.preventDefault();
+  const version = versionFilter.value;
+  download(`admin/feedback?format=csv${version ? `&version=${encodeURIComponent(version)}` : ''}`, 'daily-planner-feedback.csv');
+});
+$('[data-owner-waitlist]').addEventListener('click', event => {
+  const button = event.target.closest('[data-owner-delete]');
+  if (!button) return;
+  const row = button.closest('tr');
+  if (!window.confirm(`Delete ${row?.cells[0]?.textContent || 'this sign-up'} from the waitlist? This cannot be undone.`)) return;
+  remove(`admin/waitlist/${button.dataset.ownerDelete}`);
+});
+$('[data-owner-teams]').addEventListener('click', event => {
+  const button = event.target.closest('[data-owner-delete-team]');
+  if (!button) return;
+  const row = button.closest('tr');
+  if (!window.confirm(`Delete the team kit request from ${row?.cells[1]?.textContent || 'this team'}? This cannot be undone.`)) return;
+  remove(`admin/teams/${button.dataset.ownerDeleteTeam}`);
+});
+$('[data-owner-reviews]').addEventListener('click', event => {
+  const button = event.target.closest('[data-owner-delete-review]');
+  if (!button) return;
+  if (!window.confirm(`Delete the review from ${button.dataset.ownerReviewName || 'this person'}? It can no longer be quoted. This cannot be undone.`)) return;
+  remove(`admin/reviews/${button.dataset.ownerDeleteReview}`);
+});
+$('[data-owner-feedback]').addEventListener('click', event => {
+  const button = event.target.closest('[data-owner-delete-feedback]');
+  if (!button) return;
+  if (!window.confirm('Delete this feedback? This cannot be undone.')) return;
+  remove(`admin/feedback/${button.dataset.ownerDeleteFeedback}`);
+});
+
+announceForm.addEventListener('submit', event => event.preventDefault());
+announceForm.addEventListener('input', () => { if (!$('[data-owner-announce-confirm]').hidden) hideAnnounceConfirm(); });
+$('[data-owner-announce-test]').addEventListener('click', () => sendAnnouncement(true));
+$('[data-owner-announce-send]').addEventListener('click', () => {
+  const message = readAnnouncement();
+  if (!message) return;
+  const batch = announceBatch();
+  const rest = announceState.count - batch;
+  $('[data-owner-announce-confirm-text]').textContent = `Send “${message.subject}” to ${people(batch)} now? Each address is deleted as soon as Resend accepts its email, so this can’t be undone.${rest > 0 ? ` The other ${people(rest)} stay on the list for ${announceState.allowance > batch ? 'the next send' : 'tomorrow'}.` : ''}`;
+  $('[data-owner-announce-confirm-send]').textContent = `Yes, send to ${people(batch)}`;
+  showAnnounceResult('');
+  $('[data-owner-announce-actions]').hidden = true;
+  $('[data-owner-announce-confirm]').hidden = false;
+  $('[data-owner-announce-cancel]').focus();
+});
+$('[data-owner-announce-cancel]').addEventListener('click', () => { hideAnnounceConfirm(); $('[data-owner-announce-send]').focus(); });
+$('[data-owner-announce-confirm-send]').addEventListener('click', () => sendAnnouncement(false));
+prefillAnnouncement();
+
+start();

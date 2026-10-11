@@ -36,6 +36,16 @@ export function createSyncLedger(storage = localStorage, { now = () => new Date(
 
   const entry = recordId => read().records[recordId] || null;
 
+  const dirtyEntries = () => Object.entries(read().records).filter(([, record]) => !!record?.dirtyAt);
+
+  const hasDirty = () => dirtyEntries().length > 0;
+
+  const oldestDirtyAt = () => {
+    const stamps = dirtyEntries().map(([, record]) => Date.parse(record.dirtyAt)).filter(Number.isFinite);
+    if (!stamps.length) return null;
+    return new Date(Math.min(...stamps)).toISOString();
+  };
+
   const markSynced = (recordId, { hash, deletedAt = null } = {}) => {
     const ledger = read();
     ledger.records[recordId] = {
@@ -68,5 +78,18 @@ export function createSyncLedger(storage = localStorage, { now = () => new Date(
     storage.removeItem(PROVIDER_KEY);
   };
 
-  return { entry, read, recordMutation, markSynced, markRemoteApplied, forgetRecord, provider, saveProvider, reset };
+  return {
+    entry,
+    read,
+    recordMutation,
+    dirtyEntries,
+    hasDirty,
+    oldestDirtyAt,
+    markSynced,
+    markRemoteApplied,
+    forgetRecord,
+    provider,
+    saveProvider,
+    reset
+  };
 }

@@ -13,6 +13,15 @@ export const SOCIAL_X_URL = runtimeValue('SOCIAL_X_URL');
 export const SOCIAL_LINKEDIN_URL = runtimeValue('SOCIAL_LINKEDIN_URL');
 export const CLOUD_API_URL = runtimeValue('CLOUD_API_URL');
 export const GOOGLE_CLIENT_ID = runtimeValue('GOOGLE_CLIENT_ID');
+// Optional feedback / waitlist / anonymous-count endpoint (e.g. "/api" on Cloudflare Pages).
+// Blank means the planner never calls it.
+export const PLANNER_API_URL = runtimeValue('PLANNER_API_URL').replace(/\/+$/, '');
+// Daily Planner Plus: the public key that verifies licences on the device
+// (base64 SPKI, ECDSA P-256). Blank in public source: Plus can't be activated
+// here. Buying goes through the owner API (GET/POST /api/checkout).
+export const PLUS_PUBLIC_KEY = runtimeValue('PLUS_PUBLIC_KEY').replace(/\s+/g, '');
+// Kept in step with package.json by scripts/check.mjs; feedback is grouped by it.
+export const APP_VERSION = '1.21.0';
 // Public/project links are deployment configuration, not repository defaults.
 
 

@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#f6f3ed">
+  <meta name="theme-color" content="#f6f3ed" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#141311" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <script>try{var t=localStorage.getItem('daily-planner-ui:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}</script>
   <title>Daily Planner by Ben Morin</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="icon" href="./favicon.ico" sizes="32x32">
@@ -22,7 +25,7 @@
         </button>
         <div class="date-title" data-date-picker role="button" tabindex="0" aria-label="Choose date">
           <p class="eyebrow" data-weekday></p>
-          <h1><span data-date></span><span data-date-medium></span><span data-date-short></span></h1>
+          <h1><span data-date></span><span data-date-medium></span><span data-date-compact></span><span data-date-short></span></h1>
         </div>
       </div>
 
@@ -51,6 +54,8 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.5 15.5 4.1 4.1"/></svg>
         </button>
 
+        <span class="actions-divider" aria-hidden="true"></span>
+
         <button class="icon-button expanded-view-button" type="button" data-expanded-view aria-label="Fit app to width" data-tooltip="Fit app to width" data-tooltip-key="W" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/><path d="M3 8l5-5M21 8l-5-5M3 16l5 5M21 16l-5 5"/></svg>
         </button>
@@ -58,6 +63,8 @@
         <button class="icon-button" type="button" data-pip aria-label="Open floating mode" data-tooltip="Floating mode" data-tooltip-key="I">
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><rect x="11.5" y="11" width="7" height="5" rx="1"/></svg>
         </button>
+
+        <span class="actions-divider" aria-hidden="true"></span>
 
         <button class="icon-button" type="button" data-journal-open aria-label="Open journal" data-tooltip="Journal" data-tooltip-key="J">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h11.5A2.5 2.5 0 0 1 19 7v12.5H7.5A2.5 2.5 0 0 1 5 17V4.5Z"/><path d="M5 17a2.5 2.5 0 0 1 2.5-2.5H19M9 8h6M9 11h4"/></svg>
@@ -74,6 +81,8 @@
         <button class="icon-button" type="button" data-stats-open aria-label="Open time stats" data-tooltip="Time stats" data-tooltip-key="S">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>
         </button>
+
+        <span class="actions-divider header-secondary" aria-hidden="true"></span>
 
         <button class="icon-button header-secondary" type="button" data-print aria-label="Print planner" data-tooltip="Print" data-tooltip-key="P">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z"/></svg>
@@ -114,7 +123,7 @@
               <button type="button" data-mobile-workspace-toggle aria-expanded="false"><strong data-mobile-workspace-label>Personal</strong><svg class="disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
               <div class="mobile-workspace-options" data-mobile-workspace-options hidden></div>
             </div>
-            <button type="button" class="mobile-horizon-action" data-horizon-open><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m14.8 9.2-1.7 3.9-3.9 1.7 1.7-3.9 3.9-1.7Z"/></svg><span>Horizon</span></button>
+            <button type="button" class="mobile-stats-action" data-mobile-stats><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span>Time stats</span></button>
             <button type="button" data-mobile-print><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z"/></svg><span>Print / PDF</span></button>
             <div class="mobile-export-disclosure" data-mobile-export-disclosure>
               <button type="button" data-mobile-export-toggle aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg><span>Export</span><svg class="disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
@@ -126,6 +135,10 @@
               </div>
             </div>
             <button type="button" data-mobile-settings><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.12-1.3l2-1.55-2-3.46-2.43.98A7 7 0 0 0 14.2 5.4L13.85 3h-4l-.35 2.4a7 7 0 0 0-2.25 1.27L4.82 5.7l-2 3.46 2 1.55A7 7 0 0 0 4.7 12c0 .44.04.87.12 1.3l-2 1.55 2 3.46 2.43-.98A7 7 0 0 0 9.5 18.6l.35 2.4h4l.35-2.4a7 7 0 0 0 2.25-1.27l2.43.98 2-3.46-2-1.55c.08-.43.12-.86.12-1.3Z"/></svg><span>Settings</span></button>
+            <button type="button" data-install-open><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="12.5" rx="2"/><path d="M12 8.5v5.5M9.5 11.5 12 14l2.5-2.5M8.5 20h7"/></svg><span>Install the app</span></button>
+            <button type="button" data-sync-guide-open><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="13" height="9.5" rx="1.6"/><path d="M1.5 17.5h15"/><rect x="16.5" y="8.5" width="5.5" height="11" rx="1.4"/></svg><span>Sync my devices</span></button>
+            <button type="button" class="mobile-plus-action" data-plus-open><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 13.9 9l5.5 1.9-5.5 1.9L12 18.3l-1.9-5.5-5.5-1.9L10.1 9Z"/><path d="M18.6 3.8v3.4M16.9 5.5h3.4"/></svg><span>Daily Planner Plus</span></button>
+            <button type="button" data-feedback-open hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9.5L5 19.5v-14Z"/><path d="M9 10.5h6"/></svg><span>Send feedback</span></button>
             <button type="button" data-mobile-help><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.35 2.35 0 1 1 3.6 1.98c-.9.55-1.4 1.02-1.4 2.02M12 17h.01"/></svg><span>How it works</span></button>
             <a data-mobile-github hidden href="https://github.com/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="icon-fill" d="M12 2.5a9.7 9.7 0 0 0-3.07 18.9c.49.1.67-.22.67-.48v-1.87c-2.73.6-3.3-1.18-3.3-1.18-.45-1.15-1.09-1.46-1.09-1.46-.9-.62.07-.6.07-.6.98.06 1.5 1.01 1.5 1.01.88 1.5 2.29 1.07 2.85.82.09-.63.34-1.07.62-1.32-2.18-.25-4.48-1.09-4.48-4.86 0-1.07.38-1.95 1-2.64-.1-.25-.43-1.25.1-2.6 0 0 .82-.26 2.68 1.01A9.25 9.25 0 0 1 12 6.9a9.2 9.2 0 0 1 2.44.33c1.86-1.27 2.67-1 2.67-1 .54 1.34.2 2.34.1 2.59.63.69 1.01 1.57 1.01 2.64 0 3.78-2.3 4.6-4.49 4.85.35.3.66.9.66 1.8v2.8c0 .27.18.59.68.49A9.7 9.7 0 0 0 12 2.5Z"/></svg><span>GitHub project</span></a>
           </div>
@@ -134,16 +147,23 @@
     </header>
 
     <div class="mobile-view-switch" data-mobile-view-switch role="tablist" aria-label="Planner view">
+      <span class="mobile-view-switch__indicator" data-mobile-view-indicator aria-hidden="true"></span>
       <button type="button" class="is-active" data-mobile-view="plan" role="tab" aria-selected="true">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12M6 10h12M6 16h8"/><circle cx="3" cy="4" r=".7" class="icon-fill"/><circle cx="3" cy="10" r=".7" class="icon-fill"/><circle cx="3" cy="16" r=".7" class="icon-fill"/></svg><span>Plan</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6.5h11M8 12h11M8 17.5h7"/><circle cx="4.5" cy="6.5" r=".9" class="icon-fill"/><circle cx="4.5" cy="12" r=".9" class="icon-fill"/><circle cx="4.5" cy="17.5" r=".9" class="icon-fill"/></svg><span class="mobile-view-switch__text"><span>Plan</span><small data-view-summary="plan"></small></span>
       </button>
       <button type="button" data-mobile-view="schedule" role="tab" aria-selected="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/></svg><span>Schedule</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/></svg><span class="mobile-view-switch__text"><span>Schedule</span><small data-view-summary="schedule"></small></span>
       </button>
     </div>
 
     <section class="workspace" data-workspace>
       <div class="left pane-scroll" data-left-pane>
+        <header class="plan-head">
+          <div class="plan-head__row">
+            <h2>Plan</h2>
+            <span class="plan-head__done"><span data-view-summary="plan"></span><span class="plan-head__meter" data-view-progress="plan" aria-hidden="true"></span></span>
+          </div>
+        </header>
         <section class="focus">
           <header class="section-head">
             <div><h2>Keep in mind</h2></div>
@@ -195,13 +215,15 @@
         </section>
       </div>
 
+      <section class="week-agenda pane-scroll" data-week-agenda aria-label="This week’s plan"></section>
+
       <section class="schedule-section" data-schedule-pane>
         <header class="schedule-head">
           <div><h2>Schedule</h2></div>
           <div class="schedule-head__actions">
-            <button class="inline-add-button inline-add-button--compact" type="button" data-schedule-add data-tooltip="Add a task" data-tooltip-key="T">
+            <button class="inline-add-button inline-add-button--compact" type="button" data-schedule-add data-tooltip="Add a time block" data-tooltip-key="T">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              <span>Add a task</span>
+              <span>Add a block</span>
             </button>
             <button class="end-day-button" type="button" data-end-day-open aria-label="Close day" data-tooltip="Close day" data-tooltip-key="D">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 15.5h16"/><path d="M6.2 15.5a5.8 5.8 0 0 1 11.6 0"/><path d="M12 4.2v2.1M5.9 6.7l1.5 1.5M18.1 6.7l-1.5 1.5M3.6 11.1h2.1M18.3 11.1h2.1"/></svg>
@@ -218,6 +240,7 @@
           </div>
           <div class="week-schedule" data-week-schedule hidden></div>
         </div>
+        <p class="week-empty-hint" data-week-empty-hint hidden><span class="week-empty-hint__pointer">Click a time in any day to add a block</span><span class="week-empty-hint__touch">Tap a time in any day to add a block</span></p>
         <button class="mobile-quick-add" type="button" data-mobile-schedule-add aria-label="Add to schedule">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
@@ -255,9 +278,12 @@
             </button>
           </div>
 
-          <div class="form-field">
-            <span>Category / project</span>
-            <button class="select-trigger select-trigger--wide block-category-trigger" type="button" data-block-category aria-haspopup="listbox" aria-expanded="false"></button>
+          <div class="form-field block-category-field">
+            <div class="form-field-label-row">
+              <span id="block-category-label">Category / project</span>
+              <button class="inline-field-action" type="button" data-block-category-manage aria-haspopup="dialog">Manage</button>
+            </div>
+            <button class="select-trigger select-trigger--wide block-category-trigger" type="button" data-block-category aria-haspopup="listbox" aria-expanded="false" aria-describedby="block-category-label"></button>
           </div>
 
           <label class="form-field">
@@ -360,53 +386,118 @@
 
   <div class="modal modal--onboarding" data-onboarding-modal hidden>
     <button class="modal__backdrop" type="button" aria-hidden="true" tabindex="-1"></button>
-    <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
-      <div class="onboarding-progress" aria-label="Setup progress">
-        <span data-onboarding-progress="1"></span><span data-onboarding-progress="2"></span><span data-onboarding-progress="3"></span>
-      </div>
-      <div class="onboarding-step" data-onboarding-step="1">
-        <p class="modal__eyebrow">A small introduction</p>
-        <h2 id="onboarding-title">This is the planner I use to keep things clear and get things done.</h2>
-        <p class="onboarding-personal">I built it around a few things that have helped me over time. I’m sharing it here in case it helps you too.</p>
-        <button class="primary-button onboarding-primary" type="button" data-onboarding-go="2">Continue</button>
-      </div>
-      <div class="onboarding-step" data-onboarding-step="2" hidden>
-        <p class="modal__eyebrow">Your week</p>
-        <h2>What part of your week do you want to plan here?</h2>
-        <p>Choose the days you want this planner to cover — workdays, your whole week, or anything in between.</p>
-        <div class="onboarding-field">
-          <span>Days to include</span>
-          <div class="planning-days-picker planning-days-picker--onboarding" data-onboarding-days>
-            <button type="button" data-onboarding-day="1" aria-pressed="true"><span>M</span><small>Mon</small></button>
-            <button type="button" data-onboarding-day="2" aria-pressed="true"><span>T</span><small>Tue</small></button>
-            <button type="button" data-onboarding-day="3" aria-pressed="true"><span>W</span><small>Wed</small></button>
-            <button type="button" data-onboarding-day="4" aria-pressed="true"><span>T</span><small>Thu</small></button>
-            <button type="button" data-onboarding-day="5" aria-pressed="true"><span>F</span><small>Fri</small></button>
-            <button type="button" data-onboarding-day="6" aria-pressed="false"><span>S</span><small>Sat</small></button>
-            <button type="button" data-onboarding-day="0" aria-pressed="false"><span>S</span><small>Sun</small></button>
+    <section class="modal__panel ob-panel" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" data-onboarding-panel data-step="1" tabindex="-1">
+      <div class="ob-visual" aria-hidden="true">
+        <div class="ob-scene ob-scene--1">
+          <div class="ob-app">
+            <div class="ob-app__bar"><i></i><i></i><i></i><span>Friday, October 9</span></div>
+            <div class="ob-app__body">
+              <div class="ob-app__plan">
+                <small>Keep in mind</small><p>Protect the morning</p>
+                <small>Most important outcome</small>
+                <div class="ob-item ob-item--mit"><span></span><b>Finish the proposal</b></div>
+                <small>Tasks</small>
+                <div class="ob-item"><span></span><b>Reply to Paul</b></div>
+                <div class="ob-item"><span></span><b>Book the physio</b></div>
+              </div>
+              <div class="ob-app__day">
+                <span class="ob-hour" style="--y:0"></span><span class="ob-hour" style="--y:1"></span><span class="ob-hour" style="--y:2"></span><span class="ob-hour" style="--y:3"></span>
+                <span class="ob-block ob-block--1">Deep work · proposal</span>
+                <span class="ob-block ob-block--2">Run</span>
+                <span class="ob-block ob-block--3">Reply to Paul</span>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="onboarding-field">
-          <span>Show my day from</span>
-          <div class="onboarding-hours">
-            <button class="select-trigger select-trigger--wide" type="button" data-onboarding-start-hour aria-haspopup="listbox"></button>
-            <span aria-hidden="true">—</span>
-            <button class="select-trigger select-trigger--wide" type="button" data-onboarding-end-hour aria-haspopup="listbox"></button>
+        <div class="ob-scene ob-scene--2">
+          <div class="ob-week" data-ob-week></div>
+          <p class="ob-visual__caption">Week view follows the days you pick; the schedule opens on your hours.</p>
+        </div>
+        <div class="ob-scene ob-scene--3">
+          <div class="ob-loop">
+            <span class="ob-loop__node ob-loop__node--1"><b>Plan</b></span>
+            <span class="ob-loop__node ob-loop__node--2"><b>Do</b></span>
+            <span class="ob-loop__node ob-loop__node--3"><b>Close</b></span>
+            <span class="ob-loop__node ob-loop__node--4"><b>Decide</b></span>
+            <span class="ob-loop__center">Every<br>day</span>
           </div>
-          <small>You can still plan outside these hours.</small>
         </div>
-        <button class="primary-button onboarding-primary" type="button" data-onboarding-go="3">Continue</button>
+        <div class="ob-scene ob-scene--4">
+          <div class="ob-year">
+            <div class="ob-year__ribbon"><span class="ob-year__band"></span><span class="ob-year__dot ob-year__dot--1"></span><span class="ob-year__dot ob-year__dot--2"></span><span class="ob-year__dot ob-year__dot--3"></span></div>
+            <div class="ob-year__paint"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <p class="ob-visual__caption">Each day you close paints a square.</p>
+          </div>
+        </div>
       </div>
-      <div class="onboarding-step onboarding-step--how" data-onboarding-step="3" hidden>
-        <p class="modal__eyebrow">How it works</p>
-        <div class="onboarding-how-list">
-          <div><strong>Plan</strong><span>Choose what matters and give it real time in your day.</span></div>
-          <div><strong>Work the plan</strong><span>Follow your schedule and mark things done as you complete them.</span></div>
-          <div><strong>Wrap up the day</strong><span>Review what’s done, what moves forward, and what no longer matters.</span></div>
-          <div><strong>Journal</strong><span>As you wrap up, keep a memory and a lesson from the day.</span></div>
-          <div><strong>Nothing gets lost</strong><span>Anything unfinished stays accessible until you decide what happens next.</span></div>
+      <div class="ob-content">
+        <div class="onboarding-progress" aria-label="Setup progress">
+          <span data-onboarding-progress="1"></span><span data-onboarding-progress="2"></span><span data-onboarding-progress="3"></span><span data-onboarding-progress="4"></span>
         </div>
-        <button class="primary-button onboarding-primary" type="button" data-onboarding-finish>Start planning</button>
+        <div class="onboarding-step" data-onboarding-step="1">
+          <p class="modal__eyebrow">Welcome</p>
+          <h2 id="onboarding-title">Plan what matters. Close the day. Keep the year in view.</h2>
+          <p class="onboarding-personal">This is the planner I use to keep things clear and get things done. I built it around a few habits that have helped me over time, and I’m sharing it in case it helps you too. — Ben</p>
+          <ul class="ob-promises">
+            <li><span class="ob-promise__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.2" r="3.6"/><path d="M5.2 19.8a6.8 6.8 0 0 1 13.6 0"/><path d="m4 4 16 16"/></svg></span><strong>No account</strong><span class="ob-promise__text">Your plans stay in this browser.</span></li>
+            <li><span class="ob-promise__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8c.8 0 1.4.9 1.4 2v4.7l7 4.1v1.8l-7-2.1v4.2l2.1 1.6v1.5L12 19.8l-3.5.8v-1.5l2.1-1.6v-4.2l-7 2.1v-1.8l7-4.1V4.8c0-1.1.6-2 1.4-2Z" transform="rotate(45 12 12)"/></svg></span><strong>Works offline</strong><span class="ob-promise__text">Install it as an app if you like.</span></li>
+            <li><span class="ob-promise__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="4.5" rx="1.2"/><path d="M5 8.5v9.7A1.8 1.8 0 0 0 6.8 20h10.4a1.8 1.8 0 0 0 1.8-1.8V8.5"/><path d="M12 11v5.2M9.6 13.9 12 16.3l2.4-2.4"/></svg></span><strong>Yours to keep</strong><span class="ob-promise__text">Export or back up everything, anytime.</span></li>
+          </ul>
+          <p class="ob-privacy-note" data-privacy-entry hidden>Anonymous usage counts help improve the planner — no identifiers. <button class="privacy-link" type="button" data-privacy-open>Privacy</button></p>
+          <div class="ob-actions"><span></span><button class="primary-button onboarding-primary" type="button" data-onboarding-go="2">Let’s set it up</button></div>
+        </div>
+        <div class="onboarding-step" data-onboarding-step="2" hidden>
+          <p class="modal__eyebrow">Your week · 1 of 3</p>
+          <h2>Which days do you want to plan here?</h2>
+          <p>Workdays, your whole week, or anything in between. You can still open any date.</p>
+          <div class="onboarding-field">
+            <span>Days to include</span>
+            <div class="planning-days-picker planning-days-picker--onboarding" data-onboarding-days>
+              <button type="button" data-onboarding-day="1" aria-pressed="true"><span>M</span><small>Mon</small></button>
+              <button type="button" data-onboarding-day="2" aria-pressed="true"><span>T</span><small>Tue</small></button>
+              <button type="button" data-onboarding-day="3" aria-pressed="true"><span>W</span><small>Wed</small></button>
+              <button type="button" data-onboarding-day="4" aria-pressed="true"><span>T</span><small>Thu</small></button>
+              <button type="button" data-onboarding-day="5" aria-pressed="true"><span>F</span><small>Fri</small></button>
+              <button type="button" data-onboarding-day="6" aria-pressed="false"><span>S</span><small>Sat</small></button>
+              <button type="button" data-onboarding-day="0" aria-pressed="false"><span>S</span><small>Sun</small></button>
+            </div>
+          </div>
+          <div class="onboarding-field">
+            <span>Show my day from</span>
+            <div class="onboarding-hours">
+              <button class="select-trigger select-trigger--wide" type="button" data-onboarding-start-hour aria-haspopup="listbox"></button>
+              <span aria-hidden="true">—</span>
+              <button class="select-trigger select-trigger--wide" type="button" data-onboarding-end-hour aria-haspopup="listbox"></button>
+            </div>
+            <small>You can still plan outside these hours.</small>
+          </div>
+          <div class="ob-actions"><button class="text-button" type="button" data-onboarding-go="1">Back</button><button class="primary-button onboarding-primary" type="button" data-onboarding-go="3">Continue</button></div>
+        </div>
+        <div class="onboarding-step onboarding-step--how" data-onboarding-step="3" hidden>
+          <p class="modal__eyebrow">Your day · 2 of 3</p>
+          <h2>One small loop, every day.</h2>
+          <ol class="ob-loop-list">
+            <li><b>Plan</b><span>Pick one most important outcome, up to two others, and give them real time in your schedule.</span></li>
+            <li><b>Do</b><span>Work the plan. Check things off as they get done.</span></li>
+            <li><b>Close the day</b><span>See what got done, and write down a memory and a lesson.</span></li>
+            <li><b>Decide</b><span>Give unfinished work a date, save it in Unresolved, or forget it. Until you decide, nothing gets lost.</span></li>
+          </ol>
+          <div class="ob-actions"><button class="text-button" type="button" data-onboarding-go="2">Back</button><button class="primary-button onboarding-primary" type="button" data-onboarding-go="4">Continue</button></div>
+        </div>
+        <div class="onboarding-step" data-onboarding-step="4" hidden>
+          <p class="modal__eyebrow">Your year · 3 of 3</p>
+          <h2>Keep the year in view.</h2>
+          <p><b>Horizon</b> holds a Misogi — one hard thing that defines the year — six mini-adventures, three commitments and one winning habit per quarter, a rhythm we owe to <a href="https://jesseitzler.com/" target="_blank" rel="noopener">Jesse Itzler</a>. Every day you close paints a square of your year.</p>
+          <div class="onboarding-field">
+            <span>Appearance</span>
+            <div class="theme-switch theme-switch--compact" role="group" aria-label="Appearance">
+              <button type="button" data-theme-option="system" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="11.5" rx="1.6"/><path d="M8.5 20h7M12 16v4"/></svg><span>System</span></button>
+              <button type="button" data-theme-option="light" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.8v2M12 19.2v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.8 12h2M19.2 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg><span>Light</span></button>
+              <button type="button" data-theme-option="dark" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.6A7.8 7.8 0 0 1 9.4 4.5a7.8 7.8 0 1 0 10.1 10.1Z"/></svg><span>Dark</span></button>
+            </div>
+          </div>
+          <div class="ob-actions"><button class="text-button" type="button" data-onboarding-go="3">Back</button><div class="ob-actions__right"><button class="secondary-button" type="button" data-onboarding-install>Install the app</button><button class="primary-button onboarding-primary" type="button" data-onboarding-finish>Start planning</button></div></div>
+        </div>
       </div>
     </section>
   </div>
@@ -423,6 +514,54 @@
           <h2 id="settings-title">Schedule & categories</h2>
           <p>Choose the hours you actually want to see, then use restrained category colors to scan the day quickly.</p>
         </header>
+
+        <section class="settings-group settings-group--appearance">
+          <div class="settings-group__head">
+            <div>
+              <h3>Appearance</h3>
+              <p>Follow your device, or keep the planner light or dark on this browser.</p>
+            </div>
+          </div>
+          <div class="theme-switch" role="group" aria-label="Appearance">
+            <button type="button" data-theme-option="system" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="11.5" rx="1.6"/><path d="M8.5 20h7M12 16v4"/></svg><span>System</span></button>
+            <button type="button" data-theme-option="light" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.8v2M12 19.2v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.8 12h2M19.2 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg><span>Light</span></button>
+            <button type="button" data-theme-option="dark" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.6A7.8 7.8 0 0 1 9.4 4.5a7.8 7.8 0 1 0 10.1 10.1Z"/></svg><span>Dark</span></button>
+          </div>
+        </section>
+
+        <section class="settings-group settings-group--devices">
+          <div class="settings-group__head">
+            <div>
+              <h3>Your devices</h3>
+              <p>Use the planner like an app, and keep the same plans on your phone and computer.</p>
+            </div>
+          </div>
+          <div class="device-actions">
+            <button type="button" class="device-action" data-install-open>
+              <span class="device-action__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="12.5" rx="2"/><path d="M12 8.5v5.5M9.5 11.5 12 14l2.5-2.5M8.5 20h7"/></svg></span>
+              <span><strong>Install the app</strong><small>Its own window, works offline</small></span>
+            </button>
+            <button type="button" class="device-action" data-sync-guide-open>
+              <span class="device-action__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="13" height="9.5" rx="1.6"/><path d="M1.5 17.5h15"/><rect x="16.5" y="8.5" width="5.5" height="11" rx="1.4"/></svg></span>
+              <span><strong>Sync on all my devices</strong><small>Free with Google Drive — see how</small></span>
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-group settings-group--plus">
+          <div class="settings-group__head">
+            <div>
+              <h3>Daily Planner Plus</h3>
+              <p>New things for your year, paid once. The planner itself stays free.</p>
+            </div>
+          </div>
+          <div class="device-actions device-actions--single">
+            <button type="button" class="device-action plus-entry" data-plus-open>
+              <span class="device-action__icon plus-entry__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 13.9 9l5.5 1.9-5.5 1.9L12 18.3l-1.9-5.5-5.5-1.9L10.1 9Z"/><path d="M18.6 3.8v3.4M16.9 5.5h3.4"/></svg></span>
+              <span><strong>Daily Planner Plus</strong><small data-plus-status>Plan your year, your year in review and more</small></span>
+            </button>
+          </div>
+        </section>
 
         <section class="settings-group">
           <div class="settings-group__head">
@@ -475,36 +614,6 @@
           </div>
         </section>
 
-        <section class="settings-group" data-personal-sync hidden>
-          <div class="settings-group__head">
-            <div>
-              <h3>Personal sync</h3>
-              <p>Keep this planner available on your devices without creating a Daily Planner account. The current sync state lives in your own Google Drive app-data space.</p>
-            </div>
-          </div>
-          <div class="personal-sync-card">
-            <div class="personal-sync-card__main">
-              <div class="personal-sync-provider-mark" aria-hidden="true">G</div>
-              <div>
-                <strong data-personal-sync-status>Not connected</strong>
-                <span data-personal-sync-detail>Your planner stays local until you choose to connect it.</span>
-              </div>
-            </div>
-            <div class="personal-sync-card__actions">
-              <button class="secondary-button" type="button" data-personal-sync-primary>Connect Google Drive</button>
-              <button class="text-button" type="button" data-personal-sync-disconnect hidden>Disconnect</button>
-            </div>
-          </div>
-          <div class="personal-sync-conflicts" data-personal-sync-conflict-actions hidden>
-            <span>Changes were made to the same planner record on both sides.</span>
-            <div>
-              <button class="secondary-button" type="button" data-personal-sync-use-remote>Use Google Drive</button>
-              <button class="primary-button" type="button" data-personal-sync-keep-local>Keep this device</button>
-            </div>
-          </div>
-          <p class="personal-sync-recovery" data-personal-sync-recovery>Recovery snapshots are created on this device before remote changes are applied.</p>
-        </section>
-
         <section class="settings-group">
           <div class="settings-group__head">
             <div>
@@ -515,7 +624,78 @@
           <div class="category-settings" data-category-settings></div>
         </section>
 
+        <section class="settings-group" data-personal-sync hidden>
+          <div class="settings-group__head">
+            <div>
+              <h3>Personal sync</h3>
+              <p>Optional Google Drive sync for your devices. The planner stays local-first; Drive only carries the sync file.</p>
+            </div>
+          </div>
+          <div class="personal-sync-card">
+            <div class="personal-sync-card__main">
+              <div class="personal-sync-provider-mark" aria-hidden="true">
+                <img src="./assets/google-drive.svg" alt="" width="22" height="22" decoding="async">
+              </div>
+              <div>
+                <strong data-personal-sync-status>Not connected</strong>
+                <span data-personal-sync-detail>Your planner stays local until you choose to connect it.</span>
+              </div>
+            </div>
+            <div class="personal-sync-card__actions">
+              <button class="text-button personal-sync-disconnect" type="button" data-personal-sync-disconnect hidden>Disconnect</button>
+              <button class="secondary-button" type="button" data-personal-sync-primary>Connect Google Drive</button>
+            </div>
+            <div class="personal-sync-conflicts" data-personal-sync-conflict-actions hidden>
+              <span data-personal-sync-conflict-copy></span>
+              <div class="personal-sync-conflicts__actions">
+                <button class="secondary-button" type="button" data-personal-sync-use-remote>Use Google Drive</button>
+                <button class="primary-button" type="button" data-personal-sync-keep-local>Keep this device</button>
+              </div>
+            </div>
+          </div>
+          <p class="personal-sync-recovery" data-personal-sync-recovery>Recovery snapshots are created on this device before remote changes are applied.</p>
+        </section>
 
+        <section class="settings-group" data-privacy-entry hidden>
+          <div class="settings-group__head">
+            <div>
+              <h3>Privacy</h3>
+              <p>Your plans stay in this browser. This copy also keeps a few anonymous counts to improve the planner.</p>
+            </div>
+          </div>
+          <div class="device-actions device-actions--single">
+            <button type="button" class="device-action" data-privacy-open>
+              <span class="device-action__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.2 5.2 5.9v5.3c0 4.3 2.9 7.9 6.8 9.5 3.9-1.6 6.8-5.2 6.8-9.5V5.9Z"/><path d="m9.2 12 2 2 3.7-3.9"/></svg></span>
+              <span><strong>What this copy shares</strong><small data-privacy-status>Anonymous usage counts are on</small></span>
+            </button>
+          </div>
+        </section>
+
+
+      </div>
+    </section>
+  </div>
+
+  <!-- Before the Add category dialog: that one stacks on top of it (block editor → Manage → Add). -->
+  <div class="modal modal--small modal--categories" data-category-manage-modal hidden>
+    <button class="modal__backdrop" type="button" data-modal-close aria-label="Close categories"></button>
+    <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="category-manage-title" tabindex="-1">
+      <button class="modal__close icon-button" type="button" data-modal-close aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
+      </button>
+      <div class="modal__scroll">
+        <header class="modal__header">
+          <p class="modal__eyebrow">Categories &amp; projects</p>
+          <h2 id="category-manage-title">Manage categories</h2>
+          <p>Rename, recolor, archive or add. Archived categories leave new blocks but stay in past statistics.</p>
+        </header>
+        <div class="category-settings category-settings--dialog" data-category-settings></div>
+        <div class="modal__actions">
+          <span></span>
+          <div class="modal__actions-right">
+            <button class="primary-button" type="button" data-category-manage-done>Done</button>
+          </div>
+        </div>
       </div>
     </section>
   </div>
@@ -598,16 +778,16 @@
 
   <div class="modal modal--horizon" data-horizon-modal hidden>
     <button class="modal__backdrop" type="button" data-modal-close aria-label="Close horizon"></button>
-    <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="horizon-title">
+    <section class="modal__panel hz-shell" role="dialog" aria-modal="true" aria-labelledby="horizon-title" tabindex="-1">
       <button class="modal__close icon-button" type="button" data-modal-close aria-label="Close">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
       </button>
-      <header class="modal__header horizon-header">
-        <h2 id="horizon-title" data-horizon-title class="sr-only">Horizon</h2>
-        <div class="horizon-title-row"><div class="horizon-nav horizon-nav--title" data-horizon-nav></div></div>
+      <header class="hz-head" data-horizon-nav>
+        <h2 id="horizon-title">Horizon</h2>
       </header>
-      <div class="modal__scroll horizon-scroll">
-        <div class="horizon-content" data-horizon-content></div>
+      <nav class="hz-tabs" data-horizon-tabs aria-label="Horizon sections"></nav>
+      <div class="modal__scroll hz-scroll" data-horizon-scroll>
+        <div class="hz-content" data-horizon-content></div>
       </div>
     </section>
   </div>
@@ -643,7 +823,7 @@
         <header class="modal__header">
           <p class="modal__eyebrow">Unresolved</p>
           <h2 id="open-work-title">Decide what still deserves attention.</h2>
-          <p>Plan puts an item on a date. Keep stores it safely without a date. Drop removes it from Unresolved without erasing its history.</p>
+          <p>Plan puts an item on a date. Save stores it safely without a date. Forget removes it from Unresolved without erasing its history.</p>
         </header>
         <div class="stats-tabs open-work-tabs" role="tablist" aria-label="Unresolved type">
           <button type="button" class="is-active" data-open-work-view="needs" role="tab" aria-selected="true"><span>Needs attention</span><span class="open-work-tab-count" data-open-work-count="needs">0</span></button>
@@ -671,6 +851,7 @@
           <h2 id="day-closed-title" data-day-closed-title></h2>
           <p data-day-closed-copy></p>
         </header>
+        <section class="day-closed-progress" data-day-closed-progress hidden aria-live="polite"></section>
         <div class="week-review-summary" data-week-review-summary hidden></div>
         <section class="day-closed-prep" data-next-day-prep hidden>
           <header class="day-closed-prep__head">
@@ -693,23 +874,47 @@
     </section>
   </div>
 
-  <div class="modal modal--small" data-install-modal hidden>
-    <button class="modal__backdrop" type="button" data-install-later aria-label="Not now"></button>
+  <div class="modal modal--install" data-install-modal hidden>
+    <button class="modal__backdrop" type="button" data-modal-close aria-label="Close"></button>
     <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="install-title">
-      <button class="modal__close icon-button" type="button" data-install-later aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
-      <div class="modal__scroll">
-        <header class="modal__header">
-          <p class="modal__eyebrow">Install app</p>
-          <h2 id="install-title">Keep your planner one click away.</h2>
-          <p>Install Daily Planner on this device for a focused, app-like experience that also works offline.</p>
-        </header>
-        <div class="modal__actions">
-          <button class="text-button" type="button" data-install-later>Not now</button>
-          <div class="modal__actions-right"><button class="primary-button" type="button" data-install-confirm>Install</button></div>
-        </div>
-      </div>
+      <button class="modal__close icon-button" type="button" data-modal-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+      <div class="modal__scroll" data-install-body></div>
     </section>
   </div>
+
+  <div class="modal modal--sync-guide" data-sync-guide-modal hidden>
+    <button class="modal__backdrop" type="button" data-modal-close aria-label="Close"></button>
+    <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="sync-guide-title">
+      <button class="modal__close icon-button" type="button" data-modal-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+      <div class="modal__scroll sync-guide" data-sync-guide></div>
+    </section>
+  </div>
+
+  <div class="modal modal--feedback" data-feedback-modal hidden>
+    <button class="modal__backdrop" type="button" data-modal-close aria-label="Close"></button>
+    <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="feedback-title">
+      <button class="modal__close icon-button" type="button" data-modal-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+      <div class="modal__scroll" data-feedback></div>
+    </section>
+  </div>
+
+  <!-- Before the Privacy notice: that one stacks on top of it (Settings → Plus → Privacy). -->
+  <div class="modal modal--plus" data-plus-modal hidden>
+    <button class="modal__backdrop" type="button" data-modal-close aria-label="Close Daily Planner Plus"></button>
+    <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="plus-title">
+      <button class="modal__close icon-button" type="button" data-modal-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+      <div class="modal__scroll plus-dialog" data-plus></div>
+    </section>
+  </div>
+
+  <div class="modal modal--privacy" data-privacy-modal hidden>
+    <button class="modal__backdrop" type="button" data-modal-close aria-label="Close"></button>
+    <section class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="privacy-title">
+      <button class="modal__close icon-button" type="button" data-modal-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
+      <div class="modal__scroll" data-privacy></div>
+    </section>
+  </div>
+
 
   <div class="modal modal--small" data-sponsor-modal hidden>
     <button class="modal__backdrop" type="button" data-sponsor-later aria-label="Not now"></button>
@@ -755,7 +960,7 @@
         <header class="modal__header">
           <p class="modal__eyebrow">Reopen day</p>
           <h2 id="reopen-title">Reopen this day?</h2>
-          <p>The decisions made when you closed it will be undone: copied tasks and schedule blocks are removed from their destination, and anything kept in Unresolved returns here. You can close the day again when you are ready.</p>
+          <p>The decisions made when you closed it will be undone: copied tasks and schedule blocks are removed from their destination, and anything saved in Unresolved returns here. You can close the day again when you are ready.</p>
         </header>
         <div class="modal__actions">
           <button class="text-button" type="button" data-modal-close>Cancel</button>
@@ -805,6 +1010,7 @@
           <p>This permanently removes every saved day, category and planner setting stored by this app in this browser. This cannot be undone after deletion.</p>
         </header>
         <div class="reset-warning"><strong>Export first if you may want this data later.</strong><span>Your backup contains planner settings and every locally saved day.</span></div>
+        <p class="reset-plus-note" data-plus-reset-note hidden>Daily Planner Plus stays active on this planner.</p>
         <div class="modal__actions reset-actions">
           <button class="secondary-button icon-text-button" type="button" data-reset-export><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg><span>Export backup</span></button>
           <div class="modal__actions-right"><button class="text-button" type="button" data-modal-close>Cancel</button><button class="primary-button primary-button--danger" type="button" data-reset-confirm>Delete everything</button></div>
@@ -862,6 +1068,18 @@
           <h2 id="help-title">Plan outcomes, then protect the time.</h2>
           <p>This planner is local-first: your daily plans stay on this device unless you explicitly enable personal sync or export them.</p>
         </header>
+        <div class="help-feedback" data-help-feedback hidden>
+          <span><strong>Version <span data-app-version></span></strong> · What’s new in this release, and a place to tell us what to keep, change or fix.</span>
+          <button class="secondary-button" type="button" data-feedback-open>Send feedback</button>
+        </div>
+        <div class="help-feedback help-privacy" data-privacy-entry hidden>
+          <span><strong>Privacy</strong> · What this copy sends, and what never leaves your browser.</span>
+          <button class="secondary-button" type="button" data-privacy-open>Read the notice</button>
+        </div>
+        <div class="help-feedback help-teams">
+          <span><strong>For teams</strong> · Plan the year together at your January kickoff.</span>
+          <a class="secondary-button" href="./welcome/#teams" target="_blank" rel="noopener">See the team kit</a>
+        </div>
 
         <div class="help-content">
           <section class="github-support help-priority-card" hidden>
@@ -883,7 +1101,8 @@
               <div><span>Journal</span><kbd>J</kbd></div><div><span>Time stats</span><kbd>S</kbd></div>
               <div><span>Print</span><kbd>P</kbd></div><div><span>Export</span><kbd>E</kbd></div>
               <div><span>Settings</span><kbd>G</kbd></div><div><span>How it works</span><kbd>H</kbd></div>
-              <div><span>Add schedule task</span><kbd>T</kbd></div><div><span>Checkbox in Notes</span><kbd>//</kbd></div><div><span>Close / reopen day</span><kbd>D</kbd></div>
+              <div><span>Add a time block</span><kbd>T</kbd></div><div><span>Checkbox in Notes</span><kbd>//</kbd></div><div><span>Close / reopen day</span><kbd>D</kbd></div>
+              <div><span>Horizon sections</span><kbd>1–7</kbd></div><div><span>Add to Horizon</span><kbd>+</kbd></div>
             </div></div></div>
           </details>
 
@@ -891,12 +1110,14 @@
           <details class="help-faq" open><summary><h3>2. Make every task verifiable</h3></summary><div class="help-faq__reveal"><div><div class="example-list"><div><span>Too vague</span><s>Work on the report</s><strong>Draft the introduction and section 1 (max 3 pages)</strong></div><div><span>Too vague</span><s>Tidy the desk</s><strong>Discard old papers from the top drawer</strong></div><div><span>Too vague</span><s>Emails</s><strong>Process the inbox and reach Inbox Zero</strong></div></div></div></div></details>
           <details class="help-faq" open><summary><h3>3. Put work on the schedule</h3></summary><div class="help-faq__reveal"><div><p>Click an empty slot to create a block. Click an existing block to edit it. Hold briefly and drag to move it; resize from the lower edge. The calendar action beside a task schedules that specific item. Start and End accept typed times or 15-minute menus, and a block can cross midnight for up to 24 hours.</p></div></div></details>
           <details class="help-faq" open><summary><h3>4. Categories and statistics</h3></summary><div class="help-faq__reveal"><div><p>Categories can represent projects or areas of life. Choose from three distinct color palettes, then archive a category when it is no longer active: its historical blocks keep their identity, but it disappears from new planning. Archived categories remain visible in Settings and can be restored. Day and Week statistics are derived from scheduled blocks.</p></div></div></details>
-          <details class="help-faq" open><summary><h3>5. Choose the schedule range</h3></summary><div class="help-faq__reveal"><div><p>Settings lets you choose the hours you want visible and the days you normally plan. Week view shows those planning days side by side; Close day uses them to find the next planning day. Inactive days are never blocked — you can still open or schedule them manually.</p></div></div></details>
-          <details class="help-faq" open><summary><h3>6. Close the day deliberately</h3></summary><div class="help-faq__reveal"><div><p>Every unfinished item can go to a specific date, be <strong>Kept</strong> safely without a date in Unresolved, or be <strong>Dropped</strong>. The carried count and original date remain attached so repeated postponement stays visible.</p></div></div></details>
+          <details class="help-faq" open><summary><h3>5. Choose the schedule range</h3></summary><div class="help-faq__reveal"><div><p>Settings lets you choose the hours you want visible and the days you normally plan. Week view shows those planning days side by side, each with its main outcome above its schedule; Close day uses them to find the next planning day. Inactive days are never blocked — you can still open or schedule them manually.</p></div></div></details>
+          <details class="help-faq" open><summary><h3>6. Close the day deliberately</h3></summary><div class="help-faq__reveal"><div><p>Every unfinished item can go to a specific date, be <strong>Saved</strong> safely without a date in Unresolved, or be <strong>Forgotten</strong> — taken off your plate while its day keeps the history. The carried count and original date remain attached so repeated postponement stays visible.</p></div></div></details>
           <details class="help-faq" open><summary><h3>7. Keep the horizon visible</h3></summary><div class="help-faq__reveal"><div><p>Horizon keeps the year visible without turning it into another task manager, using a yearly rhythm inspired by Jesse Itzler: one Misogi period, three meaningful commitments, up to six Mini-adventures, quarterly Winning habits and significant Key dates grouped in the Year map. Winning habits are checked when you close the day; their activity stays available on demand.</p></div></div></details>
           <details class="help-faq" open><summary><h3>8. Find and change your view</h3></summary><div class="help-faq__reveal"><div><p>Search scans saved planner days. Press <strong>F</strong> outside a text field. Fit app to width enlarges only this planner — it never changes browser zoom for the rest of your domain.</p></div></div></details>
           <details class="help-faq" open><summary><h3>9. Floating mode & print</h3></summary><div class="help-faq__reveal"><div><p>Picture-in-Picture keeps a compact editable Plan / Schedule view while you work elsewhere. Print is optimized for a landscape planner sheet and hides editing controls.</p></div></div></details>
-          <details class="help-faq" open><summary><h3>10. Install it without creating an account</h3></summary><div class="help-faq__reveal"><div><p>Use your browser’s install action when it is available. On iPhone or iPad in Safari, use <strong>Share → Add to Home Screen</strong>. In Chromium browsers, look for <strong>Install app</strong> in the address bar or browser menu. The installed app uses the same local planner data and can work offline after the production app has been loaded once.</p></div></div></details>
+          <details class="help-faq" open><summary><h3>10. On your phone</h3></summary><div class="help-faq__reveal"><div><p><strong>Plan</strong> and <strong>Schedule</strong> sit at the bottom of the screen, and each says where you stand: how much of the plan is done, and what is on now or next. In Week view, Plan lists your week day by day and Schedule shows the week grid — tap a day to open it. Search, Journal, Unresolved and Horizon are in the header; everything else is under More.</p></div></div></details>
+          <details class="help-faq" open><summary><h3>11. Daily Planner Plus</h3></summary><div class="help-faq__reveal"><div><p>Plus is paid once and yours for life: Plan your year, Your year in review and five more colours for your painted year — and everything Plus gets later. Open it from Settings or More → Daily Planner Plus. A gift link or a licence activates it too. It is checked on this device, without an account, and travels with your planner through sync and backups.</p></div></div></details>
+          <details class="help-faq" open><summary><h3>12. Install it without creating an account</h3></summary><div class="help-faq__reveal"><div><p>Use your browser’s install action when it is available. On iPhone or iPad in Safari, use <strong>Share → Add to Home Screen</strong>. In Chromium browsers, look for <strong>Install app</strong> in the address bar or browser menu. The installed app uses the same local planner data and can work offline after the production app has been loaded once.</p><p><button class="secondary-button" type="button" data-install-open>Show me how on this device</button></p></div></div></details>
         </div>
 
 

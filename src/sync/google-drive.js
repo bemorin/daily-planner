@@ -6,8 +6,9 @@ const SYNC_FILE_NAME = 'daily-planner-sync.json';
 
 let gisPromise = null;
 
-function loadGoogleIdentityScript(documentRef = document) {
+function loadGoogleIdentityScript(documentRef = typeof document !== 'undefined' ? document : null) {
   if (globalThis.google?.accounts?.oauth2) return Promise.resolve();
+  if (!documentRef?.head) return Promise.reject(new Error('Google Identity Services require a document.'));
   if (gisPromise) return gisPromise;
   gisPromise = new Promise((resolve, reject) => {
     const existing = documentRef.querySelector(`script[src="${GIS_SRC}"]`);
@@ -41,39 +42,83 @@ async function parseJson(response) {
   return response.json();
 }
 
-export function createGoogleDriveProvider({ clientId, fetchImpl = fetch, documentRef = document } = {}) {
+export class GoogleAuthRequiredError extends Error {
+  constructor(message = 'Google Drive authorization is required.') {
+    super(message);
+    this.name = 'GoogleAuthRequiredError';
+    this.code = 'auth-required';
+  }
+}
+
+export function createGoogleDriveProvider({
+  clientId,
+  fetchImpl = fetch,
+  documentRef = typeof document !== 'undefined' ? document : null,
+  oauth2 = null
+} = {}) {
   const cleanClientId = String(clientId || '').trim();
   let token = null;
   let tokenExpiresAt = 0;
+  let authFlight = null;
+  let interactiveAuthCalls = 0;
 
   const tokenValid = () => !!token && Date.now() < tokenExpiresAt - 30_000;
+  const hasUsableToken = () => tokenValid();
 
-  async function ensureToken({ interactive = false } = {}) {
+  function getOauth2() {
+    return oauth2 || globalThis.google?.accounts?.oauth2 || null;
+  }
+
+  /**
+   * Interactive authorization only. Automatic / opportunistic paths must never
+   * call this — GIS requestAccessToken can open OAuth UI even with prompt:none.
+   */
+  async function requestInteractiveAccessToken() {
     if (tokenValid()) return token;
     if (!cleanClientId) throw new Error('Google Drive sync is not configured for this deployment.');
-    await loadGoogleIdentityScript(documentRef);
-    return new Promise((resolve, reject) => {
-      const callback = response => {
-        if (response?.error || !response?.access_token) {
-          reject(new Error(response?.error_description || response?.error || 'Google authorization was not completed.'));
-          return;
-        }
-        token = response.access_token;
-        tokenExpiresAt = Date.now() + Math.max(0, Number(response.expires_in) || 0) * 1000;
-        resolve(token);
-      };
-      const tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: cleanClientId,
-        scope: DRIVE_SCOPE,
-        callback,
-        error_callback: event => reject(new Error(event?.type || 'Google authorization failed.'))
+    if (authFlight) return authFlight;
+
+    authFlight = (async () => {
+      interactiveAuthCalls += 1;
+      if (!getOauth2()) await loadGoogleIdentityScript(documentRef);
+      const api = getOauth2();
+      if (!api?.initTokenClient) throw new Error('Google Identity Services are unavailable.');
+
+      return new Promise((resolve, reject) => {
+        const callback = response => {
+          if (response?.error || !response?.access_token) {
+            reject(new Error(response?.error_description || response?.error || 'Google authorization was not completed.'));
+            return;
+          }
+          token = response.access_token;
+          tokenExpiresAt = Date.now() + Math.max(0, Number(response.expires_in) || 0) * 1000;
+          resolve(token);
+        };
+        const tokenClient = api.initTokenClient({
+          client_id: cleanClientId,
+          scope: DRIVE_SCOPE,
+          callback,
+          error_callback: event => reject(new Error(event?.type || 'Google authorization failed.'))
+        });
+        // Empty prompt is intentional for an explicit Connect / Reconnect gesture.
+        tokenClient.requestAccessToken({ prompt: '' });
       });
-      tokenClient.requestAccessToken({ prompt: interactive ? '' : 'none' });
-    });
+    })();
+
+    try {
+      return await authFlight;
+    } finally {
+      authFlight = null;
+    }
+  }
+
+  function requireUsableToken() {
+    if (tokenValid()) return token;
+    throw new GoogleAuthRequiredError('Reconnect Google Drive to continue syncing.');
   }
 
   async function authorizedFetch(url, options = {}) {
-    const accessToken = await ensureToken({ interactive: false });
+    const accessToken = requireUsableToken();
     return fetchImpl(url, {
       ...options,
       headers: { ...(options.headers || {}), Authorization: `Bearer ${accessToken}` }
@@ -114,7 +159,7 @@ export function createGoogleDriveProvider({ clientId, fetchImpl = fetch, documen
 
   async function write(documentValue, { fileId = '' } = {}) {
     const id = fileId || (await findFile())?.id || await createFile();
-    const accessToken = await ensureToken({ interactive: false });
+    const accessToken = requireUsableToken();
     const response = await fetchImpl(`${DRIVE_UPLOAD}/${encodeURIComponent(id)}?uploadType=media&fields=id,modifiedTime,size`, {
       method: 'PATCH',
       headers: {
@@ -126,8 +171,9 @@ export function createGoogleDriveProvider({ clientId, fetchImpl = fetch, documen
     return parseJson(response);
   }
 
-  async function authorize({ interactive = true } = {}) {
-    await ensureToken({ interactive });
+  /** Explicit user-gesture Connect / Reconnect only. */
+  async function authorizeInteractive() {
+    await requestInteractiveAccessToken();
     return true;
   }
 
@@ -136,5 +182,21 @@ export function createGoogleDriveProvider({ clientId, fetchImpl = fetch, documen
     tokenExpiresAt = 0;
   }
 
-  return { authorize, clearToken, read, write, scope: DRIVE_SCOPE, configured: !!cleanClientId };
+  /** Test / diagnostics helpers. */
+  function setAccessTokenForTests(accessToken, expiresInMs = 3_600_000) {
+    token = accessToken || null;
+    tokenExpiresAt = accessToken ? Date.now() + expiresInMs : 0;
+  }
+
+  return {
+    authorizeInteractive,
+    clearToken,
+    hasUsableToken,
+    read,
+    write,
+    scope: DRIVE_SCOPE,
+    configured: !!cleanClientId,
+    get interactiveAuthCalls() { return interactiveAuthCalls; },
+    setAccessTokenForTests
+  };
 }
