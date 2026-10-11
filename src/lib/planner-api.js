@@ -40,7 +40,24 @@ export const COUNTED_EVENTS = Object.freeze([
   ['gift_opened', 'opened a gift link'],
   ['gift_redeemed', 'activated a gift'],
   ['year_plan_completed', 'finished planning a year'],
-  ['year_review_opened', 'opened a year in review']
+  ['year_review_opened', 'opened a year in review'],
+  ['review_sent', 'left a review that may be quoted'],
+  // Usage, counted at most once per day, week or month on a device (see
+  // trackOncePer): how many devices use the planner, and which parts of it.
+  ['app_active_day', 'opened the planner on a day'],
+  ['app_active_week', 'opened the planner during a week'],
+  ['app_active_month', 'opened the planner during a month'],
+  ['app_installed_day', 'opened the installed app on a day'],
+  ['day_closed', 'closed a day'],
+  ['week_view_opened', 'opened the week view on a day'],
+  ['horizon_opened', 'opened Horizon on a day'],
+  ['progress_opened', 'opened Progress on a day'],
+  ['journal_opened', 'opened the journal on a day'],
+  ['unresolved_opened', 'opened Unresolved on a day'],
+  ['stats_opened', 'opened statistics on a day'],
+  ['search_opened', 'searched on a day'],
+  ['pip_opened', 'used the floating window on a day'],
+  ['print_used', 'printed on a day']
 ]);
 /** Moments the public landing page (welcome/) counts; its own notice lists them. */
 export const LANDING_EVENTS = Object.freeze([
@@ -52,7 +69,10 @@ export const LANDING_EVENTS = Object.freeze([
   ['manager_email_opened', 'prepared the message for a manager'],
   ['plus_checkout_clicked', 'went to buy Plus'],
   ['pack_checkout_clicked', 'went to buy a team gift'],
-  ['gift_link_copied', 'copied a team gift link']
+  ['gift_link_copied', 'copied a team gift link'],
+  ['plus_viewed', 'scrolled to Plus'],
+  ['teams_viewed', 'scrolled to the team gift'],
+  ['pricing_viewed', 'scrolled to the prices']
 ]);
 const COUNTED = new Set([...COUNTED_EVENTS, ...LANDING_EVENTS].map(([name]) => name));
 
@@ -82,6 +102,48 @@ export function trackEvent(name) {
       body: JSON.stringify({ name, version: APP_VERSION })
     }).catch(() => {});
   } catch (_) {}
+}
+
+const ONCE_KEY = 'daily-planner-ui:counted';
+const pad2 = value => String(value).padStart(2, '0');
+
+/** Local period keys: 2026-10-11 (day), 2026-W41 (ISO week), 2026-10 (month). */
+export function periodKey(period, date = new Date()) {
+  if (period === 'month') return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
+  if (period === 'week') {
+    const day = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    day.setUTCDate(day.getUTCDate() + 4 - (day.getUTCDay() || 7));
+    const yearStart = Date.UTC(day.getUTCFullYear(), 0, 1);
+    const week = Math.ceil(((day - yearStart) / 86400000 + 1) / 7);
+    return `${day.getUTCFullYear()}-W${pad2(week)}`;
+  }
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+/**
+ * Counts `name` at most once per local day, ISO week or month on this device,
+ * so the dashboard can tell devices apart from repeated clicks without any
+ * identifier ever leaving the device. Returns true when a count was sent.
+ */
+export function trackOncePer(period, name, { date = new Date(), storage = globalThis.localStorage } = {}) {
+  // Offline, nothing is sent — so the period is not marked as counted either.
+  if (!plannerApiEnabled() || !COUNTED.has(name) || !usageCountsEnabled(storage) || globalThis.navigator?.onLine === false) return false;
+  const key = periodKey(period, date);
+  let seen = {};
+  try { seen = JSON.parse(storage?.getItem(ONCE_KEY) || '{}') || {}; } catch (_) { seen = {}; }
+  if (seen[name] === key) return false;
+  seen[name] = key;
+  try { storage?.setItem(ONCE_KEY, JSON.stringify(seen)); } catch (_) { return false; }
+  trackEvent(name);
+  return true;
+}
+
+/** Planner opened: daily, weekly and monthly active counts, and installed-app days. */
+export function trackAppActive({ installed = false, date = new Date() } = {}) {
+  trackOncePer('day', 'app_active_day', { date });
+  trackOncePer('week', 'app_active_week', { date });
+  trackOncePer('month', 'app_active_month', { date });
+  if (installed) trackOncePer('day', 'app_installed_day', { date });
 }
 
 async function postJson(path, body) {
@@ -127,4 +189,12 @@ export const sendFeedback = payload => postJson('feedback', { platform: platform
 /** Gift codes go in the path in their canonical XXXX-XXXX-XXXX form. */
 export const fetchGift = code => request(`gifts/${encodeURIComponent(code)}`, { method: 'GET' });
 export const redeemGift = code => request(`gifts/${encodeURIComponent(code)}/redeem`, { body: {} });
-export const claimPurchase = session => request('purchases/claim', { body: { session } });
+/** Confirms a Creem checkout (`checkout_id` on the return URL) and returns a licence or a gift. */
+export const claimPurchase = (checkout, { expect = '' } = {}) => request('purchases/claim', { body: expect ? { checkout, expect } : { checkout } });
+/** Which items and currencies can be bought right now: { plus: ['EUR','USD'], gift: [...], test }. */
+export const checkoutOptions = () => request('checkout', { method: 'GET' });
+/**
+ * Opens a Creem checkout for Plus (`item: 'plus'`) or a team gift (`item: 'gift'`, `plan`
+ * from TEAM_TIERS) in `currency`. Answers { ok, url } — the caller sends the browser there.
+ */
+export const startCheckout = ({ item, plan = '', currency }) => request('checkout', { body: { item, plan, currency } });

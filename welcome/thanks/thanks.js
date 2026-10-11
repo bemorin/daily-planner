@@ -1,21 +1,23 @@
 // Imported as a namespace so a value missing from an older config.js reads as
 // undefined instead of failing the whole module.
 import * as config from '../../src/config.js';
-import { trackEvent, plannerApiEnabled } from '../../src/lib/planner-api.js';
+import { trackEvent, plannerApiEnabled, claimPurchase } from '../../src/lib/planner-api.js';
+import { giftPageParams, isDefaultCompany } from '../landing-model.js';
 
 /* ============================================================================
-   Team gift manage page (/welcome/thanks/).
+   Your gift page (/welcome/thanks/): a private page with the gift link, the
+   seats used and the message the team sees.
 
-   ?session=cs_…          after a Stripe payment: POST /purchases/claim
-   ?gift=CODE&key=KEY     a gift made by invoice (or a bookmark): GET /gifts/:code
+   ?checkout_id=…         back from the payment page (Creem): POST /purchases/claim
+   ?session=…             an older confirmation link: claimed the same way
+   ?gift=CODE&key=KEY     the gift page link (email, bookmark, gifts made by invoice)
 
-   The manage key only travels to PATCH /gifts/:code; the page never stores it.
+   The key only travels to PATCH /gifts/:code; the page never stores it.
    ============================================================================ */
 
 const API = typeof config.PLANNER_API_URL === 'string' ? config.PLANNER_API_URL : '';
 const apiOn = plannerApiEnabled();
 const CODE_RE = /^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{12}$/;
-const SESSION_RE = /^cs_(?:live|test)_[A-Za-z0-9_]{1,250}$/;
 const KEY_RE = /^[a-f0-9]{64}$/i;
 const MESSAGE_MAX = 280;
 const ORG_MAX = 80;
@@ -98,9 +100,9 @@ function showLoading(text) {
 
 const ERRORS = {
   off: ['Gifts can’t be looked up here', 'This copy of the site runs without its API, so there’s no gift to show. Open the link from your email on planner.bemorin.com.'],
-  empty: ['Nothing to show yet', 'This page manages a team gift. Open it from the link in your confirmation email.'],
+  empty: ['Nothing to show yet', 'This is the gift page of a team gift. Open it from the link in your email.'],
   unpaid: ['Your payment is still being confirmed', 'This usually takes a few seconds. Check again in a moment; the gift link will also arrive by email once the payment is confirmed.'],
-  noSession: ['We couldn’t find this payment', 'The link may be incomplete. Open the page from your confirmation email, or ask us and we’ll send your gift link.'],
+  noSession: ['We couldn’t find this payment', 'The link may be incomplete. Open your gift page from the link in your email, or ask us and we’ll send your gift link.'],
   paymentsOff: ['Card payments aren’t switched on yet', 'This site can’t confirm card payments yet. If you’ve paid, ask us and we’ll send your gift link.'],
   badCode: ['This gift link looks incomplete', 'A gift code has 12 letters and digits, like ABCD-EFGH-JKLM. Open the page from the link in your email.'],
   noGift: ['We couldn’t find this gift', 'Check that you opened the full link from your email. If it still doesn’t work, ask us.'],
@@ -111,6 +113,7 @@ const ERRORS = {
 
 function showError(kind, { retry = null, detail = '', about = false } = {}) {
   const [title, text] = ERRORS[kind] || ERRORS.generic;
+  qs('[data-error-kicker]').textContent = 'Your gift page';
   qs('[data-error-title]').textContent = title;
   qs('[data-error-text]').textContent = detail || text;
   const button = qs('[data-retry]');
@@ -128,12 +131,13 @@ const failure = (result, retry) => {
   return showError('generic', { retry, detail: typeof result.data.error === 'string' ? result.data.error : '' });
 };
 
-function showPlus(session) {
+function showPlus(checkout) {
+  qs('[data-error-kicker]').textContent = 'Daily Planner Plus';
   qs('[data-error-title]').textContent = 'Your Plus is ready';
   qs('[data-error-text]').textContent = 'This payment was for Daily Planner Plus for one person. Open your planner on the device you use, and Plus is activated there.';
   qs('[data-retry]').hidden = true;
   const open = qs('[data-plus-open]');
-  open.href = `../../?purchase=${encodeURIComponent(session)}`;
+  open.href = `../../?purchase=${encodeURIComponent(checkout)}`;
   open.hidden = false;
   qs('[data-about]').hidden = true;
   show('error');
@@ -155,8 +159,11 @@ function readGift(data) {
   };
 }
 
+// The name people see, or none yet: the buyer typed no company at checkout.
+const companyName = gift => (isDefaultCompany(gift.org) ? '' : gift.org.trim());
+
 function forwardEmail(gift) {
-  const org = gift.org || 'our company';
+  const org = companyName(gift) || 'our company';
   return {
     subject: `A year-end gift from ${org}: Daily Planner Plus`,
     body: [
@@ -201,18 +208,40 @@ function renderForward() {
 
 function renderMessageForm() {
   const form = qs('[data-message-form]');
-  form.elements.org.value = state.gift.org;
+  form.elements.org.value = companyName(state.gift);
   form.elements.message.value = state.gift.message;
   qs('[data-message-count]').textContent = `${form.elements.message.value.length}/${MESSAGE_MAX}`;
   const locked = !state.key;
   [form.elements.org, form.elements.message, qs('[data-save]', form)].forEach(node => { node.disabled = locked; });
   qs('[data-message-locked]', form).hidden = !locked;
+  renderCompanyPrompt();
+}
+
+// No company name yet: people would read “A gift from Your company”. Point
+// at the From field until a name is saved.
+function renderCompanyPrompt() {
+  const missing = !companyName(state.gift);
+  const field = qs('[data-org-field]');
+  field.classList.toggle('is-prompt', missing);
+  qs('[data-org-prompt]').hidden = !missing;
+  qs('[data-org-prompt-text]').textContent = state.key
+    ? 'Add your company name before you forward the link: people see it as “A gift from …” when they open it.'
+    : 'No company name yet. To add it before you forward the link, open this page from the link in your email.';
+  qs('[data-link-prompt]').hidden = !missing || !state.key;
+  const input = qs('[data-message-form]').elements.org;
+  input.placeholder = missing ? 'Your company name' : '';
+  input.setAttribute('aria-describedby', missing ? 'org-prompt org-hint' : 'org-hint');
+}
+
+function readyTitle(gift) {
+  const name = companyName(gift);
+  qs('[data-ready-title]').textContent = name ? `Your gift for ${name} is ready` : 'Your gift is ready';
+  document.title = name ? `Your gift page, ${name} — Daily Planner` : 'Your gift page — Daily Planner';
 }
 
 function showReady() {
   const gift = state.gift;
-  qs('[data-ready-title]').textContent = gift.org ? `Your gift for ${gift.org} is ready` : 'Your gift is ready';
-  document.title = gift.org ? `Your gift for ${gift.org} — Daily Planner` : 'Your team gift — Daily Planner';
+  readyTitle(gift);
   qs('[data-gift-url]').value = state.url;
   renderSeats();
   renderForward();
@@ -223,17 +252,19 @@ function showReady() {
 
 /* Loading a gift ----------------------------------------------------------- */
 
-async function claim(session, attempt = 0) {
+async function claim(checkout, attempt = 0) {
   showLoading(attempt ? 'Your payment is still being confirmed…' : 'Confirming your payment…');
-  const result = await request('POST', '/purchases/claim', { session });
-  const data = result.data;
-  if (result.ok && data.kind === 'plus') return showPlus(session);
+  // `expect: 'gift'`: a Plus payment opened here is not activated (that would use one of its
+  // activations for nothing); the page sends the buyer to the planner instead.
+  const result = await claimPurchase(checkout, { expect: 'gift' });
+  const data = result;
+  if ((result.ok || result.status === 409) && data.kind === 'plus') return showPlus(checkout);
   if (result.ok && data.kind === 'gift' && normalizeCode(data.code)) {
     state.code = normalizeCode(data.code);
     state.key = KEY_RE.test(String(data.manageKey || '')) ? String(data.manageKey).toLowerCase() : '';
     state.url = giftUrl(state.code, data.url);
     state.gift = readGift(data);
-    // From now on the address is the manage link: a reload or a bookmark
+    // From now on the address is the gift page link: a reload or a bookmark
     // reads the gift instead of claiming the payment again.
     const next = state.key ? `?gift=${formatCode(state.code)}&key=${state.key}` : `?gift=${formatCode(state.code)}`;
     try { history.replaceState(null, '', `${location.pathname}${next}`); } catch (_) { /* sandboxed */ }
@@ -242,14 +273,15 @@ async function claim(session, attempt = 0) {
   if (result.ok) return showError('generic');
   if (result.status === 402) {
     if (attempt < RETRY_DELAYS.length) {
-      window.setTimeout(() => claim(session, attempt + 1), RETRY_DELAYS[attempt]);
+      window.setTimeout(() => claim(checkout, attempt + 1), RETRY_DELAYS[attempt]);
       return undefined;
     }
-    return showError('unpaid', { retry: () => claim(session, 0) });
+    return showError('unpaid', { retry: () => claim(checkout, 0) });
   }
   if (result.status === 404) return showError('noSession');
   if (result.status === 503) return showError('paymentsOff');
-  return failure(result, () => claim(session, attempt));
+  if (result.status === 0) return showError(result.offline ? 'offline' : 'network', { retry: () => claim(checkout, attempt) });
+  return showError('generic', { retry: () => claim(checkout, attempt), detail: typeof result.error === 'string' ? result.error : '' });
 }
 
 async function load(code) {
@@ -301,6 +333,11 @@ function setupActions() {
   });
 
   const form = qs('[data-message-form]');
+  qs('[data-link-prompt] a').addEventListener('click', event => {
+    event.preventDefault();
+    form.elements.org.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    form.elements.org.focus({ preventScroll: true });
+  });
   const counter = qs('[data-message-count]');
   const messageStatus = qs('[data-message-status]');
   form.elements.message.addEventListener('input', () => { counter.textContent = `${form.elements.message.value.length}/${MESSAGE_MAX}`; });
@@ -325,11 +362,12 @@ function setupActions() {
     save.disabled = false;
     if (result.ok) {
       state.gift = { ...state.gift, org: typeof result.data.org === 'string' ? result.data.org : org, message: typeof result.data.message === 'string' ? result.data.message : message };
-      qs('[data-ready-title]').textContent = `Your gift for ${state.gift.org} is ready`;
+      readyTitle(state.gift);
       renderForward();
+      renderCompanyPrompt();
       setStatus(messageStatus, 'Saved. People see it from now on.');
     } else if (result.status === 403) {
-      setStatus(messageStatus, 'This page can’t change the gift. Open it from the manage link in your email.', true);
+      setStatus(messageStatus, 'This page can’t change the gift. Open it from the gift page link in your email.', true);
     } else if (result.status === 0) {
       setStatus(messageStatus, 'The server couldn’t be reached. Try again in a moment.', true);
     } else {
@@ -343,15 +381,13 @@ function setupActions() {
 function start() {
   setupActions();
   if (!apiOn) return showError('off', { about: true });
-  const params = new URLSearchParams(location.search);
-  const session = (params.get('session') || '').trim();
-  if (session) return SESSION_RE.test(session) ? claim(session) : showError('noSession');
-  if (params.has('gift')) {
-    const code = normalizeCode(params.get('gift'));
+  const opened = giftPageParams(location.search);
+  if (opened.kind === 'checkout') return opened.checkout ? claim(opened.checkout) : showError('noSession');
+  if (opened.kind === 'gift') {
+    const code = normalizeCode(opened.gift);
     if (!code) return showError('badCode');
-    const key = (params.get('key') || '').trim();
     state.code = code;
-    state.key = KEY_RE.test(key) ? key.toLowerCase() : '';
+    state.key = KEY_RE.test(opened.key) ? opened.key.toLowerCase() : '';
     state.url = giftUrl(code);
     return load(code);
   }

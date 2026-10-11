@@ -12,7 +12,7 @@ const del = (path, token) => new Request(`https://planner.test/api/${path}`, { m
 const TOTP_SECRET = 'GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ';
 const team = (overrides = {}) => ({ email: 'Lead@Acme.example', name: 'Ada', company: 'Acme', teamSize: 25, timing: 'q1-2027', message: 'Rolling out in January', consent: true, website: '', version: '1.18.0', locale: 'fr-FR', source: 'landing', ...overrides });
 
-async function openSqlite(t, migrations = ['0001_planner_api.sql', '0002_team_requests.sql', '0003_plus.sql']) {
+async function openSqlite(t, migrations = ['0001_planner_api.sql', '0002_team_requests.sql', '0003_plus.sql', '0004_creem_reviews.sql']) {
   let DatabaseSync;
   try { ({ DatabaseSync } = await import('node:sqlite')); } catch { t.skip('node:sqlite is not available in this Node version'); return null; }
   const sqlite = new DatabaseSync(':memory:');
@@ -257,6 +257,32 @@ test('landing and team events are allow-listed anonymous counts', async () => {
   assert.deepEqual(store.data.events.map(row => row.name), names);
 });
 
+/** Event names of COUNTED_EVENTS and LANDING_EVENTS, read from the client source as text. */
+function clientEventNames() {
+  const source = readFileSync(new URL('../src/lib/planner-api.js', import.meta.url), 'utf8');
+  const names = [];
+  for (const list of ['COUNTED_EVENTS', 'LANDING_EVENTS']) {
+    const block = new RegExp(`export const ${list} = Object\\.freeze\\(\\[([\\s\\S]*?)\\n\\]\\);`).exec(source);
+    assert.ok(block, `${list} found in src/lib/planner-api.js`);
+    const found = [...block[1].matchAll(/^\s*\[\s*'([a-z0-9_]+)'\s*,/gm)].map(match => match[1]);
+    assert.ok(found.length >= 5, `${list} lists its events`);
+    names.push(...found);
+  }
+  return new Set(names);
+}
+
+test('the server accepts exactly the events the planner and the landing page may count', async () => {
+  const client = clientEventNames();
+  assert.deepEqual([...EVENT_NAMES].filter(name => !client.has(name)).sort(), [], 'accepted by the server but never sent');
+  assert.deepEqual([...client].filter(name => !EVENT_NAMES.has(name)).sort(), [], 'sent by a client but refused by the server');
+  assert.ok(EVENT_NAMES.has('pricing_viewed') && EVENT_NAMES.has('app_active_month') && EVENT_NAMES.has('review_sent'));
+  const store = createMemoryStore();
+  const api = createPlannerApi({ store, now: fixedNow });
+  for (const name of client) assert.equal((await api(post('events', { name, version: '1.21.0' }))).status, 204, name);
+  assert.equal(store.data.events.length, client.size);
+  assert.equal((await api(post('events', { name: 'internal:email_sent', version: '1.21.0' }))).status, 400, 'internal rows can never be sent');
+});
+
 test('Daily Planner Plus and team gift events are allow-listed anonymous counts', async () => {
   const store = createMemoryStore();
   const api = createPlannerApi({ store, now: fixedNow });
@@ -427,8 +453,9 @@ test('every migration runs when the D1 console joins it into one line', async t 
   let DatabaseSync;
   try { ({ DatabaseSync } = await import('node:sqlite')); } catch { t.skip('node:sqlite is not available in this Node version'); return; }
   const files = readdirSync(new URL('../migrations/', import.meta.url)).filter(name => name.endsWith('.sql')).sort();
-  assert.ok(files.length >= 3);
+  assert.ok(files.length >= 4);
   assert.ok(files.includes('0003_plus.sql'));
+  assert.ok(files.includes('0004_creem_reviews.sql'));
   const sqlite = new DatabaseSync(':memory:');
   for (const file of files) {
     const source = readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8');
@@ -450,7 +477,7 @@ test('every migration runs when the D1 console joins it into one line', async t 
     sqlite.exec(flat);
   }
   const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(row => row.name);
-  assert.deepEqual(tables, ['events', 'feedback', 'gifts', 'purchases', 'team_requests', 'waitlist']);
+  assert.deepEqual(tables, ['events', 'feedback', 'gifts', 'payments', 'purchases', 'reviews', 'team_requests', 'waitlist']);
   const teamColumns = sqlite.prepare('PRAGMA table_info(team_requests)').all();
   const column = name => teamColumns.find(row => row.name === name);
   assert.deepEqual(['plan', 'currency', 'kind'].map(name => [column(name)?.type, column(name)?.notnull, column(name)?.dflt_value]), [['TEXT', 1, "''"], ['TEXT', 1, "''"], ['TEXT', 1, "'quote'"]]);

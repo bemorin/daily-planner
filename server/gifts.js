@@ -19,7 +19,8 @@ export const GIFT_NOTE_MAX = 500;
 export const GIFT_VALID_MONTHS = 12;
 export const GIFT_AMOUNT_MAX = 100000000;
 export const GIFT_CURRENCIES = new Set(['EUR', 'USD']);
-export const GIFT_SOURCES = new Set(['manual', 'stripe']);
+// 'creem': bought online (the gift keeps its checkout reference); 'manual': made in the dashboard.
+export const GIFT_SOURCES = new Set(['manual', 'creem']);
 export const DEFAULT_PUBLIC_BASE_URL = 'https://planner.bemorin.com';
 
 const CODE_RE = new RegExp(`^[${GIFT_CODE_ALPHABET}]{${GIFT_CODE_LENGTH}}$`);
@@ -79,7 +80,8 @@ export function normalizeGift(row) {
     currency: String(row.currency ?? ''),
     amount: row.amount == null || row.amount === '' ? null : Number(row.amount),
     source: String(row.source ?? 'manual'),
-    stripeSession: row.stripeSession ? String(row.stripeSession) : null,
+    // The checkout that paid for the gift (column stripe_session, kept for older rows); null for manual gifts.
+    checkoutRef: row.checkoutRef ? String(row.checkoutRef) : row.stripeSession ? String(row.stripeSession) : null,
     buyerEmail: String(row.buyerEmail ?? ''),
     note: String(row.note ?? ''),
     createdAt: String(row.createdAt ?? ''),
@@ -114,7 +116,7 @@ export const licenseUrl = (base, token) => `${base}/?license=${token}`;
 const oneLine = value => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
 const multiLine = value => String(value ?? '').replace(/\r\n?/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f\u007f]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 
-/** Company name: one line, at most GIFT_ORG_MAX characters (longer names are cut, e.g. from Stripe). */
+/** Company name: one line, at most GIFT_ORG_MAX characters (longer names are cut, e.g. from a checkout). */
 export const cleanOrg = value => oneLine(value).slice(0, GIFT_ORG_MAX).trim();
 
 /**

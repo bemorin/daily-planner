@@ -157,10 +157,10 @@
                     <div class="rp-row rp-row--mit rp-tick"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Send the proposal to Claire</span></div>
                     <p class="rp-h">Other important outcomes</p>
                     <div class="rp-row"><span class="rp-check"></span><span class="rp-txt">Draft the offsite agenda</span></div>
-                    <div class="rp-row"><span class="rp-check"></span><span class="rp-txt">Review the hiring brief</span></div>
+                    <div class="rp-row is-done"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Review the hiring brief</span></div>
                     <p class="rp-h rp-optional">Tasks</p>
                     <div class="rp-row rp-row--task rp-optional is-done"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Call the bank</span></div>
-                    <div class="rp-row rp-row--task rp-optional"><span class="rp-check"></span><span class="rp-txt">Book physio</span></div>
+                    <div class="rp-row rp-row--task rp-optional"><span class="rp-check"></span><span class="rp-txt">Reorganise the shared drive</span></div>
                   </div>
                   <div class="rp-sched">
                     <div class="rp-sched__head"><b>Schedule</b><span class="rp-closebtn"><svg class="i"><use href="#i-sunset"/></svg>Close day</span></div>
@@ -174,7 +174,24 @@
                     </div>
                   </div>
                 </div>
+                <div class="rp-scrim"></div>
+                <div class="rp-modal">
+                  <p class="rp-eyebrow">Close day</p>
+                  <p class="rp-modal__title">Close the day without losing unfinished work.</p>
+                  <div class="rp-modal__sum">
+                    <span><small>Done</small><b>3</b></span>
+                    <span><small>Still open</small><b>2</b></span>
+                    <span class="rp-modal__to"><small>Carry to</small><b>Mon, Oct 12</b></span>
+                  </div>
+                  <div class="rp-mis">
+                    <div class="rp-mi rp-mi--save"><span class="rp-mi__body"><b>Draft the offsite agenda</b><small>Other outcome</small></span><span class="rp-mi__chips"><span class="rp-mc rp-mc--date">Mon, Oct 12</span><span class="rp-mc rp-mc--save">Save</span><span class="rp-mc rp-mc--forget">Forget</span></span></div>
+                    <div class="rp-mi rp-mi--forget"><span class="rp-mi__body"><b>Reorganise the shared drive</b><small>Task</small></span><span class="rp-mi__chips"><span class="rp-mc rp-mc--date">Mon, Oct 12</span><span class="rp-mc rp-mc--save">Save</span><span class="rp-mc rp-mc--forget">Forget</span></span></div>
+                  </div>
+                  <span class="rp-modal__field"><small>What made today worth remembering?</small><em class="rp-field"><span data-type data-speed="42">Proposal sent before lunch</span></em></span>
+                  <div class="rp-modal__actions"><span>Cancel</span><span class="rp-primary">Close day</span></div>
+                </div>
               </div>
+              <span class="rp-cursor"><i class="rp-cursor__ripple"></i><svg class="rp-cursor__arrow" viewBox="0 0 24 24"><path d="M4.5 2.5v16.6l4.3-4.2 2.9 6.6 3-1.3-2.9-6.5h6.1Z"/></svg></span>
               <div class="rp-pop rp-pop--closed">
                 <div class="rp-pop__head"><span>October, painted</span><b><svg class="i"><use href="#i-flame"/></svg><span><span data-count="20" data-from="19">20</span>-day streak</span></b></div>
                 <div class="rp-month" data-month></div>
@@ -803,23 +820,31 @@
               <p>Five more palettes for the year that paints itself: Ocean, Forest, Plum, Graphite and Sunset. Terracotta stays free.</p>
             </div>
           </article>
-          <div class="plus-more__side">
-            <article class="plus-card">
-              <h3><svg class="i"><use href="#i-spark"/></svg>Future Plus features, included</h3>
-              <p>What’s added to Plus later is yours too, at no extra cost.</p>
-            </article>
-            <article class="plus-card">
-              <h3><svg class="i"><use href="#i-devices"/></svg>Paid once, on all your devices</h3>
-              <p>No subscription. Plus is saved in your planner’s settings, so Google Drive sync and backups carry it to your other devices.</p>
-            </article>
-          </div>
+          <article class="plus-card plus-card--once">
+            <h3><svg class="i"><use href="#i-devices"/></svg>Paid once, on all your devices</h3>
+            <p>No subscription. Plus is saved in your planner’s settings, so Google Drive sync and backups carry it to your other devices.</p>
+          </article>
         </div>
+
+        <section class="soon soon--wide" aria-labelledby="soon-plus" data-reveal>
+          <div class="soon__head">
+            <h3 id="soon-plus"><svg class="i"><use href="#i-spark"/></svg>Coming to Plus</h3>
+            <p>Included, at no extra cost. Buy once: everything Plus gets later is yours.</p>
+          </div>
+          <ul class="soon__list" data-plus-upcoming data-detailed>
+            <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><h4 class="soon__name">Sync without Google</h4><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></div><span class="soon__text">Your planner on all your devices with a Daily Planner account, encrypted on your device before it leaves it.</span></div></li>
+            <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><h4 class="soon__name">Your calendar beside your day</h4><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></div><span class="soon__text">See Google, Outlook or iCloud events next to your blocks, read-only.</span></div></li>
+            <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><h4 class="soon__name">Share your year</h4><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></div><span class="soon__text">An image of your painted year or your Misogi, ready to post.</span></div></li>
+            <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><h4 class="soon__name">An evening nudge</h4><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></div><span class="soon__text">A gentle reminder to close the day, at the time you choose.</span></div></li>
+          </ul>
+          <p class="soon__foot"><span>Planned means it’s on the way; Exploring means it’s still being worked out.</span><a href="#pricing">See all prices</a></p>
+        </section>
 
         <div class="plus-buy" data-reveal>
           <div class="plus-buy__price"><b data-plus-price>€29</b><span>once, for life</span></div>
-          <p class="plus-buy__note">Every Plus feature for one person. No subscription, nothing to renew.</p>
+          <p class="plus-buy__note">Every Plus feature for one person, today’s and those to come. No subscription, nothing to renew.</p>
           <div class="plus-buy__act">
-            <div class="plus-cta" data-plus-cta><button class="btn btn--primary" type="button" disabled>Coming soon</button></div>
+            <div class="buy" data-plus-cta="plus"><button class="btn btn--primary btn--buy" type="button" disabled>Coming soon</button></div>
             <a class="plus-buy__alt" href="#teams">Giving it to a team?<svg class="i"><use href="#i-arrow"/></svg></a>
           </div>
         </div>
@@ -874,7 +899,7 @@
                     </div>
                     <span class="rp-gf__arrow"><svg class="i"><use href="#i-arrow"/></svg></span>
                     <div class="rp-gf__card rp-gf__seats">
-                      <span class="rp-gf__label"><svg class="i"><use href="#i-gift"/></svg>Your manage page</span>
+                      <span class="rp-gf__label"><svg class="i"><use href="#i-gift"/></svg>Your gift page</span>
                       <small class="rp-gf__from">Seats used</small>
                       <b class="rp-gf__count"><span data-count="32" data-from="31">32</span><i>/ 50</i></b>
                       <span class="rp-gf__meter"><i></i></span>
@@ -884,9 +909,9 @@
                 </div>
               </div>
               <ol class="seats__steps" data-reveal-each>
-                <li><span class="seats__n">1</span><span><b>One gift link.</b> After payment you get a single link to forward, with a message ready to send.</span></li>
-                <li><span class="seats__n">2</span><span><b>One person, one seat.</b> Each person who opens it activates Plus for life on their own planner. Each activation uses one seat.</span></li>
-                <li><span class="seats__n">3</span><span><b>You see the count.</b> Your manage page shows how many seats are used, and lets you edit the message people see with the gift.</span></li>
+                <li><span class="seats__n">1</span><span><b>One gift link.</b> Right after paying you land on your gift page: a private page with your gift link, the seats used and the message your team sees. Its link also arrives by email, with a message ready to forward.</span></li>
+                <li><span class="seats__n">2</span><span><b>One person, one seat.</b> Each person who opens the gift link activates Plus for life on their own planner. Each activation uses one seat.</span></li>
+                <li><span class="seats__n">3</span><span><b>You see the count.</b> Your gift page shows how many seats are used, and lets you edit the company name and the message people see with the gift.</span></li>
                 <li><span class="seats__n">4</span><span><b>No names, no accounts.</b> Nobody signs up and nobody is listed, so there’s nothing to assign or take back.</span></li>
               </ol>
             </div>
@@ -916,11 +941,13 @@
             <button type="button" data-cur="USD" aria-pressed="false">$ USD</button>
           </div>
         </div>
-        <div class="prices" data-reveal-each>
-          <article class="price price--personal" aria-labelledby="price-personal">
-            <h3 id="price-personal">Personal</h3>
-            <p class="price__big">Free, forever</p>
-            <p class="price__sub">Everything in the planner, for as long as you use it.</p>
+        <div class="offers" data-reveal-each>
+          <article class="offer offer--free" aria-labelledby="offer-free">
+            <div class="offer__head">
+              <h3 class="offer__name" id="offer-free">Free</h3>
+              <p class="offer__price"><span data-free-price>€0</span> <small>forever</small></p>
+              <p class="offer__sub">Everything in the planner, for as long as you use it.</p>
+            </div>
             <ul class="squares">
               <li>Day and Week views with time blocks</li>
               <li>Close day, Unresolved, the journal and time stats</li>
@@ -930,32 +957,50 @@
               <li>Works offline and installs as an app</li>
               <li>Free sync through your own Google Drive</li>
             </ul>
-            <a class="btn btn--ghost" href="../" data-cta="app">Open the planner</a>
+            <div class="offer__foot">
+              <a class="btn btn--ghost" href="../" data-cta="app">Open the planner</a>
+            </div>
           </article>
-          <article class="price price--plus" aria-labelledby="price-plus">
-            <h3 id="price-plus"><svg class="i"><use href="#i-spark"/></svg>Plus</h3>
-            <p class="price__big"><span data-plus-price>€29</span> <small>once</small></p>
-            <p class="price__sub">For one person, for life. No subscription.</p>
-            <ul class="squares">
-              <li>Plan your year: a guided session of about 30 minutes</li>
-              <li>Your year in review, printable on one page</li>
-              <li>Five more colours for your painted year</li>
-              <li>Plus features added later, included</li>
-              <li>Carried to your other devices by sync and backups</li>
+          <article class="offer offer--plus" aria-labelledby="offer-plus">
+            <div class="offer__head">
+              <h3 class="offer__name" id="offer-plus"><svg class="i"><use href="#i-spark"/></svg>Plus</h3>
+              <p class="offer__price"><span data-plus-price>€29</span> <small>once</small></p>
+              <p class="offer__sub">For one person, for life, on all your devices. No subscription.</p>
+            </div>
+            <ul class="squares" data-plus-features>
+              <li>Plan your year</li>
+              <li>Your year in review</li>
+              <li>Colours for your painted year</li>
             </ul>
-            <div class="plus-cta" data-plus-cta><button class="btn btn--primary" type="button" disabled>Coming soon</button></div>
+            <section class="soon" aria-labelledby="soon-pricing">
+              <div class="soon__head">
+                <h4 id="soon-pricing">Coming to Plus</h4>
+                <p>Included, at no extra cost</p>
+              </div>
+              <ul class="soon__list" data-plus-upcoming>
+                <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><b class="soon__name">Sync without Google</b><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></div><span class="soon__text">Your planner on all your devices with a Daily Planner account, encrypted on your device before it leaves it.</span></div></li>
+                <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><b class="soon__name">Your calendar beside your day</b><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></div><span class="soon__text">See Google, Outlook or iCloud events next to your blocks, read-only.</span></div></li>
+                <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><b class="soon__name">Share your year</b><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></div><span class="soon__text">An image of your painted year or your Misogi, ready to post.</span></div></li>
+                <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><b class="soon__name">An evening nudge</b><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></div><span class="soon__text">A gentle reminder to close the day, at the time you choose.</span></div></li>
+              </ul>
+              <p class="soon__foot">Buy once: everything Plus gets later is yours.</p>
+            </section>
+            <div class="offer__foot buy" data-plus-cta="pricing"><button class="btn btn--primary btn--buy" type="button" disabled>Coming soon</button></div>
           </article>
-          <article class="price price--team" aria-labelledby="price-team">
-            <h3 id="price-team"><svg class="i"><use href="#i-gift"/></svg>Team gift</h3>
-            <p class="price__big">Plus for everyone</p>
-            <p class="price__sub">One price for the company, by number of people. <a href="#seats">How seats work</a></p>
+          <article class="offer offer--team" aria-labelledby="offer-team">
+            <div class="offer__head">
+              <h3 class="offer__name" id="offer-team"><svg class="i"><use href="#i-gift"/></svg>Team gift</h3>
+              <p class="offer__price">Plus for everyone</p>
+              <p class="offer__sub">One price for the company, by number of people. <a href="#seats">How seats work</a></p>
+            </div>
             <div class="tiers" data-tiers>
               <noscript><p class="tiers__fallback">From €195 for up to 10 people to €4,995 for up to 1,000 people, paid once. Larger organisations are quoted.</p></noscript>
             </div>
-            <p class="price__note" data-pricing-note>One-time payment. Invoice included. No subscription. No VAT is added.</p>
             <div class="talk" data-talk hidden></div>
+            <p class="offer__fine"><svg class="i"><use href="#i-link"/></svg><span data-gift-after><b>Right after paying, you land on your gift page</b> with the link to forward, the seats used and the message your team sees. Its link also arrives by email.</span></p>
           </article>
         </div>
+        <p class="pricing__note"><svg class="i"><use href="#i-shield"/></svg><span data-pricing-note>One-time payments. Prices include tax. Receipts and invoices come from Creem, our payment partner.</span></p>
 
         <div class="band request" id="request" data-form-panel data-reveal>
           <form class="team-form" data-team-form novalidate aria-labelledby="request-title">
@@ -1045,6 +1090,10 @@
                 <div class="qa__a"><p>It’s optional. When you connect your Google account, the planner can only reach its own hidden sync file in your Drive, not your other files. Your plans travel between your devices and your Drive; nothing is stored on our servers. Before applying changes from another device, the planner keeps a few recovery snapshots on your device.</p></div>
               </details>
               <details class="qa" name="faq">
+                <summary>Can I sync without Google?</summary>
+                <div class="qa__a"><p>Not yet. Google Drive sync is free today: one hidden file in your own Drive keeps your devices in step. Sync with a Daily Planner account, without Google, is planned for Plus. Meanwhile, a backup file moves everything from one browser to another.</p></div>
+              </details>
+              <details class="qa" name="faq">
                 <summary>Which devices does it work on?</summary>
                 <div class="qa__a"><p>Any recent browser on iPhone, iPad, Android, Mac, Windows or Linux. To install it as an app, use Install in Chrome or Edge, or Share → Add to Home Screen on iPhone and iPad.</p></div>
               </details>
@@ -1060,13 +1109,21 @@
                     <li><b>Plan your year.</b> A guided session that sets up Horizon for the year in about 30 minutes: your Misogi and when it happens, milestones, six mini-adventures, three commitments, a habit per quarter and key dates. It ends with your year printed on one page.</li>
                     <li><b>Your year in review.</b> One printable page: days closed, the painted year, your best streak, trophies, main outcomes done, time by category, how the Misogi, adventures and habits went, and a few memories and lessons from your journal.</li>
                     <li><b>Colours for your painted year.</b> Five more palettes. Terracotta stays free.</li>
-                    <li><b>What comes next.</b> Plus features added later are included.</li>
+                    <li><b>What comes next.</b> Everything Plus gets later is included, at no extra cost.</li>
                   </ul>
                 </div>
               </details>
               <details class="qa" name="faq">
+                <summary>Are future Plus features included?</summary>
+                <div class="qa__a"><p>Yes. You pay once, and everything added to Plus later is yours at no extra cost. <span data-faq-upcoming>Planned: “Sync without Google” and “Your calendar beside your day”. Exploring: “Share your year” and “An evening nudge”.</span></p></div>
+              </details>
+              <details class="qa" name="faq">
                 <summary>Is Plus a subscription?</summary>
                 <div class="qa__a"><p>No. You pay <span data-plus-price>€29</span> once and keep Plus for life, with the Plus features added later. It’s saved in your planner’s settings, so Google Drive sync and backups carry it to your other devices.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>How do I pay?</summary>
+                <div class="qa__a"><p>By card, through Creem, our payment partner. Creem is the merchant of record: it charges the right VAT for where you are, included in the price, and emails you the receipt and invoice. A team gift can also be paid by bank transfer against an invoice.</p></div>
               </details>
             </div>
           </div>
@@ -1075,7 +1132,7 @@
             <div class="faq__list">
               <details class="qa" name="faq">
                 <summary>How do seats work?</summary>
-                <div class="qa__a"><p>You get one gift link. Each person who opens it activates Plus for life on their own planner, and each activation uses one seat. Your manage page shows how many seats are used and lets you change the message people see. Nobody signs up and no names are collected, so seats aren’t assigned to people: whoever opens the link first gets one. Share it only with the people it’s for. A small margin covers people who set the planner up again on a new device.</p></div>
+                <div class="qa__a"><p>You get one gift link. Each person who opens it activates Plus for life on their own planner, and each activation uses one seat. Your gift page shows how many seats are used and lets you change the message people see. Nobody signs up and no names are collected, so seats aren’t assigned to people: whoever opens the link first gets one. Share it only with the people it’s for. A small margin covers people who set the planner up again on a new device.</p></div>
               </details>
               <details class="qa" name="faq">
                 <summary>Does the company see what people plan?</summary>
@@ -1134,7 +1191,7 @@
     </div>
     <div class="wrap foot__privacy" id="privacy" data-privacy hidden>
       <h2>What this page counts and stores</h2>
-      <p>This page counts a few anonymous events per day, such as page views and button clicks, without any identifier: no cookies, and no IP address stored. If you send a request, what you submit (email, name, company, plan, number of people, timing and message) is stored only to reply to you, and deleted on request.</p>
+      <p>This page counts a few anonymous events per day, such as page views, the sections people scroll to and button clicks, without any identifier: no cookies, and no IP address stored. “Buy” sends only what you chose and the currency, to open the payment page; your card details go to Creem, our payment partner, never to this site. If you send a request, what you submit (email, name, company, plan, number of people, timing and message) is stored only to reply to you, and deleted on request.</p>
     </div>
   </footer>
 

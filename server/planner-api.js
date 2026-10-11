@@ -18,11 +18,15 @@
 //   announcement; every address is deleted as soon as its email is accepted.
 //   The device that joined gets a removal token so people can leave the list
 //   on their own.
-// - Daily Planner Plus (see server/licenses.js, server/gifts.js, server/stripe.js):
+// - Daily Planner Plus (see server/licenses.js, server/gifts.js, server/creem.js):
 //   licences are signed tokens kept in the person's own planner. A team gift
 //   stores the company, its message, the seat count and a counter of
-//   activations — never who activated. A purchase stores the Stripe session
-//   id, the licence id and the buyer's email (from Stripe).
+//   activations — never who activated. A purchase stores the Creem checkout
+//   id, the licence id and the buyer's email (from Creem, which is the
+//   merchant of record). A payment row keeps what was sold, when, for how
+//   much and the buyer's country, for the sales chart — no name, no email.
+// - Reviews: feedback whose author ticked that it may be quoted, with the
+//   name they chose to give (optional). Deletable.
 //
 // Owner access: POST admin/session exchanges ADMIN_TOKEN (+ an authenticator
 // code when ADMIN_TOTP_SECRET is set) for an 8-hour signed session, sent as
@@ -30,10 +34,11 @@
 // is also accepted as the Bearer value. See server/admin-auth.js.
 
 import { base32Decode, issueSession, looksLikeSession, timingSafeEqual, TOTP_MIN_SECRET_BYTES, verifySession, verifyTotp, verifyWaitlistRemoveToken, waitlistRemoveToken } from './admin-auth.js';
-import { announcementEmail, createResendMailer, DEFAULT_EMAIL_TIMEOUT_MS, EMAILS_PER_SEND, escapeHtml, htmlDocument, idempotencyKey, parseAddress, RESEND_MIN_INTERVAL_MS, textToHtml } from './email.js';
+import { announcementEmail, createResendMailer, DEFAULT_EMAIL_TIMEOUT_MS, EMAILS_PER_SEND, escapeHtml, htmlDocument, idempotencyKey, parseAddress, plusPurchaseEmail, RESEND_MIN_INTERVAL_MS, textToHtml } from './email.js';
 import { cleanOrg, DEFAULT_PUBLIC_BASE_URL, formatGiftCode, giftBuyerEmail, giftExpiry, giftLimit, giftManageUrl, giftStatus, giftUrl, licenseUrl, newGiftCode, normalizeBaseUrl, normalizeGift, normalizeGiftCode, publicGift, validateGiftFields } from './gifts.js';
 import { giftManageKey, importSigningKey, isoDay, newLicenseId, publicKeyFromSigningKey, signLicense } from './licenses.js';
-import { fetchCheckoutSession, parseStripePrices, readCheckoutSession, STRIPE_SESSION_RE, stripeMode } from './stripe.js';
+import { CHECKOUT_ID_RE, checkoutSeal, checkoutSealValid, createCheckout, CREEM_ITEMS, creemMode, fetchCheckout, parseCreemProducts, readCheckout, verifyWebhookSignature } from './creem.js';
+import { CURRENCIES, priceCents, TEAM_TIERS, teamTier, validCurrency } from '../src/lib/pricing.js';
 
 export const EVENT_NAMES = new Set([
   'onboarding_completed',
@@ -63,9 +68,28 @@ export const EVENT_NAMES = new Set([
   'gift_redeemed',
   'year_plan_completed',
   'year_review_opened',
-  // Team gifts (landing)
+  'review_sent',
+  // Usage, counted at most once per day, week or month on a device
+  'app_active_day',
+  'app_active_week',
+  'app_active_month',
+  'app_installed_day',
+  'day_closed',
+  'week_view_opened',
+  'horizon_opened',
+  'progress_opened',
+  'journal_opened',
+  'unresolved_opened',
+  'stats_opened',
+  'search_opened',
+  'pip_opened',
+  'print_used',
+  // Team gifts and pricing (landing)
   'pack_checkout_clicked',
-  'gift_link_copied'
+  'gift_link_copied',
+  'plus_viewed',
+  'teams_viewed',
+  'pricing_viewed'
 ]);
 
 export const FEEDBACK_KINDS = new Set(['idea', 'problem', 'praise', 'other']);
@@ -99,9 +123,22 @@ const LICENSE_NOTE_MAX = 200;
 const PLUS_OFF = 'Daily Planner Plus is not set up on this server yet.';
 const GIFT_UNKNOWN = 'We could not find this gift link. Check that it was copied completely.';
 const PAYMENT_UNKNOWN = 'We could not find this payment.';
+const TEST_NOTE = 'Test mode';
+const TEST_PURCHASE = 'This was a test purchase, made before payments went live.';
+const EMAIL_IN_FLIGHT_MS = 2 * 60 * 1000;
 const NOT_PLUS_PAYMENT = 'This payment is not for Daily Planner Plus.';
-const UNKNOWN_SESSION_TTL_MS = 10 * 60 * 1000;
-const UNKNOWN_SESSIONS_MAX = 500;
+const PAYMENTS_OFF = 'Payments are not configured.';
+const CHECKOUT_OFF = 'Payments are not set up yet.';
+const CHECKOUT_FAILED = 'The checkout could not be opened. Please try again in a minute.';
+const INVALID_SIGNATURE = 'Invalid signature';
+const UNKNOWN_CHECKOUT_TTL_MS = 10 * 60 * 1000;
+const UNKNOWN_CHECKOUTS_MAX = 500;
+// Shown on the Creem checkout of a team gift; its answer names the company in the gift.
+const COMPANY_FIELD = Object.freeze({ type: 'text', key: 'company', label: 'Company name, shown to your team', optional: true, text: Object.freeze({ max_length: 80 }) });
+export const REVIEW_NAME_MAX = 60;
+export const REVIEWS_LATEST = 50;
+export const SERIES_DEFAULT_DAYS = 400;
+export const SERIES_MAX_DAYS = 1200;
 const MISSING_TABLE = 'A database table is missing. Apply every file in migrations/ to the D1 database (see docs/FEEDBACK_AND_WAITLIST.md).';
 const ANNOUNCE_SUBJECT_MAX = 150;
 const ANNOUNCE_TEXT_MAX = 8000;
@@ -109,6 +146,8 @@ const TEAM_SIZE_MIN = 2;
 const TEAM_SIZE_MAX = 100000;
 const AUTH_FAILURE_DELAY_MS = 400;
 const MAX_BODY_BYTES = 16 * 1024;
+// A signed Creem event carries the whole checkout (product, order, customer).
+const WEBHOOK_MAX_BYTES = 64 * 1024;
 const VERSION_RE = /^\d{1,3}\.\d{1,3}\.\d{1,4}$/;
 // Domain limited to letters, digits, dots and hyphens: nothing that could add
 // query fields (?bcc=…) to a mailto: link in the dashboard.
@@ -124,9 +163,10 @@ const dayKey = date => date.toISOString().slice(0, 10);
 
 const sleep = ms => new Promise(resolveSleep => { setTimeout(resolveSleep, ms); });
 
-async function readJson(request) {
+/** The raw body bytes, at most `max` of them (more throws 'too-large'). */
+async function readBody(request, max = MAX_BODY_BYTES) {
   const length = Number(request.headers.get('content-length') || 0);
-  if (length > MAX_BODY_BYTES) throw new Error('too-large');
+  if (length > max) throw new Error('too-large');
   // Read with a byte cap: a missing or wrong content-length must not let a
   // client stream an unbounded body into memory.
   const chunks = [];
@@ -137,15 +177,36 @@ async function readJson(request) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_BODY_BYTES) { await reader.cancel().catch(() => {}); throw new Error('too-large'); }
+      if (size > max) { await reader.cancel().catch(() => {}); throw new Error('too-large'); }
       chunks.push(value);
     }
   }
   const bytes = new Uint8Array(size);
   let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-  const text = new TextDecoder().decode(bytes);
+  return bytes;
+}
+
+async function readJson(request) {
+  const text = new TextDecoder().decode(await readBody(request));
   try { return JSON.parse(text || '{}'); } catch { throw new Error('invalid-json'); }
+}
+
+const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const shiftDay = (day, days) => new Date(Date.parse(`${day}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10);
+const isDay = value => ISO_DAY_RE.test(String(value ?? '')) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && shiftDay(value, 0) === value;
+
+/**
+ * The days a chart covers: `to` defaults to today, `from` to SERIES_DEFAULT_DAYS
+ * before it; reversed days are swapped and the range is cut to SERIES_MAX_DAYS.
+ */
+export function seriesRange(from, to, todayDay) {
+  let end = isDay(to) ? to : todayDay;
+  let start = isDay(from) ? from : shiftDay(end, 1 - SERIES_DEFAULT_DAYS);
+  if (start > end) [start, end] = [end, start];
+  const earliest = shiftDay(end, 1 - SERIES_MAX_DAYS);
+  if (start < earliest) start = earliest;
+  return { from: start, to: end };
 }
 
 function csvCell(value) {
@@ -180,7 +241,11 @@ export function validateWaitlist(body, now = new Date()) {
   };
 }
 
-/** Validate feedback. Returns { entry } or { error }. */
+/**
+ * Validate feedback. Returns { entry, review } or { error }. `review` is the row
+ * to keep for quoting when the author ticked `quote: true` and gave both a
+ * rating and a message (with an optional name, at most REVIEW_NAME_MAX characters); null otherwise.
+ */
 export function validateFeedback(body, now = new Date()) {
   if (body?.website) return { spam: true };
   const version = String(body?.version || '');
@@ -191,6 +256,10 @@ export function validateFeedback(body, now = new Date()) {
   if (rating == null && !message) return { error: 'Add a rating or a few words.' };
   const email = clip(body?.email, 254).toLowerCase();
   if (email && !EMAIL_RE.test(email)) return { error: 'That email address does not look right.' };
+  const quote = body?.quote === true;
+  const name = quote ? oneLine(clip(body?.name, 1000)) : '';
+  if (name.length > REVIEW_NAME_MAX) return { error: `Please keep your name under ${REVIEW_NAME_MAX} characters.` };
+  const createdAt = now.toISOString();
   return {
     entry: {
       appVersion: version,
@@ -199,8 +268,9 @@ export function validateFeedback(body, now = new Date()) {
       message,
       email,
       platform: clip(body?.platform, 40),
-      createdAt: now.toISOString()
-    }
+      createdAt
+    },
+    review: quote && rating != null && message ? { appVersion: version, rating, text: message, name, createdAt } : null
   };
 }
 
@@ -301,9 +371,12 @@ const isMissingTable = error => /no such table/i.test(String(error?.message || '
  * @param {number} [options.notifyTimeoutMs] give up on an owner notification after this long
  * @param {string|(() => string)} [options.publicBaseUrl] PUBLIC_BASE_URL for links in emails (default https://planner.bemorin.com)
  * @param {string} [options.plusSigningKey] PLUS_SIGNING_KEY (base64 PKCS#8, P-256); Plus is off without it
- * @param {string} [options.stripeSecretKey] STRIPE_SECRET_KEY (a restricted key that can read Checkout Sessions)
- * @param {string} [options.stripePrices]   STRIPE_PRICES (JSON, see server/stripe.js)
- * @param {typeof fetch} [options.stripeFetch] fetch used for Stripe (tests inject one)
+ * @param {string} [options.creemApiKey]    CREEM_API_KEY; payments are off without it
+ * @param {string} [options.creemWebhookSecret] CREEM_WEBHOOK_SECRET; the webhook answers 503 without it
+ * @param {string} [options.creemTestMode]  CREEM_TEST_MODE ('1' uses Creem's test API; so does a creem_test_ key)
+ * @param {{ plus?: { EUR?: string, USD?: string }, gift?: { EUR?: string, USD?: string } }} [options.creemProducts]
+ *   CREEM_PLUS_EUR, CREEM_PLUS_USD, CREEM_GIFT_EUR, CREEM_GIFT_USD (see creemProductsFromEnv in server/creem.js)
+ * @param {typeof fetch} [options.creemFetch] fetch used for Creem (tests and the dev server inject one)
  * @param {(promise: Promise) => void} [options.defer] keeps background work alive after the
  *   response (Pages Functions: context.waitUntil); without it the work simply runs on
  * @param {(message: string) => void} [options.warn] where swallowed email and payment failures are reported
@@ -311,7 +384,7 @@ const isMissingTable = error => /no such table/i.test(String(error?.message || '
 export function createPlannerApi({
   store, adminToken = '', adminTotpSecret = '', allowedOrigins = '', now = () => new Date(), authFailureDelayMs = AUTH_FAILURE_DELAY_MS,
   resendApiKey = '', emailFrom = '', ownerEmail = '', emailDailyLimit = '', emailFetch, emailIntervalMs = RESEND_MIN_INTERVAL_MS, notifyTimeoutMs = NOTIFY_TIMEOUT_MS,
-  publicBaseUrl = '', plusSigningKey = '', stripeSecretKey = '', stripePrices = '', stripeFetch,
+  publicBaseUrl = '', plusSigningKey = '', creemApiKey = '', creemWebhookSecret = '', creemTestMode = '', creemProducts = {}, creemFetch,
   defer = null, warn = message => console.warn(message)
 }) {
   const origins = new Set(String(allowedOrigins || '').split(',').map(value => value.trim()).filter(Boolean));
@@ -337,24 +410,52 @@ export function createPlannerApi({
   let publicKeyPromise = null;
   const plusPublicKey = () => { publicKeyPromise ||= signingSecret ? publicKeyFromSigningKey(signingSecret) : Promise.resolve(''); return publicKeyPromise; };
   const baseUrl = () => normalizeBaseUrl(typeof publicBaseUrl === 'function' ? publicBaseUrl() : publicBaseUrl) || DEFAULT_PUBLIC_BASE_URL;
-  const stripe = parseStripePrices(stripePrices);
-  const stripeKey = String(stripeSecretKey || '').trim();
-  const stripeFetchImpl = stripeFetch || globalThis.fetch?.bind(globalThis);
-  const paymentsConfigured = !!(stripeKey && stripe.prices.size && stripeFetchImpl);
-  // Checkout references Stripe did not know (or that sell something else) are
-  // remembered for a few minutes, so repeating a made-up id costs no Stripe call.
-  // Per worker instance and best effort: the WAF rate limit is the real guard.
-  const unknownSessions = new Map();
-  const isUnknownSession = id => {
-    const until = unknownSessions.get(id);
-    if (until === undefined) return false;
-    if (until > now().getTime()) return true;
-    unknownSessions.delete(id);
-    return false;
+  // Payments: Creem, with four products and the prices of src/lib/pricing.js.
+  const products = parseCreemProducts(creemProducts);
+  const creem = { apiKey: String(creemApiKey || '').trim(), mode: '', fetch: creemFetch || globalThis.fetch?.bind(globalThis) };
+  creem.mode = creemMode(creem.apiKey, creemTestMode);
+  const webhookSecret = String(creemWebhookSecret || '').trim();
+  const paymentsConfigured = !!(creem.apiKey && products.byId.size && creem.fetch);
+  // Test keys never sell on the production address (anyone could pay with a test
+  // card and get a real licence): test on a preview address or locally instead.
+  const productionHost = () => { try { return new URL(baseUrl()).hostname; } catch { return ''; } };
+  const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+  const testOnProduction = request => {
+    if (creem.mode !== 'test') return false;
+    try {
+      const host = new URL(request.url).hostname;
+      return !LOCAL_HOSTS.has(host) && host === productionHost();
+    } catch { return true; }
   };
-  const rememberUnknownSession = id => {
-    if (unknownSessions.size >= UNKNOWN_SESSIONS_MAX) unknownSessions.delete(unknownSessions.keys().next().value);
-    unknownSessions.set(id, now().getTime() + UNKNOWN_SESSION_TTL_MS);
+  /** Checkouts return to the address they were opened from (a preview address while testing). */
+  const returnBase = request => {
+    try {
+      const origin = new URL(request.url).origin;
+      if (origin === new URL(baseUrl()).origin) return baseUrl();
+      return /^https?:\/\/[^/]+$/.test(origin) ? origin : baseUrl();
+    } catch { return baseUrl(); }
+  };
+  const isTestRow = row => String(row?.note || '').startsWith(TEST_NOTE);
+  /** A gift needs our seal (a product link opened by hand can't pick its pack); every item must match its product's currency. */
+  const honoured = async paid => {
+    if (paid.currency && paid.productCurrency && paid.currency !== paid.productCurrency) return false;
+    if (paid.item?.kind === 'gift') return checkoutSealValid(signingSecret, paid);
+    return true;
+  };
+  // Checkouts Creem did not know, that sell something else or that expired are
+  // remembered for a few minutes with their answer, so repeating them costs no
+  // Creem call. Per worker instance and best effort: the WAF rate limit is the real guard.
+  const unknownCheckouts = new Map();
+  const rememberedCheckout = id => {
+    const entry = unknownCheckouts.get(id);
+    if (!entry) return null;
+    if (entry.until > now().getTime()) return entry;
+    unknownCheckouts.delete(id);
+    return null;
+  };
+  const rememberCheckout = (id, status, error) => {
+    if (unknownCheckouts.size >= UNKNOWN_CHECKOUTS_MAX) unknownCheckouts.delete(unknownCheckouts.keys().next().value);
+    unknownCheckouts.set(id, { until: now().getTime() + UNKNOWN_CHECKOUT_TTL_MS, status, error });
   };
 
   // Fire and forget: the 201 never waits for, or fails because of, an email.
@@ -439,18 +540,18 @@ export function createPlannerApi({
     };
   }
 
-  /** Store a new gift under a fresh code; a Stripe session makes at most one gift. */
+  /** Store a new gift under a fresh code; a checkout makes at most one gift. */
   async function createGift(fields) {
     const created = now();
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const gift = normalizeGift({
-        message: '', currency: '', amount: null, source: 'manual', stripeSession: null, buyerEmail: '', note: '',
+        message: '', currency: '', amount: null, source: 'manual', checkoutRef: null, buyerEmail: '', note: '',
         ...fields,
         code: newGiftCode(), redeemed: 0, active: true, createdAt: created.toISOString(), expiresAt: giftExpiry(created), emailedAt: null
       });
       if (await store.addGift(gift)) return gift;
-      if (gift.stripeSession) {
-        const existing = await store.getGiftBySession(gift.stripeSession);
+      if (gift.checkoutRef) {
+        const existing = await store.getGiftByCheckout(gift.checkoutRef);
         if (existing) return existing;
       }
     }
@@ -461,15 +562,17 @@ export function createPlannerApi({
    * Email the buyer the gift link, the manage link and a message to forward —
    * once per gift: emailed_at is claimed first, and released if Resend refuses.
    */
-  async function emailGiftBuyer(gift, manageKey, timeoutMs) {
+  async function emailGiftBuyer(gift, manageKey, timeoutMs, { resend = false } = {}) {
     if (!mailer.configured) return { emailed: false, error: 'Email is not set up (RESEND_API_KEY and EMAIL_FROM).' };
     if (!gift.buyerEmail) return { emailed: false, error: 'There is no buyer email address.' };
-    if (!await store.markGiftEmailed(gift.code, now().toISOString())) return { emailed: false, already: true };
+    // `resend`: send even though another request reserved it moments ago. The
+    // Idempotency-Key makes Resend drop the copy if that other send went out.
+    if (!await store.markGiftEmailed(gift.code, now().toISOString()) && !resend) return { emailed: false, already: true };
     const base = baseUrl();
     try {
-      await mailer.send({ ...giftBuyerEmail({ gift, url: giftUrl(base, gift.code), manageUrl: giftManageUrl(base, gift.code, manageKey) }), replyTo: owner, recipients: [{ email: gift.buyerEmail }] }, { timeoutMs });
+      await mailer.send({ ...giftBuyerEmail({ gift, url: giftUrl(base, gift.code), manageUrl: giftManageUrl(base, gift.code, manageKey) }), replyTo: owner, recipients: [{ email: gift.buyerEmail }] }, { timeoutMs, idempotency: await idempotencyKey('gift-buyer', gift.code) });
     } catch (error) {
-      await store.clearGiftEmailed(gift.code).catch(() => {});
+      if (!resend) await store.clearGiftEmailed(gift.code).catch(() => {});
       return { emailed: false, error: String(error?.message || error) };
     }
     await store.addEmailSends(today(), EMAIL_SENDS_EVENT, 1).catch(() => {});
@@ -540,72 +643,220 @@ export function createPlannerApi({
   }
 
   async function plusClaimAnswer(purchase, key, cors) {
-    if (!await store.claimPurchase(purchase.stripeSession, PLUS_CLAIMS_MAX)) {
+    if (!await store.claimPurchase(purchase.checkoutRef, PLUS_CLAIMS_MAX)) {
       return json(409, { error: `This purchase has already been activated ${PLUS_CLAIMS_MAX} times. Reply to your receipt and we will help.` }, cors);
     }
     const license = await signLicense(key, { src: 'purchase', id: purchase.licenseId, iat: String(purchase.createdAt).slice(0, 10) });
     return json(200, { kind: 'plus', license }, cors);
   }
 
-  async function claimRoute(request, cors) {
-    if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
-    const body = await readJson(request);
-    if (!paymentsConfigured) return json(503, { error: 'Payments are not configured.' }, cors);
-    const key = await signer();
-    if (!key) return json(503, { error: PLUS_OFF }, cors);
-    const sessionId = typeof body?.session === 'string' ? body.session.trim() : '';
-    if (!STRIPE_SESSION_RE.test(sessionId)) return json(404, { error: PAYMENT_UNKNOWN }, cors);
-    // Known sessions are answered from the database, without asking Stripe again.
-    const purchase = await store.getPurchase(sessionId);
-    if (purchase?.kind === 'plus') return plusClaimAnswer(purchase, key, cors);
-    const existingGift = await store.getGiftBySession(sessionId);
-    if (existingGift) return giftClaimAnswer(existingGift, cors);
-    if (isUnknownSession(sessionId)) return json(404, { error: PAYMENT_UNKNOWN }, cors);
-
-    let session;
+  /**
+   * Email a Plus buyer the activation link, once per checkout: the payment's
+   * emailed_at is claimed first and released if Resend refuses (the webhook is
+   * then answered 500, so Creem sends it again). The Idempotency-Key makes a
+   * repeat within 24 hours harmless even if our answer was lost.
+   */
+  async function emailPlusBuyer(checkoutId, email) {
+    if (!await store.markPaymentEmailed(checkoutId, now().toISOString())) return { emailed: false, already: true };
+    const content = plusPurchaseEmail({ url: `${baseUrl()}/?purchase=${encodeURIComponent(checkoutId)}`, devices: PLUS_CLAIMS_MAX });
     try {
-      session = await fetchCheckoutSession({ secretKey: stripeKey, sessionId, fetch: stripeFetchImpl });
+      await mailer.send({ ...content, replyTo: owner, recipients: [{ email }] }, { timeoutMs: BUYER_EMAIL_TIMEOUT_MS, idempotency: await idempotencyKey('plus-purchase', checkoutId) });
     } catch (error) {
-      safeWarn(`Stripe session not read: ${error?.message || error}`);
-      return json(502, { error: 'The payment could not be checked right now. Please try again in a minute.' }, cors);
+      await store.clearPaymentEmailed(checkoutId).catch(() => {});
+      return { emailed: false, error: String(error?.message || error) };
     }
-    if (!session) {
-      rememberUnknownSession(sessionId);
-      return json(404, { error: PAYMENT_UNKNOWN }, cors);
-    }
-    const paid = readCheckoutSession(session, stripe.prices);
-    if (!paid.item) {
-      rememberUnknownSession(sessionId);
-      return json(404, { error: NOT_PLUS_PAYMENT }, cors);
-    }
-    if (!paid.paid) return json(402, { error: 'This payment is not complete yet.' }, cors);
+    await store.addEmailSends(today(), EMAIL_SENDS_EVENT, 1).catch(() => {});
+    return { emailed: true };
+  }
+
+  /**
+   * Turn a paid checkout into what it bought, once: the same checkout always
+   * gives the same purchase (one licence id) or the same gift, whether the
+   * claim or the webhook comes first. The payment row feeds the sales chart;
+   * a claim still answers when it cannot be written (migration 0004 missing),
+   * the webhook does not (Creem retries it).
+   */
+  async function fulfil(checkoutId, paid, { strict }) {
     const createdAt = now().toISOString();
-    if (paid.item.kind === 'plus') {
-      const row = { stripeSession: sessionId, kind: 'plus', licenseId: newLicenseId(), claims: 1, email: paid.email.slice(0, 254), note: '', createdAt };
-      if (await store.addPurchase(row)) {
-        return json(200, { kind: 'plus', license: await signLicense(key, { src: 'purchase', id: row.licenseId, iat: createdAt.slice(0, 10) }) }, cors);
-      }
-      // Claimed at the same moment by another request: answer like a repeat claim.
-      const again = await store.getPurchase(sessionId);
-      if (again?.kind === 'plus') return plusClaimAnswer(again, key, cors);
-      return json(404, { error: PAYMENT_UNKNOWN }, cors);
+    const { kind, plan, seats } = paid.item;
+    const payment = store.addPayment({ checkoutId, kind, plan, seats, amount: paid.amount, currency: paid.currency, country: paid.country, createdAt });
+    if (strict) await payment;
+    else await payment.catch(error => safeWarn(`Payment ${checkoutId} not recorded: ${error?.message || error}`));
+    if (kind === 'plus') {
+      await store.addPurchase({ checkoutRef: checkoutId, kind: 'plus', licenseId: newLicenseId(), claims: 0, email: paid.email.slice(0, 254), note: creem.mode === 'test' ? TEST_NOTE : '', createdAt });
+      return { purchase: await store.getPurchase(checkoutId) };
     }
     const gift = await createGift({
       org: cleanOrg(paid.org) || 'Your company',
-      seats: paid.item.seats,
-      source: 'stripe',
-      stripeSession: sessionId,
+      seats,
+      source: 'creem',
+      checkoutRef: checkoutId,
       buyerEmail: paid.email.slice(0, 254),
-      currency: paid.currency === 'EUR' || paid.currency === 'USD' ? paid.currency : '',
+      currency: paid.currency,
       amount: paid.amount,
-      note: paid.item.plan ? `Stripe · ${TEAM_PLAN_LABELS[paid.item.plan] || paid.item.plan}` : 'Stripe'
+      note: `${creem.mode === 'test' ? `${TEST_NOTE} · ` : ''}Creem · ${TEAM_PLAN_LABELS[plan] || plan}`
     });
-    return giftClaimAnswer(gift, cors);
+    return { gift };
+  }
+
+  async function claimRoute(request, cors) {
+    if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+    const body = await readJson(request);
+    const key = await signer();
+    if (!key) return json(503, { error: PLUS_OFF }, cors);
+    // `checkout` (Creem's checkout_id); `session` is the older name of the same field.
+    const given = typeof body?.checkout === 'string' ? body.checkout : typeof body?.session === 'string' ? body.session : '';
+    const checkoutId = given.trim();
+    if (!CHECKOUT_ID_RE.test(checkoutId)) return json(404, { error: PAYMENT_UNKNOWN }, cors);
+    // The gift page asks for a gift only: a Plus purchase opened there is sent
+    // to the planner instead of spending one of its activations here.
+    const giftOnly = body?.expect === 'gift';
+    const notAGift = () => json(409, { kind: 'plus', error: 'This payment is for Daily Planner Plus: open it in the planner.' }, cors);
+    // Known checkouts are answered from the database, without asking Creem again —
+    // except purchases made while testing, once the live keys are in place.
+    const purchase = await store.getPurchase(checkoutId);
+    if (purchase?.kind === 'plus') {
+      if (creem.mode === 'live' && isTestRow(purchase)) return json(410, { error: TEST_PURCHASE }, cors);
+      return giftOnly ? notAGift() : plusClaimAnswer(purchase, key, cors);
+    }
+    const existingGift = await store.getGiftByCheckout(checkoutId);
+    if (existingGift) {
+      if (creem.mode === 'live' && isTestRow(existingGift)) return json(410, { error: TEST_PURCHASE }, cors);
+      return giftClaimAnswer(existingGift, cors);
+    }
+    const remembered = rememberedCheckout(checkoutId);
+    if (remembered) return json(remembered.status, { error: remembered.error }, cors);
+    if (!paymentsConfigured) return json(503, { error: PAYMENTS_OFF }, cors);
+
+    let checkout;
+    try {
+      checkout = await fetchCheckout({ ...creem, checkoutId });
+    } catch (error) {
+      safeWarn(`Creem checkout not read: ${error?.message || error}`);
+      return json(502, { error: 'The payment could not be checked right now. Please try again in a minute.' }, cors);
+    }
+    const refuse = (status, error) => { rememberCheckout(checkoutId, status, error); return json(status, { error }, cors); };
+    if (!checkout) return refuse(404, PAYMENT_UNKNOWN);
+    const paid = readCheckout(checkout, products.byId);
+    if (!paid.item || !await honoured(paid)) return refuse(404, NOT_PLUS_PAYMENT);
+    if (checkout.status === 'expired') return refuse(410, 'This checkout expired before it was paid.');
+    if (!paid.paid) return json(402, { error: 'This payment is not complete yet.' }, cors);
+    if (giftOnly && paid.item.kind === 'plus') return notAGift();
+    const result = await fulfil(checkoutId, paid, { strict: false });
+    if (result.gift) return giftClaimAnswer(result.gift, cors);
+    if (result.purchase?.kind === 'plus') return plusClaimAnswer(result.purchase, key, cors);
+    return json(404, { error: PAYMENT_UNKNOWN }, cors);
+  }
+
+  /** What can be bought right now: currencies with a product, while payments and Plus are set up. */
+  async function checkoutOptions(request) {
+    const ready = paymentsConfigured && !testOnProduction(request) && !!await signer();
+    const currencies = item => (ready ? CURRENCIES.filter(currency => products.ids[item][currency]) : []);
+    return { plus: currencies('plus'), gift: currencies('gift'), test: ready && creem.mode === 'test' };
+  }
+
+  async function checkoutRoute(request, cors) {
+    if (request.method === 'GET') return json(200, await checkoutOptions(request), cors);
+    if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+    const body = await readJson(request);
+    const item = typeof body?.item === 'string' ? body.item : '';
+    if (!CREEM_ITEMS.includes(item)) return json(400, { error: 'Choose Daily Planner Plus or a team gift.' }, cors);
+    const currency = validCurrency(typeof body?.currency === 'string' ? body.currency.trim().toUpperCase() : '');
+    if (!currency) return json(400, { error: 'Choose a currency: EUR or USD.' }, cors);
+    const tier = item === 'gift' ? teamTier(typeof body?.plan === 'string' ? body.plan : '') : null;
+    if (item === 'gift' && !tier) return json(400, { error: 'Choose how many people the team gift is for.' }, cors);
+    const productId = products.ids[item][currency];
+    if (!paymentsConfigured || !productId || testOnProduction(request) || !await signer()) return json(503, { error: CHECKOUT_OFF }, cors);
+    const base = returnBase(request);
+    const rid = `dp_${newLicenseId()}`;
+    const plan = tier?.plan || '';
+    const seal = await checkoutSeal(signingSecret, { kind: item, plan, currency, rid });
+    const payload = item === 'plus'
+      ? { product_id: productId, request_id: rid, success_url: `${base}/`, metadata: { kind: 'plus', currency, rid, seal } }
+      : {
+        product_id: productId,
+        request_id: rid,
+        units: 1,
+        custom_price: priceCents('gift', plan, currency),
+        custom_fields: [COMPANY_FIELD],
+        success_url: `${base}/welcome/thanks/`,
+        metadata: { kind: 'gift', plan, seats: String(tier.seats), currency, rid, seal }
+      };
+    let checkout;
+    try {
+      checkout = await createCheckout({ ...creem, body: payload });
+    } catch (error) {
+      safeWarn(`Creem checkout not opened: ${error?.message || error}`);
+      return json(502, { error: CHECKOUT_FAILED }, cors);
+    }
+    const url = typeof checkout.checkout_url === 'string' ? checkout.checkout_url : '';
+    if (!/^https?:\/\/[^\s]+$/i.test(url)) {
+      safeWarn('Creem checkout not opened: the answer has no checkout_url.');
+      return json(502, { error: CHECKOUT_FAILED }, cors);
+    }
+    return json(201, { url }, cors);
+  }
+
+  /**
+   * POST /api/creem/webhook. The signature covers the raw body, so the body is
+   * read as bytes before any JSON parsing. checkout.completed is processed like
+   * a claim (idempotent) and emails the buyer; other events are acknowledged.
+   * Any failure answers 5xx so Creem tries again later.
+   */
+  async function webhookRoute(request, cors) {
+    if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+    if (!webhookSecret) return json(503, { error: 'The Creem webhook is not set up: add CREEM_WEBHOOK_SECRET, then redeploy.' }, cors);
+    const signature = (request.headers.get('creem-signature') || '').trim();
+    if (!/^[0-9a-f]{64}$/i.test(signature)) return json(401, { error: INVALID_SIGNATURE }, cors);
+    const raw = await readBody(request, WEBHOOK_MAX_BYTES);
+    if (!await verifyWebhookSignature(raw, signature, webhookSecret)) return json(401, { error: INVALID_SIGNATURE }, cors);
+    let event;
+    try { event = JSON.parse(new TextDecoder().decode(raw)); } catch { return json(400, { error: 'Invalid JSON' }, cors); }
+    const received = () => json(200, { received: true }, cors);
+    if (String(event?.eventType || event?.type || '') !== 'checkout.completed') return received();
+    // Creem sends the checkout as `object`; `data` (or data.object) is read too, defensively.
+    const checkout = [event?.object, event?.data?.object, event?.data].find(value => value && typeof value === 'object' && !Array.isArray(value));
+    const checkoutId = String(checkout?.id ?? '').trim();
+    if (!CHECKOUT_ID_RE.test(checkoutId)) {
+      safeWarn('Creem webhook: checkout.completed without a usable checkout id.');
+      return received();
+    }
+    const paid = readCheckout(checkout, products.byId);
+    if (!paid.item) {
+      safeWarn(`Creem webhook: checkout ${checkoutId} is not for a Daily Planner product (${paid.productId || 'no product'}); nothing to do.`);
+      return received();
+    }
+    if (!await honoured(paid)) {
+      safeWarn(`Creem webhook: checkout ${checkoutId} was not opened by this site (no valid seal); nothing delivered. Check it in Creem and refund or create the gift by hand.`);
+      return received();
+    }
+    if (!paid.paid) return received();
+    if (!await signer()) return json(503, { error: PLUS_OFF }, cors);
+    const result = await fulfil(checkoutId, paid, { strict: true });
+    let email = null;
+    if (result.gift && mailer.configured && result.gift.buyerEmail) {
+      email = await emailGiftBuyer(result.gift, await manageKeyOf(result.gift.code), BUYER_EMAIL_TIMEOUT_MS);
+      // The gift page may have started the same email moments ago and could still
+      // fail: send it here too (Resend keeps one copy per Idempotency-Key).
+      if (email.already) {
+        const current = await store.getGift(result.gift.code);
+        const startedAt = Date.parse(current?.emailedAt || '');
+        if (Number.isFinite(startedAt) && now().getTime() - startedAt < EMAIL_IN_FLIGHT_MS) {
+          email = await emailGiftBuyer(current, await manageKeyOf(current.code), BUYER_EMAIL_TIMEOUT_MS, { resend: true });
+        }
+      }
+    }
+    const buyer = result.purchase?.email || paid.email;
+    if (result.purchase?.kind === 'plus' && mailer.configured && buyer) email = await emailPlusBuyer(checkoutId, buyer);
+    if (email?.error) {
+      safeWarn(`Buyer email for ${checkoutId} not sent: ${email.error}`);
+      return json(500, { error: 'The buyer email was not sent; it will be tried again.' }, cors);
+    }
+    return received();
   }
 
   async function setupInfo() {
     const publicKey = await plusPublicKey();
-    const kinds = [...stripe.prices.values()];
     return {
       email: {
         configured: mailer.configured,
@@ -615,19 +866,48 @@ export function createPlannerApi({
         ownerEmail: owner?.email || '',
         dailyLimit
       },
-      stripe: {
+      payments: {
+        provider: 'creem',
         configured: paymentsConfigured,
-        keySet: !!stripeKey,
-        mode: stripeMode(stripeKey),
-        plusPrices: kinds.filter(price => price.kind === 'plus').length,
-        giftPrices: kinds.filter(price => price.kind === 'gift').length,
-        error: stripe.error
+        apiKeySet: !!creem.apiKey,
+        mode: creem.mode,
+        products: { plus: { ...products.ids.plus }, gift: { ...products.ids.gift } },
+        webhookSecretSet: !!webhookSecret,
+        webhookUrl: `${baseUrl()}/api/creem/webhook`,
+        error: products.error
       },
       plus: { configured: !!publicKey, keySet: !!signingSecret, publicKey },
       publicBaseUrl: baseUrl(),
       publicBaseUrlSet: !!normalizeBaseUrl(typeof publicBaseUrl === 'function' ? publicBaseUrl() : publicBaseUrl),
       twoFactor: totpEnabled
     };
+  }
+
+  /**
+   * Daily counts and sales between two days, for the dashboard charts. Counts
+   * are summed across app versions (internal rows excluded); sales are the
+   * recorded Creem payments plus manual gifts that have an amount.
+   */
+  async function seriesAnswer(url) {
+    const { from, to } = seriesRange(url.searchParams.get('from'), url.searchParams.get('to'), today());
+    const [rows, payments, gifts] = await Promise.all([
+      store.eventsSeries(from, to),
+      store.listPayments({ fromDay: from, toDay: to }).catch(() => null),
+      store.listGifts().catch(() => null)
+    ]);
+    const events = {};
+    for (const row of rows) {
+      if (String(row.name).startsWith(INTERNAL_EVENT_PREFIX)) continue;
+      events[row.name] ||= {};
+      events[row.name][row.day] = (events[row.name][row.day] || 0) + (Number(row.count) || 0);
+    }
+    const number = value => (value == null || value === '' ? null : Number(value));
+    const sales = [
+      ...(payments || []).map(row => ({ day: String(row.createdAt).slice(0, 10), kind: row.kind, source: 'creem', plan: row.plan || '', seats: number(row.seats), amount: number(row.amount), currency: row.currency || '' })),
+      ...(gifts || []).filter(gift => gift.source === 'manual' && gift.amount != null && gift.createdAt.slice(0, 10) >= from && gift.createdAt.slice(0, 10) <= to)
+        .map(gift => ({ day: gift.createdAt.slice(0, 10), kind: 'gift', source: 'manual', plan: TEAM_TIERS.find(tier => tier.seats === gift.seats)?.plan || '', seats: gift.seats, amount: gift.amount, currency: gift.currency }))
+    ].sort((a, b) => a.day.localeCompare(b.day) || a.source.localeCompare(b.source) || a.kind.localeCompare(b.kind) || (a.seats ?? 0) - (b.seats ?? 0) || (a.amount ?? 0) - (b.amount ?? 0));
+    return { from, to, events, sales, salesUnavailable: !payments || !gifts };
   }
 
   async function adminGifts(request, path, cors) {
@@ -645,7 +925,7 @@ export function createPlannerApi({
       if (sendEmail && !result.fields.buyerEmail) return json(400, { error: 'Add the buyer’s email address to email the link.' }, cors);
       if (sendEmail && !mailer.configured) return json(400, { error: 'Email is not set up (RESEND_API_KEY and EMAIL_FROM), so the link cannot be emailed. Untick “Email the link” and copy it instead.' }, cors);
       if (!await signer()) return json(503, { error: `${PLUS_OFF} Set PLUS_SIGNING_KEY (npm run plus:keys), then redeploy.` }, cors);
-      const gift = await createGift({ ...result.fields, source: 'manual', stripeSession: null });
+      const gift = await createGift({ ...result.fields, source: 'manual', checkoutRef: null });
       const answer = await adminGift(gift, now().toISOString());
       const email = sendEmail ? await emailGiftBuyer(gift, answer.manageKey, DEFAULT_EMAIL_TIMEOUT_MS) : null;
       if (email?.emailed) answer.emailedAt = now().toISOString();
@@ -657,10 +937,10 @@ export function createPlannerApi({
     if (request.method === 'DELETE') {
       const existing = code ? await store.getGift(code) : null;
       if (!existing) return json(404, { removed: false }, cors);
-      // A paid Stripe gift is switched off, never erased: its row is the only
-      // record of the session, and erasing it would let the same checkout
-      // create a fresh gift with all its seats again.
-      if (existing.stripeSession) {
+      // A paid gift is switched off, never erased: its row is the only record
+      // of the checkout, and erasing it would let the same checkout create a
+      // fresh gift with all its seats again.
+      if (existing.checkoutRef) {
         await store.updateGift(code, { active: false });
         return json(200, { removed: false, deactivated: true }, cors);
       }
@@ -687,7 +967,7 @@ export function createPlannerApi({
     const id = newLicenseId();
     const createdAt = now().toISOString();
     // Recorded as a "manual" row of the purchases table: an id, a date and the owner's note.
-    await store.addPurchase({ stripeSession: `manual_${id}`, kind: 'manual', licenseId: id, claims: 0, email: '', note, createdAt });
+    await store.addPurchase({ checkoutRef: `manual_${id}`, kind: 'manual', licenseId: id, claims: 0, email: '', note, createdAt });
     const license = await signLicense(key, { src: 'manual', id, iat: isoDay(new Date(createdAt)) });
     return json(201, { license, url: licenseUrl(baseUrl(), license) }, cors);
   }
@@ -737,7 +1017,9 @@ export function createPlannerApi({
       // 0002 or 0003 migration has not been applied yet.
       const teams = Promise.all([store.listTeamRequests({ limit: 200 }), store.teamRequestTotals()]).catch(() => null);
       const plusTables = Promise.all([store.listGifts({ limit: 200 }), store.giftTotals(), store.purchaseTotals(), store.listPurchases({ kind: 'manual', limit: 10 })]).catch(() => null);
-      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, setup] = await Promise.all([
+      // Reviews come from migration 0004; without it the rest still loads.
+      const reviewRows = store.listReviews({ limit: REVIEWS_LATEST }).catch(() => null);
+      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, setup] = await Promise.all([
         store.eventTotals({ sinceDay }).then(publicEvents),
         store.eventDaily({ sinceDay }).then(publicEvents),
         store.listWaitlist(),
@@ -746,18 +1028,21 @@ export function createPlannerApi({
         teams,
         store.emailSendsOn(today(), EMAIL_SENDS_EVENT),
         plusTables,
+        reviewRows,
         setupInfo()
       ]);
       const [teamRequests, teamRequestTotals] = teamData || [[], { count: 0, seats: 0 }];
-      const [giftRows, giftTotals, purchaseTotals, manualLicenses] = plusData || [[], { count: 0, seats: 0, redeemed: 0, stripe: 0 }, { plus: 0, manual: 0 }, []];
+      const [giftRows, giftTotals, purchaseTotals, manualLicenses] = plusData || [[], { count: 0, seats: 0, redeemed: 0, paid: 0 }, { plus: 0, manual: 0 }, []];
       return json(200, {
         generatedAt: nowIso, sinceDay, eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamRequests, teamRequestTotals, teamRequestsUnavailable: !teamData,
         emailConfigured: mailer.configured, emailTestAvailable: mailer.configured && !!owner, emailDailyLimit: dailyLimit, emailsSentToday, emailsPerSend: EMAILS_PER_SEND,
         gifts: await Promise.all(giftRows.map(gift => adminGift(gift, nowIso))), giftTotals, plusUnavailable: !plusData,
         plus: { purchases: purchaseTotals.plus, manualLicenses: purchaseTotals.manual, recentLicenses: manualLicenses.map(row => ({ id: row.licenseId, note: row.note, createdAt: row.createdAt })) },
+        reviews: reviews || [], reviewsUnavailable: !reviews,
         setup
       }, cors);
     }
+    if (request.method === 'GET' && path === 'admin/series') return json(200, await seriesAnswer(url), cors);
     if (request.method === 'GET' && path === 'admin/feedback') {
       const version = url.searchParams.get('version') || '';
       const rows = await store.listFeedback({ version: VERSION_RE.test(version) ? version : '', limit: 500 });
@@ -780,9 +1065,9 @@ export function createPlannerApi({
       const answer = await adminGifts(request, path, cors);
       if (answer) return answer;
     }
-    const removal = path.match(/^admin\/(waitlist|feedback|teams)\/(\d+)$/);
+    const removal = path.match(/^admin\/(waitlist|feedback|teams|reviews)\/(\d+)$/);
     if (request.method === 'DELETE' && removal) {
-      const remove = { waitlist: store.deleteWaitlist, feedback: store.deleteFeedback, teams: store.deleteTeamRequest }[removal[1]];
+      const remove = { waitlist: store.deleteWaitlist, feedback: store.deleteFeedback, teams: store.deleteTeamRequest, reviews: store.deleteReview }[removal[1]];
       const removed = await remove.call(store, Number(removal[2]));
       return json(removed ? 200 : 404, { removed: !!removed }, cors);
     }
@@ -797,6 +1082,9 @@ export function createPlannerApi({
     try {
       if (path === 'health' && request.method === 'GET') return json(200, { ok: true }, cors);
       if (path.startsWith('admin/')) return await admin(request, path, url, cors);
+      // Before any JSON parsing: the signature covers the raw body.
+      if (path === 'creem/webhook') return await webhookRoute(request, cors);
+      if (path === 'checkout') return await checkoutRoute(request, cors);
       const gift = /^gifts\/([^/]{1,40})(\/redeem)?$/.exec(path);
       if (gift) return await giftRoute(request, gift, cors);
       if (path === 'purchases/claim') return await claimRoute(request, cors);
@@ -832,6 +1120,8 @@ export function createPlannerApi({
         if (result.spam) return json(201, { ok: true }, cors);
         if (result.error) return json(400, { error: result.error }, cors);
         await store.addFeedback(result.entry);
+        // A quotable review is kept apart; without migration 0004 the feedback still counts.
+        if (result.review) await store.addReview(result.review).catch(error => safeWarn(`Review not stored: ${error?.message || error}`));
         return json(201, { ok: true }, cors);
       }
       if (path === 'teams') {
@@ -856,7 +1146,8 @@ export function createPlannerApi({
 /**
  * In-memory store with optional persistence hooks; used by the dev server and
  * the unit tests. Mirrors the D1 store's behaviour (unique emails, counts,
- * oldest-first announcement order, internal email-send counts, gift limits).
+ * oldest-first announcement order, internal email-send counts, gift limits,
+ * one gift, purchase and payment per checkout).
  */
 export function createMemoryStore(initial = {}, { onChange = null } = {}) {
   const data = {
@@ -866,8 +1157,17 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
     teamRequests: Array.isArray(initial.teamRequests) ? initial.teamRequests : [],
     gifts: Array.isArray(initial.gifts) ? initial.gifts : [],
     purchases: Array.isArray(initial.purchases) ? initial.purchases : [],
+    payments: Array.isArray(initial.payments) ? initial.payments : [],
+    reviews: Array.isArray(initial.reviews) ? initial.reviews : [],
     nextId: Number(initial.nextId) || 1
   };
+  // Data files written before 1.21 call the checkout reference stripeSession.
+  for (const row of [...data.gifts, ...data.purchases]) {
+    if (row && typeof row === 'object' && row.checkoutRef === undefined && 'stripeSession' in row) {
+      row.checkoutRef = row.stripeSession ?? null;
+      delete row.stripeSession;
+    }
+  }
   const changed = () => onChange?.(data);
   const byNewest = (a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || b.id - a.id;
   const findGift = code => data.gifts.find(item => item.code === code);
@@ -875,13 +1175,13 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
   return {
     data,
     async addGift(gift) {
-      if (data.gifts.some(item => item.code === gift.code || (gift.stripeSession && item.stripeSession === gift.stripeSession))) return false;
+      if (data.gifts.some(item => item.code === gift.code || (gift.checkoutRef && item.checkoutRef === gift.checkoutRef))) return false;
       data.gifts.push({ ...normalizeGift(gift) });
       changed();
       return true;
     },
     async getGift(code) { return normalizeGift(findGift(code)); },
-    async getGiftBySession(session) { return normalizeGift(data.gifts.find(item => item.stripeSession === session)); },
+    async getGiftByCheckout(ref) { return normalizeGift(data.gifts.find(item => item.checkoutRef === ref)); },
     async listGifts({ limit = 0 } = {}) {
       const rows = [...data.gifts].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || a.code.localeCompare(b.code)).map(normalizeGift);
       return limit ? rows.slice(0, limit) : rows;
@@ -891,8 +1191,8 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
         count: totals.count + 1,
         seats: totals.seats + (Number(item.seats) || 0),
         redeemed: totals.redeemed + (Number(item.redeemed) || 0),
-        stripe: totals.stripe + (item.source === 'stripe' ? 1 : 0)
-      }), { count: 0, seats: 0, redeemed: 0, stripe: 0 });
+        paid: totals.paid + (String(item.source ?? 'manual') !== 'manual' ? 1 : 0)
+      }), { count: 0, seats: 0, redeemed: 0, paid: 0 });
     },
     /** One activation, only while the gift is active, unexpired and under its limit. */
     async redeemGift(code, nowIso) {
@@ -933,18 +1233,18 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
       const gift = findGift(code);
       if (gift) { gift.emailedAt = null; changed(); }
     },
-    async getPurchase(session) {
-      const row = data.purchases.find(item => item.stripeSession === session);
+    async getPurchase(ref) {
+      const row = data.purchases.find(item => item.checkoutRef === ref);
       return row ? { ...row } : null;
     },
     async addPurchase(row) {
-      if (data.purchases.some(item => item.stripeSession === row.stripeSession)) return false;
+      if (data.purchases.some(item => item.checkoutRef === row.checkoutRef)) return false;
       data.purchases.push({ note: '', ...row });
       changed();
       return true;
     },
-    async claimPurchase(session, max) {
-      const row = data.purchases.find(item => item.stripeSession === session);
+    async claimPurchase(ref, max) {
+      const row = data.purchases.find(item => item.checkoutRef === ref);
       if (!row || row.claims >= max) return false;
       row.claims += 1;
       changed();
@@ -955,6 +1255,52 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
     },
     async listPurchases({ kind = '', limit = 50 } = {}) {
       return data.purchases.filter(item => !kind || item.kind === kind).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, limit).map(row => ({ ...row }));
+    },
+    async addPayment(row) {
+      if (data.payments.some(item => item.checkoutId === row.checkoutId)) return false;
+      data.payments.push({ plan: '', seats: null, amount: null, currency: '', country: '', ...row, emailedAt: null });
+      changed();
+      return true;
+    },
+    async getPayment(id) {
+      const row = data.payments.find(item => item.checkoutId === id);
+      return row ? { ...row } : null;
+    },
+    async listPayments({ fromDay, toDay }) {
+      return data.payments.filter(item => String(item.createdAt).slice(0, 10) >= fromDay && String(item.createdAt).slice(0, 10) <= toDay)
+        .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)) || String(a.checkoutId).localeCompare(String(b.checkoutId))).map(row => ({ ...row }));
+    },
+    async markPaymentEmailed(id, iso) {
+      const row = data.payments.find(item => item.checkoutId === id);
+      if (!row || row.emailedAt) return false;
+      row.emailedAt = iso;
+      changed();
+      return true;
+    },
+    async clearPaymentEmailed(id) {
+      const row = data.payments.find(item => item.checkoutId === id);
+      if (row) { row.emailedAt = null; changed(); }
+    },
+    async addReview(entry) {
+      data.reviews.push({ id: data.nextId++, appVersion: entry.appVersion, rating: entry.rating, text: entry.text, name: entry.name || '', createdAt: entry.createdAt });
+      changed();
+    },
+    async listReviews({ limit = 50 } = {}) {
+      return [...data.reviews].sort(byNewest).slice(0, limit).map(row => ({ ...row }));
+    },
+    async deleteReview(id) {
+      const before = data.reviews.length;
+      data.reviews = data.reviews.filter(item => item.id !== id);
+      changed();
+      return before !== data.reviews.length;
+    },
+    async eventsSeries(fromDay, toDay) {
+      const totals = new Map();
+      data.events.filter(item => item.day >= fromDay && item.day <= toDay && !String(item.name).startsWith(INTERNAL_EVENT_PREFIX)).forEach(item => {
+        const key = `${item.day}|${item.name}`;
+        totals.set(key, { day: item.day, name: item.name, count: (totals.get(key)?.count || 0) + item.count });
+      });
+      return [...totals.values()].sort((a, b) => a.day.localeCompare(b.day) || a.name.localeCompare(b.name));
     },
     async countEvent(day, name, appVersion) {
       const row = data.events.find(item => item.day === day && item.name === name && item.appVersion === appVersion);

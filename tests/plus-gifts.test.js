@@ -1,15 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createMemoryStore, createPlannerApi, EMAIL_SENDS_EVENT, PLUS_CLAIMS_MAX } from '../server/planner-api.js';
+import { createMemoryStore, createPlannerApi } from '../server/planner-api.js';
 import { createD1Store } from '../server/d1-store.js';
 import { formatGiftCode, GIFT_CODE_ALPHABET, giftForwardMessage, giftLimit, newGiftCode, normalizeGiftCode, validateGiftFields } from '../server/gifts.js';
 import { generatePlusKeyPair, giftManageKey, verifyLicense } from '../server/licenses.js';
-import { parseStripePrices, readCheckoutSession, stripeMode } from '../server/stripe.js';
 
 const START = Date.parse('2026-10-09T08:00:00Z');
 const KEYS = await generatePlusKeyPair();
-const PRICES = { price_plus: { kind: 'plus' }, price_pack50: { kind: 'gift', seats: 50, plan: 'up-to-50' }, price_pack10: { kind: 'gift', seats: 10, plan: 'up-to-10' } };
+// Paid checkouts, the webhook and the setup summary are covered in tests/creem.test.js.
+const PRODUCTS = { plus: { EUR: 'prod_plus_eur', USD: 'prod_plus_usd' }, gift: { EUR: 'prod_gift_eur', USD: 'prod_gift_usd' } };
 const request = (method, path, body, token) => new Request(`https://planner.test/api/${path}`, {
   method,
   headers: { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...(token ? { authorization: `Bearer ${token}` } : {}) },
@@ -20,30 +20,6 @@ const post = (path, body = {}, token) => request('POST', path, body, token);
 const patch = (path, body, token) => request('PATCH', path, body, token);
 const del = (path, token) => request('DELETE', path, undefined, token);
 const asJson = async response => ({ status: response.status, body: await response.json() });
-
-function checkoutSession(id, { price = 'price_plus', paid = true, status = 'complete', company = '', name = 'Ada Buyer', email = 'Buyer@Example.com', quantity = 1, currency = 'eur', amount = 2900 } = {}) {
-  return {
-    id, object: 'checkout.session', status, payment_status: paid ? 'paid' : 'unpaid', currency, amount_total: amount,
-    customer_details: { email, name },
-    custom_fields: company ? [{ key: 'company', type: 'text', text: { value: company } }] : [],
-    line_items: { object: 'list', data: [{ object: 'item', price: { id: price }, quantity }] }
-  };
-}
-
-/** Stand-in for Stripe: GET /v1/checkout/sessions/:id from a dictionary; `status` forces an error. */
-function fakeStripe(sessions = {}, { status = 0 } = {}) {
-  const calls = [];
-  const fetch = async (url, init) => {
-    calls.push({ url, headers: init.headers, method: init.method });
-    if (status) return new Response(JSON.stringify({ error: { message: 'Something broke' } }), { status, headers: { 'content-type': 'application/json' } });
-    const id = decodeURIComponent(new URL(url).pathname.split('/').pop());
-    const found = Object.hasOwn(sessions, id) ? sessions[id] : null;
-    return found
-      ? new Response(JSON.stringify(found), { status: 200, headers: { 'content-type': 'application/json' } })
-      : new Response(JSON.stringify({ error: { message: `No such checkout.session: '${id}'` } }), { status: 404, headers: { 'content-type': 'application/json' } });
-  };
-  return { fetch, calls, sessions };
-}
 
 function fakeResend({ fail = () => 0 } = {}) {
   const calls = [];
@@ -57,21 +33,31 @@ function fakeResend({ fail = () => 0 } = {}) {
   return { fetch, calls };
 }
 
-function setup({ store = createMemoryStore(), clock = { now: START }, stripe = fakeStripe(), resend = fakeResend(), ...options } = {}) {
+/** Stand-in for Creem: every checkout is unknown. */
+function fakeCreem() {
+  const calls = [];
+  const fetch = async url => {
+    calls.push(String(url));
+    return new Response(JSON.stringify({ message: ['Checkout not found'] }), { status: 404, headers: { 'content-type': 'application/json' } });
+  };
+  return { fetch, calls };
+}
+
+function setup({ store = createMemoryStore(), clock = { now: START }, creem = fakeCreem(), resend = fakeResend(), ...options } = {}) {
   const deferred = [];
   const warnings = [];
   const api = createPlannerApi({
     store, adminToken: 'secret', now: () => new Date(clock.now), authFailureDelayMs: 0,
-    plusSigningKey: KEYS.signingKey, stripeSecretKey: 'rk_test_51abc', stripePrices: JSON.stringify(PRICES), stripeFetch: stripe.fetch,
+    plusSigningKey: KEYS.signingKey, creemApiKey: 'creem_test_abc', creemProducts: PRODUCTS, creemFetch: creem.fetch,
     resendApiKey: 're_test_key', emailFrom: 'Ben Morin <hello@bemorin.example>', ownerEmail: 'owner@bemorin.example', emailFetch: resend.fetch, emailIntervalMs: 0,
     defer: promise => deferred.push(promise), warn: message => warnings.push(message),
     ...options
   });
   const settle = () => Promise.all(deferred.splice(0));
-  return { api, store, clock, stripe, resend, deferred, warnings, settle };
+  return { api, store, clock, creem, resend, deferred, warnings, settle };
 }
 
-async function openSqlite(t, migrations = ['0001_planner_api.sql', '0002_team_requests.sql', '0003_plus.sql']) {
+async function openSqlite(t, migrations = ['0001_planner_api.sql', '0002_team_requests.sql', '0003_plus.sql', '0004_creem_reviews.sql']) {
   let DatabaseSync;
   try { ({ DatabaseSync } = await import('node:sqlite')); } catch { t.skip('node:sqlite is not available in this Node version'); return null; }
   const sqlite = new DatabaseSync(':memory:');
@@ -274,14 +260,14 @@ test('the manage key lets the buyer change only the company name and the message
 test('without a usable PLUS_SIGNING_KEY nothing can be activated and the owner is told why', async () => {
   for (const plusSigningKey of ['', 'bm90IGEga2V5']) {
     const { api, store } = setup({ plusSigningKey });
-    await store.addGift({ code: 'ABCDEFGHJKMN', org: 'Acme', message: '', seats: 5, redeemed: 0, active: true, currency: '', amount: null, source: 'manual', stripeSession: null, buyerEmail: '', note: '', createdAt: '2026-10-09T08:00:00.000Z', expiresAt: '2027-10-09T08:00:00.000Z', emailedAt: null });
+    await store.addGift({ code: 'ABCDEFGHJKMN', org: 'Acme', message: '', seats: 5, redeemed: 0, active: true, currency: '', amount: null, source: 'manual', checkoutRef: null, buyerEmail: '', note: '', createdAt: '2026-10-09T08:00:00.000Z', expiresAt: '2027-10-09T08:00:00.000Z', emailedAt: null });
     assert.equal((await api(get('gifts/ABCD-EFGH-JKMN'))).status, 200, 'the gift can still be shown');
     const off = await asJson(await api(post('gifts/ABCD-EFGH-JKMN/redeem')));
     assert.equal(off.status, 503);
     assert.match(off.body.error, /not set up/);
     assert.equal((await store.getGift('ABCDEFGHJKMN')).redeemed, 0, 'no seat used');
     assert.equal((await api(patch('gifts/ABCD-EFGH-JKMN', { key: 'f'.repeat(64) }))).status, 503);
-    assert.equal((await api(post('purchases/claim', { session: 'cs_test_abcdefgh123' }))).status, 503);
+    assert.equal((await api(post('purchases/claim', { checkout: 'ch_abcdefgh123' }))).status, 503);
     const create = await asJson(await api(post('admin/gifts', { org: 'Acme', seats: 3 }, 'secret')));
     assert.equal(create.status, 503);
     assert.match(create.body.error, /PLUS_SIGNING_KEY/);
@@ -289,179 +275,6 @@ test('without a usable PLUS_SIGNING_KEY nothing can be activated and the owner i
     const { setup: info } = (await asJson(await api(get('admin/summary', 'secret')))).body;
     assert.deepEqual(info.plus, { configured: false, keySet: !!plusSigningKey, publicKey: '' });
   }
-});
-
-test('a Stripe Plus purchase becomes a licence, the same one on every claim (memory and D1)', async t => {
-  await bothStores(t, async (label, store) => {
-    const stripe = fakeStripe({ cs_live_plus123456: checkoutSession('cs_live_plus123456') });
-    const { api } = setup({ store, stripe });
-    const first = await asJson(await api(post('purchases/claim', { session: ' cs_live_plus123456 ' })));
-    assert.equal(first.status, 200, label);
-    assert.deepEqual(Object.keys(first.body), ['kind', 'license'], label);
-    assert.equal(first.body.kind, 'plus');
-    const payload = await verifyLicense(KEYS.publicKey, first.body.license);
-    assert.equal(payload.src, 'purchase');
-    assert.equal(payload.org, undefined);
-    // Stripe was asked exactly as documented.
-    assert.equal(stripe.calls.length, 1, label);
-    assert.equal(stripe.calls[0].url, 'https://api.stripe.com/v1/checkout/sessions/cs_live_plus123456?expand[]=line_items');
-    assert.equal(stripe.calls[0].method, 'GET');
-    assert.equal(stripe.calls[0].headers.authorization, 'Bearer rk_test_51abc');
-    const row = await store.getPurchase('cs_live_plus123456');
-    assert.deepEqual([row.kind, row.claims, row.email, row.licenseId], ['plus', 1, 'buyer@example.com', payload.id], label);
-    // Claims 2…10 answer the same licence id from the database; Stripe is not asked again.
-    for (let claim = 2; claim <= PLUS_CLAIMS_MAX; claim += 1) {
-      const again = await asJson(await api(post('purchases/claim', { session: 'cs_live_plus123456' })));
-      assert.equal(again.status, 200, `${label} claim ${claim}`);
-      assert.equal((await verifyLicense(KEYS.publicKey, again.body.license)).id, payload.id);
-    }
-    assert.equal(stripe.calls.length, 1, label);
-    const eleventh = await asJson(await api(post('purchases/claim', { session: 'cs_live_plus123456' })));
-    assert.equal(eleventh.status, 409, label);
-    assert.match(eleventh.body.error, /10 times/);
-    const summary = (await asJson(await api(get('admin/summary', 'secret')))).body;
-    assert.equal(summary.plus.purchases, 1, label);
-  });
-});
-
-test('a Stripe team pack becomes one gift, emailed once to the buyer (memory and D1)', async t => {
-  await bothStores(t, async (label, store) => {
-    const stripe = fakeStripe({
-      cs_test_pack50abcdef: checkoutSession('cs_test_pack50abcdef', { price: 'price_pack50', company: 'Acme <Studio>', email: 'Boss@Acme.example', amount: 59500 }),
-      cs_test_pack10x2abcd: checkoutSession('cs_test_pack10x2abcd', { price: 'price_pack10', quantity: 2, name: 'Globex Ltd', currency: 'usd', amount: 39000 })
-    });
-    const { api, resend, settle } = setup({ store, stripe });
-    const first = await asJson(await api(post('purchases/claim', { session: 'cs_test_pack50abcdef' })));
-    assert.equal(first.status, 200, label);
-    const answer = first.body;
-    assert.deepEqual(Object.keys(answer), ['kind', 'code', 'url', 'seats', 'redeemed', 'org', 'message', 'manageKey', 'manageUrl', 'expiresAt'], label);
-    assert.equal(answer.kind, 'gift');
-    assert.match(answer.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
-    assert.equal(answer.url, `https://planner.bemorin.com/?gift=${answer.code}`);
-    assert.deepEqual([answer.seats, answer.redeemed, answer.org, answer.message], [50, 0, 'Acme <Studio>', ''], label);
-    assert.equal(answer.manageKey, await giftManageKey(KEYS.signingKey, answer.code));
-    await settle();
-    // The buyer gets one email: the link, the manage link and a message to forward.
-    assert.equal(resend.calls.length, 1, label);
-    const email = resend.calls[0].body;
-    assert.equal(resend.calls[0].url, 'https://api.resend.com/emails');
-    assert.deepEqual(email.to, ['boss@acme.example']);
-    assert.equal(email.reply_to, 'owner@bemorin.example');
-    assert.equal(email.subject, 'Your Daily Planner Plus gift link for Acme <Studio>');
-    for (const part of [answer.url, answer.manageUrl, 'Subject: A gift from Acme <Studio>: Daily Planner Plus', 'up to 50 people', '9 October 2027']) assert.ok(email.text.includes(part), part);
-    assert.ok(email.html.includes('Acme &lt;Studio&gt;') && !email.html.includes('<Studio>'), 'escaped in HTML');
-    assert.equal(await store.emailSendsOn('2026-10-09', EMAIL_SENDS_EVENT), 1, label);
-
-    // Claiming again returns the same gift, without Stripe and without a second email.
-    const again = await asJson(await api(post('purchases/claim', { session: 'cs_test_pack50abcdef' })));
-    await settle();
-    assert.equal(again.body.code, answer.code, label);
-    assert.equal(stripe.calls.length, 1, label);
-    assert.equal(resend.calls.length, 1, label);
-    const stored = await store.getGift(answer.code.replace(/-/g, ''));
-    assert.deepEqual([stored.source, stored.stripeSession, stored.currency, stored.amount, stored.buyerEmail, stored.note], ['stripe', 'cs_test_pack50abcdef', 'EUR', 59500, 'boss@acme.example', 'Stripe · Up to 50 people'], label);
-    assert.ok(stored.emailedAt, label);
-
-    // Quantity multiplies the seats; without the company field, the Stripe name is used.
-    const globex = await asJson(await api(post('purchases/claim', { session: 'cs_test_pack10x2abcd' })));
-    assert.deepEqual([globex.body.seats, globex.body.org], [20, 'Globex Ltd'], label);
-    const summary = (await asJson(await api(get('admin/summary', 'secret')))).body;
-    assert.deepEqual(summary.giftTotals, { count: 2, seats: 70, redeemed: 0, stripe: 2 }, label);
-    assert.equal(summary.plus.purchases, 0, label);
-  });
-});
-
-test('a paid Stripe gift is switched off by Delete, never erased and recreated by the next claim', async () => {
-  const stripe = fakeStripe({ cs_test_pack50keep12: checkoutSession('cs_test_pack50keep12', { price: 'price_pack50', company: 'Acme' }) });
-  const { api, store } = setup({ stripe });
-  const first = (await asJson(await api(post('purchases/claim', { session: 'cs_test_pack50keep12' })))).body;
-  const code = first.code.replace(/-/g, '');
-  assert.deepEqual(await asJson(await api(del(`admin/gifts/${code}`, 'secret'))), { status: 200, body: { removed: false, deactivated: true } });
-  assert.equal((await store.getGift(code)).active, false);
-  const again = (await asJson(await api(post('purchases/claim', { session: 'cs_test_pack50keep12' })))).body;
-  assert.equal(again.code, first.code, 'the buyer gets the same, switched-off gift back');
-  assert.equal((await asJson(await api(get(`gifts/${code}`)))).body.status, 'inactive');
-  assert.deepEqual(await asJson(await api(post(`gifts/${code}/redeem`))), { status: 410, body: { error: 'This gift link is no longer active.' } });
-  assert.equal(stripe.calls.length, 1, 'Stripe was asked once');
-});
-
-test('a gift email Resend refused is tried again on the next claim', async () => {
-  const stripe = fakeStripe({ cs_test_pack50retry1: checkoutSession('cs_test_pack50retry1', { price: 'price_pack50', company: 'Acme' }) });
-  const resend = fakeResend({ fail: call => (call === 1 ? 500 : 0) });
-  const { api, store, settle, warnings } = setup({ stripe, resend });
-  const first = (await asJson(await api(post('purchases/claim', { session: 'cs_test_pack50retry1' })))).body;
-  await settle();
-  assert.match(warnings[0], /Gift email not sent.*500/);
-  assert.equal((await store.getGift(first.code.replace(/-/g, ''))).emailedAt, null);
-  await api(post('purchases/claim', { session: 'cs_test_pack50retry1' }));
-  await settle();
-  assert.equal(resend.calls.length, 2);
-  await api(post('purchases/claim', { session: 'cs_test_pack50retry1' }));
-  await settle();
-  assert.equal(resend.calls.length, 2, 'sent once, never again');
-  // Without email set up, the claim still works and nothing is attempted.
-  const quiet = setup({ stripe: fakeStripe({ cs_test_pack50quiet1: checkoutSession('cs_test_pack50quiet1', { price: 'price_pack50' }) }), resendApiKey: '' });
-  assert.equal((await quiet.api(post('purchases/claim', { session: 'cs_test_pack50quiet1' }))).status, 200);
-  assert.equal(quiet.deferred.length, 0);
-});
-
-test('claims that cannot be honoured: unpaid, unknown, not ours, Stripe down, not configured', async () => {
-  const sessions = {
-    cs_test_unpaid12345: checkoutSession('cs_test_unpaid12345', { paid: false }),
-    cs_test_open1234567: checkoutSession('cs_test_open1234567', { status: 'open' }),
-    cs_test_other123456: checkoutSession('cs_test_other123456', { price: 'price_tshirt' }),
-    cs_test_free1234567: { ...checkoutSession('cs_test_free1234567'), payment_status: 'no_payment_required' }
-  };
-  const stripe = fakeStripe(sessions);
-  const { api, store, clock } = setup({ stripe });
-  assert.deepEqual(await asJson(await api(post('purchases/claim', { session: 'cs_test_unpaid12345' }))), { status: 402, body: { error: 'This payment is not complete yet.' } });
-  assert.equal((await api(post('purchases/claim', { session: 'cs_test_open1234567' }))).status, 402);
-  assert.equal(await store.getPurchase('cs_test_unpaid12345'), null, 'nothing stored before payment');
-  assert.deepEqual(await asJson(await api(post('purchases/claim', { session: 'cs_test_missing1234' }))), { status: 404, body: { error: 'We could not find this payment.' } });
-  assert.equal((await api(post('purchases/claim', { session: 'cs_test_other123456' }))).status, 404);
-  assert.equal((await api(post('purchases/claim', { session: 'cs_test_free1234567' }))).status, 200, 'a 100% coupon counts as paid');
-  const calls = stripe.calls.length;
-  for (const session of ['', 'cs_test_', 'pi_test_abcdefgh123', 'cs_prod_abcdefgh123', 'cs_test_abc/../x1234', 42, null]) {
-    assert.equal((await api(post('purchases/claim', { session }))).status, 404, String(session));
-  }
-  assert.equal(stripe.calls.length, calls, 'malformed ids never reach Stripe');
-  // Unknown ids and other products are remembered for ten minutes: repeats cost no Stripe call.
-  for (let index = 0; index < 5; index += 1) {
-    assert.equal((await api(post('purchases/claim', { session: 'cs_test_missing1234' }))).status, 404);
-    assert.equal((await api(post('purchases/claim', { session: 'cs_test_other123456' }))).status, 404);
-  }
-  assert.equal(stripe.calls.length, calls, 'remembered unknown ids never reach Stripe again');
-  clock.now += 11 * 60 * 1000;
-  assert.equal((await api(post('purchases/claim', { session: 'cs_test_missing1234' }))).status, 404);
-  assert.equal(stripe.calls.length, calls + 1, 'asked again once the memory expires');
-  // Paid later (bank transfer): the same session then works.
-  sessions.cs_test_unpaid12345.payment_status = 'paid';
-  assert.equal((await api(post('purchases/claim', { session: 'cs_test_unpaid12345' }))).status, 200);
-  assert.equal((await api(get('purchases/claim'))).status, 405);
-
-  const down = setup({ stripe: fakeStripe({}, { status: 500 }) });
-  const failed = await asJson(await down.api(post('purchases/claim', { session: 'cs_test_whatever1234' })));
-  assert.equal(failed.status, 502);
-  assert.match(down.warnings[0], /Stripe answered HTTP 500: Something broke/);
-
-  for (const options of [{ stripeSecretKey: '' }, { stripePrices: '' }, { stripePrices: '{nope' }, { stripePrices: '{"price_x":{"kind":"tshirt"}}' }]) {
-    const off = setup(options);
-    assert.deepEqual(await asJson(await off.api(post('purchases/claim', { session: 'cs_test_whatever1234' }))), { status: 503, body: { error: 'Payments are not configured.' } }, JSON.stringify(options));
-    assert.equal(off.stripe.calls.length, 0);
-  }
-});
-
-test('Stripe helpers read prices, modes and sessions defensively', () => {
-  const parsed = parseStripePrices(JSON.stringify({ ...PRICES, bad: { kind: 'gift', seats: 0 }, 'x y': { kind: 'plus' } }));
-  assert.equal(parsed.prices.size, 3);
-  assert.match(parsed.error, /skipped 2 entries/);
-  assert.match(parseStripePrices('[1]').error, /JSON object/);
-  assert.equal(parseStripePrices('').error, '');
-  assert.deepEqual(['sk_live_x', 'rk_test_y', 'pk_live_z', ''].map(stripeMode), ['live', 'test', '', '']);
-  const read = readCheckoutSession(checkoutSession('cs_test_x', { price: 'price_pack50', quantity: 3000, company: '' }), parsed.prices);
-  assert.deepEqual(read, { paid: true, item: { kind: 'gift', seats: 100000, plan: 'up-to-50' }, org: 'Ada Buyer', email: 'buyer@example.com', currency: 'EUR', amount: 2900 });
-  assert.equal(readCheckoutSession({}, parsed.prices).item, null);
-  assert.equal(readCheckoutSession(null, parsed.prices).paid, false);
 });
 
 test('owner gift management: list, edit, switch off, delete, and the buyer email on request (memory and D1)', async t => {
@@ -527,57 +340,41 @@ test('licences for support and giveaways (memory and D1)', async t => {
   });
 });
 
-test('the setup summary says what is configured without ever showing a secret', async () => {
-  const { api } = setup({ adminTotpSecret: '' });
-  const { body } = await asJson(await api(get('admin/summary', 'secret')));
-  assert.deepEqual(body.setup, {
-    email: { configured: true, apiKeySet: true, fromSet: true, from: 'Ben Morin <hello@bemorin.example>', ownerEmail: 'owner@bemorin.example', dailyLimit: 100 },
-    stripe: { configured: true, keySet: true, mode: 'test', plusPrices: 1, giftPrices: 2, error: '' },
-    plus: { configured: true, keySet: true, publicKey: KEYS.publicKey },
-    publicBaseUrl: 'https://planner.bemorin.com',
-    publicBaseUrlSet: false,
-    twoFactor: false
-  });
-  const text = JSON.stringify(body);
-  for (const secret of [KEYS.signingKey, 'rk_test_51abc', 're_test_key']) assert.ok(!text.includes(secret));
-  assert.equal(body.plusUnavailable, false);
-  const empty = setup({ resendApiKey: '', emailFrom: '', ownerEmail: '', stripeSecretKey: '', stripePrices: '{bad', plusSigningKey: '' });
-  const off = (await asJson(await empty.api(get('admin/summary', 'secret')))).body.setup;
-  assert.deepEqual([off.email.configured, off.stripe.configured, off.stripe.error, off.plus.configured], [false, false, 'STRIPE_PRICES is not valid JSON.', false]);
-});
-
 test('without the 0003 migration the dashboard still loads and Plus routes explain what is missing', async t => {
   const d1 = await openSqlite(t, ['0001_planner_api.sql', '0002_team_requests.sql']);
   if (!d1) return;
-  const { api } = setup({ store: createD1Store(d1), stripe: fakeStripe({ cs_test_plus1234567: checkoutSession('cs_test_plus1234567') }) });
+  const { api, creem } = setup({ store: createD1Store(d1) });
   const summary = await asJson(await api(get('admin/summary', 'secret')));
   assert.equal(summary.status, 200);
   assert.equal(summary.body.plusUnavailable, true);
   assert.deepEqual(summary.body.gifts, []);
-  for (const call of [get('gifts/ABCD-EFGH-JKMN'), post('gifts/ABCD-EFGH-JKMN/redeem'), post('purchases/claim', { session: 'cs_test_plus1234567' }), post('admin/gifts', { org: 'Acme', seats: 3 }, 'secret')]) {
+  for (const call of [get('gifts/ABCD-EFGH-JKMN'), post('gifts/ABCD-EFGH-JKMN/redeem'), post('purchases/claim', { checkout: 'ch_plus1234567' }), post('admin/gifts', { org: 'Acme', seats: 3 }, 'secret')]) {
     const answer = await asJson(await api(call));
     assert.equal(answer.status, 503);
     assert.match(answer.body.error, /migrations/);
   }
+  assert.equal(creem.calls.length, 0, 'a claim stops at the missing table, before Creem');
   // Applying 0003 later (or twice) is safe.
   for (let round = 0; round < 2; round += 1) d1.sqlite.exec(readFileSync(new URL('../migrations/0003_plus.sql', import.meta.url), 'utf8'));
   assert.equal((await asJson(await api(get('admin/summary', 'secret')))).body.plusUnavailable, false);
 });
 
-test('migration 0003: columns, one gift per Stripe session, several invoiced gifts', async t => {
+test('migration 0003: columns, one gift per checkout, several invoiced gifts', async t => {
   const d1 = await openSqlite(t);
   if (!d1) return;
   const columns = table => d1.sqlite.prepare(`PRAGMA table_info(${table})`).all().map(row => row.name);
   assert.deepEqual(columns('gifts'), ['code', 'org', 'message', 'seats', 'redeemed', 'active', 'currency', 'amount', 'source', 'stripe_session', 'buyer_email', 'note', 'created_at', 'expires_at', 'emailed_at']);
   assert.deepEqual(columns('purchases'), ['stripe_session', 'kind', 'license_id', 'claims', 'email', 'note', 'created_at']);
   const store = createD1Store(d1);
-  const gift = (code, stripeSession) => ({ code, org: 'Acme', message: '', seats: 5, redeemed: 0, active: true, currency: '', amount: null, source: stripeSession ? 'stripe' : 'manual', stripeSession, buyerEmail: '', note: '', createdAt: '2026-10-09T08:00:00.000Z', expiresAt: '2027-10-09T08:00:00.000Z', emailedAt: null });
+  const gift = (code, checkoutRef) => ({ code, org: 'Acme', message: '', seats: 5, redeemed: 0, active: true, currency: '', amount: null, source: checkoutRef ? 'creem' : 'manual', checkoutRef, buyerEmail: '', note: '', createdAt: '2026-10-09T08:00:00.000Z', expiresAt: '2027-10-09T08:00:00.000Z', emailedAt: null });
   assert.equal(await store.addGift(gift('AAAAAAAAAAAA', null)), true);
-  assert.equal(await store.addGift(gift('BBBBBBBBBBBB', null)), true, 'NULL sessions do not collide');
-  assert.equal(await store.addGift(gift('CCCCCCCCCCCC', 'cs_test_1')), true);
-  assert.equal(await store.addGift(gift('DDDDDDDDDDDD', 'cs_test_1')), false, 'one gift per session');
-  assert.equal(await store.addGift(gift('AAAAAAAAAAAA', 'cs_test_2')), false, 'codes are unique');
-  assert.equal((await store.getGiftBySession('cs_test_1')).code, 'CCCCCCCCCCCC');
+  assert.equal(await store.addGift(gift('BBBBBBBBBBBB', null)), true, 'NULL checkouts do not collide');
+  assert.equal(await store.addGift(gift('CCCCCCCCCCCC', 'ch_test_1')), true);
+  assert.equal(await store.addGift(gift('DDDDDDDDDDDD', 'ch_test_1')), false, 'one gift per checkout');
+  assert.equal(await store.addGift(gift('AAAAAAAAAAAA', 'ch_test_2')), false, 'codes are unique');
+  assert.equal((await store.getGiftByCheckout('ch_test_1')).code, 'CCCCCCCCCCCC');
+  assert.equal(d1.sqlite.prepare('SELECT stripe_session AS ref FROM gifts WHERE code = ?').get('CCCCCCCCCCCC').ref, 'ch_test_1', 'the column keeps its name');
+  assert.deepEqual(await store.giftTotals(), { count: 3, seats: 15, redeemed: 0, paid: 1 });
   assert.equal(await store.markGiftEmailed('CCCCCCCCCCCC', '2026-10-09T09:00:00.000Z'), true);
   assert.equal(await store.markGiftEmailed('CCCCCCCCCCCC', '2026-10-09T10:00:00.000Z'), false);
   await store.clearGiftEmailed('CCCCCCCCCCCC');

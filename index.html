@@ -25,7 +25,7 @@
         </button>
         <div class="date-title" data-date-picker role="button" tabindex="0" aria-label="Choose date">
           <p class="eyebrow" data-weekday></p>
-          <h1><span data-date></span><span data-date-medium></span><span data-date-short></span></h1>
+          <h1><span data-date></span><span data-date-medium></span><span data-date-compact></span><span data-date-short></span></h1>
         </div>
       </div>
 
@@ -123,7 +123,7 @@
               <button type="button" data-mobile-workspace-toggle aria-expanded="false"><strong data-mobile-workspace-label>Personal</strong><svg class="disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
               <div class="mobile-workspace-options" data-mobile-workspace-options hidden></div>
             </div>
-            <button type="button" class="mobile-horizon-action" data-horizon-open><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m14.8 9.2-1.7 3.9-3.9 1.7 1.7-3.9 3.9-1.7Z"/></svg><span>Horizon</span></button>
+            <button type="button" class="mobile-stats-action" data-mobile-stats><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span>Time stats</span></button>
             <button type="button" data-mobile-print><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z"/></svg><span>Print / PDF</span></button>
             <div class="mobile-export-disclosure" data-mobile-export-disclosure>
               <button type="button" data-mobile-export-toggle aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg><span>Export</span><svg class="disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
@@ -147,16 +147,23 @@
     </header>
 
     <div class="mobile-view-switch" data-mobile-view-switch role="tablist" aria-label="Planner view">
+      <span class="mobile-view-switch__indicator" data-mobile-view-indicator aria-hidden="true"></span>
       <button type="button" class="is-active" data-mobile-view="plan" role="tab" aria-selected="true">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12M6 10h12M6 16h8"/><circle cx="3" cy="4" r=".7" class="icon-fill"/><circle cx="3" cy="10" r=".7" class="icon-fill"/><circle cx="3" cy="16" r=".7" class="icon-fill"/></svg><span>Plan</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6.5h11M8 12h11M8 17.5h7"/><circle cx="4.5" cy="6.5" r=".9" class="icon-fill"/><circle cx="4.5" cy="12" r=".9" class="icon-fill"/><circle cx="4.5" cy="17.5" r=".9" class="icon-fill"/></svg><span class="mobile-view-switch__text"><span>Plan</span><small data-view-summary="plan"></small></span>
       </button>
       <button type="button" data-mobile-view="schedule" role="tab" aria-selected="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/></svg><span>Schedule</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/></svg><span class="mobile-view-switch__text"><span>Schedule</span><small data-view-summary="schedule"></small></span>
       </button>
     </div>
 
     <section class="workspace" data-workspace>
       <div class="left pane-scroll" data-left-pane>
+        <header class="plan-head">
+          <div class="plan-head__row">
+            <h2>Plan</h2>
+            <span class="plan-head__done"><span data-view-summary="plan"></span><span class="plan-head__meter" data-view-progress="plan" aria-hidden="true"></span></span>
+          </div>
+        </header>
         <section class="focus">
           <header class="section-head">
             <div><h2>Keep in mind</h2></div>
@@ -208,6 +215,8 @@
         </section>
       </div>
 
+      <section class="week-agenda pane-scroll" data-week-agenda aria-label="This week’s plan"></section>
+
       <section class="schedule-section" data-schedule-pane>
         <header class="schedule-head">
           <div><h2>Schedule</h2></div>
@@ -231,6 +240,7 @@
           </div>
           <div class="week-schedule" data-week-schedule hidden></div>
         </div>
+        <p class="week-empty-hint" data-week-empty-hint hidden><span class="week-empty-hint__pointer">Click a time in any day to add a block</span><span class="week-empty-hint__touch">Tap a time in any day to add a block</span></p>
         <button class="mobile-quick-add" type="button" data-mobile-schedule-add aria-label="Add to schedule">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
         </button>
@@ -1059,7 +1069,7 @@
           <p>This planner is local-first: your daily plans stay on this device unless you explicitly enable personal sync or export them.</p>
         </header>
         <div class="help-feedback" data-help-feedback hidden>
-          <span><strong>Version <span data-app-version></span></strong> · An idea, a problem, or something you love?</span>
+          <span><strong>Version <span data-app-version></span></strong> · What’s new in this release, and a place to tell us what to keep, change or fix.</span>
           <button class="secondary-button" type="button" data-feedback-open>Send feedback</button>
         </div>
         <div class="help-feedback help-privacy" data-privacy-entry hidden>
@@ -1100,12 +1110,14 @@
           <details class="help-faq" open><summary><h3>2. Make every task verifiable</h3></summary><div class="help-faq__reveal"><div><div class="example-list"><div><span>Too vague</span><s>Work on the report</s><strong>Draft the introduction and section 1 (max 3 pages)</strong></div><div><span>Too vague</span><s>Tidy the desk</s><strong>Discard old papers from the top drawer</strong></div><div><span>Too vague</span><s>Emails</s><strong>Process the inbox and reach Inbox Zero</strong></div></div></div></div></details>
           <details class="help-faq" open><summary><h3>3. Put work on the schedule</h3></summary><div class="help-faq__reveal"><div><p>Click an empty slot to create a block. Click an existing block to edit it. Hold briefly and drag to move it; resize from the lower edge. The calendar action beside a task schedules that specific item. Start and End accept typed times or 15-minute menus, and a block can cross midnight for up to 24 hours.</p></div></div></details>
           <details class="help-faq" open><summary><h3>4. Categories and statistics</h3></summary><div class="help-faq__reveal"><div><p>Categories can represent projects or areas of life. Choose from three distinct color palettes, then archive a category when it is no longer active: its historical blocks keep their identity, but it disappears from new planning. Archived categories remain visible in Settings and can be restored. Day and Week statistics are derived from scheduled blocks.</p></div></div></details>
-          <details class="help-faq" open><summary><h3>5. Choose the schedule range</h3></summary><div class="help-faq__reveal"><div><p>Settings lets you choose the hours you want visible and the days you normally plan. Week view shows those planning days side by side; Close day uses them to find the next planning day. Inactive days are never blocked — you can still open or schedule them manually.</p></div></div></details>
+          <details class="help-faq" open><summary><h3>5. Choose the schedule range</h3></summary><div class="help-faq__reveal"><div><p>Settings lets you choose the hours you want visible and the days you normally plan. Week view shows those planning days side by side, each with its main outcome above its schedule; Close day uses them to find the next planning day. Inactive days are never blocked — you can still open or schedule them manually.</p></div></div></details>
           <details class="help-faq" open><summary><h3>6. Close the day deliberately</h3></summary><div class="help-faq__reveal"><div><p>Every unfinished item can go to a specific date, be <strong>Saved</strong> safely without a date in Unresolved, or be <strong>Forgotten</strong> — taken off your plate while its day keeps the history. The carried count and original date remain attached so repeated postponement stays visible.</p></div></div></details>
           <details class="help-faq" open><summary><h3>7. Keep the horizon visible</h3></summary><div class="help-faq__reveal"><div><p>Horizon keeps the year visible without turning it into another task manager, using a yearly rhythm inspired by Jesse Itzler: one Misogi period, three meaningful commitments, up to six Mini-adventures, quarterly Winning habits and significant Key dates grouped in the Year map. Winning habits are checked when you close the day; their activity stays available on demand.</p></div></div></details>
           <details class="help-faq" open><summary><h3>8. Find and change your view</h3></summary><div class="help-faq__reveal"><div><p>Search scans saved planner days. Press <strong>F</strong> outside a text field. Fit app to width enlarges only this planner — it never changes browser zoom for the rest of your domain.</p></div></div></details>
           <details class="help-faq" open><summary><h3>9. Floating mode & print</h3></summary><div class="help-faq__reveal"><div><p>Picture-in-Picture keeps a compact editable Plan / Schedule view while you work elsewhere. Print is optimized for a landscape planner sheet and hides editing controls.</p></div></div></details>
-          <details class="help-faq" open><summary><h3>10. Install it without creating an account</h3></summary><div class="help-faq__reveal"><div><p>Use your browser’s install action when it is available. On iPhone or iPad in Safari, use <strong>Share → Add to Home Screen</strong>. In Chromium browsers, look for <strong>Install app</strong> in the address bar or browser menu. The installed app uses the same local planner data and can work offline after the production app has been loaded once.</p><p><button class="secondary-button" type="button" data-install-open>Show me how on this device</button></p></div></div></details>
+          <details class="help-faq" open><summary><h3>10. On your phone</h3></summary><div class="help-faq__reveal"><div><p><strong>Plan</strong> and <strong>Schedule</strong> sit at the bottom of the screen, and each says where you stand: how much of the plan is done, and what is on now or next. In Week view, Plan lists your week day by day and Schedule shows the week grid — tap a day to open it. Search, Journal, Unresolved and Horizon are in the header; everything else is under More.</p></div></div></details>
+          <details class="help-faq" open><summary><h3>11. Daily Planner Plus</h3></summary><div class="help-faq__reveal"><div><p>Plus is paid once and yours for life: Plan your year, Your year in review and five more colours for your painted year — and everything Plus gets later. Open it from Settings or More → Daily Planner Plus. A gift link or a licence activates it too. It is checked on this device, without an account, and travels with your planner through sync and backups.</p></div></div></details>
+          <details class="help-faq" open><summary><h3>12. Install it without creating an account</h3></summary><div class="help-faq__reveal"><div><p>Use your browser’s install action when it is available. On iPhone or iPad in Safari, use <strong>Share → Add to Home Screen</strong>. In Chromium browsers, look for <strong>Install app</strong> in the address bar or browser menu. The installed app uses the same local planner data and can work offline after the production app has been loaded once.</p><p><button class="secondary-button" type="button" data-install-open>Show me how on this device</button></p></div></div></details>
         </div>
 
 

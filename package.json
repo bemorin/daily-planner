@@ -1,6 +1,6 @@
 {
   "name": "daily-planner",
-  "version": "1.20.0",
+  "version": "1.21.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "start:api": "node scripts/serve.mjs --api --open",
     "admin:secret": "node scripts/admin-secret.mjs",
     "plus:keys": "node scripts/plus-keys.mjs",
-    "start:api:fake": "node scripts/serve.mjs --api --fake-email --fake-stripe --open",
+    "start:api:fake": "node scripts/serve.mjs --api --fake-email --fake-creem --open",
     "serve:dist": "node scripts/serve.mjs --dist --open",
     "vendor:motion": "node scripts/vendor-motion.mjs",
     "lint": "node scripts/lint.mjs",

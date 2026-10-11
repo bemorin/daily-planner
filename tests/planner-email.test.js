@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createMemoryStore, createPlannerApi, DEFAULT_EMAIL_DAILY_LIMIT, EMAIL_SENDS_EVENT, parseDailyLimit, teamRequestEmail } from '../server/planner-api.js';
 import { createD1Store } from '../server/d1-store.js';
 import { waitlistRemoveToken } from '../server/admin-auth.js';
-import { announcementEmail, buildResendMessages, createResendMailer, EMAILS_PER_SEND, escapeHtml, formatAddress, MAX_BATCHES_PER_SEND, ONE_EMAIL_FOOTER, parseAddress, RESEND_BATCH_URL, RESEND_EMAILS_URL, RESEND_MAX_BATCH, textToHtml } from '../server/email.js';
+import { announcementEmail, buildResendMessages, createResendMailer, EMAILS_PER_SEND, escapeHtml, formatAddress, MAX_BATCHES_PER_SEND, ONE_EMAIL_FOOTER, parseAddress, plusPurchaseEmail, RESEND_BATCH_URL, RESEND_EMAILS_URL, RESEND_MAX_BATCH, textToHtml } from '../server/email.js';
 
 const START = Date.parse('2026-10-09T08:00:00Z');
 const post = (path, body, token) => new Request(`https://planner.test/api/${path}`, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
@@ -47,7 +47,7 @@ async function openSqlite(t) {
   let DatabaseSync;
   try { ({ DatabaseSync } = await import('node:sqlite')); } catch { t.skip('node:sqlite is not available in this Node version'); return null; }
   const sqlite = new DatabaseSync(':memory:');
-  for (const migration of ['0001_planner_api.sql', '0002_team_requests.sql', '0003_plus.sql']) sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
+  for (const migration of ['0001_planner_api.sql', '0002_team_requests.sql', '0003_plus.sql', '0004_creem_reviews.sql']) sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), 'utf8'));
   return {
     sqlite,
     prepare(sql) {
@@ -89,6 +89,18 @@ test('email HTML escapes everything and keeps the one-email footer', () => {
   assert.ok(email.text.startsWith('Hello <script>alert(1)</script>\n\nBye\n\n'));
   assert.ok(email.text.trimEnd().endsWith(ONE_EMAIL_FOOTER));
   assert.equal(ONE_EMAIL_FOOTER, 'This is the one email you asked for. Your address has now been deleted from our list.');
+});
+
+test('the Plus purchase email carries the activation link, in text and escaped HTML', () => {
+  const url = 'https://planner.bemorin.com/?purchase=ch_abc&x=<b>';
+  const email = plusPurchaseEmail({ url, devices: 10 });
+  assert.equal(email.subject, 'Your Daily Planner Plus');
+  assert.ok(email.text.includes(`Activate Plus on each device: open this link on the phone, tablet or computer where you plan.\n${url}\n`));
+  assert.ok(email.text.includes('up to 10 devices'));
+  assert.ok(email.text.includes('Creem'), 'the receipt comes from Creem');
+  assert.ok(email.html.includes('href="https://planner.bemorin.com/?purchase=ch_abc&amp;x=&lt;b&gt;"'));
+  assert.ok(!email.html.includes('<b>"'), 'the link is escaped');
+  assert.ok(email.html.startsWith('<!doctype html>'));
 });
 
 test('sender addresses are parsed from EMAIL_FROM and the daily limit defaults to Resend’s free plan', () => {

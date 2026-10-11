@@ -76,6 +76,39 @@ export function announcementEmail({ subject, text }) {
 }
 
 /**
+ * The one email sent after a Plus purchase (from the Creem webhook): the link that
+ * activates Plus on each device. `url` is ${PUBLIC_BASE_URL}/?purchase=<checkout id>.
+ */
+export function plusPurchaseEmail({ url, devices = 10 }) {
+  const link = `<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`;
+  const html = [
+    '<p>Thank you for buying Daily Planner Plus.</p>',
+    `<p><b>Activate Plus on each device</b>: open this link on the phone, tablet or computer where you plan.<br>\n${link}</p>`,
+    '<p>Plus is yours for life: Plan your year, Your year in review and new colours for your painted year. No account is needed.</p>',
+    `<p>Keep this email. The link works on up to ${escapeHtml(devices)} devices, so you can use it again on a new phone or computer.</p>`,
+    '<p>Your receipt comes separately from Creem, which handles the payment.</p>',
+    '<p>Questions? Just reply to this email.</p>'
+  ].join('\n');
+  const text = [
+    'Thank you for buying Daily Planner Plus.',
+    '',
+    'Activate Plus on each device: open this link on the phone, tablet or computer where you plan.',
+    url,
+    '',
+    'Plus is yours for life: Plan your year, Your year in review and new colours for your painted year. No account is needed.',
+    '',
+    `Keep this email. The link works on up to ${devices} devices, so you can use it again on a new phone or computer.`,
+    '',
+    'Your receipt comes separately from Creem, which handles the payment.',
+    '',
+    '---',
+    'Questions? Just reply to this email.',
+    ''
+  ].join('\n');
+  return { subject: 'Your Daily Planner Plus', html: htmlDocument(html), text };
+}
+
+/**
  * One Resend message per recipient (nobody sees anyone else's address).
  * recipients: [{ email }]; replyTo: { email, name? } or null.
  */

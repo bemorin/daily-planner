@@ -2,13 +2,15 @@ import { qs, qsa } from '../lib/dom.js';
 import { esc, escAttr } from '../lib/text.js';
 import { APP_VERSION, PROJECT_GITHUB_URL } from '../config.js';
 import { platformLabel, plannerApiEnabled, sendFeedback, trackEvent } from '../lib/planner-api.js';
-import { itemEnter, itemExit } from '../ui/motion.js';
+import { WHATS_NEW } from './whats-new.js';
 
 /**
- * Versioned feedback. People can always send feedback from Help or the menu;
- * at most once per version — after the planner has been used for a few days —
- * a small card asks how this version is working. Sending or dismissing it means
- * that version is never asked about again on this device.
+ * Feedback, once per feature release. People can always open it from Help or
+ * the menu; once per feature release (1.21 covers 1.21.0, 1.21.1…) — after
+ * the planner has really been used — it opens by itself with what changed in
+ * that release, a rating, a few words, and an opt-in to be quoted on the
+ * Daily Planner website. Sending it, or "Not now", means that release is never
+ * asked about again on this device.
  */
 
 const STATE_KEY = 'daily-planner-ui:feedback';
@@ -16,40 +18,75 @@ const DAY = 86400000;
 const KINDS = [['idea', 'Idea'], ['problem', 'Problem'], ['praise', 'Praise'], ['other', 'Other']];
 const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8Z"/></svg>';
 const RATING_LABELS = ['', 'Not working for me', 'Needs work', 'It’s fine', 'Really useful', 'Love it'];
+export const QUOTE_NAME_MAX = 60;
+export const PROMPT_RULES = Object.freeze({ closedDays: 3, daysOnRelease: 2, daysBetweenPrompts: 14 });
+
+/** The feature release a version belongs to: '1.21' for 1.21.0 and 1.21.3. */
+export function featureVersion(version = APP_VERSION) {
+  const match = /^(\d+)\.(\d+)/.exec(String(version || ''));
+  return match ? `${Number(match[1])}.${Number(match[2])}` : String(version || '');
+}
+
+const earliest = (a, b) => (!a ? b || '' : !b ? a : a < b ? a : b);
+const latest = (a, b) => (!a ? b || '' : !b ? a : a > b ? a : b);
+
+/**
+ * Normalises the stored state to `{ releases: { '1.21': entry }, lastPromptAt }`.
+ * Older copies kept one entry per full version (`versions['1.20.0']`): those are
+ * folded into their release, so a release already asked about is not asked again.
+ */
+export function migrateFeedbackState(raw) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const releases = {};
+  const merge = (key, entry) => {
+    if (!key || !entry || typeof entry !== 'object') return;
+    const current = releases[key] || {};
+    const next = { firstSeen: earliest(current.firstSeen, entry.firstSeen) };
+    ['prompted', 'sent', 'dismissed'].forEach(field => { const value = latest(current[field], entry[field]); if (value) next[field] = value; });
+    releases[key] = next;
+  };
+  if (source.versions && typeof source.versions === 'object') Object.entries(source.versions).forEach(([version, entry]) => merge(featureVersion(version), entry));
+  if (source.releases && typeof source.releases === 'object') Object.entries(source.releases).forEach(([release, entry]) => merge(featureVersion(release), entry));
+  return { releases, lastPromptAt: typeof source.lastPromptAt === 'string' ? source.lastPromptAt : '' };
+}
 
 export function readFeedbackState(storage = globalThis.localStorage) {
   try {
-    const raw = JSON.parse(storage?.getItem(STATE_KEY) || '{}');
-    return { versions: raw.versions && typeof raw.versions === 'object' ? raw.versions : {}, lastPromptAt: raw.lastPromptAt || '' };
+    return migrateFeedbackState(JSON.parse(storage?.getItem(STATE_KEY) || '{}'));
   } catch (_) {
-    return { versions: {}, lastPromptAt: '' };
+    return { releases: {}, lastPromptAt: '' };
   }
 }
 
 function writeFeedbackState(state, storage = globalThis.localStorage) {
-  try { storage?.setItem(STATE_KEY, JSON.stringify(state)); } catch (_) {}
+  try { storage?.setItem(STATE_KEY, JSON.stringify({ releases: state.releases, lastPromptAt: state.lastPromptAt })); } catch (_) {}
 }
 
 /**
- * Pure prompt rule (unit-tested): ask about a version at most once, only after
- * five closed days in total and three days on this version, and never more
- * than once a fortnight across versions.
+ * Pure prompt rule (unit-tested): ask about a feature release at most once,
+ * only with the owner API on, after three closed days in total and two days on
+ * this release, never within two weeks of the last prompt, and never over
+ * another dialog or during first-run setup.
  */
-export function shouldPromptFeedback(state, { version, now = new Date(), closeDayCount = 0, enabled = true }) {
-  if (!enabled || closeDayCount < 5) return false;
-  const entry = state.versions?.[version];
-  // Once shown, a version is never asked about again — even if the card was
-  // ignored or the page reloaded before it was answered.
+export function shouldPromptFeedback(state, { version = APP_VERSION, now = new Date(), closeDayCount = 0, enabled = true, busy = false }) {
+  if (!enabled || busy || closeDayCount < PROMPT_RULES.closedDays) return false;
+  const entry = state.releases?.[featureVersion(version)];
+  // Once shown, a release is never asked about again — even if it was ignored
+  // or the page reloaded before it was answered.
   if (!entry?.firstSeen || entry.sent || entry.dismissed || entry.prompted) return false;
-  if (now - new Date(entry.firstSeen) < 3 * DAY) return false;
-  if (state.lastPromptAt && now - new Date(state.lastPromptAt) < 14 * DAY) return false;
+  if (now - new Date(entry.firstSeen) < PROMPT_RULES.daysOnRelease * DAY) return false;
+  if (state.lastPromptAt && now - new Date(state.lastPromptAt) < PROMPT_RULES.daysBetweenPrompts * DAY) return false;
   return true;
 }
 
 export function createFeedbackFeature({ openModal, closeModal, openPrivacy = null }) {
   const modal = () => qs('[data-feedback-modal]');
   const root = () => qs('[data-feedback]');
-  let draft = { rating: null, kind: 'idea', message: '', email: '' };
+  const release = featureVersion(APP_VERSION);
+  const blankDraft = () => ({ rating: null, kind: 'idea', message: '', email: '', quote: false, name: '' });
+  let draft = blankDraft();
+  // 'prompt' when it opened by itself (its quiet button is "Not now"), 'manual' from Help or the menu.
+  let mode = 'manual';
 
   const available = () => plannerApiEnabled() || !!PROJECT_GITHUB_URL;
 
@@ -59,109 +96,152 @@ export function createFeedbackFeature({ openModal, closeModal, openPrivacy = nul
     writeFeedbackState(state);
   }
 
-  /** Remember when this version was first used, so prompts wait a few days. */
+  const mark = (field, now = new Date()) => update(state => { state.releases[release] = { ...(state.releases[release] || { firstSeen: now.toISOString() }), [field]: now.toISOString() }; });
+
+  /** Remember when this release was first used, so the prompt waits a few days. */
   function noteVersionSeen(now = new Date()) {
-    update(state => {
-      state.versions[APP_VERSION] ||= { firstSeen: now.toISOString() };
-    });
+    update(state => { state.releases[release] ||= { firstSeen: now.toISOString() }; });
+  }
+
+  function whatsNew() {
+    const items = WHATS_NEW.version === release ? WHATS_NEW.items : [];
+    if (!items.length) return '';
+    return `<section class="whats-new" aria-labelledby="whats-new-title">
+        <h3 id="whats-new-title" class="sr-only">What’s new</h3>
+        <ul>${items.map(item => `<li><span class="whats-new__mark" aria-hidden="true"></span><span>${esc(item)}</span></li>`).join('')}</ul>
+      </section>`;
+  }
+
+  function header() {
+    const items = WHATS_NEW.version === release && WHATS_NEW.items.length;
+    return `<header class="modal__header feedback-head">
+        <p class="modal__eyebrow">Daily Planner ${esc(APP_VERSION)}</p>
+        <h2 id="feedback-title" tabindex="-1">${items ? `What’s new in ${esc(release)}` : 'How is Daily Planner working for you?'}</h2>
+      </header>`;
   }
 
   function render(error = '') {
+    const el = root();
     if (!plannerApiEnabled()) {
-      root().innerHTML = `<header class="modal__header"><p class="modal__eyebrow">Feedback</p><h2 id="feedback-title">Tell us what to improve.</h2><p>Feedback for this copy of the planner goes through the project page.</p></header>
+      el.innerHTML = `${header()}${whatsNew()}
+        <p class="feedback-lede">Feedback for this copy of the planner goes through the project page.</p>
         <div class="modal__actions"><button class="text-button" type="button" data-feedback-close>Close</button><div class="modal__actions-right"><a class="primary-button" href="${escAttr(PROJECT_GITHUB_URL)}/issues/new" target="_blank" rel="noopener">Open the project page</a></div></div>`;
+      bind();
       return;
     }
-    const sentBefore = !!readFeedbackState().versions[APP_VERSION]?.sent;
-    root().innerHTML = `<header class="modal__header"><p class="modal__eyebrow">Feedback · version ${esc(APP_VERSION)}</p><h2 id="feedback-title">How is Daily Planner working for you?</h2><p>${sentBefore ? 'Thanks for your earlier note on this version — anything else is welcome.' : 'A rating, a sentence, or both. It goes straight to Ben, grouped by version.'}</p></header>
+    const sentBefore = !!readFeedbackState().releases[release]?.sent;
+    el.innerHTML = `${header()}${whatsNew()}
       <form class="feedback-form" data-feedback-form novalidate>
-        <div class="feedback-rating" role="radiogroup" aria-label="Rating">${[1, 2, 3, 4, 5].map(value => `<button type="button" role="radio" aria-checked="${draft.rating === value}" class="${draft.rating >= value ? 'is-on' : ''}" data-feedback-rate="${value}" aria-label="${escAttr(`${value} — ${RATING_LABELS[value]}`)}">${STAR}</button>`).join('')}<span class="feedback-rating__label" data-feedback-rating-label>${draft.rating ? esc(RATING_LABELS[draft.rating]) : 'Tap a star'}</span></div>
-        <div class="feedback-kinds" role="radiogroup" aria-label="Type">${KINDS.map(([value, label]) => `<button type="button" role="radio" aria-checked="${draft.kind === value}" class="${draft.kind === value ? 'is-active' : ''}" data-feedback-kind="${value}">${label}</button>`).join('')}</div>
+        <div class="feedback-ask">
+          <h3>${sentBefore ? `Anything else about ${esc(release)}?` : 'How is it working for you?'}</h3>
+          <div class="feedback-rating" role="radiogroup" aria-label="Rating">${[1, 2, 3, 4, 5].map(value => `<button type="button" role="radio" aria-checked="${draft.rating === value}" tabindex="${(draft.rating || 1) === value ? '0' : '-1'}" class="${draft.rating >= value ? 'is-on' : ''}" data-feedback-rate="${value}" aria-label="${escAttr(`${value} — ${RATING_LABELS[value]}`)}">${STAR}</button>`).join('')}<span class="feedback-rating__label" data-feedback-rating-label aria-hidden="true">${draft.rating ? esc(RATING_LABELS[draft.rating]) : 'Tap a star'}</span></div>
+        </div>
         <label class="form-field"><span>What should we keep, change or fix?</span><textarea name="message" rows="4" maxlength="4000" placeholder="The more concrete, the better.">${esc(draft.message)}</textarea></label>
+        <div class="feedback-kinds" role="radiogroup" aria-label="It’s mostly">${KINDS.map(([value, label]) => `<button type="button" role="radio" aria-checked="${draft.kind === value}" class="${draft.kind === value ? 'is-active' : ''}" data-feedback-kind="${value}">${label}</button>`).join('')}</div>
         <label class="form-field"><span>Email <em>optional — only if you’d like a reply</em></span><input type="email" name="email" maxlength="254" autocomplete="email" value="${escAttr(draft.email)}"></label>
+        <div class="feedback-quote">
+          <label class="feedback-quote__opt"><input type="checkbox" name="quote" data-feedback-quote${draft.quote ? ' checked' : ''}><span><strong>You can quote this on the Daily Planner website</strong><small>With your rating and the name below. Your email is never shown.</small></span></label>
+          <label class="form-field feedback-quote__name" data-feedback-quote-name${draft.quote ? '' : ' hidden'}><span>Name to show <em>optional</em></span><input type="text" name="name" maxlength="${QUOTE_NAME_MAX}" autocomplete="off" placeholder="e.g. Claire, product designer" value="${escAttr(draft.name)}"></label>
+        </div>
         <input type="text" name="website" tabindex="-1" autocomplete="off" class="sg-honeypot" aria-hidden="true">
         <p class="feedback-meta">Sent with: Daily Planner ${esc(APP_VERSION)} · ${esc(platformLabel())}. Your plans are never included.</p>
         ${error ? `<p class="sg-error" role="alert">${esc(error)}</p>` : ''}
-        <div class="modal__actions"><button class="text-button" type="button" data-feedback-close>Cancel</button><div class="modal__actions-right"><button class="primary-button" type="submit" data-feedback-submit>Send feedback</button></div></div>
+        <div class="modal__actions"><button class="text-button" type="button" data-feedback-later>${mode === 'prompt' ? 'Not now' : 'Cancel'}</button><div class="modal__actions-right"><button class="primary-button" type="submit" data-feedback-submit>Send feedback</button></div></div>
         ${openPrivacy ? '<p class="privacy-footnote">Only what you send is stored. <button class="privacy-link" type="button" data-feedback-privacy>How this is handled</button></p>' : ''}
       </form>`;
     bind();
   }
 
+  function setRating(value, el = root()) {
+    draft.rating = value;
+    qsa('[data-feedback-rate]', el).forEach(star => {
+      const n = Number(star.dataset.feedbackRate);
+      star.classList.toggle('is-on', n <= value);
+      star.setAttribute('aria-checked', String(n === value));
+      star.tabIndex = n === value ? 0 : -1;
+    });
+    const label = qs('[data-feedback-rating-label]', el);
+    if (label) label.textContent = RATING_LABELS[value];
+  }
+
   function bind() {
     const el = root();
     qsa('[data-feedback-close]', el).forEach(button => button.addEventListener('click', () => closeModal(modal())));
+    qs('[data-feedback-later]', el)?.addEventListener('click', () => { if (mode === 'prompt') mark('dismissed'); closeModal(modal()); });
     qs('[data-feedback-privacy]', el)?.addEventListener('click', () => openPrivacy?.());
     const form = qs('[data-feedback-form]', el);
     if (!form) return;
-    const capture = () => { draft.message = form.elements.message.value; draft.email = form.elements.email.value; };
-    qsa('[data-feedback-rate]', el).forEach(button => button.addEventListener('click', () => {
-      draft.rating = Number(button.dataset.feedbackRate);
-      qsa('[data-feedback-rate]', el).forEach(star => {
-        const value = Number(star.dataset.feedbackRate);
-        star.classList.toggle('is-on', value <= draft.rating);
-        star.setAttribute('aria-checked', String(value === draft.rating));
+    const capture = () => {
+      draft.message = form.elements.message.value;
+      draft.email = form.elements.email.value;
+      draft.quote = form.elements.quote.checked;
+      draft.name = form.elements.name.value;
+    };
+    qsa('[data-feedback-rate]', el).forEach(button => {
+      button.addEventListener('click', () => setRating(Number(button.dataset.feedbackRate), el));
+      button.addEventListener('keydown', event => {
+        const step = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[event.key];
+        if (!step) return;
+        event.preventDefault();
+        const next = Math.min(5, Math.max(1, (draft.rating || Number(button.dataset.feedbackRate)) + (draft.rating ? step : 0)));
+        setRating(next, el);
+        qs(`[data-feedback-rate="${next}"]`, el)?.focus();
       });
-      qs('[data-feedback-rating-label]', el).textContent = RATING_LABELS[draft.rating];
-    }));
+    });
     qsa('[data-feedback-kind]', el).forEach(button => button.addEventListener('click', () => {
       draft.kind = button.dataset.feedbackKind;
       qsa('[data-feedback-kind]', el).forEach(chip => { const on = chip === button; chip.classList.toggle('is-active', on); chip.setAttribute('aria-checked', String(on)); });
     }));
+    qs('[data-feedback-quote]', el)?.addEventListener('change', event => {
+      draft.quote = event.currentTarget.checked;
+      const field = qs('[data-feedback-quote-name]', el);
+      if (field) field.hidden = !draft.quote;
+    });
     form.addEventListener('submit', async event => {
       event.preventDefault();
       capture();
+      if (!draft.rating && !draft.message.trim()) { render('Add a rating or a few words.'); qs('[data-feedback-rate]', root())?.focus(); return; }
       const submit = qs('[data-feedback-submit]', form);
       submit.disabled = true;
       submit.textContent = 'Sending…';
-      const result = await sendFeedback({ rating: draft.rating, kind: draft.kind, message: draft.message, email: draft.email, website: form.elements.website.value });
+      const quote = draft.quote;
+      const result = await sendFeedback({ rating: draft.rating, kind: draft.kind, message: draft.message, email: draft.email, quote, name: quote ? draft.name.trim().slice(0, QUOTE_NAME_MAX) : '', website: form.elements.website.value });
       if (!result.ok) { render(result.error); return; }
-      update(state => { state.versions[APP_VERSION] = { ...(state.versions[APP_VERSION] || {}), sent: new Date().toISOString() }; });
+      mark('sent');
       trackEvent('feedback_sent');
-      draft = { rating: null, kind: 'idea', message: '', email: '' };
-      root().innerHTML = `<div class="sg-success"><span class="sg-success__mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 12.5 3.3 3.3 7.7-8"/></svg></span><h2 id="feedback-title">Thank you.</h2><p>Your note on version ${esc(APP_VERSION)} has been sent. You won’t be asked about this version again.</p><button class="primary-button" type="button" data-feedback-close>Done</button></div>`;
+      if (quote && draft.rating && draft.message.trim()) trackEvent('review_sent');
+      draft = blankDraft();
+      root().innerHTML = `<div class="sg-success"><span class="sg-success__mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 12.5 3.3 3.3 7.7-8"/></svg></span><h2 id="feedback-title">Thank you.</h2><p>Your note on Daily Planner ${esc(release)} has been sent${quote ? ', and may be quoted on the website' : ''}. You won’t be asked about this release again.</p><button class="primary-button" type="button" data-feedback-close>Done</button></div>`;
       qs('[data-feedback-close]', root())?.addEventListener('click', () => closeModal(modal()));
     });
   }
 
-  function open(rating = null) {
-    if (rating) draft.rating = rating;
+  function show(nextMode) {
+    mode = nextMode;
     render();
-    // A rating that came from the card moves focus to the message; otherwise to the stars.
-    openModal(modal(), qs(rating ? 'textarea' : '[data-feedback-rate]', root()));
+    // Opened by itself, the dialog starts at its title; from Help or the menu, at the stars.
+    openModal(modal(), qs(nextMode === 'prompt' ? '#feedback-title' : plannerApiEnabled() ? '[data-feedback-rate]' : '.primary-button', root()));
+  }
+
+  /** From Help or the menu: the same dialog, with what's new. */
+  function open() {
+    show('manual');
     trackEvent('feedback_opened');
-    dismissPromptCard(false);
   }
 
-  function dismissPromptCard(markDismissed = true) {
-    const card = qs('[data-feedback-card]');
-    if (!card) return;
-    if (markDismissed) update(state => { state.versions[APP_VERSION] = { ...(state.versions[APP_VERSION] || {}), dismissed: new Date().toISOString() }; });
-    itemExit(card).then(() => card.remove());
-  }
-
-  /** Show the small "how's this version?" card when the rule allows it. */
-  function maybePrompt({ closeDayCount = 0, now = new Date() } = {}) {
+  /**
+   * Opens the release prompt when the rule allows it. `busy` is true while a
+   * dialog is open or first-run setup isn't finished.
+   */
+  function maybePrompt({ closeDayCount = 0, now = new Date(), busy = false } = {}) {
     const state = readFeedbackState();
-    if (!shouldPromptFeedback(state, { version: APP_VERSION, now, closeDayCount, enabled: plannerApiEnabled() })) return false;
-    if (qs('[data-feedback-card]') || document.querySelector('.modal.is-open')) return false;
+    const blocked = busy || !!document.querySelector('.modal.is-open');
+    if (!shouldPromptFeedback(state, { version: APP_VERSION, now, closeDayCount, enabled: plannerApiEnabled(), busy: blocked })) return false;
     update(next => {
       next.lastPromptAt = now.toISOString();
-      next.versions[APP_VERSION] = { ...(next.versions[APP_VERSION] || {}), prompted: now.toISOString() };
+      next.releases[release] = { ...(next.releases[release] || { firstSeen: now.toISOString() }), prompted: now.toISOString() };
     });
-    const card = document.createElement('aside');
-    card.className = 'feedback-card';
-    card.dataset.feedbackCard = '';
-    card.setAttribute('role', 'dialog');
-    card.setAttribute('aria-label', 'Rate this version');
-    card.innerHTML = `<button type="button" class="feedback-card__close" data-feedback-card-close aria-label="Not now"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg></button>
-      <small>Daily Planner ${esc(APP_VERSION)}</small><strong>How is this version working for you?</strong>
-      <div class="feedback-card__stars">${[1, 2, 3, 4, 5].map(value => `<button type="button" data-feedback-card-rate="${value}" aria-label="${escAttr(`${value} — ${RATING_LABELS[value]}`)}">${STAR}</button>`).join('')}</div>
-      <button type="button" class="text-button feedback-card__later" data-feedback-card-close>Not now</button>`;
-    document.body.append(card);
-    qsa('[data-feedback-card-close]', card).forEach(button => button.addEventListener('click', () => dismissPromptCard(true)));
-    qsa('[data-feedback-card-rate]', card).forEach(button => button.addEventListener('click', () => open(Number(button.dataset.feedbackCardRate))));
-    itemEnter(card);
+    show('prompt');
     trackEvent('feedback_prompt_shown');
     return true;
   }

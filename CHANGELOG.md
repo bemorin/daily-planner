@@ -2,6 +2,16 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.21.0 — 2026-10-11
+
+- Payments move to **Creem**, a merchant of record that charges the right tax worldwide and sends receipts and invoices. Plus and the team gift are bought right from the planner and the landing page in EUR or USD; the team gift's price comes from the pack chosen. A webhook delivers the gift link, or a Plus activation link, by email even if the buyer closes the page.
+- The Plus dialog shows what Plus adds with previews built from your own year (the parts of Horizon it fills, your painted year, your weeks in each palette), what is coming to Plus at no extra cost, and a field for a gift link or a licence.
+- Week view shows your plan too: each day's main outcome and progress sit above its column, and on a phone the Plan tab lists the week day by day. Day view gives the plan a Plan heading with how much is done. On a phone, Plan and Schedule say where you stand (“2 of 6 done”, “Next 17:30”).
+- Horizon is one tap away in the phone header.
+- Feedback is asked once per feature release (1.21, not every fix), in a dialog with what's new, a rating, and an opt-in to be quoted on the website.
+- Landing page: the hero shows the Close day dialog before the day paints, pricing makes the coming Plus features obvious, and buyers land on their “gift page”.
+- Owner dashboard: trends by week, month and year with comparisons, funnels (landing, team gift, Plus), usage by section and installs, reviews, revenue per currency, Creem setup, and an “Open in the planner” link for licences. Anonymous counts now include daily, weekly and monthly active devices and the sections used, each at most once per period on a device.
+
 ## 1.20.0 — 2026-10-09
 
 - Add **Daily Planner Plus**, a one-time unlock for life (the planner itself stays free): **Plan your year**, a guided session that sets up Horizon (look back, Misogi, milestones, six mini-adventures, three commitments, quarterly habits, key dates) and ends with printing the year; **Your year in review**, one printable page with days closed, the painted year, streaks, trophies, outcomes, time by category, the Horizon results and a few memories and lessons; and five colour palettes for the painted year. Without Plus they stay visible with a badge.

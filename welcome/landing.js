@@ -1,48 +1,24 @@
 // Imported as a namespace so a value missing from an older config.js reads as
 // undefined instead of failing the whole module.
 import * as config from '../src/config.js';
-import { trackEvent, plannerApiEnabled } from '../src/lib/planner-api.js';
+import { trackEvent, plannerApiEnabled, checkoutOptions, startCheckout } from '../src/lib/planner-api.js';
 import { animate } from '../src/vendor/motion.js';
+import { CURRENCIES, PLUS_PRICE, PLUS_FEATURES, PLUS_UPCOMING, TEAM_TIERS, detectCurrency, formatMoney } from '../src/lib/pricing.js';
+import { TEAM_ROWS, buyState, checkoutUrl, defaultPlan, lowestPerPerson, perPerson, planForPeople, planRow, readCheckoutOptions, rememberCurrency, statusTone, storedCurrency, tierLabel, tierPrice } from './landing-model.js';
 
 /* ============================================================================
-   LANDING — everything the owner may want to change without touching markup.
-   Prices, checkout links and the optional talk are rendered from here.
+   LANDING — copy the owner may want to change without touching markup.
+   Prices, what Plus adds and what it promises next live in
+   src/lib/pricing.js (shared with the planner and the server, which charges
+   exactly those amounts). Online checkout is Creem, through the owner API:
+   GET /api/checkout says what can be bought in which currency.
 
    PROPOSALS TO CONFIRM BEFORE PUBLISHING (owner decision pending):
-   - `plus.price` and every price in `tiers`, and the `badge` on the
-     highlighted tier;
-   - `pricingNote` (check the VAT line with your accountant);
+   - `pricingNote` (check the tax line with your accountant);
    - `replyDelay` (left blank on purpose: no response time is promised).
    ============================================================================ */
 const LANDING = {
-  // PROPOSAL: Daily Planner Plus for one person, paid once. The same number
-  // in EUR and USD; write { EUR: 29, USD: 32 } to set them apart. The buy
-  // button links to PLUS_CHECKOUT_URL from the deployment config (build
-  // variable DAILY_PLANNER_PLUS_CHECKOUT_URL); blank shows "Coming soon".
-  plus: { price: 29 },
-  // PROPOSAL: team gift, one-time price per company by number of people.
-  // `price` is the same number in EUR and USD; write { EUR: 595, USD: 650 } to
-  // set them apart. `price: null` turns a tier into "On quote".
-  tiers: [
-    { plan: 'up-to-10', people: 10, price: 195 },
-    { plan: 'up-to-50', people: 50, price: 595, highlight: true, badge: 'Suggested' },
-    { plan: 'up-to-100', people: 100, price: 995 },
-    { plan: 'up-to-500', people: 500, price: 2995 },
-    { plan: 'up-to-1000', people: 1000, price: 4995 },
-    { plan: 'over-1000', people: null, price: null, label: 'More than 1,000 people', note: 'A price for the whole organisation' }
-  ],
-  // Stripe Payment Links (https://buy.stripe.com/…), one per tier and currency.
-  // While a link is blank, that tier offers the invoice request instead.
-  // Set each link's confirmation page to
-  // https://planner.bemorin.com/welcome/thanks/?session={CHECKOUT_SESSION_ID}
-  checkout: {
-    'up-to-10': { EUR: '', USD: '' },
-    'up-to-50': { EUR: '', USD: '' },
-    'up-to-100': { EUR: '', USD: '' },
-    'up-to-500': { EUR: '', USD: '' },
-    'up-to-1000': { EUR: '', USD: '' }
-  },
-  pricingNote: 'One-time payment. Invoice included. No subscription. No VAT is added.',
+  pricingNote: 'One-time payments. Prices include tax. Receipts and invoices come from Creem, our payment partner.',
   // Optional add-on, shown under the team prices (and as a request type) when
   // enabled. Off: no workshops, travel or live sessions are sold for now.
   talk: { enabled: false, label: 'A remote talk by Ben (45 minutes)', price: 'On quote' },
@@ -118,97 +94,84 @@ function el(tag, attrs = {}, ...children) {
 
 /* Currency: euro area pays in EUR, everyone else in USD ------------------- */
 
-const CURRENCIES = ['EUR', 'USD'];
-const MONEY_LOCALE = { EUR: 'en-IE', USD: 'en-US' };
-const EURO_REGIONS = new Set(['AT', 'BE', 'BG', 'CY', 'DE', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PT', 'SI', 'SK', 'AD', 'MC', 'SM', 'VA', 'ME', 'XK']);
-const CURRENCY_KEY = 'daily-planner-landing:currency';
-
-function localeRegion(tag, guess) {
-  try {
-    const locale = new Intl.Locale(tag);
-    return locale.region || (guess && locale.maximize().region) || '';
-  } catch (_) {
-    const match = /^[a-z]{2,3}(?:-[a-z]{4})?-([a-z]{2})(?:-|$)/i.exec(tag);
-    return match ? match[1].toUpperCase() : '';
-  }
-}
-
-function detectCurrency() {
-  const tags = [...(navigator.languages || []), navigator.language].filter(tag => typeof tag === 'string' && tag);
-  // An explicit region anywhere in the list wins ("en, fr-FR" is a French
-  // visitor); otherwise the likely region of the first language.
-  const region = tags.map(tag => localeRegion(tag, false)).find(Boolean) || (tags[0] ? localeRegion(tags[0], true) : '');
-  return EURO_REGIONS.has(region) ? 'EUR' : 'USD';
-}
-
-function storedCurrency() {
-  try {
-    const value = localStorage.getItem(CURRENCY_KEY);
-    return CURRENCIES.includes(value) ? value : '';
-  } catch (_) {
-    return '';
-  }
-}
-
-function rememberCurrency(value) {
-  try { localStorage.setItem(CURRENCY_KEY, value); } catch (_) { /* private mode: the choice lasts for this visit */ }
-}
-
 let currency = storedCurrency() || detectCurrency();
+const money = value => formatMoney(value, currency);
 
-function money(value, cents = false) {
-  return new Intl.NumberFormat(MONEY_LOCALE[currency] || 'en-US', { style: 'currency', currency, minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 }).format(value);
+/* What can be bought online: asked once, when prices come near ------------ */
+
+const sale = { options: readCheckoutOptions(null), pending: null };
+
+function loadSaleOptions() {
+  if (!apiOn) return Promise.resolve(sale.options);
+  if (sale.options.known) return Promise.resolve(sale.options);
+  if (!sale.pending) {
+    sale.pending = checkoutOptions().then(result => {
+      sale.options = readCheckoutOptions(result);
+      sale.pending = null;
+      renderOffers();
+      return sale.options;
+    });
+  }
+  return sale.pending;
 }
 
-const roundedMoney = value => {
-  const rounded = Math.round(value * 100) / 100;
-  return money(rounded, !Number.isInteger(rounded));
-};
-
-const people = value => new Intl.NumberFormat('en-US').format(value);
-
-function priceIn(price) {
-  if (price == null) return null;
-  const value = typeof price === 'object' ? price[currency] : price;
-  return Number.isFinite(value) ? value : null;
-}
-
-const tierPrice = tier => priceIn(tier?.price);
-const plusPrice = () => priceIn(LANDING.plus?.price);
-const tierLabel = tier => tier.label || `Up to ${people(tier.people)} people`;
-const tierByPlan = plan => LANDING.tiers.find(tier => tier.plan === plan) || null;
-const quoteTier = () => LANDING.tiers.find(tier => tierPrice(tier) == null) || null;
-const defaultPlan = () => (LANDING.tiers.find(tier => tier.highlight) || LANDING.tiers[0]).plan;
-
-function perPerson(tier) {
-  const price = tierPrice(tier);
-  return price != null && tier.people ? roundedMoney(price / tier.people) : '';
-}
-
-function lowestPerPerson() {
-  const values = LANDING.tiers.map(tier => {
-    const price = tierPrice(tier);
-    return price != null && tier.people ? price / tier.people : Infinity;
-  });
-  const lowest = Math.min(...values);
-  return Number.isFinite(lowest) ? roundedMoney(lowest) : '';
-}
-
-const checkoutUrl = tier => httpsUrl(LANDING.checkout?.[tier.plan]?.[currency]);
-const anyCheckout = () => LANDING.tiers.some(checkoutUrl);
-const plusCheckoutUrl = () => httpsUrl(configUrl('PLUS_CHECKOUT_URL'));
+const saleFor = item => buyState({ apiOn, options: sale.options, item, currency });
 
 /* Offer: Plus, team tiers, talk -------------------------------------------- */
 
-function renderPlus() {
-  const price = plusPrice();
-  qsa('[data-plus-price]').forEach(node => { node.textContent = price == null ? '' : money(price); });
-  const url = plusCheckoutUrl();
-  qsa('[data-plus-cta]').forEach(box => {
-    box.replaceChildren(url
-      ? el('a', { class: 'btn btn--primary', href: url, rel: 'noopener', 'data-plus-checkout': true }, 'Get Plus')
-      : el('button', { class: 'btn btn--primary', type: 'button', disabled: true }, 'Coming soon'));
+function renderPlusLists() {
+  qsa('[data-plus-features]').forEach(list => {
+    list.replaceChildren(...PLUS_FEATURES.map(feature => el('li', {}, feature.title)));
   });
+  // The promise: what Plus gets next, at no extra cost, with its status. A
+  // list in the Plus card of the prices; four columns (with headings) in the
+  // Plus section.
+  qsa('[data-plus-upcoming]').forEach(list => {
+    const detailed = list.hasAttribute('data-detailed');
+    list.replaceChildren(...PLUS_UPCOMING.map(next => el('li', { class: 'soon__item' },
+      el('span', { class: 'soon__mark', 'aria-hidden': 'true' }),
+      el('div', { class: 'soon__body' },
+        el('div', { class: 'soon__top' },
+          el(detailed ? 'h4' : 'b', { class: 'soon__name' }, next.title),
+          el('span', { class: `chip chip--${statusTone(next.status)}` }, el('span', { class: 'sr-only' }, 'Status: '), next.status)),
+        el('span', { class: 'soon__text' }, next.text)))));
+  });
+  qsa('[data-faq-upcoming]').forEach(node => { node.textContent = upcomingSentence(); });
+}
+
+const listText = items => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0] || '');
+
+/** "Planned: “A” and “B”. Exploring: “C”." for the FAQ, from PLUS_UPCOMING. */
+function upcomingSentence() {
+  const groups = new Map();
+  PLUS_UPCOMING.forEach(next => {
+    const status = next.status || 'Coming';
+    groups.set(status, [...(groups.get(status) || []), `“${next.title}”`]);
+  });
+  return [...groups].map(([status, titles]) => `${status}: ${listText(titles)}.`).join(' ');
+}
+
+function plusCta(box) {
+  const state = saleFor('plus');
+  const children = [];
+  if (state.buyable) {
+    children.push(el('button', { class: 'btn btn--primary btn--buy', type: 'button', 'data-buy': 'plus' }, 'Buy Plus'));
+  } else {
+    const id = `plus-note-${box.dataset.plusCta || 'x'}`;
+    children.push(el('button', { class: 'btn btn--primary btn--buy', type: 'button', disabled: true, 'aria-describedby': id }, 'Coming soon'));
+    children.push(state.reason === 'currency'
+      ? el('p', { class: 'buy__note', id }, `Not on sale in ${currency} yet. `, el('button', { class: 'linklike', type: 'button', 'data-cur-switch': state.other }, `Show prices in ${state.other}`))
+      : el('p', { class: 'buy__note', id }, 'Plus isn’t on sale here yet. Everything else is free: ', el('a', { href: '../', 'data-cta': 'app' }, 'open the planner'), '.'));
+  }
+  children.push(el('p', { class: 'buy__error', role: 'alert', 'data-buy-error': true, hidden: true }));
+  box.replaceChildren(...children);
+}
+
+function renderPlus() {
+  const price = PLUS_PRICE[currency];
+  qsa('[data-plus-price]').forEach(node => { node.textContent = Number.isFinite(price) ? money(price) : ''; });
+  qsa('[data-free-price]').forEach(node => { node.textContent = money(0); });
+  qsa('[data-plus-cta]').forEach(plusCta);
 }
 
 function renderTalk() {
@@ -228,74 +191,164 @@ function renderTalk() {
 function renderTiers() {
   const box = qs('[data-tiers]');
   if (!box) return;
-  const rows = LANDING.tiers.map(tier => {
-    const price = tierPrice(tier);
-    const label = tierLabel(tier);
-    const named = label.toLowerCase();
+  const state = saleFor('gift');
+  const rows = TEAM_ROWS.map(row => {
+    const price = tierPrice(row, currency);
+    const named = tierLabel(row).toLowerCase();
     const quote = price == null;
-    const url = quote ? '' : checkoutUrl(tier);
-    const look = `btn btn--tier ${tier.highlight ? 'btn--primary' : 'btn--ghost'}`;
-    let action;
-    let invoice = null;
+    const look = `btn btn--tier ${row.highlight ? 'btn--primary' : 'btn--ghost'}`;
+    const actions = [];
     if (quote) {
-      action = el('a', { class: look, href: '#request', 'data-request': 'quote', 'data-plan': tier.plan, 'aria-label': `Ask for a quote for ${named}` }, 'Ask for a quote');
-    } else if (url) {
-      action = el('a', { class: look, href: url, rel: 'noopener', 'data-checkout': tier.plan, 'aria-label': `Buy the team gift for ${named}, ${money(price)}` }, 'Buy');
-      invoice = el('a', { class: 'tier__link', href: '#request', 'data-request': 'invoice', 'data-plan': tier.plan, 'aria-label': `Pay by invoice for ${named}` }, 'Pay by invoice');
+      actions.push(el('a', { class: look, href: '#request', 'data-request': 'quote', 'data-plan': row.plan, 'aria-label': `Ask for a quote for ${named}` }, 'Ask for a quote'));
+    } else if (state.buyable) {
+      actions.push(el('button', { class: look, type: 'button', 'data-buy': 'gift', 'data-plan': row.plan, 'aria-label': `Buy the team gift for ${named}, ${money(price)}` }, 'Buy'));
+      actions.push(el('a', { class: 'tier__link', href: '#request', 'data-request': 'invoice', 'data-plan': row.plan, 'aria-label': `Get the team gift for ${named} by invoice` }, 'Invoice'));
     } else {
-      action = el('a', { class: look, href: '#request', 'data-request': 'invoice', 'data-plan': tier.plan, 'aria-label': `Get the team gift for ${named} by invoice` }, 'Get it by invoice');
+      actions.push(el('a', { class: look, href: '#request', 'data-request': 'invoice', 'data-plan': row.plan, 'aria-label': `Get the team gift for ${named} by invoice` }, 'Get it by invoice'));
     }
-    return el('div', { class: `tier${tier.highlight ? ' is-highlight' : ''}${quote ? ' tier--quote' : ''}` },
+    return el('div', { class: `tier${row.highlight ? ' is-highlight' : ''}${quote ? ' tier--quote' : ''}` },
       el('div', { class: 'tier__who' },
-        tier.badge ? el('span', { class: 'tier__badge' }, tier.badge) : null,
-        el('b', {}, label),
-        el('small', {}, quote ? (tier.note || '') : `${perPerson(tier)} per person`),
-        invoice),
+        el('b', {}, tierLabel(row), row.badge ? el('span', { class: 'tier__badge' }, row.badge) : null),
+        el('small', {}, quote ? (row.note || '') : `${perPerson(row, currency)} per person`)),
       el('div', { class: 'tier__price' }, quote ? 'On quote' : money(price)),
-      el('div', { class: 'tier__act' }, action));
+      el('div', { class: 'tier__act' }, actions),
+      el('p', { class: 'buy__error tier__error', role: 'alert', 'data-buy-error': true, hidden: true }));
   });
   box.replaceChildren(...rows);
+  const after = qs('[data-gift-after]');
+  if (after) {
+    after.replaceChildren(...(state.buyable
+      ? [el('b', {}, 'Right after paying, you land on your gift page'), ' with the link to forward, the seats used and the message your team sees. Its link also arrives by email.']
+      : [el('b', {}, 'Once the invoice is paid,'), ' you get your gift page by email: a private page with the gift link to forward, the seats used and the message your team sees.']));
+  }
 }
 
 function renderCurrencyCopy() {
-  qsa('[data-min-per-person]').forEach(node => { node.textContent = lowestPerPerson(); });
+  qsa('[data-min-per-person]').forEach(node => { node.textContent = lowestPerPerson(currency); });
   const pay = qs('[data-faq-pay]');
   if (pay) {
-    pay.textContent = anyCheckout()
-      ? 'Yes, or by card. “Buy” opens a secure card payment page, and the gift link arrives as soon as it’s paid. “Pay by invoice” sends a request instead: you receive an invoice to pay by bank transfer, then the gift link once it’s paid. Either way it’s one payment, with no subscription.'
+    pay.textContent = saleFor('gift').buyable
+      ? 'Yes, or by card. “Buy” opens a secure checkout run by Creem, our payment partner; you land on your gift page as soon as it’s paid, and its link arrives by email. “Invoice” sends a request instead: you receive an invoice to pay by bank transfer, then the gift link once it’s paid. Either way it’s one payment, with no subscription.'
       : 'Yes. Choose a team size and send the request: you’ll receive an invoice to pay by bank transfer, then the gift link once it’s paid. It’s one payment, with no subscription.';
   }
 }
 
-function setupCurrency() {
+function renderOffers() {
+  qsa('[data-cur]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.cur === currency)));
+  renderPlus();
+  renderTiers();
+  renderCurrencyCopy();
+  renderPlanOptions();
+  updateManagerLink();
+}
+
+function setCurrency(next, { animated = false } = {}) {
+  if (!CURRENCIES.includes(next) || next === currency) return;
+  currency = next;
+  rememberCurrency(currency);
+  renderOffers();
+  if (animated && !reduceQuery.matches) {
+    qsa('.tier__price, .tier__who small, .offer__price, .plus-buy__price b').forEach((node, index) => {
+      try { animate(node, { opacity: [0, 1], transform: ['translateY(5px)', 'none'] }, { duration: 0.32, delay: (index % 6) * 0.025, ease: EASE_OUT }); } catch (_) { /* static is fine */ }
+    });
+  }
+}
+
+function setupOffers() {
   const group = qs('[data-currency]');
   const note = qs('[data-pricing-note]');
   if (note) note.textContent = LANDING.pricingNote;
   renderTalk();
-  const apply = ({ animated = false } = {}) => {
-    qsa('[data-cur]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.cur === currency)));
-    renderPlus();
-    renderTiers();
-    renderCurrencyCopy();
-    renderPlanOptions();
-    updateManagerLink();
-    if (animated && !reduceQuery.matches) {
-      qsa('.tier__price, .tier__who small, .price--plus .price__big').forEach((node, index) => {
-        try { animate(node, { opacity: [0, 1], transform: ['translateY(5px)', 'none'] }, { duration: 0.32, delay: (index % 6) * 0.025, ease: EASE_OUT }); } catch (_) { /* static is fine */ }
-      });
-    }
-  };
+  renderPlusLists();
   if (group) {
     group.hidden = false;
     group.addEventListener('click', event => {
       const button = event.target.closest('[data-cur]');
-      if (!button || !CURRENCIES.includes(button.dataset.cur) || button.dataset.cur === currency) return;
-      currency = button.dataset.cur;
-      rememberCurrency(currency);
-      apply({ animated: true });
+      if (button) setCurrency(button.dataset.cur, { animated: true });
     });
   }
-  apply();
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-cur-switch]');
+    if (button) setCurrency(button.dataset.curSwitch, { animated: true });
+  });
+  renderOffers();
+
+  // Ask what's on sale once, a little before the prices come into view.
+  const near = [qs('#pricing'), qs('.plus-buy')].filter(Boolean);
+  if (apiOn && near.length && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      observer.disconnect();
+      loadSaleOptions();
+    }, { rootMargin: '900px 0px' });
+    near.forEach(node => observer.observe(node));
+  }
+}
+
+/* Buy: Plus or a team gift, through the owner API's Creem checkout -------- */
+
+function buyError(button, text) {
+  const box = button.closest('[data-plus-cta], .tier');
+  const error = box && qs('[data-buy-error]', box);
+  if (!error) return;
+  error.textContent = text;
+  error.hidden = !text;
+}
+
+function setBusy(button, busy) {
+  if (busy) {
+    button.dataset.label = button.textContent;
+    button.textContent = button.dataset.buy === 'plus' ? 'Opening checkout…' : 'Opening…';
+  } else if (button.dataset.label) {
+    button.textContent = button.dataset.label;
+  }
+  button.disabled = busy;
+  button.classList.toggle('is-busy', busy);
+  button.setAttribute('aria-busy', String(busy));
+}
+
+let openRequest = () => {};
+
+async function buy(button) {
+  const item = button.dataset.buy;
+  const plan = button.dataset.plan || '';
+  if (item === 'plus') track('plus_checkout_clicked');
+  else track('pack_checkout_clicked');
+  buyError(button, '');
+  setBusy(button, true);
+  await loadSaleOptions();
+  const state = saleFor(item);
+  if (!state.buyable) {
+    // On sale nowhere (or not in this currency) after all: show the honest
+    // state, and for a team gift go on with the invoice request.
+    setBusy(button, false);
+    renderOffers();
+    if (item === 'gift') openRequest({ kind: 'invoice', plan });
+    return;
+  }
+  const result = await startCheckout({ item, plan, currency });
+  const url = result.ok ? checkoutUrl(result.url) : '';
+  if (url) {
+    // The button stays busy while the browser leaves for the checkout.
+    location.assign(url);
+    return;
+  }
+  setBusy(button, false);
+  buyError(button, result.error || 'The checkout could not be opened. Please try again in a minute.');
+}
+
+function setupBuy() {
+  document.addEventListener('click', event => {
+    const button = event.target.closest('[data-buy]');
+    if (!button || button.disabled) return;
+    event.preventDefault();
+    buy(button);
+  });
+  // Back from the checkout page (back/forward cache): buttons work again.
+  window.addEventListener('pageshow', event => {
+    if (!event.persisted) return;
+    qsa('[data-buy].is-busy').forEach(button => setBusy(button, false));
+  });
 }
 
 /* Footer: privacy notice and configured links ----------------------------- */
@@ -315,7 +368,7 @@ function renderFooter() {
 
 /* Send this to my manager ------------------------------------------------- */
 
-const managerBody = () => LANDING.managerEmail.body.replaceAll('{url}', LANDING.landingUrl).replaceAll('{perPerson}', lowestPerPerson());
+const managerBody = () => LANDING.managerEmail.body.replaceAll('{url}', LANDING.landingUrl).replaceAll('{perPerson}', lowestPerPerson(currency));
 
 function updateManagerLink() {
   const link = qs('[data-manager-mail]');
@@ -362,11 +415,11 @@ function renderPlanOptions() {
   const select = qs('[data-plan-select]');
   if (!select) return;
   const current = select.value || defaultPlan();
-  select.replaceChildren(...LANDING.tiers.map(tier => {
-    const price = tierPrice(tier);
-    return el('option', { value: tier.plan }, `${tierLabel(tier)} · ${price == null ? 'on quote' : money(price)}`);
+  select.replaceChildren(...TEAM_ROWS.map(row => {
+    const price = tierPrice(row, currency);
+    return el('option', { value: row.plan }, `${tierLabel(row)} · ${price == null ? 'on quote' : money(price)}`);
   }));
-  select.value = tierByPlan(current) ? current : defaultPlan();
+  select.value = planRow(current) ? current : defaultPlan();
 }
 
 function setupRequest() {
@@ -411,11 +464,11 @@ function setupRequest() {
   }
 
   function setPlan(plan, prefill) {
-    if (!tierByPlan(plan)) return;
+    if (!planRow(plan)) return;
     select.value = plan;
     if (prefill) {
-      const tier = tierByPlan(plan);
-      size.value = tier.people ? String(tier.people) : '';
+      const row = planRow(plan);
+      size.value = row.seats ? String(row.seats) : '';
       request.peopleTouched = false;
       setError(size, '');
     }
@@ -423,7 +476,7 @@ function setupRequest() {
 
   // An invoice needs a price; a tier without one is quoted.
   function matchKindToPlan() {
-    const priced = tierPrice(tierByPlan(select.value)) != null;
+    const priced = tierPrice(planRow(select.value), currency) != null;
     request.quoted = request.kind === 'invoice' && !priced;
     if (request.quoted) setKind('quote', false);
   }
@@ -431,20 +484,20 @@ function setupRequest() {
   // "Pay by invoice" chosen while the plan is on quote: move to the priced
   // tier that fits the number of people, if there is one.
   function pricePlanForInvoice() {
-    if (tierPrice(tierByPlan(select.value)) != null) return;
+    if (tierPrice(planRow(select.value), currency) != null) return;
     const count = Number(size.value);
-    const fit = LANDING.tiers.find(tier => tierPrice(tier) != null && tier.people && (!count || count <= tier.people));
+    const fit = TEAM_TIERS.find(tier => !count || count <= tier.seats);
     if (fit) select.value = fit.plan;
   }
 
   function fitPlanToPeople() {
     const count = Number(size.value);
     if (!/^\d+$/.test(size.value.trim()) || count < 2) return;
-    const current = tierByPlan(select.value);
-    const fits = current && (current.people ? count <= current.people : count > Math.max(...LANDING.tiers.map(tier => tier.people || 0)));
+    const current = planRow(select.value);
+    const fits = current && (current.seats ? count <= current.seats : count > Math.max(...TEAM_TIERS.map(tier => tier.seats)));
     if (fits) return;
-    const next = LANDING.tiers.find(tier => tier.people && count <= tier.people) || quoteTier();
-    if (next) select.value = next.plan;
+    const next = planForPeople(count);
+    if (next) select.value = next;
   }
 
   function setKind(kind, apply = true) {
@@ -459,7 +512,7 @@ function setupRequest() {
     title.textContent = copy.title;
     intro.textContent = requestMode === 'mailto' ? 'Fill this in and your email app will open with the request, ready to send.' : copy.intro;
     // Below the choice, so the buttons never move under the pointer.
-    kindNote.textContent = request.quoted ? `${tierLabel(tierByPlan(select.value))}: it starts with a quote, and the invoice follows.` : '';
+    kindNote.textContent = request.quoted ? `${tierLabel(planRow(select.value))}: it starts with a quote, and the invoice follows.` : '';
     kindNote.hidden = !request.quoted;
     submit.textContent = requestMode === 'mailto' ? 'Write the request email' : copy.submit;
     const asking = request.kind === 'question' || request.kind === 'talk';
@@ -492,6 +545,7 @@ function setupRequest() {
       try { animate(title, { opacity: [0.35, 1] }, { duration: 0.5, ease: EASE_OUT }).finished.then(() => title.style.removeProperty('opacity'), () => {}); } catch (_) { /* static is fine */ }
     }
   }
+  openRequest = open;
 
   document.addEventListener('click', event => {
     const trigger = event.target.closest('[data-request]');
@@ -547,8 +601,8 @@ function setupRequest() {
     if (invalid) { invalid.focus(); return; }
 
     if (requestMode === 'mailto') {
-      const tier = tierByPlan(values.plan);
-      const price = tierPrice(tier);
+      const tier = planRow(values.plan);
+      const price = tierPrice(tier, currency);
       const lines = [
         `Request: ${KINDS[values.kind].label}`,
         `Plan: Team gift, ${tierLabel(tier).toLowerCase()} (${price == null ? 'on quote' : money(price)})`,
@@ -620,7 +674,7 @@ function validate(form, values) {
     ['email', !values.email ? 'Enter your work email.' : (!EMAIL_RE.test(values.email) || values.email.length > 254 ? 'Enter an email address like name@company.com.' : '')],
     ['name', !values.name ? 'Enter your name.' : (values.name.length > 80 ? 'Keep your name under 80 characters.' : '')],
     ['company', !values.company ? 'Enter your company.' : (values.company.length > 120 ? 'Keep the company name under 120 characters.' : '')],
-    ['plan', tierByPlan(values.plan) ? '' : 'Choose a plan.'],
+    ['plan', planRow(values.plan) ? '' : 'Choose a plan.'],
     ['teamSize', /^\d+$/.test(values.teamSize) && count >= 2 && count <= 100000 ? '' : 'Enter the number of people, from 2 to 100,000.'],
     ['message', values.message.length > 1000 ? 'Keep the message under 1,000 characters.' : (asking && !values.message ? 'Write your question.' : '')],
     ['consent', requestMode !== 'api' || values.consent ? '' : 'Tick this box so we can reply to you.']
@@ -705,10 +759,23 @@ function setupChrome() {
     const target = event.target.closest('a, button');
     if (!target) return;
     if (target.matches('[data-cta="app"]')) track('landing_cta_app');
-    else if (target.matches('[data-plus-checkout]')) track('plus_checkout_clicked');
-    else if (target.matches('[data-checkout]')) track('pack_checkout_clicked');
     else if (target.getAttribute('href') === '#teams') track('landing_cta_teams');
   });
+}
+
+/* Counts: which parts of the page people reach, once per page view -------- */
+
+function setupViewCounts() {
+  if (!apiOn || !('IntersectionObserver' in window)) return;
+  const sections = new Map([['plus', 'plus_viewed'], ['teams', 'teams_viewed'], ['pricing', 'pricing_viewed']]);
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      observer.unobserve(entry.target);
+      track(sections.get(entry.target.id));
+    });
+  }, { rootMargin: '0px 0px -30% 0px' });
+  sections.forEach((name, id) => { const node = document.getElementById(id); if (node) observer.observe(node); });
 }
 
 /* Replica data: painted cells --------------------------------------------- */
@@ -801,18 +868,49 @@ function buildPaint() {
 
 const PALETTES = ['ocean', 'forest', 'plum', 'graphite', 'sunset'];
 
+// A click in a replica: the pointer dips, a ripple spreads, the target presses.
+function click(t, ms, press = '') {
+  t.add('d-click', ms);
+  t.remove('d-click', ms + 640);
+  if (!press) return;
+  t.add(press, ms);
+  t.remove(press, ms + 240);
+}
+
 const SCRIPTS = {
+  // The hero: plan, then a pointer closes the day. The Close day sheet opens,
+  // two open items are decided, a memory is written, and only then is the
+  // day's square painted.
   day: {
-    length: 11500,
+    length: 14000,
     loop: true,
     run(t) {
-      t.type(qs('[data-type]', t.root), 500);
-      t.add('s-mit', 2500);
-      t.add('s-block', 3300);
-      t.add('s-press', 4600);
-      t.remove('s-press', 4860);
-      t.add('s-closed', 5000);
-      t.count(qs('[data-count]', t.root), 5900, 300);
+      const [focus, memory] = qsa('[data-type]', t.root);
+      t.type(focus, 300);
+      t.add('s-mit', 1800);
+      t.add('s-block', 2300);
+      t.point('.rp-window', 2900, { x: 0.6, y: 0.94, jump: true });
+      t.add('d-cursor', 2950);
+      t.point('.rp-closebtn', 3050, { duration: 950, x: 0.42, y: 0.62 });
+      t.add('d-hover', 3850);
+      click(t, 4150, 'd-press');
+      t.remove('d-hover', 4450);
+      t.add('d-modal', 4450);
+      t.point('.rp-mi--save .rp-mc--save', 5100, { duration: 700 });
+      click(t, 5850);
+      t.add('d-save', 5850);
+      t.point('.rp-mi--forget .rp-mc--forget', 6350, { duration: 560 });
+      click(t, 7000);
+      t.add('d-forget', 7000);
+      t.point('.rp-modal .rp-field', 7550, { duration: 620, x: 0.16, y: 0.55 });
+      click(t, 8250);
+      t.type(memory, 8350);
+      t.point('.rp-modal .rp-primary', 9650, { duration: 640, x: 0.5, y: 0.58 });
+      click(t, 10400, 'd-submit');
+      t.remove('d-modal', 10700);
+      t.remove('d-cursor', 10700);
+      t.add('s-closed', 11050);
+      t.count(qs('[data-count]', t.root), 11700, 300);
     }
   },
   close: {
@@ -943,7 +1041,24 @@ const SCRIPTS = {
 };
 
 // Classes a scene passes through on its way to the final frame.
-const TRANSIENT = ['s-press', 's-sync', 's-finger', 's-press-plan', 's-press-save', 's-save', 's-later', 's-tap', ...PALETTES.map(name => `pal-${name}`)];
+const TRANSIENT = ['s-press', 's-sync', 's-finger', 's-press-plan', 's-press-save', 's-save', 's-later', 's-tap', ...PALETTES.map(name => `pal-${name}`),
+  'd-cursor', 'd-hover', 'd-press', 'd-click', 'd-modal', 'd-save', 'd-forget', 'd-submit'];
+
+// Moves a replica's pointer onto `target` (a selector inside the scene), in
+// em so it stays in place if the replica is resized while it glides.
+function aim(root, target, { duration = 700, x = 0.5, y = 0.5, jump = false } = {}) {
+  const pointer = qs('.rp-cursor', root);
+  const node = qs(target, root);
+  if (!pointer || !node) return;
+  const box = root.getBoundingClientRect();
+  const rect = node.getBoundingClientRect();
+  const em = Number.parseFloat(getComputedStyle(root).fontSize) || 12;
+  const left = (rect.left - box.left + rect.width * x) / em;
+  const top = (rect.top - box.top + rect.height * y) / em;
+  pointer.style.setProperty('--move', `${jump ? 0 : duration}ms`);
+  pointer.style.setProperty('--cx', `${left.toFixed(2)}em`);
+  pointer.style.setProperty('--cy', `${top.toFixed(2)}em`);
+}
 
 function createScene(root) {
   const script = SCRIPTS[root.dataset.scene];
@@ -963,6 +1078,7 @@ function createScene(root) {
     root,
     add: (cls, ms) => later(ms, () => root.classList.add(cls)),
     remove: (cls, ms) => later(ms, () => root.classList.remove(cls)),
+    point: (target, ms, options) => later(ms, () => aim(root, target, options)),
     type(node, ms) {
       if (!node) return;
       const text = node.dataset.text || '';
@@ -980,8 +1096,11 @@ function createScene(root) {
     }
   };
 
+  const pointers = qsa('.rp-cursor', root);
+
   function reset() {
     root.classList.remove(...finals, ...TRANSIENT);
+    pointers.forEach(node => node.removeAttribute('style'));
     typed.forEach(node => { node.textContent = ''; node.classList.remove('is-typing'); });
     counters.forEach(node => { node.textContent = node.dataset.from || '0'; });
     state = 'reset';
@@ -990,6 +1109,7 @@ function createScene(root) {
   function finish() {
     clear();
     root.classList.remove(...TRANSIENT, 'is-playing');
+    pointers.forEach(node => node.removeAttribute('style'));
     root.classList.add(...finals, 'is-armed');
     typed.forEach(node => { node.textContent = node.dataset.text; node.classList.remove('is-typing'); });
     counters.forEach(node => { node.textContent = node.dataset.count; });
@@ -1212,20 +1332,22 @@ function setupFaq() {
 
 /* Start -------------------------------------------------------------------- */
 
-// A Stripe confirmation pointed at this page instead of the manage page.
+// A payment confirmation sent here instead of to the gift page.
 const params = new URLSearchParams(location.search);
-if (/^cs_(?:live|test)_[A-Za-z0-9_]+$/.test(params.get('session') || '')) location.replace(`./thanks/${location.search}`);
+if (params.get('checkout_id') || params.get('session')) location.replace(`./thanks/${location.search}`);
 
 // The inline script in <head> set `js-anim` before first paint when motion is
 // welcome. If it gave up waiting for this module, stay static.
 motionOn = html.classList.contains('js-anim') && !reduceQuery.matches;
 
 buildPaint();
-setupCurrency();
+setupOffers();
+setupBuy();
 renderFooter();
 setupManagerEmail();
 setupRequest();
 setupChrome();
+setupViewCounts();
 setupScenes();
 setupReveal();
 setupFaq();

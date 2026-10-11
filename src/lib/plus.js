@@ -21,7 +21,11 @@ export const GIFT_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const EURO_AREA = Object.freeze(['AT', 'BE', 'BG', 'CY', 'DE', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PT', 'SI', 'SK', 'AD', 'MC', 'SM', 'VA', 'ME', 'XK']);
 const SOURCES = new Set(['gift', 'purchase', 'manual', 'dev']);
 const TOKEN_RE = /^DP1\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/;
-const SESSION_RE = /^cs_(?:live|test)_[A-Za-z0-9_]+$/;
+// Checkout references: Creem ids (ch_…), older Stripe sessions (cs_…) and dev fakes —
+// the same shape the server accepts. Typed on their own (not in a link), only the
+// two known prefixes count, so a gift code is never mistaken for one.
+const CHECKOUT_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{5,199}$/;
+const BARE_CHECKOUT_RE = /^(?:ch|cs_(?:live|test))_[A-Za-z0-9_-]+$/;
 // Remembers the token this device last verified, so Plus is on from the first paint.
 const VERIFIED_KEY = 'daily-planner-ui:plus-verified';
 
@@ -43,19 +47,21 @@ export function normalizeGiftCode(input) {
 }
 
 /**
- * What someone pasted into "Have a gift link, code or licence?": a gift link
- * or code, a licence (or a ?license= link), or a ?purchase= link.
+ * What someone pasted into "Have a gift link or a licence?": a gift link or
+ * code, a licence (or a ?license= link), or a purchase link (?purchase= from
+ * the receipt email, ?checkout_id= from the payment page).
  */
 export function parsePlusInput(input) {
   const text = String(input || '').trim();
   if (!text) return { kind: 'empty' };
   let value = text;
-  if (/^https?:\/\/|[?&](?:gift|license|purchase)=/i.test(text)) {
+  if (/^https?:\/\/|[?&](?:gift|license|purchase|checkout_id)=/i.test(text)) {
     try {
       const params = new URL(text, 'https://planner.bemorin.com/').searchParams;
       if (params.get('gift')) return normalizeGiftCode(params.get('gift')) ? { kind: 'gift', code: normalizeGiftCode(params.get('gift')) } : { kind: 'invalid' };
-      if (params.get('purchase')) value = params.get('purchase');
-      else if (params.get('license')) value = params.get('license');
+      const checkout = (params.get('purchase') || params.get('checkout_id') || '').trim();
+      if (checkout) return CHECKOUT_RE.test(checkout) ? { kind: 'purchase', checkout } : { kind: 'invalid' };
+      if (params.get('license')) value = params.get('license');
       else return { kind: 'invalid' };
     } catch (_) {
       return { kind: 'invalid' };
@@ -63,12 +69,13 @@ export function parsePlusInput(input) {
   }
   value = value.trim();
   if (TOKEN_RE.test(value)) return { kind: 'license', token: value };
-  if (SESSION_RE.test(value)) return { kind: 'purchase', session: value };
   const code = normalizeGiftCode(value);
-  return code ? { kind: 'gift', code } : { kind: 'invalid' };
+  if (code) return { kind: 'gift', code };
+  return BARE_CHECKOUT_RE.test(value) && CHECKOUT_RE.test(value) ? { kind: 'purchase', checkout: value } : { kind: 'invalid' };
 }
 
-export const isCheckoutSession = value => SESSION_RE.test(String(value || ''));
+/** A checkout reference the server can look up (Creem `checkout_id`, a receipt's `?purchase=`). */
+export const isCheckoutReference = value => CHECKOUT_RE.test(String(value || '').trim());
 
 /** Region of a BCP 47 locale ('fr' → 'FR', 'en' → 'US'), or ''. */
 export function localeRegion(locale) {

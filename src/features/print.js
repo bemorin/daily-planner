@@ -145,11 +145,13 @@ export function createPrintFeature(ctx) {
 
   function printPlanner() {
     preparePrint();
+    ctx.trackOncePer?.('day', 'print_used');
     requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
   }
 
   function printYear(year) {
     preparePrint(year);
+    ctx.trackOncePer?.('day', 'print_used');
     requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
   }
 

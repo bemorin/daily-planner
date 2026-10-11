@@ -1,9 +1,10 @@
 /* Daily Planner owner API (Cloudflare D1): Daily Planner Plus team gifts and purchases.
-   Run after 0002. Paste into the D1 console as is, or apply it with wrangler d1 execute
+   Any order with the other files. Paste into the D1 console as is, or apply it with wrangler d1 execute
    (see docs/FEEDBACK_AND_WAITLIST.md). Safe to run again.
    Block comments only: the D1 console joins all lines into one.
    gifts: one row per gift link; amount is in cents; emailed_at is set once the buyer was emailed.
-   purchases: Stripe Plus purchases (kind plus) and licences made in the dashboard (kind manual). */
+   purchases: Plus purchases (kind plus) and licences made in the dashboard (kind manual).
+   stripe_session keeps its name and holds the checkout reference (a Creem checkout id). */
 CREATE TABLE IF NOT EXISTS gifts (
   code TEXT PRIMARY KEY,
   org TEXT NOT NULL,

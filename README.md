@@ -181,11 +181,11 @@ The in-app **How it works** modal contains the complete shortcut reference. Comm
 
 ## Landing page
 
-`welcome/` is the public landing page (served at `/welcome/`): animated replicas of the planner, Daily Planner Plus, the team gift, pricing in EUR or USD, and an FAQ. `welcome/thanks/` is where a company gets its gift link after paying. The page reuses the planner's runtime configuration, makes no request when `PLANNER_API_URL` is blank, and keeps prices and Stripe Payment Links in one `LANDING` object at the top of `welcome/landing.js`.
+`welcome/` is the public landing page (served at `/welcome/`): animated replicas of the planner, Daily Planner Plus, the team gift, pricing in EUR or USD, and an FAQ. `welcome/thanks/` is where a company gets its gift link after paying. The page reuses the planner's runtime configuration, makes no request when `PLANNER_API_URL` is blank, and takes every price from `src/lib/pricing.js`, the file the planner and the owner API use too.
 
 ## Daily Planner Plus
 
-The planner is free. **Plus** is a one-time unlock, for life, that adds new features: **Plan your year** (a guided session that sets up Horizon), **Your year in review** (one printable page), and colours for the painted year. Companies can give Plus to their people as a team gift: one link, each person who opens it activates Plus, no accounts and no names collected. Licences are signed by the owner API and verified on the device; a copy built without `DAILY_PLANNER_PLUS_PUBLIC_KEY` cannot activate Plus.
+The planner is free. **Plus** is a one-time unlock, for life, that adds new features: **Plan your year** (a guided session that sets up Horizon), **Your year in review** (one printable page), and colours for the painted year. Companies can give Plus to their people as a team gift: one link, each person who opens it activates Plus, no accounts and no names collected. Licences are signed by the owner API and verified on the device; a copy built without `DAILY_PLANNER_PLUS_PUBLIC_KEY` cannot activate Plus. Payments go through Creem, the merchant of record (it charges VAT and sends receipts and invoices); setup is in [`docs/FEEDBACK_AND_WAITLIST.md`](./docs/FEEDBACK_AND_WAITLIST.md).
 
 ## Local development
 
@@ -210,7 +210,7 @@ Browsers keep planner data per address, so the launcher always uses port 8080 â€
 npm start            # node scripts/serve.mjs --open
 npm run serve:dist   # production build
 npm run start:api    # also run the owner API and dashboard (/admin/, token "dev")
-npm run start:api:fake # the same, printing emails and accepting pretend Stripe payments
+npm run start:api:fake # the same, printing emails and with pretend Creem payments
 npm run admin:secret # print a fresh ADMIN_TOKEN and two-factor secret for production
 npm run plus:keys    # print a fresh Plus signing key and its public key
 ```

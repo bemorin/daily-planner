@@ -40,6 +40,7 @@ export function privacyNoticeSections({ plannerApi = false, googleDrive = false,
         'The waitlist stores the email you enter, the devices you tick, your optional note, your browser language, the app version, the date, and that you came from the Google Drive guide.',
         'Waitlist addresses are emailed once, through our email provider, when account sync is ready — and then deleted automatically. You can remove yours at any time from the sync guide (Leave the waitlist).',
         'Feedback stores your rating, the kind of note, your message, the app version, the kind of device (for example “Mac · browser”) and the date — and your email only if you add one.',
+        'If you tick “You can quote this on the Daily Planner website”, your rating, your message and the name you chose are also kept as a review that may be published there. Ask and it is deleted.',
         'Either can be deleted on request.'
       ]
     });
@@ -49,7 +50,7 @@ export function privacyNoticeSections({ plannerApi = false, googleDrive = false,
         title: 'Daily Planner Plus',
         paragraphs: [
           'Plus is checked on this device, from the licence saved with your planner settings. There is no account, and nothing else is sent.',
-          'Activating a gift sends only the gift code. Finishing a purchase sends only the Stripe checkout reference, so the payment can be confirmed.'
+          'Activating a gift sends only the gift code, and a purchase sends only the checkout reference, so the payment can be confirmed. Payments themselves are handled by Creem, our payment provider, on its own page.'
         ]
       });
     }

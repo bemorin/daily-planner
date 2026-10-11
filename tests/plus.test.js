@@ -150,7 +150,15 @@ test('the gift field accepts links, codes, licences and purchase links', async (
   assert.deepEqual(plus.parsePlusInput('abcd-efgh-jkmn'), { kind: 'gift', code: 'ABCD-EFGH-JKMN' });
   assert.deepEqual(plus.parsePlusInput(` ${token} `), { kind: 'license', token });
   assert.deepEqual(plus.parsePlusInput(`https://planner.bemorin.com/?license=${token}`), { kind: 'license', token });
-  assert.deepEqual(plus.parsePlusInput('https://planner.bemorin.com/?purchase=cs_test_a1B2c3'), { kind: 'purchase', session: 'cs_test_a1B2c3' });
+  assert.deepEqual(plus.parsePlusInput('https://planner.bemorin.com/?purchase=cs_test_a1B2c3'), { kind: 'purchase', checkout: 'cs_test_a1B2c3' }, 'older receipt links');
+  assert.deepEqual(plus.parsePlusInput('https://planner.bemorin.com/?purchase=ch_4bXk2Lm9QrT'), { kind: 'purchase', checkout: 'ch_4bXk2Lm9QrT' }, 'the receipt email');
+  assert.deepEqual(plus.parsePlusInput('https://planner.bemorin.com/?checkout_id=ch_4bXk2Lm9QrT&order_id=ord_1&signature=abc'), { kind: 'purchase', checkout: 'ch_4bXk2Lm9QrT' }, 'back from the payment page');
+  assert.deepEqual(plus.parsePlusInput('ch_4bXk2Lm9QrT'), { kind: 'purchase', checkout: 'ch_4bXk2Lm9QrT' }, 'a checkout reference on its own');
+  assert.deepEqual(plus.parsePlusInput('https://planner.bemorin.com/?purchase=x'), { kind: 'invalid' });
+  assert.equal(plus.isCheckoutReference('ch_4bXk2Lm9QrT'), true);
+  assert.equal(plus.isCheckoutReference('fake_plus'), true, 'dev shortcut');
+  assert.equal(plus.isCheckoutReference('<script>'), false);
+  assert.equal(plus.isCheckoutReference(''), false);
   assert.deepEqual(plus.parsePlusInput('https://planner.bemorin.com/?gift=short'), { kind: 'invalid' });
   assert.deepEqual(plus.parsePlusInput('hello there'), { kind: 'invalid' });
   assert.deepEqual(plus.parsePlusInput('   '), { kind: 'empty' });
@@ -174,7 +182,7 @@ test('the status line says where Plus came from', () => {
 });
 
 test('Horizon features open the dialog on themselves, and problems are explained calmly', () => {
-  assert.deepEqual(PLUS_FEATURES.map(feature => feature.id), ['year-plan', 'year-review', 'paint-palettes', 'later']);
+  assert.deepEqual(PLUS_FEATURES.map(feature => feature.id), ['year-plan', 'year-review', 'paint-palettes']);
   assert.equal(plusFeatureId('year-plan'), 'year-plan');
   assert.equal(plusFeatureId('Year-Review'), 'year-review');
   assert.equal(plusFeatureId('palettes'), 'paint-palettes');

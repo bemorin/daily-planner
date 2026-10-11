@@ -63,7 +63,8 @@ test('with Plus configured, the notice says what a gift and a purchase send — 
   assert.match(words, /checked on this device/);
   assert.match(words, /no account, and nothing else is sent/i);
   assert.match(words, /Activating a gift sends only the gift code/);
-  assert.match(words, /purchase sends only the Stripe checkout reference/);
+  assert.match(words, /a purchase sends only the checkout reference/);
+  assert.doesNotMatch(words, /Stripe/);
   const counts = privacyNoticeSections({ plannerApi: true }).find(section => section.id === 'counts');
   for (const words of ['opened the Plus details', 'went to buy Plus', 'unlocked Plus', 'opened a gift link', 'activated a gift']) assert.ok(counts.list.includes(words), words);
   const landing = new Map(api.LANDING_EVENTS);
@@ -129,6 +130,8 @@ test('every trackEvent() call in the planner is listed in the Privacy notice', a
     const source = await readFile(join(root, file), 'utf8');
     // trackEvent('…') directly, or ctx.track?.('…') from features that receive it.
     for (const match of source.matchAll(/(?:trackEvent|\btrack(?:\?\.)?)\(\s*'([a-z0-9_]+)'\s*\)/g)) used.add(match[1]);
+    // trackOncePer('day', '…') — or ctx.trackOncePer?.('week', '…') — counted at most once per period.
+    for (const match of source.matchAll(/\btrackOncePer(?:\?\.)?\(\s*'(?:day|week|month)'\s*,\s*'([a-z0-9_]+)'/g)) used.add(match[1]);
   }
   assert.ok(used.size >= 10, 'found the planner’s counts');
   for (const name of used) assert.ok(listed.has(name), `${name} is counted but not described in the Privacy notice`);

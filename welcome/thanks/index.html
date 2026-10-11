@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Your team gift — Daily Planner</title>
-  <meta name="description" content="Manage a Daily Planner team gift: the gift link, the seats used and the message people see.">
+  <title>Your gift page — Daily Planner</title>
+  <meta name="description" content="Your gift page: a private page with your Daily Planner gift link, the seats used and the message your team sees.">
   <meta name="robots" content="noindex, nofollow">
-  <!-- The address carries the manage key: never send it to another site. -->
+  <!-- The address carries the gift page key: never send it to another site. -->
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#f6f3ed" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)">
@@ -53,7 +53,7 @@
       </section>
 
       <section class="manage__error" data-view="error" hidden>
-        <p class="kicker"><svg class="i"><use href="#i-gift"/></svg>Team gift</p>
+        <p class="kicker"><svg class="i"><use href="#i-gift"/></svg><span data-error-kicker>Your gift page</span></p>
         <h1 tabindex="-1" data-error-title>Something went wrong</h1>
         <p class="lead" data-error-text></p>
         <div class="cta-row">
@@ -66,9 +66,10 @@
 
       <section data-view="ready" hidden>
         <div class="manage__head">
-          <p class="kicker"><svg class="i"><use href="#i-gift"/></svg>Team gift</p>
+          <p class="kicker"><svg class="i"><use href="#i-gift"/></svg>Your gift page</p>
           <h1 tabindex="-1" data-ready-title>Your gift is ready</h1>
           <p class="lead">Forward the link below to your people. Each person who opens it activates Daily Planner Plus for life on their own planner. No accounts, no names collected.</p>
+          <p class="mg-about">This is your gift page: a private page with your gift link, the seats used and the message your team sees. Its link is also in your email.</p>
         </div>
 
         <div class="manage__grid">
@@ -80,6 +81,7 @@
             </div>
             <p class="mg-status" data-link-status role="status"></p>
             <p class="mg-fine">Share it only with the people it’s for: whoever opens it uses a seat.</p>
+            <p class="mg-prompt" data-link-prompt hidden><svg class="i"><use href="#i-spark"/></svg><span>Before you forward it, <a href="#gift-from">add your company name</a>: it’s shown with the gift.</span></p>
           </div>
 
           <div class="mg-card mg-seats">
@@ -96,13 +98,14 @@
           <form class="mg-card mg-message" data-message-form novalidate>
             <h2><svg class="i"><use href="#i-spark"/></svg>What people see</h2>
             <p class="mg-fine">Shown with the gift when someone opens the link.</p>
-            <label class="mg-field"><span>From</span><input type="text" name="org" maxlength="80" required autocomplete="organization" aria-describedby="org-hint"><small id="org-hint">Shown as “A gift from …”</small></label>
+            <div class="mg-org-prompt" id="org-prompt" data-org-prompt hidden><svg class="i"><use href="#i-spark"/></svg><p data-org-prompt-text>Add your company name before you forward the link: people see it as “A gift from …” when they open it.</p></div>
+            <label class="mg-field" data-org-field><span>From</span><input type="text" name="org" id="gift-from" maxlength="80" required autocomplete="organization" aria-describedby="org-hint"><small id="org-hint">Shown as “A gift from …”</small></label>
             <label class="mg-field"><span>Message</span><textarea name="message" rows="3" maxlength="280" aria-describedby="message-count"></textarea><small id="message-count" data-message-count>0/280</small></label>
             <div class="mg-actions">
               <button class="btn btn--primary btn--sm" type="submit" data-save>Save</button>
               <p class="mg-status" data-message-status role="status"></p>
             </div>
-            <p class="mg-fine" data-message-locked hidden>To change the message, open this page from the manage link in your email.</p>
+            <p class="mg-fine" data-message-locked hidden>To change the name or the message, open this page from the gift page link in your email.</p>
           </form>
 
           <div class="mg-card mg-forward">
@@ -128,7 +131,7 @@
           </div>
           <a class="btn btn--ghost" href="../../">Open your own planner<svg class="i"><use href="#i-arrow"/></svg></a>
         </div>
-        <p class="mg-fine mg-keep">Bookmark this page to come back to it. Keep its address to yourself: it lets you change the message.</p>
+        <p class="mg-fine mg-keep">Bookmark your gift page to come back to it. Keep its address to yourself: it lets you change the name and the message.</p>
       </section>
     </div>
   </main>

@@ -1,19 +1,24 @@
 // Cloudflare D1 implementation of the planner API store.
 // Schema: migrations/0001_planner_api.sql, migrations/0002_team_requests.sql,
-// migrations/0003_plus.sql
+// migrations/0003_plus.sql, migrations/0004_creem_reviews.sql
 // Every value goes through bound parameters (D1 allows at most 100 per query,
 // so id lists are deleted in chunks).
+// The stripe_session columns of gifts and purchases hold the checkout reference
+// (a Creem checkout id; older rows may hold an earlier reference).
 
 import { normalizeGift } from './gifts.js';
 
 const waitlistColumns = 'id, email, devices, note, locale, app_version AS appVersion, drive_seen AS driveSeen, created_at AS createdAt';
 const feedbackColumns = 'id, app_version AS appVersion, rating, kind, message, email, platform, created_at AS createdAt';
 const teamColumns = 'id, email, name, company, team_size AS teamSize, timing, plan, currency, kind, message, locale, app_version AS appVersion, source, created_at AS createdAt';
-const giftColumns = 'code, org, message, seats, redeemed, active, currency, amount, source, stripe_session AS stripeSession, buyer_email AS buyerEmail, note, created_at AS createdAt, expires_at AS expiresAt, emailed_at AS emailedAt';
-const purchaseColumns = 'stripe_session AS stripeSession, kind, license_id AS licenseId, claims, email, note, created_at AS createdAt';
+const giftColumns = 'code, org, message, seats, redeemed, active, currency, amount, source, stripe_session AS checkoutRef, buyer_email AS buyerEmail, note, created_at AS createdAt, expires_at AS expiresAt, emailed_at AS emailedAt';
+const purchaseColumns = 'stripe_session AS checkoutRef, kind, license_id AS licenseId, claims, email, note, created_at AS createdAt';
 // Columns an owner may change, by field name. Names come from this list only; values are bound.
 const GIFT_EDITABLE = Object.freeze({ org: 'org', message: 'message', seats: 'seats', active: 'active', note: 'note' });
+const paymentColumns = 'checkout_id AS checkoutId, kind, plan, seats, amount, currency, country, created_at AS createdAt, emailed_at AS emailedAt';
+const reviewColumns = 'id, app_version AS appVersion, rating, text, name, created_at AS createdAt';
 const ID_CHUNK = 90;
+const nextDay = day => new Date(Date.parse(`${day}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 
 export function createD1Store(db) {
   const all = async (sql, ...params) => (await db.prepare(sql).bind(...params).all()).results || [];
@@ -21,17 +26,18 @@ export function createD1Store(db) {
   const purchaseRow = row => (row ? { ...row, claims: Number(row.claims) || 0 } : null);
   return {
     async addGift(gift) {
-      // Neither a code nor a Stripe session can be stored twice; the caller tells which.
+      // Neither a code nor a checkout reference can be stored twice; the caller tells which.
       return await run('INSERT INTO gifts (code, org, message, seats, redeemed, active, currency, amount, source, stripe_session, buyer_email, note, created_at, expires_at, emailed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING',
-        gift.code, gift.org, gift.message, gift.seats, gift.redeemed, gift.active ? 1 : 0, gift.currency, gift.amount, gift.source, gift.stripeSession || null, gift.buyerEmail, gift.note, gift.createdAt, gift.expiresAt, gift.emailedAt || null) > 0;
+        gift.code, gift.org, gift.message, gift.seats, gift.redeemed, gift.active ? 1 : 0, gift.currency, gift.amount, gift.source, gift.checkoutRef || null, gift.buyerEmail, gift.note, gift.createdAt, gift.expiresAt, gift.emailedAt || null) > 0;
     },
     getGift: code => all(`SELECT ${giftColumns} FROM gifts WHERE code = ?`, code).then(([row]) => normalizeGift(row)),
-    getGiftBySession: session => all(`SELECT ${giftColumns} FROM gifts WHERE stripe_session = ?`, session).then(([row]) => normalizeGift(row)),
+    getGiftByCheckout: ref => all(`SELECT ${giftColumns} FROM gifts WHERE stripe_session = ?`, ref).then(([row]) => normalizeGift(row)),
     listGifts: ({ limit = 0 } = {}) => (limit
       ? all(`SELECT ${giftColumns} FROM gifts ORDER BY created_at DESC, code LIMIT ?`, limit)
       : all(`SELECT ${giftColumns} FROM gifts ORDER BY created_at DESC, code`)).then(rows => rows.map(normalizeGift)),
-    giftTotals: () => all('SELECT COUNT(*) AS count, COALESCE(SUM(seats), 0) AS seats, COALESCE(SUM(redeemed), 0) AS redeemed, COALESCE(SUM(CASE WHEN source = ? THEN 1 ELSE 0 END), 0) AS stripe FROM gifts', 'stripe')
-      .then(([row]) => ({ count: Number(row?.count) || 0, seats: Number(row?.seats) || 0, redeemed: Number(row?.redeemed) || 0, stripe: Number(row?.stripe) || 0 })),
+    /** `paid`: gifts bought online (every source but 'manual'). */
+    giftTotals: () => all('SELECT COUNT(*) AS count, COALESCE(SUM(seats), 0) AS seats, COALESCE(SUM(redeemed), 0) AS redeemed, COALESCE(SUM(CASE WHEN source <> ? THEN 1 ELSE 0 END), 0) AS paid FROM gifts', 'manual')
+      .then(([row]) => ({ count: Number(row?.count) || 0, seats: Number(row?.seats) || 0, redeemed: Number(row?.redeemed) || 0, paid: Number(row?.paid) || 0 })),
     /**
      * One activation in a single statement: the WHERE clause re-checks the
      * limit (seats + max(1, seats / 10)), so concurrent requests can never
@@ -48,10 +54,10 @@ export function createD1Store(db) {
     deleteGift: async code => await run('DELETE FROM gifts WHERE code = ?', code) > 0,
     markGiftEmailed: async (code, iso) => await run('UPDATE gifts SET emailed_at = ? WHERE code = ? AND emailed_at IS NULL', iso, code) === 1,
     clearGiftEmailed: async code => { await run('UPDATE gifts SET emailed_at = NULL WHERE code = ?', code); },
-    getPurchase: session => all(`SELECT ${purchaseColumns} FROM purchases WHERE stripe_session = ?`, session).then(([row]) => purchaseRow(row)),
+    getPurchase: ref => all(`SELECT ${purchaseColumns} FROM purchases WHERE stripe_session = ?`, ref).then(([row]) => purchaseRow(row)),
     addPurchase: async row => await run('INSERT INTO purchases (stripe_session, kind, license_id, claims, email, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(stripe_session) DO NOTHING',
-      row.stripeSession, row.kind, row.licenseId, row.claims, row.email || '', row.note || '', row.createdAt) > 0,
-    claimPurchase: async (session, max) => await run('UPDATE purchases SET claims = claims + 1 WHERE stripe_session = ? AND claims < ?', session, max) === 1,
+      row.checkoutRef, row.kind, row.licenseId, row.claims, row.email || '', row.note || '', row.createdAt) > 0,
+    claimPurchase: async (ref, max) => await run('UPDATE purchases SET claims = claims + 1 WHERE stripe_session = ? AND claims < ?', ref, max) === 1,
     purchaseTotals: () => all('SELECT kind, COUNT(*) AS count FROM purchases GROUP BY kind').then(rows => {
       const count = kind => Number(rows.find(row => row.kind === kind)?.count) || 0;
       return { plus: count('plus'), manual: count('manual') };
@@ -59,6 +65,23 @@ export function createD1Store(db) {
     listPurchases: ({ kind = '', limit = 50 } = {}) => (kind
       ? all(`SELECT ${purchaseColumns} FROM purchases WHERE kind = ? ORDER BY created_at DESC LIMIT ?`, kind, limit)
       : all(`SELECT ${purchaseColumns} FROM purchases ORDER BY created_at DESC LIMIT ?`, limit)).then(rows => rows.map(purchaseRow)),
+    // Payments (migration 0004): one row per paid checkout, for the sales chart.
+    addPayment: async row => await run('INSERT INTO payments (checkout_id, kind, plan, seats, amount, currency, country, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING',
+      row.checkoutId, row.kind, row.plan || '', row.seats ?? null, row.amount ?? null, row.currency || '', row.country || '', row.createdAt) > 0,
+    getPayment: id => all(`SELECT ${paymentColumns} FROM payments WHERE checkout_id = ?`, id).then(([row]) => row || null),
+    /** Payments made between two UTC days, both included. */
+    listPayments: ({ fromDay, toDay }) => all(`SELECT ${paymentColumns} FROM payments WHERE created_at >= ? AND created_at < ? ORDER BY created_at, checkout_id`, fromDay, nextDay(toDay)),
+    markPaymentEmailed: async (id, iso) => await run('UPDATE payments SET emailed_at = ? WHERE checkout_id = ? AND emailed_at IS NULL', iso, id) === 1,
+    clearPaymentEmailed: async id => { await run('UPDATE payments SET emailed_at = NULL WHERE checkout_id = ?', id); },
+    // Reviews (migration 0004): feedback its author agreed may be quoted.
+    async addReview(entry) {
+      await run('INSERT INTO reviews (app_version, rating, text, name, created_at) VALUES (?, ?, ?, ?, ?)', entry.appVersion, entry.rating, entry.text, entry.name || '', entry.createdAt);
+    },
+    listReviews: ({ limit = 50 } = {}) => all(`SELECT ${reviewColumns} FROM reviews ORDER BY created_at DESC, id DESC LIMIT ?`, limit),
+    deleteReview: async id => await run('DELETE FROM reviews WHERE id = ?', id) > 0,
+    /** Counts per day and name between two UTC days (both included), summed across app versions; internal rows left out. */
+    eventsSeries: (fromDay, toDay) => all("SELECT day, name, SUM(count) AS count FROM events WHERE day >= ? AND day <= ? AND name NOT LIKE 'internal:%' GROUP BY day, name ORDER BY day, name", fromDay, toDay)
+      .then(rows => rows.map(row => ({ day: row.day, name: row.name, count: Number(row.count) || 0 }))),
     async countEvent(day, name, appVersion) {
       await db.prepare('INSERT INTO events (day, name, app_version, count) VALUES (?, ?, ?, 1) ON CONFLICT(day, name, app_version) DO UPDATE SET count = count + 1')
         .bind(day, name, appVersion).run();

@@ -41,8 +41,7 @@ const deploymentConfig = {
   CLOUD_API_URL: process.env.DAILY_PLANNER_CLOUD_API_URL || '',
   GOOGLE_CLIENT_ID: process.env.DAILY_PLANNER_GOOGLE_CLIENT_ID || '',
   PLANNER_API_URL: process.env.DAILY_PLANNER_API_URL || '',
-  PLUS_PUBLIC_KEY: process.env.DAILY_PLANNER_PLUS_PUBLIC_KEY || '',
-  PLUS_CHECKOUT_URL: process.env.DAILY_PLANNER_PLUS_CHECKOUT_URL || ''
+  PLUS_PUBLIC_KEY: process.env.DAILY_PLANNER_PLUS_PUBLIC_KEY || ''
 };
 await fs.writeFile(resolve(dist, 'runtime-config.js'), `globalThis.__DAILY_PLANNER_CONFIG__ = Object.freeze(${JSON.stringify(deploymentConfig, null, 2)});\n`);
 await copyTree('src');

@@ -1,5 +1,39 @@
 /* Owner dashboard: reuses the planner's tokens and controls from ../styles.css. */
 
+/* Chart colours, from the planner's accent. Funnel stages use one ordinal ramp
+   (tone 1 lightest → 5 darkest; light end ≥ 2:1 on the card, validated per
+   mode); the period still running uses tone 2; earlier sparkline columns recede. */
+.owner {
+  --trend-bar: var(--accent);
+  --trend-partial: #ae9784;
+  --trend-recede: var(--line-strong);
+  --trend-tone-1: #c3b2a3;
+  --trend-tone-2: #ae9784;
+  --trend-tone-3: #9b8068;
+  --trend-tone-4: #8b6b4f;
+  --trend-tone-5: #735943;
+}
+
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .owner {
+    --trend-partial: #957557;
+    --trend-tone-1: #7a614a;
+    --trend-tone-2: #957557;
+    --trend-tone-3: #b08965;
+    --trend-tone-4: #cf9f74;
+    --trend-tone-5: #dbbea2;
+  }
+}
+
+:root[data-theme="dark"] .owner {
+  --trend-partial: #957557;
+  --trend-tone-1: #7a614a;
+  --trend-tone-2: #957557;
+  --trend-tone-3: #b08965;
+  --trend-tone-4: #cf9f74;
+  --trend-tone-5: #dbbea2;
+}
+
 body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--paper); }
 
 .owner-shell { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 60px; display: grid; gap: 18px; }
@@ -93,7 +127,7 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .owner-card__tools .secondary-button { height: 34px; display: inline-flex; align-items: center; padding: 0 12px; text-decoration: none; }
 
-/* Funnel: one series, one hue; values and shares are text, never the bar colour. */
+/* Funnel: stages on one ordinal ramp; values and shares are text, never the bar colour. */
 .owner-funnel { display: grid; gap: 10px; }
 
 .owner-funnel__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; }
@@ -104,13 +138,13 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .owner-funnel__value small { margin-left: 6px; color: var(--muted); font-weight: 500; }
 
-.owner-funnel__track { grid-column: 1 / -1; height: 10px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.owner-funnel__track { grid-column: 1 / -1; height: 10px; border-radius: 0 4px 4px 0; background: color-mix(in srgb, var(--ink) 4%, transparent); }
 
-.owner-funnel__bar { display: block; height: 100%; min-width: 2px; border-radius: 4px; background: var(--accent); }
+.owner-funnel__bar { display: block; height: 100%; min-width: 2px; border-radius: 0 4px 4px 0; background: var(--accent); }
 
 .owner-funnel__row--branch .owner-funnel__label { color: var(--muted); font-weight: 500; }
 
-.owner-funnel__row--branch .owner-funnel__bar { background: color-mix(in srgb, var(--accent) 55%, var(--surface)); }
+.owner-funnel__row--branch .owner-funnel__bar { background: var(--faint); }
 
 .owner-insight { margin: 4px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--soft); color: var(--muted); font-size: .82rem; line-height: 1.55; }
 
@@ -123,6 +157,8 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 .owner-table td { padding: 9px 10px; border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); vertical-align: top; }
 
 .owner-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.owner-table th.num { text-align: right; }
 
 .owner-table tr:last-child td { border-bottom: 0; }
 
@@ -306,13 +342,251 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .owner-offscreen { position: fixed; top: 0; left: -9999px; opacity: 0; }
 
+.owner-copy-row--plain { grid-template-columns: auto minmax(0, 1fr); }
+
+.owner .owner-link-button { display: inline-flex; align-items: center; text-decoration: none; }
+
+.owner-mini { font-size: .76rem; }
+
+.owner-mini th,
+.owner-mini td { padding: 6px 8px; }
+
+.owner-mini th[scope="row"] { color: var(--ink); font-size: .76rem; font-weight: 650; letter-spacing: 0; text-transform: none; }
+
+.owner-mini td { overflow-wrap: anywhere; }
+
+.owner-mini code { font-size: .68rem; }
+
+.owner-check { margin-right: 5px; color: var(--hz-habit); font-weight: 700; }
+
+.owner-missing { color: var(--danger); }
+
+/* Reviews */
+.owner-reviews { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+
+.owner-review { display: grid; grid-template-rows: auto 1fr auto auto; gap: 8px; padding: 14px 14px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+
+.owner-review__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; color: var(--muted); font-size: .72rem; }
+
+.owner-review__text { margin: 0; color: var(--ink); font-size: .88rem; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.owner-review__name { margin: 0; color: var(--ink); font-size: .78rem; font-weight: 620; }
+
+.owner-review__name span { color: var(--muted); font-weight: 500; }
+
+.owner-review__actions { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 -6px; }
+
+.owner-review__actions .text-button { min-height: 30px; padding: 2px 6px; font-size: .74rem; }
+
+/* Trends: a filter row (Week, Month, Year) scoping the tiles, chart, funnels and usage below it. */
+.trends { display: grid; gap: 14px; }
+
+.trends__head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 18px; }
+
+.trends__head > div:first-child { flex: 1 1 420px; min-width: 0; }
+
+.trends__head h2 { margin: 0; font-size: 1.25rem; letter-spacing: -.025em; }
+
+.trends__head p { margin: 4px 0 0; max-width: 780px; color: var(--muted); font-size: .8rem; line-height: 1.5; }
+
+.trends__body { display: grid; gap: 18px; }
+
+.trends.is-refreshing .trends__body { opacity: .55; }
+
+.trends-switch { display: inline-grid; grid-auto-columns: minmax(72px, 1fr); grid-auto-flow: column; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 11px; background: var(--soft); }
+
+.trends-switch button { min-height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: .8rem; font-weight: 630; cursor: pointer; }
+
+.trends-switch button:hover { color: var(--ink); }
+
+.trends-switch button[aria-pressed="true"] { background: var(--surface-strong); color: var(--ink); box-shadow: 0 1px 5px rgba(28, 25, 21, .08); }
+
+.trends-switch button:focus-visible,
+.trend-tile:focus-visible,
+.trend-chart__frame:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.trend-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+
+.trend-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px 16px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-strong); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+
+.trend-tile:hover { border-color: var(--line-strong); }
+
+.trend-tile.is-selected { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+
+.trend-tile__label { color: var(--muted); font-size: .76rem; font-weight: 620; }
+
+.trend-tile__figure { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 2px; }
+
+.trend-tile__figure strong { font-size: 1.85rem; font-weight: 700; letter-spacing: -.035em; line-height: 1.05; }
+
+.trend-tile__note { color: var(--faint); font-size: .72rem; line-height: 1.4; }
+
+.trend-tile__monies { display: grid; gap: 8px; margin-top: 2px; }
+
+.trend-tile__money { display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; }
+
+.trend-tile__money strong { font-size: 1.4rem; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; }
+
+.trend-tile__money .trend-tile__note { flex-basis: 100%; }
+
+.trend-delta { display: inline-flex; align-items: center; gap: 3px; padding: 1px 8px; border-radius: 999px; background: var(--soft); color: var(--ink); font-size: .72rem; font-weight: 650; line-height: 1.5; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.trend-delta.is-new { color: var(--muted); }
+
+/* Sparkline: the last periods as mini columns; only the current one wears the accent. */
+.trend-spark { display: flex; align-items: flex-end; gap: 3px; height: 26px; margin-top: auto; padding-top: 10px; border-bottom: 1px solid var(--line); }
+
+.trend-spark i { flex: 1 1 0; max-width: 16px; border-radius: 2px 2px 0 0; background: var(--trend-recede); }
+
+.trend-spark i.is-current { background: var(--trend-bar); }
+
+.trend-detail__span { color: var(--muted); font-weight: 500; }
+
+.trend-detail > .owner-card__head { flex-wrap: nowrap; align-items: flex-start; }
+
+.trend-detail > .owner-card__head > div:first-child { flex: 1 1 auto; min-width: 0; }
+
+.trend-detail > .owner-card__head .owner-card__tools { flex: 0 0 auto; }
+
+.trend-detail__body { min-width: 0; }
+
+.trend-detail .owner-hint { margin: 0; }
+
+.trend-table-toggle[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
+
+.trend-table td:first-child { white-space: nowrap; }
+
+.trend-inline { display: inline; margin: 0 0 0 4px; }
+
+.trend-multiple h3 { margin: 0 0 2px; color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .04em; }
+
+.trend-multiple + .trend-multiple { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* Column chart (admin/charts.js) */
+.trend-chart { position: relative; min-width: 0; }
+
+.trend-chart__frame { display: block; min-width: 0; border-radius: 8px; }
+
+.trend-chart__svg { display: block; overflow: visible; font-family: inherit; }
+
+.trend-chart__grid { stroke: var(--line); stroke-width: 1; shape-rendering: crispEdges; }
+
+.trend-chart__base { stroke: var(--line-strong); stroke-width: 1; shape-rendering: crispEdges; }
+
+.trend-chart__tick,
+.trend-chart__label { fill: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+.trend-chart__value { fill: var(--ink); font-size: 12px; font-weight: 650; }
+
+.trend-chart__bar { fill: var(--trend-bar); }
+
+.trend-chart__col.is-partial .trend-chart__bar { fill: var(--trend-partial); }
+
+.trend-chart__hit { fill: transparent; }
+
+.trend-chart__col.is-active .trend-chart__hit { fill: color-mix(in srgb, var(--ink) 5%, transparent); }
+
+.trend-chart__col.is-active .trend-chart__bar { opacity: .82; }
+
+.trend-tip { position: absolute; z-index: 2; display: grid; gap: 1px; min-width: 112px; max-width: 240px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-strong); box-shadow: 0 8px 24px rgba(28, 25, 21, .14); color: var(--muted); font-size: .74rem; line-height: 1.35; pointer-events: none; }
+
+.trend-tip[hidden] { display: none; }
+
+.trend-tip strong { color: var(--ink); font-size: .92rem; font-weight: 700; }
+
+.trend-tip small { color: var(--faint); font-size: .7rem; }
+
+/* Funnels */
+.trend-funnels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 28px; }
+
+.trend-funnel { display: grid; align-content: start; gap: 6px; min-width: 0; }
+
+.trend-funnel h3 { margin: 0; font-size: .9rem; letter-spacing: -.015em; }
+
+.trend-funnel__overall { margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.45; }
+
+.trend-funnel__overall strong { color: var(--ink); font-size: 1.05rem; font-weight: 700; }
+
+.trend-funnel__steps { margin: 6px 0 0; padding: 0; display: grid; gap: 10px; list-style: none; }
+
+.trend-funnel__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 4px 10px; }
+
+.trend-funnel__label { font-size: .8rem; font-weight: 600; }
+
+.trend-funnel__value { font-size: .8rem; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.trend-funnel__value small { margin-left: 6px; color: var(--muted); font-size: .74rem; font-weight: 500; }
+
+.trend-funnel__track { grid-column: 1 / -1; height: 9px; border-radius: 0 4px 4px 0; background: color-mix(in srgb, var(--ink) 4%, transparent); }
+
+.trend-funnel__bar { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--trend-bar); }
+
+.trend-tone-1 { background: var(--trend-tone-1); }
+
+.trend-tone-2 { background: var(--trend-tone-2); }
+
+.trend-tone-3 { background: var(--trend-tone-3); }
+
+.trend-tone-4 { background: var(--trend-tone-4); }
+
+.trend-tone-5 { background: var(--trend-tone-5); }
+
+.trend-funnel__bar--context { background: var(--faint); }
+
+/* Usage by section: share of active days on a 0–100% track; the tick is the period before. */
+.trend-usage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 280px); align-items: start; gap: 18px 32px; }
+
+.trend-usage__list { margin: 0; padding: 0; display: grid; gap: 9px; list-style: none; }
+
+.trend-usage__row { display: grid; grid-template-columns: 128px minmax(0, 1fr) 56px 64px; grid-template-areas: "label track share points"; align-items: center; gap: 12px; font-size: .8rem; }
+
+.trend-usage__label { grid-area: label; font-weight: 600; }
+
+.trend-usage__track { grid-area: track; position: relative; height: 14px; border-radius: 0 4px 4px 0; background: color-mix(in srgb, var(--accent) 9%, var(--surface-strong)); }
+
+.trend-usage__bar { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 0 4px 4px 0; background: var(--trend-bar); }
+
+.trend-usage__tick { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); box-shadow: 0 0 0 1px var(--surface-strong); }
+
+.trend-usage__share { grid-area: share; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
+
+.trend-points { grid-area: points; color: var(--muted); font-size: .74rem; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.trend-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 12px 0 0; color: var(--muted); font-size: .72rem; }
+
+.trend-legend__bar { width: 14px; height: 9px; border-radius: 0 3px 3px 0; background: var(--trend-bar); }
+
+.trend-legend__tick { width: 2px; height: 14px; margin-left: 12px; border-radius: 1px; background: var(--ink); }
+
+.trend-usage__side { display: grid; gap: 10px; }
+
+.trend-usage__side .owner-stat small { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+
+.trend-usage__side .trend-points { font-size: .7rem; }
+
+@media (max-width: 960px) {
+  .trend-funnels { grid-template-columns: minmax(0, 1fr); }
+  .trend-usage { grid-template-columns: minmax(0, 1fr); }
+  .trend-usage__side { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (max-width: 860px) {
   .owner-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .owner-kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .owner-grid { grid-template-columns: minmax(0, 1fr); }
+  .trend-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trend-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 
 @media (max-width: 600px) {
+  .trends-switch { width: 100%; }
+  .trend-detail > .owner-card__head { flex-wrap: wrap; }
+  .trend-tiles { gap: 8px; }
+  .trend-tile { padding: 12px 12px 10px; }
+  .trend-tile__figure strong { font-size: 1.45rem; }
+  .trend-tile__money strong { font-size: 1.2rem; }
+  .trend-usage__row { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "label share points" "track track track"; gap: 4px 10px; }
+  .trend-usage__side { grid-template-columns: minmax(0, 1fr); }
   .owner-form-grid { grid-template-columns: minmax(0, 1fr); }
   .owner-stats { grid-template-columns: minmax(0, 1fr); }
   .owner-copy-row { grid-template-columns: minmax(0, 1fr) auto; }

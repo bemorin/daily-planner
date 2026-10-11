@@ -1,6 +1,11 @@
+import { agendaDay } from './day-summary.js';
+import { dayHeadPlan, dayLabel, renderWeekAgenda } from './week-agenda.js';
+
 /**
  * Week schedule rendering and interaction.
  * Keeps the week-only DOM, hover/add behavior, and mobile auto-scroll out of app.js.
+ * Each day header also carries that day's plan (most important outcome and
+ * counts), and the phone's Plan tab gets the same week as an agenda.
  */
 export function createWeekFeature(ctx) {
   let autoScrollKey = '';
@@ -133,8 +138,12 @@ export function createWeekFeature(ctx) {
       const key = ctx.ymd(day);
       const current = key === todayKey;
       const past = key < todayKey;
-      return `<button type="button" class="week-day-head${current ? ' is-today' : ''}${past ? ' is-past' : ''}" data-week-open-day="${key}"><span>${ctx.esc(day.toLocaleDateString(undefined, { weekday: 'short' }))}</span><strong>${day.getDate()}</strong></button>`;
+      const info = agendaDay(ctx.loadStateForDate(day), { key, todayKey });
+      return `<button type="button" class="week-day-head${current ? ' is-today' : ''}${past ? ' is-past' : ''}" data-week-open-day="${key}" aria-label="${ctx.escAttr(dayLabel(day, info))}"><span class="week-day-head__date"><span>${ctx.esc(day.toLocaleDateString(undefined, { weekday: 'short' }))}</span><strong>${day.getDate()}</strong></span>${dayHeadPlan(info)}</button>`;
     }).join('');
+    // An empty week says how blocks are added here: click (or tap) a time in a day.
+    const emptyHint = ctx.qs('[data-week-empty-hint]');
+    if (emptyHint) emptyHint.hidden = !days.every(day => !(ctx.loadStateForDate(day).blocks || []).length);
 
     const columns = days.map(day => {
       const key = ctx.ymd(day);
@@ -171,6 +180,7 @@ export function createWeekFeature(ctx) {
     }).join('');
 
     wrap.innerHTML = `<div class="week-schedule-head"><span class="week-gutter-head"><small>Week</small><strong>${weekNo}</strong></span>${dayHeaders}</div><div class="week-schedule-body" style="--week-days:${days.length};height:${totalHeight}px"><div class="week-hour-gutter">${hourLabels}</div>${columns}</div>`;
+    renderWeekAgenda(ctx, days, todayKey);
 
     bindNowLineGuard(wrap);
 

@@ -3,8 +3,12 @@
 // is on) for a signed 8-hour session (POST admin/session). Only that session is
 // kept, in sessionStorage for this tab, and sent as a Bearer header; the token
 // itself is never stored. Every value rendered here is escaped. Secret values
-// (Resend, Stripe, Plus signing key) never reach this page: the Setup card
-// only says whether they are set.
+// (Resend, Creem, Plus signing key) never reach this page: the Setup card
+// only says whether they are set. Trends (./trends-view.js) read the daily
+// series once per sign-in and again on Refresh.
+
+import { createTrendsView } from './trends-view.js';
+import { dayOf, normalizeSeries, seriesWindow } from './trends.js';
 
 const SESSION_KEY = 'daily-planner-owner-session';
 const LEGACY_TOKEN_KEY = 'daily-planner-owner-token';
@@ -35,6 +39,8 @@ const CHECK_SVG = '<svg class="option-check" viewBox="0 0 24 24" width="16" heig
 const people = count => `${number(count)} ${Number(count) === 1 ? 'person' : 'people'}`;
 const SIGNED_OUT_MESSAGE = 'Your session has ended. Please sign in again.';
 const SIGN_IN_FAILED_MESSAGE = 'Sign-in failed. Check the token and the code, then try again.';
+const UPDATE_API_MESSAGE = 'Update the API to see trends: this one does not answer admin/series yet (added in 1.21).';
+const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', manual: 'Invoice / manual' };
 
 class ApiError extends Error {
   constructor(kind, message = '') {
@@ -192,6 +198,9 @@ try { sessionStorage.removeItem(LEGACY_TOKEN_KEY); } catch (_) {}
 
 let session = readSession();
 let expiryTimer = 0;
+// The session the trends series was last read for: once per sign-in, and on Refresh.
+let seriesSession = null;
+const trends = createTrendsView($('[data-owner-trends]'));
 
 function scheduleExpiry() {
   clearTimeout(expiryTimer);
@@ -278,8 +287,11 @@ function showUnavailable(error) {
 
 function clearRendered() {
   ['[data-owner-kpis]', '[data-owner-funnel]', '[data-owner-team-funnel]', '[data-owner-teams]', '[data-owner-waitlist]', '[data-owner-versions]', '[data-owner-feedback]', '[data-owner-signals]',
-    '[data-owner-gifts]', '[data-owner-gift-created]', '[data-owner-gift-panel]', '[data-owner-plus-stats]', '[data-owner-plus-funnel]', '[data-owner-license-created]', '[data-owner-license-list]', '[data-owner-setup]']
+    '[data-owner-gifts]', '[data-owner-gift-created]', '[data-owner-gift-panel]', '[data-owner-plus-stats]', '[data-owner-plus-funnel]', '[data-owner-license-created]', '[data-owner-license-list]', '[data-owner-setup]',
+    '[data-owner-reviews]']
     .forEach(selector => { $(selector).innerHTML = ''; });
+  trends.clear();
+  seriesSession = null;
   ['[data-owner-gift-created]', '[data-owner-gift-panel]', '[data-owner-license-created]'].forEach(selector => { $(selector).hidden = true; });
   giftRows = [];
   giftPanel = null;
@@ -337,15 +349,22 @@ function renderKpis(summary, days) {
   ].map(([label, value, note]) => `<div class="owner-kpi"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join('');
 }
 
-// One series, one hue; values and shares are text, never the bar colour.
+// Stages take one hue, lighter to darker in order (the same ramp as the
+// Trends funnels); a side branch stays grey. Values and shares are text.
 function funnelHtml(steps, baseLabel, insight) {
   const base = steps[0].value;
   const max = Math.max(1, ...steps.map(step => step.value));
-  const row = step => `<div class="owner-funnel__row${step.branch ? ' owner-funnel__row--branch' : ''}" title="${esc(`${step.label}: ${step.value} (${percent(step.value, base)} of ${baseLabel})`)}">
+  const stages = steps.filter(step => !step.branch).length;
+  let stage = -1;
+  const row = step => {
+    if (!step.branch) stage += 1;
+    const tone = step.branch ? 'owner-funnel__bar--branch' : `trend-tone-${stages > 1 ? Math.round(stage * 4 / (stages - 1)) + 1 : 5}`;
+    return `<div class="owner-funnel__row${step.branch ? ' owner-funnel__row--branch' : ''}" title="${esc(`${step.label}: ${step.value} (${percent(step.value, base)} of ${baseLabel})`)}">
       <span class="owner-funnel__label">${esc(step.label)}</span>
       <span class="owner-funnel__value">${number(step.value)}<small>${percent(step.value, base)}</small></span>
-      <span class="owner-funnel__track"><span class="owner-funnel__bar" style="width:${Math.min(100, Math.round(step.value / max * 100))}%"></span></span>
+      <span class="owner-funnel__track"><span class="owner-funnel__bar ${tone}" style="width:${Math.min(100, Math.round(step.value / max * 100))}%"></span></span>
     </div>`;
+  };
   return `${steps.map(row).join('')}${insight}`;
 }
 
@@ -582,6 +601,16 @@ async function copyText(text, button) {
   button.dataset.timer = String(setTimeout(() => { button.textContent = button.dataset.label; }, 1600));
 }
 
+/** An http(s) address to link to, or ''. */
+function webUrl(value) {
+  try {
+    const url = new URL(String(value || ''), location.href);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : '';
+  } catch (_) {
+    return '';
+  }
+}
+
 const copyRow = (label, value) => `<div class="owner-copy-row"><span>${esc(label)}</span><input type="text" readonly value="${esc(value)}" aria-label="${esc(label)}" spellcheck="false"><button class="secondary-button" type="button" data-owner-copy="${esc(value)}">Copy</button></div>`;
 
 // Mutations from the Plus cards: errors stay in the card instead of replacing
@@ -624,13 +653,13 @@ function giftRowHtml(row) {
     <td class="num owner-nowrap"><b>${number(row.redeemed)}</b> / ${number(row.seats)}<small class="owner-small">up to ${number(row.limit)}</small>${status}</td>
     <td class="owner-nowrap">${esc(day(row.createdAt))}</td>
     <td class="owner-nowrap">${esc(day(row.expiresAt))}</td>
-    <td class="owner-nowrap">${row.source === 'stripe' ? 'Stripe' : 'Invoice'}${amount}</td>
+    <td class="owner-nowrap">${esc(SOURCE_LABELS[row.source] || row.source || SOURCE_LABELS.manual)}${amount}</td>
     <td><input class="privacy-switch" type="checkbox" role="switch" data-owner-gift-active="${esc(row.code)}"${row.active ? ' checked' : ''} aria-label="Gift link for ${esc(row.org)} is active"></td>
     <td><div class="owner-row-actions">
       <button class="text-button" type="button" data-owner-copy="${esc(row.url)}">Copy link</button>
       <button class="text-button" type="button" data-owner-copy="${esc(row.manageUrl)}"${row.manageUrl ? '' : ' disabled'}>Copy manage link</button>
       <button class="text-button" type="button" data-owner-gift-edit="${esc(row.code)}">Edit</button>
-      ${row.source === 'stripe' ? '' : `<button class="text-button text-button--danger" type="button" data-owner-gift-delete="${esc(row.code)}">Delete</button>`}
+      ${(row.source || 'manual') === 'manual' ? `<button class="text-button text-button--danger" type="button" data-owner-gift-delete="${esc(row.code)}">Delete</button>` : ''}
     </div></td>
   </tr>`;
 }
@@ -649,13 +678,13 @@ function renderGifts(summary) {
     return;
   }
   giftRows = Array.isArray(summary.gifts) ? summary.gifts : [];
-  const totals = summary.giftTotals || { count: 0, seats: 0, redeemed: 0, stripe: 0 };
+  const totals = summary.giftTotals || { count: 0, seats: 0, redeemed: 0, paid: 0 };
   caption.textContent = totals.count
-    ? `${number(totals.count)} ${plural(totals.count, 'gift')} · ${number(totals.redeemed)} of ${number(totals.seats)} seats activated · ${number(totals.stripe)} bought online. ${intro}`
+    ? `${number(totals.count)} ${plural(totals.count, 'gift')} · ${number(totals.redeemed)} of ${number(totals.seats)} seats activated · ${number(totals.paid)} bought online. ${intro}`
     : intro;
   target.innerHTML = giftRows.length
     ? `<div class="owner-scroll"><table class="owner-table owner-gifts"><thead><tr><th>Code</th><th>Company</th><th class="num">Activated</th><th>Created</th><th>Expires</th><th>Source</th><th>Active</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${giftRows.map(giftRowHtml).join('')}</tbody></table></div>`
-    : '<p class="owner-empty">No gifts yet. Create one above for an invoice, or share a Stripe pack link.</p>';
+    : '<p class="owner-empty">No gifts yet. Create one above for an invoice; gifts bought online appear here on their own.</p>';
   renderGiftPanel();
 }
 
@@ -848,7 +877,7 @@ function renderPlus(summary, days) {
   const missing = !!summary.plusUnavailable;
   const value = count => (missing ? '—' : number(count));
   $('[data-owner-plus-stats]').innerHTML = [
-    ['Individual purchases', value(plus.purchases), 'Bought with the Plus payment link'],
+    ['Individual purchases', value(plus.purchases), 'Bought online'],
     ['Gift activations', value(totals.redeemed), `${number(totals.count)} ${plural(totals.count, 'gift')} · ${number(totals.seats)} seats`],
     ['Licences made here', value(plus.manualLicenses), 'Support and giveaways']
   ].map(([label, figure, note]) => `<div class="owner-stat"><span>${esc(label)}</span><strong>${figure}</strong><small>${esc(note)}</small></div>`).join('');
@@ -880,7 +909,10 @@ licenseForm.addEventListener('submit', async event => {
     const result = await sendJson('admin/licenses', 'POST', { note: licenseForm.elements.note.value });
     licenseForm.reset();
     const created = $('[data-owner-license-created]');
-    created.innerHTML = `${copyRow('Licence link', result.url)}<p class="owner-hint">Whoever opens this link gets Plus for life on their planner. Send it privately.</p>`;
+    const link = webUrl(result.url);
+    created.innerHTML = `<div class="owner-copy-row owner-copy-row--plain"><span>Licence link</span><input type="text" readonly value="${esc(result.url)}" aria-label="Licence link" spellcheck="false"></div>
+      <div class="owner-actions">${link ? `<a class="secondary-button owner-link-button" href="${esc(link)}" target="_blank" rel="noopener">Open in the planner</a>` : ''}<button class="secondary-button" type="button" data-owner-copy="${esc(result.url)}">Copy link</button></div>
+      <p class="owner-hint">Opening this link on a device unlocks Plus there — handy to see the planner as a Plus user. Whoever opens it gets Plus for life on that planner, so send it privately.</p>`;
     created.hidden = false;
     showResult('[data-owner-license-result]', '');
     await load();
@@ -895,6 +927,34 @@ licenseForm.addEventListener('submit', async event => {
 // ---- Setup --------------------------------------------------------------------
 
 const SETUP_STATES = { ok: 'Ready', warn: 'Check', missing: 'Not set' };
+const PAYMENT_ITEMS = [['plus', 'Plus'], ['gift', 'Team gift']];
+const PAYMENT_CURRENCIES = ['EUR', 'USD'];
+
+// Creem: the API key, one product per item and currency, and the webhook.
+function paymentsItem(payments) {
+  const products = payments.products || {};
+  const cell = (item, currency) => {
+    const id = String(products[item]?.[currency] || '');
+    return id
+      ? `<td><span class="owner-check" aria-hidden="true">✓</span><span class="sr-only">Set: </span><code>${esc(id)}</code></td>`
+      : `<td class="owner-missing">missing · <code>CREEM_${item.toUpperCase()}_${currency}</code></td>`;
+  };
+  const allProducts = PAYMENT_ITEMS.every(([item]) => PAYMENT_CURRENCIES.every(currency => products[item]?.[currency]));
+  const table = `<div class="owner-scroll"><table class="owner-table owner-mini"><thead><tr><th>Product</th>${PAYMENT_CURRENCIES.map(currency => `<th>${currency}</th>`).join('')}</tr></thead><tbody>${PAYMENT_ITEMS.map(([item, label]) => `<tr><th scope="row">${label}</th>${PAYMENT_CURRENCIES.map(currency => cell(item, currency)).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const mode = payments.mode === 'live' ? 'live mode' : payments.mode === 'test' ? 'test mode: no real payments, and buying is switched off on the public address — test on your project’s .pages.dev address' : '';
+  const key = payments.apiKeySet
+    ? `<p>API key set${mode ? ` · ${mode}` : ''} (<code>CREEM_API_KEY</code>).</p>`
+    : '<p>Set the secret <code>CREEM_API_KEY</code> (Creem → Developers → API keys), then redeploy. Until then nothing can be bought online.</p>';
+  const webhook = payments.webhookSecretSet
+    ? '<p>Webhook signing secret set (<code>CREEM_WEBHOOK_SECRET</code>).</p>'
+    : '<p>Webhook signing secret not set (<code>CREEM_WEBHOOK_SECRET</code>). Recommended: without it, a purchase is recorded only when the buyer comes back to the site after paying.</p>';
+  const url = payments.webhookUrl
+    ? `${copyRow('Webhook URL', payments.webhookUrl)}<p>Creem → Developers → Webhooks: add this URL with the event <code>checkout.completed</code>, then paste the signing secret into <code>CREEM_WEBHOOK_SECRET</code>.</p>`
+    : '';
+  const error = payments.error ? `<p class="owner-setup__error">${esc(payments.error)}</p>` : '';
+  const state = !payments.configured ? 'missing' : (payments.error || !allProducts || !payments.webhookSecretSet || payments.mode === 'test') ? 'warn' : 'ok';
+  return { title: 'Payments (Creem)', state, html: `${key}${error}<p>Product ids (one-time products, one per item and currency):</p>${table}${webhook}${url}` };
+}
 
 function setupItems(summary) {
   const setup = summary.setup;
@@ -931,21 +991,10 @@ function setupItems(summary) {
     });
   }
 
-  const stripe = setup.stripe || {};
-  const checkout = String(APP_CONFIG.PLUS_CHECKOUT_URL || '').trim();
-  const links = `<p>Payment Link success URLs. Plus: <code>${esc(base)}/?purchase={CHECKOUT_SESSION_ID}</code>. Team packs: <code>${esc(base)}/welcome/thanks/?session={CHECKOUT_SESSION_ID}</code>, with a custom text field whose key is <code>company</code>.</p>
-    <p>Buy button in the app: ${checkout ? 'set' : 'not set, so the app says “Coming soon”'} (<code>DAILY_PLANNER_PLUS_CHECKOUT_URL</code>).</p>`;
-  const error = stripe.error ? `<p class="owner-setup__error">${esc(stripe.error)}</p>` : '';
-  items.push(stripe.configured
-    ? { title: 'Payments (Stripe)', state: stripe.error ? 'warn' : 'ok', html: `<p>${esc(stripe.mode ? `${stripe.mode[0].toUpperCase()}${stripe.mode.slice(1)} mode` : 'Key set')} · ${number(stripe.plusPrices)} Plus ${plural(stripe.plusPrices, 'price')} and ${number(stripe.giftPrices)} team ${plural(stripe.giftPrices, 'pack')} in <code>STRIPE_PRICES</code>.</p>${error}${links}` }
-    : {
-      title: 'Payments (Stripe)',
-      state: 'missing',
-      html: `<p>Set the secret <code>STRIPE_SECRET_KEY</code>${stripe.keySet ? ' (set)' : ''} (a restricted key with “Checkout Sessions: Read”) and <code>STRIPE_PRICES</code>, e.g. <code>{"price_…":{"kind":"plus"},"price_…":{"kind":"gift","seats":50,"plan":"up-to-50"}}</code>.</p>${error}${links}`
-    });
+  items.push(paymentsItem(setup.payments || {}));
 
   items.push({ title: 'Links in emails', state: 'ok', html: `<p>They start with ${esc(base)}${setup.publicBaseUrlSet ? ' (<code>PUBLIC_BASE_URL</code>)' : ', the default. Set <code>PUBLIC_BASE_URL</code> to change it'}.</p>` });
-  const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql'].filter(Boolean);
+  const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql', summary.reviewsUnavailable && '0004_creem_reviews.sql'].filter(Boolean);
   items.push(missingTables.length
     ? { title: 'Database', state: 'missing', html: `<p>Apply ${missingTables.map(file => `<code>migrations/${file}</code>`).join(' and ')} to the D1 database.</p>` }
     : { title: 'Database', state: 'ok', html: '<p>All tables are in place.</p>' });
@@ -953,6 +1002,35 @@ function setupItems(summary) {
     ? { title: 'Owner sign-in', state: 'ok', html: '<p>Two-factor sign-in is on.</p>' }
     : { title: 'Owner sign-in', state: 'warn', html: '<p>Only the admin token protects this page. Run <code>npm run admin:secret</code> and set <code>ADMIN_TOTP_SECRET</code> to also require an authenticator code.</p>' });
   return items;
+}
+
+// ---- Reviews -------------------------------------------------------------------
+
+const quoteOf = row => `“${String(row.text || '').trim()}” — ${String(row.name || '').trim() || 'Anonymous'}`;
+
+function reviewHtml(row) {
+  const name = String(row.name || '').trim();
+  return `<article class="owner-review">
+    <div class="owner-review__meta">${stars(row.rating)}<span>${esc(row.appVersion)}</span><span>${esc(day(row.createdAt))}</span></div>
+    <blockquote class="owner-review__text">${esc(row.text)}</blockquote>
+    <p class="owner-review__name">${name ? `— ${esc(name)}` : '<span>Anonymous</span>'}</p>
+    <div class="owner-review__actions"><button class="text-button" type="button" data-owner-copy="${esc(quoteOf(row))}">Copy as quote</button><button class="text-button text-button--danger" type="button" data-owner-delete-review="${Number(row.id)}" data-owner-review-name="${esc(name || 'Anonymous')}">Delete</button></div>
+  </article>`;
+}
+
+function renderReviews(summary) {
+  const target = $('[data-owner-reviews]');
+  const caption = $('[data-owner-reviews-caption]');
+  if (summary.reviewsUnavailable) {
+    caption.textContent = 'Reviews people agreed to have quoted.';
+    target.innerHTML = '<p class="owner-empty">Run migration 0004 to collect reviews: apply <code>migrations/0004_creem_reviews.sql</code> to the D1 database.</p>';
+    return;
+  }
+  const rows = Array.isArray(summary.reviews) ? summary.reviews : [];
+  caption.textContent = rows.length
+    ? `${rows.length === 50 ? 'The newest 50' : `${number(rows.length)} ${plural(rows.length, 'review')}`}, sent from the planner with permission to quote them. Delete any you would not quote.`
+    : 'Reviews people agreed to have quoted.';
+  target.innerHTML = rows.length ? `<div class="owner-reviews">${rows.map(reviewHtml).join('')}</div>` : '<p class="owner-empty">No reviews yet.</p>';
 }
 
 function renderSetup(summary) {
@@ -992,16 +1070,49 @@ function renderSignals(summary) {
     year_plan_completed: 'Finished planning a year',
     year_review_opened: 'Opened a year in review',
     pack_checkout_clicked: 'Landing → went to buy a team gift',
-    gift_link_copied: 'Copied a team gift link'
+    gift_link_copied: 'Copied a team gift link',
+    plus_viewed: 'Landing → scrolled to Plus',
+    teams_viewed: 'Landing → scrolled to the team gift',
+    pricing_viewed: 'Landing → scrolled to the prices',
+    review_sent: 'Left a review that may be quoted'
   };
   const versions = [...new Set(summary.eventTotals.map(row => row.appVersion))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
   const body = Object.entries(labels).map(([name, label]) => `<tr><td>${esc(label)}</td><td class="num"><b>${number(totalOf(summary.eventTotals, name))}</b></td>${versions.map(version => `<td class="num">${number(summary.eventTotals.filter(row => row.name === name && row.appVersion === version).reduce((sum, row) => sum + row.count, 0))}</td>`).join('')}</tr>`).join('');
   $('[data-owner-signals]').innerHTML = `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Signal</th><th class="num">Total</th>${versions.map(version => `<th class="num">${esc(version)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
-async function load() {
+// The daily series behind Trends: { series } or { message } (an older API has no
+// admin/series), or { error } when the session has ended.
+async function fetchSeries() {
+  const { from, to } = seriesWindow(dayOf(new Date()));
+  try {
+    const series = normalizeSeries(await jsonOf(await call(`admin/series?from=${from}&to=${to}`)));
+    return series ? { series } : { message: UPDATE_API_MESSAGE };
+  } catch (error) {
+    if (error.kind === 'unauthorized') return { error };
+    if (error.kind === 'offline' || /HTTP 40[45]\)/.test(error.message)) return { message: UPDATE_API_MESSAGE };
+    return { message: `Trends could not be loaded. ${failureText(error)}` };
+  }
+}
+
+async function showSeries(pending, forSession) {
+  const result = await pending;
+  if (!session || session.session !== forSession) return;
+  if (result.error) { handleError(result.error); return; }
+  if (result.series) {
+    seriesSession = forSession;
+    trends.show(result.series);
+  } else {
+    trends.unavailable(result.message);
+  }
+}
+
+async function load({ series: refreshSeries = false } = {}) {
   if (!session) { await start(); return; }
   const days = Number(periodPicker.value) || 90;
+  const forSession = session.session;
+  const pending = refreshSeries === true || seriesSession !== forSession ? fetchSeries() : null;
+  if (pending) trends.refreshing();
   try {
     const summary = await jsonOf(await call(`admin/summary?days=${days}`));
     if (!session) return;
@@ -1020,9 +1131,12 @@ async function load() {
     renderAnnounce(summary);
     renderVersions(summary);
     renderSignals(summary);
+    renderReviews(summary);
+    if (pending) await showSeries(pending, forSession);
     await renderFeedback();
   } catch (error) {
     handleError(error);
+    if (pending && session) await showSeries(pending, forSession);
   }
 }
 
@@ -1095,10 +1209,10 @@ loginForm.addEventListener('submit', async event => {
   }
 });
 
-const periodPicker = createDropdown($('[data-owner-days]'), { items: PERIODS, value: '90', onChange: load });
+const periodPicker = createDropdown($('[data-owner-days]'), { items: PERIODS, value: '90', onChange: () => load() });
 const versionFilter = createDropdown($('[data-owner-version-filter]'), { items: [{ value: '', label: 'All versions' }], value: '', onChange: () => renderFeedback().catch(handleError) });
 
-$('[data-owner-refresh]').addEventListener('click', load);
+$('[data-owner-refresh]').addEventListener('click', () => load({ series: true }));
 $('[data-owner-retry]').addEventListener('click', start);
 $('[data-owner-signout]').addEventListener('click', () => signOut());
 $('[data-owner-waitlist-csv]').addEventListener('click', event => { event.preventDefault(); download('admin/waitlist?format=csv', 'daily-planner-waitlist.csv'); });
@@ -1121,6 +1235,12 @@ $('[data-owner-teams]').addEventListener('click', event => {
   const row = button.closest('tr');
   if (!window.confirm(`Delete the team kit request from ${row?.cells[1]?.textContent || 'this team'}? This cannot be undone.`)) return;
   remove(`admin/teams/${button.dataset.ownerDeleteTeam}`);
+});
+$('[data-owner-reviews]').addEventListener('click', event => {
+  const button = event.target.closest('[data-owner-delete-review]');
+  if (!button) return;
+  if (!window.confirm(`Delete the review from ${button.dataset.ownerReviewName || 'this person'}? It can no longer be quoted. This cannot be undone.`)) return;
+  remove(`admin/reviews/${button.dataset.ownerDeleteReview}`);
 });
 $('[data-owner-feedback]').addEventListener('click', event => {
   const button = event.target.closest('[data-owner-delete-feedback]');

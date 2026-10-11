@@ -650,6 +650,7 @@ export function createHorizonView(ctx) {
     const delta = Math.sign(SECTION_IDS.indexOf(target) - SECTION_IDS.indexOf(section));
     const changed = target !== section;
     section = target;
+    if (changed && target === 'progress') ctx.trackOncePer?.('day', 'progress_opened');
     ctx.closeAllPopovers();
     render({ transition: changed ? delta || 1 : 0 });
     if (changed) { const scroll = els().scroll; if (scroll) scroll.scrollTop = 0; }

@@ -548,3 +548,131 @@
 .week-time-block { overflow: hidden; overflow: clip; }
 .week-time-block:not(.is-micro) .week-time-block__copy { position: sticky; top: 52px; background: inherit; }
 .week-time-block.is-now-done { box-shadow: inset 3px 0 0 var(--block-color), inset 0 0 0 1.5px color-mix(in srgb, var(--current-time) 50%, transparent); }
+
+/* 1.21: each day header carries that day's plan ------------------------- */
+.week-schedule { --week-head-h: 46px; }
+.week-day-head {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 7px 10px 8px;
+  text-align: left;
+}
+.week-day-head__date { display: flex; align-items: baseline; justify-content: flex-start; gap: 7px; }
+.week-day-head .week-day-head__plan { min-width: 0; display: grid; gap: 3px; font-size: inherit; text-transform: none; letter-spacing: 0; }
+.week-day-head__mit { min-width: 0; display: flex; align-items: center; gap: 6px; color: var(--ink); }
+.week-day-head__mit > span { min-width: 0; overflow: hidden; font-size: .66rem; font-weight: 620; letter-spacing: -.005em; text-overflow: ellipsis; text-transform: none; white-space: nowrap; }
+.week-day-head__mit.is-done > span { color: var(--muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 55%, transparent); }
+.week-day-head__mit.is-empty > span { color: var(--faint); font-weight: 520; }
+.week-day-head .week-day-head__meta { overflow: hidden; color: var(--faint); font-size: .58rem; font-weight: 580; letter-spacing: 0; text-overflow: ellipsis; text-transform: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.week-day-head .week-day-head__date span { font-size: .6rem; font-weight: 670; text-transform: uppercase; letter-spacing: .055em; }
+.week-day-head:hover .week-day-head__mit.is-empty > span { color: var(--muted); }
+.week-day-head:focus-visible { outline: 0; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+
+/* A small check that only shows state (the day itself is where it's ticked). */
+.week-plan-check {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1.3px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface-strong);
+}
+.week-plan-check.is-done { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.week-plan-check svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+
+@media (min-width: 791px) {
+  .week-schedule { --week-head-h: 78px; }
+  .week-schedule-head { min-height: var(--week-head-h); }
+}
+@media (max-width: 790px) {
+  .week-day-head { flex-direction: row; align-items: center; justify-content: center; padding: 6px 8px; }
+  .week-day-head .week-day-head__plan { display: none; }
+}
+.week-time-block:not(.is-micro) .week-time-block__copy { top: calc(var(--week-head-h) + 6px); }
+
+/* An empty week says how blocks are added here: over the visible grid, not
+   scrolling with it, and never in the way of a click. */
+.schedule-section { position: relative; }
+.week-empty-hint {
+  position: absolute;
+  z-index: 31;
+  left: 54px;
+  right: 8px;
+  top: calc(var(--week-head-h, 46px) + var(--hour) * 1.25);
+  display: flex;
+  justify-content: center;
+  margin: 0;
+  pointer-events: none;
+}
+.workspace:not(.is-week-view) .week-empty-hint { display: none; }
+@media (min-width: 791px) { .schedule-section { --week-head-h: 78px; } }
+.week-empty-hint span {
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-strong) 88%, transparent);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 600;
+}
+.week-empty-hint__touch { display: none; }
+@media (hover: none), (pointer: coarse) {
+  .week-empty-hint__pointer { display: none; }
+  .week-empty-hint__touch { display: inline; }
+}
+
+/* Phones: Week's Plan tab is an agenda of the planning days ------------- */
+.week-agenda { display: none; }
+@media (max-width: 790px) {
+  .workspace.is-week-view[data-mobile-active="plan"] .week-agenda { display: block; height: calc(100% - var(--mobile-dock-clearance)); }
+  .workspace.is-week-view[data-mobile-active="plan"] .schedule-section { display: none; }
+}
+.week-agenda__list { display: grid; gap: 8px; margin: 0; padding: 4px 0 20px; list-style: none; }
+.week-agenda__day {
+  width: 100%;
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 18px;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+.week-agenda__day:hover,
+.week-agenda__day:focus-visible { outline: 0; border-color: var(--line-strong); }
+.week-agenda__day:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.week-agenda__day:active { background: color-mix(in srgb, var(--soft) 60%, var(--surface-strong)); }
+.week-agenda__day.is-today { border-color: color-mix(in srgb, var(--current-time) 55%, var(--line)); box-shadow: inset 3px 0 0 var(--current-time); }
+.week-agenda__day.is-past:not(.is-today) { background: color-mix(in srgb, var(--surface) 70%, var(--paper)); }
+.week-agenda__day.is-empty { min-height: 56px; align-items: center; border-style: dashed; background: transparent; }
+.week-agenda__date { display: grid; justify-items: start; gap: 1px; padding-top: 1px; }
+.week-agenda__date > span { color: var(--faint); font-size: .6rem; font-weight: 680; letter-spacing: .055em; text-transform: uppercase; }
+.week-agenda__date strong { font-size: 1.2rem; font-weight: 700; line-height: 1.05; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.week-agenda__day.is-today .week-agenda__date strong { color: var(--current-time); }
+.week-agenda__date em { margin-top: 3px; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--current-time) 13%, var(--surface-strong)); color: color-mix(in srgb, var(--current-time) 85%, var(--ink)); font-size: .56rem; font-style: normal; font-weight: 700; }
+.week-agenda__date em.is-closed { background: var(--soft); color: var(--muted); }
+.week-agenda__body { min-width: 0; display: grid; gap: 6px; }
+.week-agenda__mit { min-width: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr); align-items: start; gap: 8px; font-size: .84rem; font-weight: 650; line-height: 1.3; letter-spacing: -.012em; }
+.week-agenda__mit .week-plan-check { width: 14px; height: 14px; margin-top: 2px; }
+.week-agenda__mit.is-done > span:last-child { color: var(--muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 55%, transparent); }
+.week-agenda__mit.is-empty { grid-template-columns: minmax(0, 1fr); color: var(--faint); font-size: .76rem; font-weight: 560; }
+.week-agenda__others { display: grid; gap: 4px; }
+.week-agenda__others > span { min-width: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr); align-items: center; gap: 8px; color: var(--muted); font-size: .74rem; line-height: 1.3; }
+.week-agenda__others > span > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.week-agenda__others .week-plan-check { justify-self: center; width: 11px; height: 11px; border-radius: 3.5px; }
+.week-agenda__others .week-plan-check svg { width: 8px; height: 8px; }
+.week-agenda__others > .is-done > span { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--muted) 50%, transparent); }
+.week-agenda__meta { display: flex; flex-wrap: wrap; gap: 4px 12px; color: var(--faint); font-size: .66rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.week-agenda__meta span + span::before { content: ""; display: inline-block; width: 3px; height: 3px; margin: 0 9px 2px -6px; border-radius: 99px; background: currentColor; opacity: .7; }
+.week-agenda__empty { color: var(--faint); font-size: .76rem; font-weight: 560; }
+.week-agenda__chevron { align-self: center; width: 18px; height: 18px; fill: none; stroke: var(--faint); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }

@@ -18,10 +18,13 @@ import { createFeedbackFeature } from './src/features/feedback.js';
 import { createPrivacyNotice } from './src/features/privacy.js';
 import { createCategoryManager } from './src/features/category-manager.js';
 import { createPlusFeature } from './src/features/plus-dialog.js';
+import { defaultPlanYear, planSummary } from './src/features/year-plan.js';
 import { adoptPlus, connectPlus, hasPlus, keepPlus, onPlusChange, plusSettingsFrom, refreshPlus } from './src/lib/plus.js';
 import { buildProgressModel, newlyUnlocked } from './src/features/progress-model.js';
 import { markTrophiesSeen, readSeenTrophies, renderDayClosedProgress } from './src/features/progress-view.js';
-import { trackEvent } from './src/lib/planner-api.js';
+import { trackAppActive, trackEvent, trackOncePer } from './src/lib/planner-api.js';
+import { viewSummaries } from './src/features/day-summary.js';
+import { createViewSwitch } from './src/features/view-switch.js';
 import { createLocalStore } from './src/state/local-store.js';
 import { createSyncLedger } from './src/sync/ledger.js';
 import { createPersonalSyncFeature } from './src/features/personal-sync.js';
@@ -181,6 +184,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       updateStorageUsage();
     }, 70);
     renderPip();
+    viewSwitch.refresh();
   }
 
   // ---------------------------------------------------------------------------
@@ -203,6 +207,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     updateEndDayButton();
     applyExpandedView();
     updatePrintSizing();
+    viewSwitch.refresh();
     if (!initialScheduleScrollDone) {
       initialScheduleScrollDone = true;
       requestAnimationFrame(() => scrollScheduleToRelevantTime());
@@ -213,13 +218,11 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     const title = qs('.date-title');
     const heading = title?.querySelector('h1');
     if (!title || !heading) return;
-    title.dataset.dateVariant = 'full';
     // Let flexbox allocate the real remaining header width first. Only shorten
     // the date when the currently visible label actually overflows that space.
-    if (heading.scrollWidth <= heading.clientWidth + 1) return;
-    title.dataset.dateVariant = 'medium';
-    if (heading.scrollWidth <= heading.clientWidth + 1) return;
-    title.dataset.dateVariant = 'short';
+    // Where the weekday line is hidden (phones), "Wed, Oct 7" keeps the weekday.
+    const variants = qs('[data-weekday]')?.offsetParent ? ['full', 'medium', 'short'] : ['compact', 'short'];
+    variants.some(variant => { title.dataset.dateVariant = variant; return heading.scrollWidth <= heading.clientWidth + 1; });
   }
 
   function renderDate() {
@@ -227,6 +230,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     const full = qs('[data-date]');
     const medium = qs('[data-date-medium]');
     const short = qs('[data-date-short]');
+    const compact = qs('[data-date-compact]');
     if (plannerRangeView === 'week') {
       const days = planningWeekDates(date);
       const first = days[0]; const last = days[days.length - 1];
@@ -248,11 +252,13 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
           : `${first.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: '2-digit' })} – ${last.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: '2-digit' })}`;
         short.textContent = `${first.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}–${last.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`;
       }
+      compact.textContent = short.textContent;
     } else {
       weekday.textContent = date.toLocaleDateString(undefined, { weekday: 'long' });
       full.textContent = date.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
       medium.textContent = date.toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
       short.textContent = date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+      compact.textContent = date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
     }
     requestAnimationFrame(fitHeaderDate);
     const todayLabel = qs('[data-today-label]');
@@ -655,6 +661,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     resizeWeekBlock,
     moveWeekBlock
   });
+  // The phone's Plan / Schedule dock and the Day view's "Plan" heading: what each side holds, in a few words.
+  const viewSwitch = createViewSwitch({ qs, qsa, summary: () => { const now = new Date(); const days = plannerRangeView === 'week' ? planningWeekDates(date) : [date]; return viewSummaries(days.map(day => ({ key: ymd(day), state: viewStateForDate(day) })), { todayKey: ymd(now), nowMinutes: now.getHours() * 60 + now.getMinutes() }); } });
 
 
   createDaySwipeNavigation({
@@ -687,7 +695,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   }
 
-  function renderWeekSchedule() { weekFeature.render(); }
+  function renderWeekSchedule() { weekFeature.render(); viewSwitch.refresh(); }
 
   function layoutBlocks(blocks) {
     const map = new Map();
@@ -1481,7 +1489,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       openModal(qs('[data-sponsor-modal]'));
       return;
     }
-    feedbackFeature.maybePrompt({ closeDayCount: settings.closeDayCount });
+    feedbackFeature.maybePrompt({ closeDayCount: settings.closeDayCount, busy: !settings.onboardingComplete || !!activeModal });
   }
 
   /** Progress (painted year, streak, trophies) is derived from stored days; memoised briefly per render. */
@@ -1888,7 +1896,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   function toggleWeekView() {
     weekFeature?.resetAutoScroll?.();
     plannerRangeView = plannerRangeView === 'week' ? 'day' : 'week';
-    if (plannerRangeView === 'week' && innerWidth <= 760) setMobileView('schedule');
+    if (plannerRangeView === 'week') trackOncePer('day', 'week_view_opened');
     initialScheduleScrollDone = false;
     render();
     animatePlannerChange(0);
@@ -2028,6 +2036,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     if (input) input.value = '';
     renderSearchResults('');
     openModal(qs('[data-search-modal]'), input);
+    trackOncePer('day', 'search_opened');
   }
 
   function goToSearchResult(button) {
@@ -2637,6 +2646,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     }
     state.endedAt = new Date().toISOString();
     settings.closeDayCount = Math.max(0, Number(settings.closeDayCount) || 0) + 1;
+    trackEvent('day_closed');
     state.triaged = [...new Set([...(state.triaged || []), ...triaged])];
     state.carriedForward = [...new Set([...(state.carriedForward || []), ...carried.map(item => `${item.key}@${item.targetKey}`)])];
     state.closeTransfers = transfers;
@@ -2860,6 +2870,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     renderHorizon();
     openModal(qs('[data-horizon-modal]'));
     horizonView.onOpen();
+    trackOncePer('day', 'horizon_opened');
   }
 
   function horizonOpenItems(limit = 4) {
@@ -2893,6 +2904,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     categoryFor: id => { const category = categoryFor(id); return category ? { id: category.id, name: category.name, color: category.color } : null; },
     categories: () => settings.categories.map(category => ({ ...category })),
     track: trackEvent,
+    trackOncePer,
     openDay: dayKey => { closeModal(qs('[data-horizon-modal]')); date = dateFromKey(dayKey); plannerRangeView = 'day'; load(); }
   });
 
@@ -3228,13 +3240,14 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     openWorkReturnModal = returnTo;
     openWorkReturnScrollTop = returnTo ? (qs('.modal__scroll', returnTo)?.scrollTop || 0) : 0;
     openModal(qs('[data-open-work-modal]'));
+    trackOncePer('day', 'unresolved_opened');
   }
 
   const printFeature = createPrintFeature({
     qs, getState: () => state, getDate: () => date, getPlannerRangeView: () => plannerRangeView,
     visibleStartMinutes, visibleEndMinutes, layoutBlocks, categoryFor, isBlockDone, time, esc,
     planningWeekDates, isoWeekNumber, loadStateForDate, ymd, atNoon, updatePrintSizing,
-    renderWeekSchedule, hideAppTooltip, closePopover, updateNow,
+    renderWeekSchedule, hideAppTooltip, closePopover, updateNow, trackOncePer,
     getPrintYear: () => (qs('[data-horizon-modal]')?.hidden === false ? horizonYear : null),
     yearPrintData: year => ({ year, data: horizonYearData(year), keyDates: horizonYearKeyDates(year), weekStartsOn: settings.weekStartsOn, progress: progressFor(year), today: new Date() })
   });
@@ -3270,6 +3283,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     themeController.mirrorTo(pipWindow.document);
     pipWindow.addEventListener('pagehide', () => { pipWindow = null; });
     renderPip();
+    trackOncePer('day', 'pip_opened');
   }
 
   function renderPip() {
@@ -3369,14 +3383,12 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     doc.querySelectorAll('[data-t-calendar]').forEach(button => button.onclick = () => openScheduleFor('task', +button.dataset.tCalendar));
   }
 
-  function setMobileView(view) {
+  function setMobileView(view, { animate = true } = {}) {
     qs('[data-workspace]').dataset.mobileActive = view;
-    qsa('[data-mobile-view]').forEach(btn => {
-      const active = btn.dataset.mobileView === view;
-      btn.classList.toggle('is-active', active);
-      btn.setAttribute('aria-selected', String(active));
-    });
+    viewSwitch.setActive(view, { animate });
     if (view === 'plan') requestAnimationFrame(regrowItemFields);
+    // The week grid was hidden behind the agenda: bring today's column into view again.
+    else if (plannerRangeView === 'week') { weekFeature.resetAutoScroll(); renderWeekSchedule(); }
   }
 
   function focusOrCreateTaskSlot() {
@@ -3484,7 +3496,9 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qs('[data-import-menu]')?.addEventListener('click', openImportPicker);
   qs('[data-export-pdf]').addEventListener('click', printPlanner);
   qs('[data-pip]').addEventListener('click', pip);
-  qs('[data-journal-open]').addEventListener('click', () => { journalPage = 0; renderJournal(); openModal(qs('[data-journal-modal]')); });
+  const openJournal = () => { journalPage = 0; renderJournal(); openModal(qs('[data-journal-modal]')); trackOncePer('day', 'journal_opened'); };
+  const openStats = () => { statsFeature.ensureWeek(); renderStats(); openModal(qs('[data-stats-modal]')); trackOncePer('day', 'stats_opened'); };
+  qs('[data-journal-open]').addEventListener('click', openJournal);
   qs('[data-open-work-open]').addEventListener('click', openUnresolvedModal);
   qsa('[data-horizon-open]').forEach(button => button.addEventListener('click', () => { const mobileMenu = qs('[data-mobile-more-menu]'); if (mobileMenu) mobileMenu.hidden = true; openHorizon('year', date); }));
   qs('[data-horizon-scroll]')?.addEventListener('scroll', () => closeAllPopovers(), { passive: true });
@@ -3516,11 +3530,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     if (!event.target.closest('[data-review-open-work]')) return;
     openUnresolvedModal({ returnTo: qs('[data-day-closed-modal]') });
   });
-  qs('[data-stats-open]').addEventListener('click', () => {
-    statsFeature.ensureWeek();
-    renderStats();
-    openModal(qs('[data-stats-modal]'));
-  });
+  qs('[data-stats-open]').addEventListener('click', openStats);
   qsa('[data-open-work-view]').forEach(button => button.addEventListener('click', () => { openWorkView = button.dataset.openWorkView; renderOpenWork(); }));
   qsa('[data-stats-view]').forEach(button => button.addEventListener('click', () => {
     statsFeature.setView(button.dataset.statsView);
@@ -3619,6 +3629,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   });
 
   qs('[data-mobile-print]').addEventListener('click', () => { qs('[data-mobile-more-menu]').hidden = true; printPlanner(); });
+  qs('[data-mobile-stats]')?.addEventListener('click', () => { qs('[data-mobile-more-menu]').hidden = true; openStats(); });
   qs('[data-mobile-export]')?.addEventListener('click', () => { qs('[data-mobile-more-menu]').hidden = true; openModal(qs('[data-export-modal]')); });
   qs('[data-mobile-settings]').addEventListener('click', () => { qs('[data-mobile-more-menu]').hidden = true; renderCategorySettings(); renderSettingsHours(); renderPlanningWeek(); openModal(qs('[data-settings-modal]')); });
   qs('[data-mobile-help]').addEventListener('click', () => { qs('[data-mobile-more-menu]').hidden = true; updateStorageUsage(); openModal(qs('[data-help-modal]')); });
@@ -3662,10 +3673,10 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       arrowleft: () => shiftDate(-1), arrowright: () => shiftDate(1),
       n: goToNow, v: toggleWeekView, f: openSearchModal, w: toggleExpandedView,
       i: () => { if (pipWindow && !pipWindow.closed) { pipWindow.close(); pipWindow = null; } else pip(); },
-      j: () => toggleModalShortcut('[data-journal-modal]', () => { journalPage = 0; renderJournal(); openModal(qs('[data-journal-modal]')); }),
+      j: () => toggleModalShortcut('[data-journal-modal]', openJournal),
       u: () => toggleModalShortcut('[data-open-work-modal]', openUnresolvedModal),
       y: () => toggleModalShortcut('[data-horizon-modal]', () => openHorizon('year', date)),
-      s: () => toggleModalShortcut('[data-stats-modal]', () => { statsFeature.ensureWeek(); renderStats(); openModal(qs('[data-stats-modal]')); }),
+      s: () => toggleModalShortcut('[data-stats-modal]', openStats),
       p: printPlanner,
       e: () => { const menu = qs('[data-export-menu]'); const trigger = qs('[data-export]'); closePopover(); const opening = !!menu.hidden; menu.hidden = !opening; trigger?.setAttribute('aria-expanded', String(opening)); },
       g: () => toggleModalShortcut('[data-settings-modal]', () => { renderCategorySettings(); renderSettingsHours(); renderPlanningWeek(); openModal(qs('[data-settings-modal]')); }),
@@ -3679,7 +3690,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   window.addEventListener('resize', () => { hideAppTooltip(); closePopover(); applyExpandedView(); renderScheduleRange(); updateNow(); requestAnimationFrame(fitHeaderDate); requestAnimationFrame(regrowItemFields); });
   window.addEventListener('beforeprint', printFeature.handleBeforePrint);
   window.addEventListener('afterprint', cleanupPrintMode);
-  setInterval(() => { updateNow(); renderStats(); renderPip(); }, 30000);
+  setInterval(() => { updateNow(); renderStats(); renderPip(); viewSwitch.write(); }, 30000);
 
   qs('[data-mobile-export-md]')?.addEventListener('click', () => download(`daily-planner-${ymd()}.md`, markdown(), 'text/markdown'));
   qs('[data-mobile-export-json]')?.addEventListener('click', () => download(`daily-planner-${ymd()}.json`, JSON.stringify(state, null, 2), 'application/json'));
@@ -3744,7 +3755,10 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   const privacyNotice = createPrivacyNotice({ openModal, closeModal });
   const syncGuide = createSyncGuide({ openModal, closeModal, openPrivacy: privacyNotice.open, driveAvailable: () => !!GOOGLE_CLIENT_ID, openDriveSettings: () => { renderCategorySettings(); renderSettingsHours(); renderPlanningWeek(); openModal(qs('[data-settings-modal]')); requestAnimationFrame(() => { const section = qs('[data-personal-sync]'); section?.scrollIntoView({ behavior: 'smooth', block: 'center' }); section?.classList.add('is-spotlit'); qs('[data-personal-sync-primary]')?.focus({ preventScroll: true }); setTimeout(() => section?.classList.remove('is-spotlit'), 2400); }); } });
   const feedbackFeature = createFeedbackFeature({ openModal, closeModal, openPrivacy: privacyNotice.open });
-  const plusFeature = createPlusFeature({ openModal, closeModal, getActiveModal: () => activeModal, openPrivacy: privacyNotice.open, flush: flushPlannerForSync });
+  // The Plus dialog previews this planner: the year "Plan your year" would set up, and this year's painted days.
+  const plusPreview = () => { const planYear = defaultPlanYear(new Date()); return { plan: planSummary(horizonYearData(planYear), planYear), progress: progressFor(new Date().getFullYear()) }; };
+  const openPlusFeature = feature => { if (qs('[data-horizon-modal]').hidden) openHorizon('year', date); if (feature === 'year-plan') horizonView.openPlan(); else if (feature === 'year-review') horizonView.openReview(); else horizonView.setSection('progress'); };
+  const plusFeature = createPlusFeature({ openModal, closeModal, getActiveModal: () => activeModal, openPrivacy: privacyNotice.open, flush: flushPlannerForSync, preview: plusPreview, openFeature: openPlusFeature });
   onPlusChange(() => horizonView.refreshPlus());
   // Another tab activated Plus (a gift or purchase link opened there): take the licence before this tab saves over it.
   window.addEventListener('storage', event => { if (event.key === 'daily-planner:settings' && adoptPlus(settings, event.newValue)) refreshPlus(); });
@@ -3757,13 +3771,16 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   const helpFeedback = qs('[data-help-feedback]');
   if (helpFeedback) helpFeedback.hidden = !feedbackFeature.available();
   qsa('[data-app-version]').forEach(node => { node.textContent = APP_VERSION; });
-  setMobileView('plan');
+  setMobileView('plan', { animate: false });
   renderCategorySettings();
   renderSettingsHours();
   renderPlanningWeek();
   load();
   personalSyncFeature.load();
   feedbackFeature.noteVersionSeen();
+  trackAppActive({ installed: window.matchMedia?.('(display-mode: standalone)')?.matches || navigator.standalone === true });
   // Gift, purchase and licence links open above first-run setup and return to it.
   requestAnimationFrame(() => { onboarding.maybeOpen(); plusFeature.handleLaunch(); });
+  // Once per feature release, a little after opening, what's new and a request for feedback (never over another dialog).
+  setTimeout(() => feedbackFeature.maybePrompt({ closeDayCount: settings.closeDayCount, busy: !settings.onboardingComplete || !!activeModal }), 2400);
 })();

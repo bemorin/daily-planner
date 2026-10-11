@@ -16,12 +16,12 @@
     <header class="owner-head">
       <div>
         <p class="modal__eyebrow">Daily Planner · owner</p>
-        <h1>Waitlist, gifts, feedback &amp; demand</h1>
+        <h1>Trends, sales, feedback &amp; demand</h1>
         <p class="owner-sub" data-owner-sub>Private. Only someone with the admin token can read this data.</p>
       </div>
       <div class="owner-head__actions" data-owner-actions hidden>
         <span class="owner-session" data-owner-session></span>
-        <div class="owner-range"><span id="owner-days-label">Period</span>
+        <div class="owner-range"><span id="owner-days-label">Totals over</span>
           <button class="select-trigger owner-select" type="button" id="owner-days" data-owner-days aria-haspopup="listbox" aria-expanded="false" aria-labelledby="owner-days-label owner-days"><span class="select-trigger__value">90 days</span><svg class="select-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
         </div>
         <button class="secondary-button" type="button" data-owner-refresh>Refresh</button>
@@ -57,6 +57,18 @@
     <div class="owner-body" data-owner-body hidden>
       <section class="owner-kpis" data-owner-kpis aria-label="Key numbers"></section>
 
+      <section class="trends" data-owner-trends aria-labelledby="owner-trends-title">
+        <header class="trends__head">
+          <div><h2 id="owner-trends-title">Trends</h2><p data-trends-caption></p></div>
+          <div class="trends-switch" role="group" aria-label="Compare by">
+            <button type="button" data-trends-period="week" aria-pressed="true">Week</button>
+            <button type="button" data-trends-period="month" aria-pressed="false">Month</button>
+            <button type="button" data-trends-period="year" aria-pressed="false">Year</button>
+          </div>
+        </header>
+        <div class="trends__body" data-trends-body><p class="owner-checking">Loading trends…</p></div>
+      </section>
+
       <div class="owner-grid">
         <section class="owner-card">
           <header><h2>Sync demand</h2><p>Did people who saw the free Google Drive route still want account sync?</p></header>
@@ -73,7 +85,7 @@
         <form class="owner-subform" data-owner-gift-form aria-labelledby="owner-gift-form-title" novalidate>
           <div class="owner-subform__head">
             <h3 id="owner-gift-form-title">Create a gift</h3>
-            <p>For a company paying by invoice. Stripe purchases create their gift on their own.</p>
+            <p>For a company paying by invoice. Gifts bought online (Creem) are created on their own.</p>
           </div>
           <div class="owner-form-grid">
             <label class="form-field"><span>Company</span><input name="org" maxlength="80" autocomplete="off" required></label>
@@ -150,6 +162,11 @@
           <p class="owner-announce__result" data-owner-announce-result role="status" aria-live="polite" hidden></p>
         </form>
         <div data-owner-waitlist></div>
+      </section>
+
+      <section class="owner-card" aria-labelledby="owner-reviews-title">
+        <header><h2 id="owner-reviews-title">Reviews</h2><p data-owner-reviews-caption>Shared from the planner with permission to quote them.</p></header>
+        <div data-owner-reviews></div>
       </section>
 
       <section class="owner-card">
