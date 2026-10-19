@@ -1,11 +1,12 @@
 // Imported as a namespace so a value missing from an older config.js reads as
 // undefined instead of failing the whole module.
 import * as config from '../src/config.js';
-import { trackEvent, plannerApiEnabled, checkoutOptions, startCheckout, rememberReferral } from '../src/lib/planner-api.js';
+import { LANDING_EVENTS, trackEvent, plannerApiEnabled, checkoutOptions, startCheckout, rememberReferral, setUsageCountsEnabled, usageCountsEnabled } from '../src/lib/planner-api.js';
 import { animate } from '../src/vendor/motion.js';
 import { PERSONAL_GIFTS, PLUS_PRICE, PLUS_FEATURES, PLUS_UPCOMING, TEAM_TIERS, formatMoney, isPersonalGift } from '../src/lib/pricing.js';
-import { TEAM_ROWS, buyState, checkoutUrl, currencyLine, defaultPlan, lowestPerPerson, pageCurrency, perPerson, personalOffer, planForPeople, planRow, readCheckoutOptions, statusTone, tierLabel, tierPrice } from './landing-model.js';
+import { TEAM_ROWS, buyState, checkoutUrl, countedMoments, currencyLine, defaultPlan, lowestPerPerson, monthWeeks, pageCurrency, perPerson, personalOffer, planForPeople, planRow, readCheckoutOptions, ritualYear, statusTone, tierLabel, tierPrice } from './landing-model.js';
 import { createListbox } from './listbox.js';
+import { createPrivacyDialog } from './privacy-dialog.js';
 import { createStepper } from './stepper.js';
 
 /* ============================================================================
@@ -19,7 +20,8 @@ import { createStepper } from './stepper.js';
    PROPOSALS TO CONFIRM BEFORE PUBLISHING (owner decision pending):
    - `pricingNote` (check the wording with your accountant);
    - `replyDelay` (left blank on purpose: no response time is promised);
-   - `supportEmail` (left blank on purpose: fill it in yourself).
+   - `supportEmail` (left blank on purpose: fill it in yourself, or set
+     DAILY_PLANNER_SUPPORT_EMAIL when building, which the legal pages use too).
    ============================================================================ */
 const LANDING = {
   // Shown after "Prices in euros, taxes included." under the prices.
@@ -32,6 +34,7 @@ const LANDING = {
   contactEmail: '',
   // A reachable support address, shown as "Support: …" in the footer when set
   // (the payment provider's review asks for one that matches this site).
+  // Blank here: the site's SUPPORT_EMAIL (runtime config) is used instead.
   supportEmail: '',
   // Optional promise shown after a request, e.g. 'within two working days'.
   replyDelay: '',
@@ -59,7 +62,7 @@ const LANDING = {
 
 const PLANNER_API_URL = typeof config.PLANNER_API_URL === 'string' ? config.PLANNER_API_URL : '';
 const APP_VERSION = typeof config.APP_VERSION === 'string' ? config.APP_VERSION : '';
-const configUrl = key => (typeof config[key] === 'string' ? config[key].trim() : '');
+const configText = key => (typeof config[key] === 'string' ? config[key].trim() : '');
 
 const TIMING_LABELS = {
   'december-2026': 'Before the holidays (December 2026)',
@@ -437,19 +440,19 @@ function setupBuy() {
   });
 }
 
-/* Footer: privacy notice, support address and configured links ------------ */
+/* Footer: support address and configured links ---------------------------- */
 
 function renderFooter() {
-  if (apiOn) qsa('[data-privacy]').forEach(node => { node.hidden = false; });
   const support = qs('[data-support]');
-  const email = String(LANDING.supportEmail || '').trim();
+  // config.SUPPORT_EMAIL may not exist in an older config.js: undefined is fine.
+  const email = String(LANDING.supportEmail || configText('SUPPORT_EMAIL') || '').trim();
   if (support && EMAIL_RE.test(email)) {
     support.replaceChildren('Support: ', el('a', { href: `mailto:${email}` }, email));
     support.hidden = false;
   }
   const social = qs('[data-social]');
   const links = [['PROJECT_GITHUB_URL', 'GitHub'], ['SOCIAL_X_URL', 'X'], ['SOCIAL_LINKEDIN_URL', 'LinkedIn']]
-    .map(([key, label]) => [httpsUrl(configUrl(key)), label])
+    .map(([key, label]) => [httpsUrl(configText(key)), label])
     .filter(([url]) => url)
     .map(([url, label]) => el('a', { href: url, rel: 'noopener' }, label));
   if (social && links.length) {
@@ -888,10 +891,79 @@ function setupViewCounts() {
 /* Replica data: painted cells --------------------------------------------- */
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-// Illustrative demo years. The hero and Progress stop on a Friday in October;
-// the year in review covers all of 2026.
+// Illustrative demo years. The hero and Progress stop on a Friday in October
+// 2026; the year in review covers the year before the one to plan.
 const DEMO = { year: 2026, month: 9, day: 9, firstClosed: [0, 12], missed: ['8-10', '5-14', '2-23', '6-27'], jokers: ['9-2', '7-15', '4-7'] };
 const REVIEW = { year: 2026, month: 11, day: 31, firstClosed: [0, 5], missed: ['1-17', '3-29', '5-14', '7-12', '10-24', '11-29'], jokers: ['2-11', '4-21', '6-3', '8-23', '10-5'], noToday: true };
+
+/* The year of the ritual: next year from 1 October, else this one --------- */
+
+const PLAN_YEAR = ritualYear(new Date());
+REVIEW.year = PLAN_YEAR - 1;
+
+function renderYears() {
+  qsa('[data-plan-year]').forEach(node => { node.textContent = String(PLAN_YEAR + (Number(node.dataset.yearOffset) || 0)); });
+}
+
+/* The printed year map: twelve small months, a few dates, a pen ------------ */
+
+// What the guided session planned (the same plan as its replica), by month.
+const PRINT_EVENTS = [
+  { month: 1, from: 2, kind: 'milestone', when: 'Feb 2', text: 'Book the flights' },
+  { month: 2, from: 9, to: 11, kind: 'keydate', when: 'Mar 9 – 11', text: 'Team offsite in Lisbon' },
+  { month: 2, from: 14, kind: 'adventure', when: 'Mar 14', text: 'Sleep in a mountain hut' },
+  { month: 2, from: 21, kind: 'milestone', when: 'Mar 21', text: 'Walk 100 km in one week' },
+  { month: 3, from: 11, kind: 'milestone', when: 'Apr 11', text: 'Test the gear on a weekend' },
+  { month: 4, from: 3, to: 31, kind: 'misogi', when: 'May 3 – 31', text: 'Walk the Camino de Santiago' },
+  { month: 5, from: 6, kind: 'adventure', when: 'Jun 6', text: 'Swim before 8am' },
+  { month: 5, from: 20, kind: 'keydate', when: 'Jun 20', text: 'Sam’s wedding' },
+  { month: 7, from: 2, to: 20, kind: 'keydate', when: 'Aug 2 – 20', text: 'Summer break' },
+  { month: 10, from: 21, kind: 'adventure', when: 'Nov 21', text: 'Cook for twelve people' }
+];
+// Written by hand on the printout: a circled day, and a note on its month's first free line.
+const PEN_CIRCLE = { month: 8, day: 9 };
+const PEN_CIRCLE_PATH = 'M23.6 6.2C20.4 2.6 10.9 2.2 6.3 5.8 1.8 9.4 2.9 17.2 9.6 19.9c6.2 2.5 14.7.6 16.9-4.2 1.9-4.2-.9-8.9-6.4-10.8-2.6-.9-5.4-.9-7.6-.3';
+const PEN_NOTE_PATH = 'M1 11.1c.5-.3 2.1-.8 3.1-1.8c.9-.9 2-2.7 2.6-3.9c.6-1.2 .9-2.7 .9-3.3c.1-.5-.4-.4-.7 .1c-.2 .5-.9 2-1 3.2c-.2 1.2-.3 3 .1 3.9c.3 1 1.3 1.6 1.9 1.7c.7 .2 1.4-.4 2.1-.8c.6-.5 1.3-1.4 1.7-1.9c.4-.6 .7-1.3 .8-1.6c.1-.3 0-.3-.1-.1c0 .3-.2 1-.2 1.6c.1 .6 .2 1.5 .5 2c.4 .4 1 .8 1.5 .8c.5 0 1-.3 1.5-.7c.6-.5 1.2-1.4 1.7-1.9c.4-.5 .9-1.1 1.2-1.4c.4-.2 .6-.3 .7 0c.2 .2 .2 .8 .4 1.4c.1 .5 .2 1.4 .4 1.9c.3 .4 .4 .8 1 .8c.7 0 2-.4 2.8-.8c.8-.4 1.5-1.3 1.9-1.8c.3-.5 .3-1.1 .2-1.3c-.1-.2-.6-.3-.8-.1c-.3 .3-.7 .9-.7 1.4c0 .6 .3 1.3 .8 1.7c.5 .5 1.9 .8 2.2 .9M30.1 11.1c.5-.3 2.1-.8 3-1.7c1-1 2.1-2.8 2.7-4c.6-1.1 .9-2.6 .9-3.1c.1-.5-.3-.5-.6 0c-.3 .5-.9 2-1 3.2c-.2 1.1-.3 3 .1 3.9c.3 .9 1.1 1.5 1.9 1.7c.8 .2 2.1-.4 2.9-.7c.8-.4 1.6-1.2 1.9-1.7c.4-.5 .4-1.1 .3-1.3c-.1-.3-.7-.3-.9-.1c-.3 .3-.7 .9-.7 1.4c.1 .5 .3 1.3 .9 1.7c.5 .4 2 .6 2.4 .7';
+const PRINT_LINES = 3;
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function penMark(className, viewBox, d, order) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('class', `pen ${className}`);
+  svg.setAttribute('viewBox', viewBox);
+  svg.setAttribute('preserveAspectRatio', 'xMinYMax meet');
+  svg.style.setProperty('--pen', String(order));
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('pathLength', '1');
+  path.setAttribute('d', d);
+  svg.append(path);
+  return svg;
+}
+
+function buildPrintMonths(year) {
+  const box = qs('[data-print-months]');
+  if (!box) return;
+  box.replaceChildren(...MONTHS.map((name, month) => {
+    const events = PRINT_EVENTS.filter(event => event.month === month);
+    const kindOf = day => events.find(event => day >= event.from && day <= (event.to || event.from))?.kind || '';
+    const head = ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(letter => el('span', { class: 'rp-pp__wd' }, letter));
+    const days = monthWeeks(year, month).flat().map(day => {
+      if (!day) return el('span', {});
+      const weekday = new Date(year, month, day).getDay();
+      const kind = kindOf(day);
+      const cell = el('span', { class: [kind ? `is-${kind}` : '', weekday === 0 || weekday === 6 ? 'is-weekend' : ''].filter(Boolean).join(' ') || null }, String(day));
+      if (month === PEN_CIRCLE.month && day === PEN_CIRCLE.day) cell.append(penMark('pen--circle', '0 0 30 24', PEN_CIRCLE_PATH, 1));
+      return cell;
+    });
+    const lines = events.slice(0, PRINT_LINES).map(event => el('li', { class: `k-${event.kind}` }, el('i', {}), el('b', {}, event.when), ` ${event.text}`));
+    while (lines.length < PRINT_LINES) lines.push(el('li', {}));
+    if (month === PEN_CIRCLE.month) lines[events.length]?.append(penMark('pen--note', '0 0 48 14', PEN_NOTE_PATH, 2.6));
+    return el('div', { class: 'rp-pp__month' },
+      el('p', { class: 'rp-pp__mname' }, name, month % 3 === 0 ? el('small', {}, `Q${month / 3 + 1}`) : null),
+      el('div', { class: 'rp-pp__cal' }, head, days),
+      el('ul', { class: 'rp-pp__lines' }, lines));
+  }));
+}
 
 function paintState(demo, month, day) {
   const date = new Date(demo.year, month, day);
@@ -957,6 +1029,8 @@ function buildPaint() {
     setCount(qs('[data-review-mits]'), mits);
     qs('.rp--review')?.style.setProperty('--paint-steps', String(order));
   }
+
+  buildPrintMonths(PLAN_YEAR);
 
   const palette = qs('[data-palette-grid]');
   if (palette) {
@@ -1108,6 +1182,8 @@ const SCRIPTS = {
       t.remove('s-press', 15460);
     }
   },
+  // The printout: the pen goes over it once (ticks, a circled day, two notes).
+  print: { length: 4200, run(t) { t.add('s-ink', 500); } },
   review: {
     run(t) {
       const steps = Number(t.root.style.getPropertyValue('--paint-steps')) || 240;
@@ -1450,11 +1526,20 @@ motionOn = html.classList.contains('js-anim') && !reduceQuery.matches;
 // A partner's link (?ref=CODE) is remembered for a later purchase.
 if (apiOn) rememberReferral();
 
+renderYears();
 buildPaint();
 setupOffers();
 setupCompare();
 setupBuy();
 renderFooter();
+createPrivacyDialog({
+  dialog: qs('[data-privacy-dialog]'),
+  enabled: apiOn,
+  moments: countedMoments(LANDING_EVENTS),
+  countsEnabled: () => usageCountsEnabled(),
+  setCountsEnabled: on => setUsageCountsEnabled(on),
+  reduceMotion: () => reduceQuery.matches
+});
 setupManagerEmail();
 setupRequest();
 setupChrome();

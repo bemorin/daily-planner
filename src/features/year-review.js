@@ -181,7 +181,7 @@ function periodLabel(review) {
 function statTiles(review) {
   const tiles = [
     { label: 'Days closed', value: review.days.closed, note: review.days.planningElapsed ? `${review.days.closeRate}% of planning days` : 'Close a day to paint it' },
-    { label: 'Close rate', value: `${review.days.closeRate}<small>%</small>`, note: review.days.planningElapsed ? `${plural(review.days.planningElapsed, 'planning day')} so far` : 'No planning days yet' },
+    { label: 'Close rate', value: `${review.days.closeRate}<small>%</small>`, note: review.days.planningElapsed ? `${review.isCurrentYear ? '' : 'of '}${plural(review.days.planningElapsed, 'planning day')}${review.isCurrentYear ? ' so far' : ''}` : 'No planning days yet' },
     { label: 'Best streak', value: `${review.bestStreak}<small> d</small>`, note: 'Planning days in a row', icon: 'flame' },
     { label: 'Trophies', value: `${review.trophies.unlocked.length}<small>/${review.trophies.total}</small>`, note: review.trophies.unlocked.length ? `Latest: ${esc(review.trophies.unlocked[review.trophies.unlocked.length - 1].title)}` : 'None unlocked yet', icon: 'trophy' },
     { label: 'Main outcomes done', value: review.outcomes.done, note: review.days.closed ? `${review.outcomes.share}% of closed days` : 'Your most important outcome', icon: 'target' }
@@ -362,7 +362,7 @@ export function createYearReview({ ctx, overlay, icon, onLeave }) {
     document.title = `Daily Planner - review-${session.year}`;
     buildSheet();
     const cleanup = () => {
-      document.querySelectorAll('.print-sheet--review').forEach(sheet => sheet.remove());
+      document.querySelectorAll('[data-print-sheet].print-sheet--review').forEach(sheet => sheet.remove());
       if (!document.querySelector('[data-print-sheet]')) document.body.classList.remove('is-printing');
       document.title = titleBefore;
     };
@@ -377,7 +377,7 @@ export function createYearReview({ ctx, overlay, icon, onLeave }) {
     window.addEventListener('beforeprint', () => {
       if (session && !document.body.classList.contains('is-printing')) {
         buildSheet();
-        window.addEventListener('afterprint', () => { document.querySelectorAll('.print-sheet--review').forEach(sheet => sheet.remove()); }, { once: true });
+        window.addEventListener('afterprint', () => { document.querySelectorAll('[data-print-sheet].print-sheet--review').forEach(sheet => sheet.remove()); }, { once: true });
       }
     });
   }

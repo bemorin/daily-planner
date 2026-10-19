@@ -1,0 +1,9 @@
+# Cloudflare Pages redirects (copied to dist/ by scripts/build.mjs).
+# Short links to the legal pages; older links to bemorin.com/privacy, /terms and
+# /cookies arrive here through the bemorin.com → planner.bemorin.com redirect.
+/privacy /legal/privacy/ 301
+/terms /legal/terms/ 301
+/cookies /legal/cookies/ 301
+/privacy/ /legal/privacy/ 301
+/terms/ /legal/terms/ 301
+/cookies/ /legal/cookies/ 301

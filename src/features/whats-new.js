@@ -6,11 +6,11 @@
  * (1.22.1, 1.22.2…) keep the same note and are never asked about again.
  */
 export const WHATS_NEW = Object.freeze({
-  version: '1.22',
+  version: '1.23',
   items: Object.freeze([
-    'Day · Week · Horizon: your year now sits beside your day and your week, at the top of the planner (V and Y on a keyboard).',
-    'On a phone, Horizon is the third tab at the bottom, next to Plan and Schedule, and tells you what comes next on your year.',
-    'Every menu in the planner now looks and works like the rest of the app, with the keyboard too.',
-    'Give Plus to someone, or to up to five people in your family, from the Daily Planner Plus window: you get a link to send.'
+    'Daily Planner Plus shows its yearly ritual: plan the year in a guided half hour, print it for your desk and fill it in by hand, then look back on one printed page.',
+    'See the real pages before you buy: the printed year and the year in review, from your own planner or a sample. Tap Enlarge to read them.',
+    'From October, Plan your year prepares next year.',
+    'Privacy, terms, cookies and the legal notice now live on planner.bemorin.com, linked at the bottom of Help.'
   ])
 });

@@ -20,8 +20,14 @@ export const PLANNER_API_URL = runtimeValue('PLANNER_API_URL').replace(/\/+$/, '
 // (base64 SPKI, ECDSA P-256). Blank in public source: Plus can't be activated
 // here. Buying goes through the owner API (GET/POST /api/checkout).
 export const PLUS_PUBLIC_KEY = runtimeValue('PLUS_PUBLIC_KEY').replace(/\s+/g, '');
+// Legal pages (legal/): the publisher's contact address, postal address and
+// registration (e.g. SIRET or VAT number). Blank details are left out of the
+// pages; without SUPPORT_EMAIL they point to the “Ask a question” form.
+export const SUPPORT_EMAIL = runtimeValue('SUPPORT_EMAIL');
+export const LEGAL_ADDRESS = runtimeValue('LEGAL_ADDRESS');
+export const LEGAL_REGISTRATION = runtimeValue('LEGAL_REGISTRATION');
 // Kept in step with package.json by scripts/check.mjs; feedback is grouped by it.
-export const APP_VERSION = '1.22.0';
+export const APP_VERSION = '1.23.0';
 // Public/project links are deployment configuration, not repository defaults.
 
 

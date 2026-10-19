@@ -8,5 +8,8 @@ globalThis.__DAILY_PLANNER_CONFIG__ = Object.freeze({
   CLOUD_API_URL: '',
   GOOGLE_CLIENT_ID: '',
   PLANNER_API_URL: '',
-  PLUS_PUBLIC_KEY: ''
+  PLUS_PUBLIC_KEY: '',
+  SUPPORT_EMAIL: '',
+  LEGAL_ADDRESS: '',
+  LEGAL_REGISTRATION: ''
 });

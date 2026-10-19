@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 globalThis.__DAILY_PLANNER_CONFIG__ = { PLANNER_API_URL: '' };
-const { PLAN_PARTS, paintRows, planCaption, planPreview, recentWeeks, renderPaletteTry, renderPaintStrip, renderPlanRail, sampleRows } = await import('../src/features/plus-previews.js');
+const { PAGE_SIZE, PLAN_PARTS, paintRows, paperScale, planPreview, recentWeeks, renderPaletteTry, renderPaper, renderPlanSession, sampleRows } = await import('../src/features/plus-previews.js');
 const { checkoutHref } = await import('../src/features/plus-dialog.js');
 
 test('the plan preview reads which parts of the year are already set', () => {
@@ -10,16 +10,44 @@ test('the plan preview reads which parts of the year are already set', () => {
   const blank = planPreview(null);
   assert.equal(blank.set, 0);
   assert.equal(blank.total, 7);
-  assert.match(planCaption(blank), /blank year/);
-  const some = planPreview({ year: 2027, misogi: { text: 'Ride the Pyrenees' }, steps: { misogi: true, milestones: true, adventures: false } });
+  assert.equal(blank.misogi, '');
+  const some = planPreview({ year: 2027, misogi: { text: ' Ride the Pyrenees ', when: '12–19 Jun' }, steps: { misogi: true, milestones: true, adventures: false } });
   assert.equal(some.set, 2);
   assert.equal(some.next, 'Look back');
   assert.equal(some.misogi, 'Ride the Pyrenees');
-  assert.equal(planCaption(some), '2 of 7 parts of 2027 already set. Next: look back.');
-  const all = planPreview({ year: 2027, steps: Object.fromEntries(PLAN_PARTS.map(part => [part.id, true])) });
-  assert.match(planCaption(all), /Every part of 2027 is set/);
-  assert.match(renderPlanRail(some), /Ride the Pyrenees/);
-  assert.equal((renderPlanRail(some).match(/is-set/g) || []).length, 2);
+  assert.equal(some.when, '12–19 Jun');
+});
+
+test('the guided session preview asks the Misogi question and ticks the parts already set', () => {
+  const blank = renderPlanSession(planPreview(null), { year: 2027 });
+  assert.match(blank, /What one challenge would define 2027\?/);
+  assert.match(blank, /plus-session__field is-placeholder/, 'an empty Misogi shows the placeholder');
+  assert.match(blank, /Put it on the calendar/);
+  assert.match(blank, /aria-hidden="true"/, 'decorative: the caption says the same');
+  assert.equal((blank.match(/plus-session__part /g) || []).length, 8, 'seven parts and the summary');
+  const some = renderPlanSession(planPreview({ year: 2027, misogi: { text: 'Ride <the> Pyrenees', when: '12–19 Jun' }, steps: { misogi: true, milestones: true } }), { year: 2027 });
+  assert.match(renderPlanSession(planPreview({ misogi: { text: 'Ride', why: 'To see if I can' } }), { year: 2027 }), /plus-session__why"><span>To see if I can/);
+  assert.match(some, /Ride &lt;the&gt; Pyrenees/, 'escaped');
+  assert.doesNotMatch(some, /plus-session__field is-placeholder/, 'their Misogi, not the placeholder');
+  assert.match(some, /plus-session__why is-placeholder/, 'no why yet');
+  assert.match(some, /plus-session__chip has-value[^>]*>.*12–19 Jun/);
+  assert.equal((some.match(/ is-set/g) || []).length, 2);
+  assert.match(some, /2 of 7 parts set/);
+});
+
+test('a printed page sits on an A4 sheet scaled to fit its box', () => {
+  assert.equal(Math.round(PAGE_SIZE.width), 1123);
+  assert.equal(Math.round(PAGE_SIZE.height), 794);
+  assert.equal(paperScale(PAGE_SIZE.width / 2, 10000), 0.5, 'limited by the width');
+  assert.equal(paperScale(10000, PAGE_SIZE.height / 4), 0.25, 'limited by the height');
+  assert.equal(paperScale(5000, 5000), 1, 'never above the printed size…');
+  assert.equal(paperScale(5000, Infinity, { max: 1.35 }), 1.35, '…unless asked (the enlarged page)');
+  assert.equal(paperScale(0, 300), 0, 'no box, no scale');
+  const html = renderPaper('<header class="print-sheet-head">x</header>', { kind: 'year', palette: 'ocean' });
+  assert.match(html, /data-plus-paper="year"/);
+  assert.match(html, /plus-paper__page plus-paper--ocean" inert aria-hidden="true"/, 'the page is decoration: not focusable, not read');
+  assert.match(html, /<section class="print-sheet print-sheet--year"><header class="print-sheet-head">x<\/header><\/section>/, 'the print sheet as printing builds it');
+  assert.match(renderPaper('', { kind: 'review', zoom: true }), /plus-paper plus-paper--zoom/);
 });
 
 function model(closedKeys, year = 2026) {
@@ -32,7 +60,7 @@ function model(closedKeys, year = 2026) {
   return { year, months, closed: closedKeys.length };
 }
 
-test('the painted year preview uses real days, or a sample when there are too few', () => {
+test('the painted weeks use real days, or a sample when there are too few', () => {
   const few = paintRows(model(['2026-10-01']));
   assert.equal(few.sample, true);
   assert.equal(few.rows.length, 12);
@@ -45,8 +73,6 @@ test('the painted year preview uses real days, or a sample when there are too fe
   assert.equal(real.rows[9][5], 'x', 'a planning day left open');
   assert.equal(real.rows[9][3], '', 'a weekend');
   assert.equal(real.rows[9][20], '', 'the future');
-  assert.match(renderPaintStrip(real, { year: 2026 }), /Your 2026/);
-  assert.match(renderPaintStrip(few), /A sample year/);
 });
 
 test('the palette preview shows the latest weeks, one swatch per palette', () => {
@@ -57,6 +83,7 @@ test('the palette preview shows the latest weeks, one swatch per palette', () =>
   const html = renderPaletteTry(weeks, { current: 'ocean' });
   assert.equal((html.match(/data-plus-palette="/g) || []).length, 6);
   assert.match(html, /hz-palette--ocean" data-plus-palette-grid/);
+  assert.match(html, /data-plus-palette-name aria-hidden="true">Ocean</);
 });
 
 test('Get Plus only sends the browser to a web checkout or a page of this site', () => {

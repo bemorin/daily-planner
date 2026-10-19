@@ -3230,13 +3230,14 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     trackOncePer('day', 'unresolved_opened');
   }
 
+  const yearPrintData = year => ({ year, data: horizonYearData(year), keyDates: horizonYearKeyDates(year), weekStartsOn: settings.weekStartsOn, progress: progressFor(year), today: new Date() });
   const printFeature = createPrintFeature({
     qs, getState: () => state, getDate: () => date, getPlannerRangeView: () => plannerRangeView,
     visibleStartMinutes, visibleEndMinutes, layoutBlocks, categoryFor, isBlockDone, time, esc,
     planningWeekDates, isoWeekNumber, loadStateForDate, ymd, atNoon, updatePrintSizing,
     renderWeekSchedule, hideAppTooltip, closePopover, updateNow, trackOncePer,
     getPrintYear: () => (qs('[data-horizon-modal]')?.hidden === false ? horizonYear : null),
-    yearPrintData: year => ({ year, data: horizonYearData(year), keyDates: horizonYearKeyDates(year), weekStartsOn: settings.weekStartsOn, progress: progressFor(year), today: new Date() })
+    yearPrintData
   });
   const { printPlanner, cleanupPrintMode } = printFeature;
 
@@ -3741,10 +3742,10 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   const privacyNotice = createPrivacyNotice({ openModal, closeModal });
   const syncGuide = createSyncGuide({ openModal, closeModal, openPrivacy: privacyNotice.open, driveAvailable: () => !!GOOGLE_CLIENT_ID, openDriveSettings: () => { renderCategorySettings(); renderSettingsHours(); renderPlanningWeek(); openModal(qs('[data-settings-modal]')); requestAnimationFrame(() => { const section = qs('[data-personal-sync]'); section?.scrollIntoView({ behavior: 'smooth', block: 'center' }); section?.classList.add('is-spotlit'); qs('[data-personal-sync-primary]')?.focus({ preventScroll: true }); setTimeout(() => section?.classList.remove('is-spotlit'), 2400); }); } });
   const feedbackFeature = createFeedbackFeature({ openModal, closeModal, openPrivacy: privacyNotice.open });
-  // The Plus dialog previews this planner: the year "Plan your year" would set up, and this year's painted days.
-  const plusPreview = () => { const planYear = defaultPlanYear(new Date()); return { plan: planSummary(horizonYearData(planYear), planYear), progress: progressFor(new Date().getFullYear()) }; };
+  // The Plus dialog previews this planner: the year "Plan your year" would set up, its printed page, this year's painted days and its review.
+  const plusPreview = () => { const planYear = defaultPlanYear(new Date()); return { plan: planSummary(horizonYearData(planYear), planYear), progress: progressFor(new Date().getFullYear()), print: yearPrintData, review: year => ({ progress: progressFor(year), yearData: horizonYearData(year), readDay: key => (key === ymd(date) ? state : store.readJSON(`daily-planner:${key}`)), categoryFor }) }; };
   const openPlusFeature = feature => { if (qs('[data-horizon-modal]').hidden) openHorizon('year', date); if (feature === 'year-plan') horizonView.openPlan(); else if (feature === 'year-review') horizonView.openReview(); else horizonView.setSection('progress'); };
-  const plusFeature = createPlusFeature({ openModal, closeModal, getActiveModal: () => activeModal, openPrivacy: privacyNotice.open, flush: flushPlannerForSync, preview: plusPreview, openFeature: openPlusFeature });
+  const plusFeature = createPlusFeature({ openModal, closeModal, getActiveModal: () => activeModal, openPrivacy: privacyNotice.open, flush: flushPlannerForSync, preview: plusPreview, openFeature: openPlusFeature, printYear: year => printFeature.printYear(year) });
   onPlusChange(() => horizonView.refreshPlus());
   // Another tab activated Plus (a gift or purchase link opened there): take the licence before this tab saves over it.
   window.addEventListener('storage', event => { if (event.key === 'daily-planner:settings' && adoptPlus(settings, event.newValue)) refreshPlus(); });

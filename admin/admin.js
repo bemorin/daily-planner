@@ -962,6 +962,25 @@ function paymentsItem(payments) {
   return { title: 'Payments (Creem)', state, html: `${key}${error}<p>Product ids (one-time products, one per item and currency):</p>${table}${webhook}${url}` };
 }
 
+// Legal pages (legal/): their contact and address come from build variables.
+// Creem's store review asks for the terms, the privacy policy and the website.
+function legalItem(base = 'https://planner.bemorin.com') {
+  const value = key => String(APP_CONFIG[key] || '').trim();
+  const missing = [['SUPPORT_EMAIL', 'DAILY_PLANNER_SUPPORT_EMAIL', 'contact address'], ['LEGAL_ADDRESS', 'DAILY_PLANNER_LEGAL_ADDRESS', 'postal address']].filter(([key]) => !value(key));
+  // The public site (PUBLIC_BASE_URL), not a preview deployment this page may be open on.
+  const page = path => new URL(path, `${base.replace(/\/+$/, '')}/`).href;
+  const urls = `<p>The addresses Creem asks for:</p>${copyRow('Terms', page('legal/terms/'))}${copyRow('Privacy', page('legal/privacy/'))}${copyRow('Website', page('welcome/'))}`;
+  const registration = value('LEGAL_REGISTRATION') ? '' : ' If you have a SIRET or VAT number, add it with <code>DAILY_PLANNER_LEGAL_REGISTRATION</code>.';
+  if (!missing.length) return { title: 'Legal pages', state: 'ok', html: `<p>The legal notice shows your contact (${esc(value('SUPPORT_EMAIL'))}) and postal address.${registration}</p>${urls}` };
+  const names = missing.map(([, variable]) => `<code>${variable}</code>`).join(' and ');
+  const what = missing.map(([, , label]) => label).join(' or ');
+  return {
+    title: 'Legal pages',
+    state: 'warn',
+    html: `<p>Set the build variable${missing.length > 1 ? 's' : ''} ${names} (Settings → Variables and Secrets, type Text), then redeploy. Until then the legal pages show no ${what}${value('SUPPORT_EMAIL') ? '' : ' and point to the “Ask a question” form'}.${registration}</p>${urls}`
+  };
+}
+
 function setupItems(summary) {
   const setup = summary.setup;
   const base = setup.publicBaseUrl || 'https://planner.bemorin.com';
@@ -1000,6 +1019,7 @@ function setupItems(summary) {
   items.push(paymentsItem(setup.payments || {}));
 
   items.push({ title: 'Links in emails', state: 'ok', html: `<p>They start with ${esc(base)}${setup.publicBaseUrlSet ? ' (<code>PUBLIC_BASE_URL</code>)' : ', the default. Set <code>PUBLIC_BASE_URL</code> to change it'}.</p>` });
+  items.push(legalItem(base));
   const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql', summary.reviewsUnavailable && '0004_creem_reviews.sql'].filter(Boolean);
   items.push(missingTables.length
     ? { title: 'Database', state: 'missing', html: `<p>Apply ${missingTables.map(file => `<code>migrations/${file}</code>`).join(' and ')} to the D1 database.</p>` }

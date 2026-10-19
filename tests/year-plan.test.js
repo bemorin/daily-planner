@@ -53,9 +53,11 @@ function richYear() {
   };
 }
 
-test('the year to plan is this one until October, the next one from November', () => {
+test('the year to plan is this one until September, the next one from 1 October', () => {
   assert.equal(defaultPlanYear(new Date(2026, 0, 3)), 2026);
-  assert.equal(defaultPlanYear(new Date(2026, 9, 31)), 2026);
+  assert.equal(defaultPlanYear(new Date(2026, 8, 30, 23, 59)), 2026);
+  assert.equal(defaultPlanYear(new Date(2026, 9, 1)), 2027);
+  assert.equal(defaultPlanYear(new Date(2026, 9, 31)), 2027);
   assert.equal(defaultPlanYear(new Date(2026, 10, 1)), 2027);
   assert.equal(defaultPlanYear(new Date(2026, 11, 31)), 2027);
   assert.deepEqual(planYearOptions(today), [2026, 2027]);

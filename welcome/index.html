@@ -100,6 +100,11 @@
     <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.2-1-1.6-1-2.6 0-1 .8-1.7 1.8-1.7h2.2a3.7 3.7 0 0 0 3.7-3.7c0-4.3-3.8-7.3-8.5-7.3Z"/><circle cx="7.8" cy="11.2" r="1"/><circle cx="10.6" cy="7.6" r="1"/><circle cx="15" cy="7.9" r="1"/></symbol>
     <symbol id="i-pip" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="14" rx="2"/><rect x="11.5" y="10.5" width="7" height="5.5" rx="1"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7L6 20v-3.6a2 2 0 0 1-1.5-1.9Z"/></symbol>
+    <symbol id="i-laptop" viewBox="0 0 24 24"><path d="M4.8 15.5V7a1.6 1.6 0 0 1 1.6-1.6h11.2A1.6 1.6 0 0 1 19.2 7v8.5"/><path d="M2.6 15.5h18.8l-.9 2.4a1.2 1.2 0 0 1-1.1.8H4.6a1.2 1.2 0 0 1-1.1-.8Z"/></symbol>
+    <symbol id="i-tablet" viewBox="0 0 24 24"><rect x="4.5" y="3" width="15" height="18" rx="2.2"/><path d="M10.8 18h2.4"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2.2"/><path d="M11 18h2"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M4.6 12.8A7.5 7.5 0 1 0 6.9 6.6"/><path d="M5.8 3.8v3.6h3.6"/><path d="M12 8.2v4l2.7 1.7"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></symbol>
   </svg>
 
   <a class="skip" href="#main">Skip to content</a>
@@ -129,13 +134,17 @@
     <section class="hero" id="top" aria-labelledby="hero-title">
       <div class="wrap hero__grid">
         <div class="hero__copy">
+          <a class="hero__news" href="#plus"><span class="hero__news-tag">New</span> <span>Plan <span data-plan-year>2027</span> in 30 minutes</span><svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
           <h1 id="hero-title"><span>Plan what matters.</span> <span>Close the day.</span> <span>Keep the year in view.</span></h1>
           <p class="lead">Daily Planner is a calm planner for your day, your week and your year. It’s free, needs no account and works offline. Your plans stay in your browser, not on our servers.</p>
           <div class="cta-row" data-hero-ctas>
             <a class="btn btn--primary" href="../" data-cta="app">Open the planner — it’s free</a>
             <a class="btn btn--ghost" href="#teams">Give it to your team</a>
           </div>
-          <p class="hero__note">Works on phone and computer. Install it as an app if you like.</p>
+          <div class="devices">
+            <span class="devices__icons" aria-hidden="true"><svg class="i devices__laptop"><use href="#i-laptop"/></svg><svg class="i devices__tablet"><use href="#i-tablet"/></svg><svg class="i devices__phone"><use href="#i-phone"/></svg></span>
+            <p><b>On your computer, tablet and phone.</b> <span>Installs like an app, straight from the browser — no app store.</span></p>
+          </div>
         </div>
 
         <figure class="hero__visual">
@@ -587,12 +596,12 @@
       <div class="wrap split">
         <div class="split__copy" data-reveal-each>
           <h2 id="yours-title">Yours, on every device</h2>
-          <p class="lead">No sign-up and no subscription. Your plans live in your browser, and you decide where else they go.</p>
+          <p class="lead">On your computer, your tablet and your phone. No sign-up and no subscription: your plans live in your browser, and you decide where else they go.</p>
           <ul class="features">
             <li><svg class="i"><use href="#i-noaccount"/></svg><span><b>No account.</b> Open it and start; there’s nothing to sign up for.</span></li>
             <li><svg class="i"><use href="#i-offline"/></svg><span><b>Works offline.</b> Once loaded, it opens without a connection.</span></li>
-            <li><svg class="i"><use href="#i-install"/></svg><span><b>Installs as an app</b> on iPhone, Android, Mac and Windows, straight from the browser.</span></li>
-            <li><svg class="i"><use href="#i-devices"/></svg><span><b>Free sync with your Google Drive.</b> One hidden file in your own Drive keeps your devices in step. Nothing is stored on our servers.</span></li>
+            <li><svg class="i"><use href="#i-install"/></svg><span><b>Installs as an app</b> on iPhone and iPad, Android phones and tablets, Mac and Windows, straight from the browser. No app store.</span></li>
+            <li><svg class="i"><use href="#i-devices"/></svg><span><b>Free sync with your Google Drive.</b> Connect it and one hidden file in your own Drive keeps your devices in step; nothing is stored on our servers. Without it, each device keeps its own plans.</span></li>
             <li><svg class="i"><use href="#i-export"/></svg><span><b>Export any time.</b> Back up everything to a file, export a day as Markdown, or print it.</span></li>
           </ul>
         </div>
@@ -614,6 +623,14 @@
                   </div>
                 </div>
                 <span class="rp-laptop__base"></span>
+                <div class="rp-tablet">
+                  <div class="rp-tablet__screen">
+                    <span class="rp-phone__url">planner.bemorin.com</span>
+                    <p class="rp-h">Most important outcome</p>
+                    <div class="rp-row rp-row--mit rp-tick rp-tick--tablet"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Send the proposal to Claire</span></div>
+                    <div class="rp-row"><span class="rp-check"></span><span class="rp-txt">Book physio</span></div>
+                  </div>
+                </div>
               </div>
               <span class="rp-syncdot"><svg class="i"><use href="#i-sync"/></svg><small>your Drive</small></span>
               <div class="rp-phone">
@@ -629,7 +646,7 @@
               </div>
             </div>
           </div>
-          <p class="visual-note">Tick something on your phone; it shows up on your laptop through your own Google Drive.</p>
+          <p class="visual-note">With Google Drive sync connected, tick something on your phone and it shows up on your laptop and tablet. Without it, each device keeps its own plans.</p>
         </div>
       </div>
     </section>
@@ -638,8 +655,17 @@
       <div class="wrap">
         <div class="section__intro" data-reveal-each>
           <p class="kicker"><svg class="i"><use href="#i-spark"/></svg>Daily Planner Plus</p>
-          <h2 id="plus-title">Plan your year in one sitting. Review it on one page.</h2>
-          <p class="lead">Everything above stays free. Plus adds a few things for the year itself, for <span data-plus-price>€29</span>, paid once. No subscription.</p>
+          <h2 id="plus-title">Make <span data-plan-year>2027</span> count.</h2>
+          <p class="lead">A ritual for every year: plan it in a guided half hour, print it and fill it in by hand as the months go, then look back on one page. Everything above stays free. Plus is <span data-plus-price>€29</span>, paid once, with no subscription.</p>
+        </div>
+
+        <div class="ritual" data-reveal-each>
+          <ol class="ritual__steps" aria-label="The yearly ritual">
+            <li class="ritual__step"><span class="ritual__icon" aria-hidden="true"><svg class="i"><use href="#i-compass"/></svg></span><span class="ritual__text"><b><span class="ritual__n">1</span>Plan it</b><span>A guided half hour</span></span></li>
+            <li class="ritual__step"><span class="ritual__icon" aria-hidden="true"><svg class="i"><use href="#i-print"/></svg></span><span class="ritual__text"><b><span class="ritual__n">2</span>Print it</b><span>On your desk, filled in by hand all year</span></span></li>
+            <li class="ritual__step"><span class="ritual__icon" aria-hidden="true"><svg class="i"><use href="#i-history"/></svg></span><span class="ritual__text"><b><span class="ritual__n">3</span>Look back</b><span>Your year in review on one page, then plan the next</span></span></li>
+          </ol>
+          <p class="ritual__loop"><span><svg class="i" aria-hidden="true"><use href="#i-sync"/></svg>Every year</span></p>
         </div>
 
         <div class="split split--visual-first plus-split">
@@ -648,7 +674,7 @@
               <div class="rp rp--yp s-1 s-2 s-3 s-4 s-5 s-6 s-7" data-scene="yearplan" data-final="s-1 s-2 s-3 s-4 s-5 s-6 s-7" aria-hidden="true">
                 <div class="rp-yp">
                   <div class="rp-yp__head">
-                    <span><span class="rp-eyebrow rp-eyebrow--plus">Plus · Plan your year</span><b class="rp-title">2027, one step at a time</b></span>
+                    <span><span class="rp-eyebrow rp-eyebrow--plus">Plus · Plan your year</span><b class="rp-title"><span data-plan-year>2027</span>, one step at a time</b></span>
                     <span class="rp-yp__time">About 30 min</span>
                   </div>
                   <span class="rp-yp__bar"><i></i></span>
@@ -731,6 +757,7 @@
             </div>
           </div>
           <div class="split__copy" data-reveal-each>
+            <p class="ritual-tag">Step 1 · Plan it</p>
             <h3 class="h3-lg">Plan your year</h3>
             <p>A guided session sets up Horizon for the whole year in about 30 minutes, one question at a time:</p>
             <ol class="steps">
@@ -747,16 +774,82 @@
 
         <div class="split plus-split">
           <div class="split__copy" data-reveal-each>
-            <h3 class="h3-lg">Your year in review</h3>
-            <p>One page for a whole year: days closed, the painted year, your best streak, trophies unlocked, main outcomes done and where your time went. Then how the Misogi, the mini-adventures and the habits turned out, with a few memories and lessons from your journal.</p>
-            <p class="print-note"><svg class="i"><use href="#i-print"/></svg><span><b>Printable on one page.</b> Keep it with the year it describes, or next to the plan for the one ahead.</span></p>
+            <p class="ritual-tag">Step 2 · Print it</p>
+            <h3 class="h3-lg">Print it, fill it in by hand</h3>
+            <p>Your year on one landscape page: the Misogi and its milestones, six mini-adventures, three commitments, a habit for each quarter and twelve small months with your key dates.</p>
+            <ul class="ticks">
+              <li>What you haven’t planned yet prints as lines and boxes, ready for a pen.</li>
+              <li>Keep it on your desk. Tick milestones, circle dates and add what comes up as the year goes.</li>
+            </ul>
+            <p class="print-note"><svg class="i"><use href="#i-print"/></svg><span><b>One landscape page.</b> The guided session ends with it, and Horizon prints it again whenever you like.</span></p>
           </div>
+          <div class="split__visual" data-reveal>
+            <div class="rp-scale rp-scale--print">
+              <div class="rp rp--print s-ink" data-scene="print" data-final="s-ink" aria-hidden="true">
+                <div class="rp-pp">
+                  <div class="rp-pp__head">
+                    <span class="rp-pp__title"><small>Horizon · Year map</small><b data-plan-year>2027</b></span>
+                    <span class="rp-pp__legend"><i class="k-misogi">Misogi</i><i class="k-milestone">Milestone</i><i class="k-adventure">Mini-adventure</i><i class="k-keydate">Key date</i></span>
+                  </div>
+                  <div class="rp-pp__body">
+                    <div class="rp-pp__side">
+                      <div class="rp-pp__card">
+                        <p class="rp-pp__h">Misogi</p>
+                        <p class="rp-pp__misogi"><span class="rp-pp__box"></span><b>Walk the Camino de Santiago</b></p>
+                        <p class="rp-pp__when"><small>When</small>May 3 – May 31</p>
+                        <p class="rp-pp__sub">Milestones</p>
+                        <ol class="rp-pp__list">
+                          <li><span class="rp-pp__box"><svg class="pen pen--tick" viewBox="0 0 20 20" style="--pen:0"><path pathLength="1" d="M3.6 10.6c1.4 1.3 2.5 2.7 3.6 4.6 2.6-4.9 5.6-8.6 9.9-12.4"/></svg></span><i>1</i><b>Book the flights</b><em>Feb 2</em></li>
+                          <li><span class="rp-pp__box"></span><i>2</i><b>Walk 100 km in one week</b><em>Mar 21</em></li>
+                          <li><span class="rp-pp__box"></span><i>3</i><b>Test the gear on a weekend</b><em>Apr 11</em></li>
+                          <li><span class="rp-pp__box"></span><i>4</i><span class="rp-pp__blank"><svg class="pen pen--note" viewBox="0 0 70 14" preserveAspectRatio="xMinYMax meet" style="--pen:2"><path pathLength="1" d="M1 10.9c.2-.1 1-.3 1.4-.6c.5-.4 1.1-1.2 1.6-1.6c.4-.5 .9-1.1 1.2-1.3c.3-.2 .5-.2 .7 0c.1 .2 .2 .8 .4 1.2c.1 .5 .2 1.3 .5 1.6c.2 .4 .4 .7 1 .7c.6 0 1.9-.3 2.7-.7c.8-.4 1.5-1.2 1.8-1.7c.4-.6 .4-1.2 .3-1.4c-.1-.2-.6-.2-.9 .1c-.2 .2-.6 .8-.6 1.4c0 .5 .3 1.2 .8 1.6c.5 .4 1.3 .8 2.2 .7c.9-.1 2.1-.7 3.1-1.6c.9-.8 2-2.6 2.5-3.7c.6-1.1 .9-2.5 .9-3c.1-.5-.4-.5-.7 0c-.2 .5-.8 1.9-1 3c-.1 1.1-.1 2.9 .2 3.7c.4 .9 1.7 1.4 2.1 1.6M23.8 11c.5-.3 2-.8 2.9-1.8c.9-.9 2-2.7 2.5-3.8c.6-1.2 .9-2.6 1-3.1c0-.5-.4-.5-.7 0c-.3 .6-.8 1.9-1 3.1c-.2 1.2-.3 2.9 0 3.9c.3 .9 1.3 1.5 1.8 1.7c.6 .1 1-.3 1.5-.7c.5-.4 1.1-1.2 1.5-1.7c.5-.6 .9-1.2 1.2-1.5c.4-.2 .5-.2 .7 .1c.2 .2 .2 .8 .4 1.3c.1 .6 .2 1.4 .4 1.8c.3 .4 .3 .8 1 .8c.6-.1 2-.5 2.8-1c.8-.5 1.5-1.3 1.9-1.9c.4-.6 .4-1.2 .3-1.5c-.1-.2-.6-.3-.8-.1c-.3 .3-.7 1-.7 1.6c0 .6 .2 1.4 .7 1.9c.5 .5 1.9 .8 2.2 .9M46 11.1c.5-.3 2.1-.7 3-1.6c.9-.9 2-2.5 2.5-3.6c.6-1.1 .9-2.5 .9-3c.1-.5-.3-.5-.6 0c-.3 .5-.8 1.9-1 3c-.1 1.1-.1 2.8 .2 3.7c.4 .8 1.2 1.3 2 1.5c.8 .1 2.1-.3 2.9-.8c.8-.4 1.6-1.3 2-1.8c.4-.6 .4-1.2 .3-1.4c-.1-.3-.7-.3-.9-.1c-.3 .3-.7 .9-.7 1.4c0 .6 .3 1.4 .8 1.9c.5 .4 1.8 .8 2.4 .8c.6 0 .9-.4 1.4-.8c.4-.4 1-1.2 1.5-1.7c.4-.5 .8-1.2 1.1-1.4c.3-.2 .5-.2 .7 .1c.1 .2 .1 .8 .3 1.3c.1 .5 .1 1.3 .4 1.7c.2 .4 .7 .7 .8 .8"/></svg></span><em class="rp-pp__dash"></em></li>
+                          <li><span class="rp-pp__box"></span><i>5</i><span class="rp-pp__blank"></span><em class="rp-pp__dash"></em></li>
+                        </ol>
+                      </div>
+                      <div class="rp-pp__card">
+                        <p class="rp-pp__h">Mini-adventures</p>
+                        <ol class="rp-pp__list">
+                          <li><span class="rp-pp__box"><svg class="pen pen--tick" viewBox="0 0 20 20" style="--pen:3"><path pathLength="1" d="M3.4 11.2c1.5 1.1 2.6 2.5 3.8 4.3 2.4-5 5.3-8.8 9.6-12.6"/></svg></span><i>1</i><b>Sleep in a mountain hut</b><em>Mar 14</em></li>
+                          <li><span class="rp-pp__box"></span><i>2</i><b>Swim before 8am</b><em>Jun 6</em></li>
+                          <li><span class="rp-pp__box"></span><i>3</i><b>Cook for twelve people</b><em>Nov 21</em></li>
+                          <li><span class="rp-pp__box"></span><i>4</i><b>Learn to sail</b><em>Idea</em></li>
+                          <li><span class="rp-pp__box"></span><i>5</i><b>A night under the stars</b><em>Idea</em></li>
+                          <li><span class="rp-pp__box"></span><i>6</i><b>A day without a phone</b><em>Idea</em></li>
+                        </ol>
+                      </div>
+                      <div class="rp-pp__card">
+                        <p class="rp-pp__h">Commitments</p>
+                        <ol class="rp-pp__list rp-pp__list--plain">
+                          <li><i>1</i><b>Home for dinner four nights a week</b></li>
+                          <li><i>2</i><b>Read one book a month</b></li>
+                          <li><i>3</i><b>Fewer projects, done better</b></li>
+                        </ol>
+                      </div>
+                      <div class="rp-pp__card">
+                        <p class="rp-pp__h">Winning habits</p>
+                        <ol class="rp-pp__list rp-pp__list--habits">
+                          <li><i>Q1</i><b>Walk after lunch</b></li>
+                          <li><i>Q2</i><b>No phone in the bedroom</b></li>
+                          <li><i>Q3</i><b>Write three lines</b></li>
+                          <li><i>Q4</i><b>Stretch before bed</b></li>
+                        </ol>
+                      </div>
+                    </div>
+                    <div class="rp-pp__months" data-print-months></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="split split--visual-first plus-split">
           <div class="split__visual" data-reveal>
             <div class="rp-scale">
               <div class="rp rp--review s-in s-bars s-notes" data-scene="review" data-final="s-in s-bars s-notes" aria-hidden="true">
                 <div class="rp-rv">
                   <div class="rp-rv__head">
-                    <span><span class="rp-eyebrow rp-eyebrow--plus">Plus · Year in review</span><b class="rp-rv__title">2026, in review</b></span>
+                    <span><span class="rp-eyebrow rp-eyebrow--plus">Plus · Year in review</span><b class="rp-rv__title"><span data-plan-year data-year-offset="-1">2026</span>, in review</b></span>
                     <span class="rp-rv__print"><svg class="i"><use href="#i-print"/></svg>Print</span>
                   </div>
                   <div class="rp-rv__stats">
@@ -795,6 +888,12 @@
                 </div>
               </div>
             </div>
+          </div>
+          <div class="split__copy" data-reveal-each>
+            <p class="ritual-tag">Step 3 · Look back</p>
+            <h3 class="h3-lg">Your year in review</h3>
+            <p>One page for a whole year: days closed, the painted year, your best streak, trophies unlocked, main outcomes done and where your time went. Then how the Misogi, the mini-adventures and the habits turned out, with a few memories and lessons from your journal.</p>
+            <p class="print-note"><svg class="i"><use href="#i-print"/></svg><span><b>It prints on one page.</b> Keep it with the plan it answers, then plan the next year.</span></p>
           </div>
         </div>
 
@@ -987,7 +1086,7 @@
             <div class="hp" aria-hidden="true"><label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
             <label class="consent" data-consent-row><input type="checkbox" name="consent" required aria-describedby="err-consent"><span>You may email me about this request.</span></label>
             <small class="field__err field__err--consent" id="err-consent"></small>
-            <p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request. <a href="#privacy">How requests are handled</a></p>
+            <p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request. <a href="#privacy" data-privacy-open="requests">How requests are handled</a></p>
             <p class="form-error" data-form-error role="alert" hidden></p>
             <div class="team-form__actions">
               <button class="btn btn--light" type="submit" data-form-submit disabled>Request the invoice</button>
@@ -1098,7 +1197,7 @@
                 <tbody>
                   <tr class="cmp__group"><th scope="rowgroup" colspan="2">Everywhere</th><td></td></tr>
                   <tr><th scope="row">Works offline</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
-                  <tr><th scope="row">Installs as an app on phone and computer</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Installs as an app on computer, tablet and phone</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
                   <tr><th scope="row">Sync through your own Google Drive</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
                 </tbody>
                 <tbody class="cmp__soon" data-compare-upcoming>
@@ -1249,20 +1348,72 @@
         <span class="foot__support" data-support hidden></span>
         <span class="foot__social" data-social hidden></span>
       </nav>
-      <nav class="foot__legal" aria-label="Legal">
-        <a href="https://bemorin.com/privacy" rel="noopener">Privacy</a>
-        <a href="https://bemorin.com/terms" rel="noopener">Terms</a>
-        <a href="https://bemorin.com/cookies" rel="noopener">Cookies</a>
-      </nav>
     </div>
-    <div class="wrap foot__privacy" id="privacy" data-privacy hidden>
-      <h2>What this page counts and stores</h2>
-      <p>This page counts a few anonymous events per day, such as page views, the sections people scroll to and button clicks, without any identifier: no cookies, and no IP address stored. Prices are in euros in the euro area and in US dollars elsewhere: the server reads the country of your connection for that request (from Cloudflare) and never stores it. A purchase sends only what you chose, to open the payment page, along with a partner’s referral code if you came through a partner’s link (it’s kept on this device for 60 days for that purpose only); your card details go to Creem, our payment partner, never to this site. If you send a request, what you submit (email, name, company, plan, number of people, timing and message) is stored only to reply to you, and deleted on request.</p>
+    <div class="wrap foot__base">
+      <nav class="foot__legal" aria-label="Legal">
+        <a href="../legal/privacy/">Privacy</a>
+        <a href="../legal/terms/">Terms</a>
+        <a href="../legal/cookies/">Cookies</a>
+        <a href="../legal/">Legal notice</a>
+      </nav>
+      <button class="foot__counts" type="button" data-privacy-open hidden><svg class="i" aria-hidden="true"><use href="#i-stats"/></svg>What this page counts</button>
     </div>
   </footer>
 
   <div class="dock" data-dock>
     <a class="btn btn--primary" href="../" data-cta="app">Open the planner — it’s free</a>
   </div>
+
+  <dialog class="pv" id="privacy" aria-labelledby="privacy-title" data-privacy-dialog>
+    <div class="pv__panel">
+      <button class="pv__close" type="button" aria-label="Close" data-privacy-close><svg class="i" aria-hidden="true"><use href="#i-close"/></svg></button>
+      <div class="pv__scroll" data-privacy-scroll>
+        <header class="pv__head">
+          <p class="pv__eyebrow">Privacy</p>
+          <h2 id="privacy-title" tabindex="-1">What this page counts and stores</h2>
+          <p>Your plans are never part of it: they stay in your browser.</p>
+        </header>
+        <section class="pv__sec" data-privacy-section="counts" aria-labelledby="pv-counts">
+          <span class="pv__icon" aria-hidden="true"><svg class="i"><use href="#i-stats"/></svg></span>
+          <div class="pv__body">
+            <h3 id="pv-counts" tabindex="-1">Anonymous counts</h3>
+            <p>To learn what helps, this page adds one to a daily count when someone:</p>
+            <ul class="pv__moments" data-privacy-moments></ul>
+            <p>No identifiers, no cookies, your IP address is not stored.</p>
+            <label class="pv-toggle"><span><strong>Count my visits anonymously</strong><small data-privacy-note>On in this browser, here and in the planner.</small></span><input class="pv-switch" type="checkbox" role="switch" checked data-privacy-switch></label>
+          </div>
+        </section>
+        <section class="pv__sec" data-privacy-section="prices" aria-labelledby="pv-prices">
+          <span class="pv__icon" aria-hidden="true"><svg class="i"><use href="#i-globe"/></svg></span>
+          <div class="pv__body">
+            <h3 id="pv-prices" tabindex="-1">Prices and your country</h3>
+            <p>Euros in the euro area, US dollars elsewhere. To choose, the server reads your connection’s country (from Cloudflare) for that one request, and never stores it.</p>
+          </div>
+        </section>
+        <section class="pv__sec" data-privacy-section="purchases" aria-labelledby="pv-purchases">
+          <span class="pv__icon" aria-hidden="true"><svg class="i"><use href="#i-lock"/></svg></span>
+          <div class="pv__body">
+            <h3 id="pv-purchases" tabindex="-1">Purchases</h3>
+            <ul class="pv__list">
+              <li>You pay on the page of Creem, our payment partner. Your card details never reach this site.</li>
+              <li>A purchase sends only what you chose, to open that page.</li>
+              <li>If you came through a partner’s link, its referral code (<code>?ref=</code>) is kept in this browser for 60 days and sent with a purchase, only to credit that partner.</li>
+            </ul>
+          </div>
+        </section>
+        <section class="pv__sec" data-privacy-section="requests" aria-labelledby="pv-requests">
+          <span class="pv__icon" aria-hidden="true"><svg class="i"><use href="#i-mail"/></svg></span>
+          <div class="pv__body">
+            <h3 id="pv-requests" tabindex="-1">Requests</h3>
+            <p>What you send — your email, name, company, the kind of request, plan, number of people, currency, timing and message — is stored only to reply to you, with your browser’s language, the page version and where the form was opened. It’s deleted on request.</p>
+          </div>
+        </section>
+      </div>
+      <div class="pv__foot">
+        <a class="pv__policy" href="../legal/privacy/">Read the full privacy policy<svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <button class="btn btn--primary btn--sm" type="button" data-privacy-close>Done</button>
+      </div>
+    </div>
+  </dialog>
 </body>
 </html>
