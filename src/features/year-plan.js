@@ -52,9 +52,9 @@ function grow(field) {
 // Pure helpers
 // ---------------------------------------------------------------------------
 
-/** From November on, the year to plan is the next one. */
+/** From 1 October on, the year to plan is the next one. */
 export function defaultPlanYear(today = new Date()) {
-  return today.getMonth() >= 10 ? today.getFullYear() + 1 : today.getFullYear();
+  return today.getMonth() >= 9 ? today.getFullYear() + 1 : today.getFullYear();
 }
 
 /** The years a session can plan: this one and the next. */

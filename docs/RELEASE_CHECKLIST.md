@@ -21,5 +21,6 @@ Use this checklist for public releases.
 - [ ] Confirm onboarding pages when onboarding code or shared modal CSS changes.
 - [ ] Bump the service-worker cache with the public semantic version when shipping changed runtime assets.
 - [ ] Confirm `runtime-config.js` contains no owner-specific links in the public source.
+- [ ] When a release changes what is collected, stored or sold, update `legal/privacy/`, `legal/terms/` or `legal/cookies/` and their “Last updated” date.
 - [ ] Confirm the public source contains no unrelated project/organization names.
 - [ ] Do not commit `dist/`; generate it for deployment with `npm run build`.

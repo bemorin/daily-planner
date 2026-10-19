@@ -63,9 +63,9 @@ export const COUNTED_EVENTS = Object.freeze([
 export const LANDING_EVENTS = Object.freeze([
   ['landing_viewed', 'visited the landing page'],
   ['landing_cta_app', 'clicked “Open the planner”'],
-  ['landing_cta_teams', 'went to the team kit'],
-  ['team_form_opened', 'opened the team kit request'],
-  ['team_request_sent', 'sent a team kit request'],
+  ['landing_cta_teams', 'went to the team gift'],
+  ['team_form_opened', 'opened the request form'],
+  ['team_request_sent', 'sent a request'],
   ['manager_email_opened', 'prepared the message for a manager'],
   ['plus_checkout_clicked', 'went to buy Plus'],
   ['pack_checkout_clicked', 'went to buy a team gift'],

@@ -740,100 +740,99 @@ html[data-paint="sunset"],
 
 /* Year in review, printed on one landscape page ---------------------------------
    Same print surface as the year map (print.css): light colours, a fixed-height
-   sheet, the palette chosen on this device for the painted year. */
+   sheet, the palette chosen on this device for the painted year. Sheet-scoped and
+   outside @media print, so the Plus dialog can preview the same page on screen. */
 
-@media print {
-  .print-sheet--review { --rv-line: #ddd8d1; --rv-rule: #e9e4dd; --rv-muted: #77716a; --rv-faint: #a39d95; }
-  .print-sheet--review h1,
-  .print-sheet--review h2,
-  .print-sheet--review h5,
-  .print-sheet--review p,
-  .print-sheet--review ol,
-  .print-sheet--review ul,
-  .print-sheet--review blockquote { margin: 0; padding: 0; }
-  .print-sheet--review ol,
-  .print-sheet--review ul { list-style: none; }
-  .print-sheet--review svg { width: 2.6mm; height: 2.6mm; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.print-sheet--review { --rv-line: #ddd8d1; --rv-rule: #e9e4dd; --rv-muted: #77716a; --rv-faint: #a39d95; }
+.print-sheet--review h1,
+.print-sheet--review h2,
+.print-sheet--review h5,
+.print-sheet--review p,
+.print-sheet--review ol,
+.print-sheet--review ul,
+.print-sheet--review blockquote { margin: 0; padding: 0; }
+.print-sheet--review ol,
+.print-sheet--review ul { list-style: none; }
+.print-sheet--review svg { width: 2.6mm; height: 2.6mm; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
-  .print-sheet--review .rv-head { height: 24mm; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8mm; padding-bottom: 2.4mm; }
-  .rv-head h1 { font-size: 18pt; letter-spacing: -.02em; }
-  .rv-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2mm; }
-  .print-sheet--review .rv-stats .yr-stat { display: grid; gap: .6mm; padding: 1.6mm 2.2mm; border: .2mm solid var(--rv-line); border-radius: 1.8mm; }
-  .print-sheet--review .rv-stats .yr-stat > span { margin: 0; color: var(--rv-faint); font-size: 5pt; letter-spacing: .05em; }
-  .rv-stats .yr-stat > strong { display: flex; align-items: center; gap: .8mm; font-size: 12pt; font-weight: 740; line-height: 1.05; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-  .rv-stats .yr-stat > strong small { color: var(--rv-faint); font-size: 7pt; font-weight: 600; }
-  .rv-stats .yr-stat > strong svg { width: 3.4mm; height: 3.4mm; color: var(--hz-paint); }
-  .rv-stats .yr-stat > small { overflow: hidden; color: var(--rv-muted); font-size: 5.2pt; white-space: nowrap; text-overflow: ellipsis; }
+.print-sheet--review .rv-head { height: 24mm; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8mm; padding-bottom: 2.4mm; }
+.rv-head h1 { font-size: 18pt; letter-spacing: -.02em; }
+.rv-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2mm; }
+.print-sheet--review .rv-stats .yr-stat { display: grid; gap: .6mm; padding: 1.6mm 2.2mm; border: .2mm solid var(--rv-line); border-radius: 1.8mm; }
+.print-sheet--review .rv-stats .yr-stat > span { margin: 0; color: var(--rv-faint); font-size: 5pt; letter-spacing: .05em; }
+.rv-stats .yr-stat > strong { display: flex; align-items: center; gap: .8mm; font-size: 12pt; font-weight: 740; line-height: 1.05; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.rv-stats .yr-stat > strong small { color: var(--rv-faint); font-size: 7pt; font-weight: 600; }
+.rv-stats .yr-stat > strong svg { width: 3.4mm; height: 3.4mm; color: var(--hz-paint); }
+.rv-stats .yr-stat > small { overflow: hidden; color: var(--rv-muted); font-size: 5.2pt; white-space: nowrap; text-overflow: ellipsis; }
 
-  .rv-body { height: 146mm; display: grid; grid-template-columns: 101mm minmax(0, 1fr) 66mm; gap: 3.4mm; padding-top: 3mm; }
-  /* The last card of each column fills it, so the three columns end on one line. */
-  .rv-col { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 3mm; overflow: hidden; }
-  .rv-col:last-child { grid-template-rows: minmax(0, 1fr); }
-  .rv-card { min-width: 0; min-height: 0; overflow: hidden; padding: 2.2mm 2.6mm 2.4mm; border: .2mm solid var(--rv-line); border-radius: 2mm; }
-  .rv-card h2 { display: flex; align-items: baseline; justify-content: space-between; gap: 2mm; margin-bottom: 1.8mm; font-size: 7.4pt; line-height: 1.2; }
-  .rv-card h2 small { color: var(--rv-faint); font-size: 5.6pt; font-weight: 600; }
+.rv-body { height: 146mm; display: grid; grid-template-columns: 101mm minmax(0, 1fr) 66mm; gap: 3.4mm; padding-top: 3mm; }
+/* The last card of each column fills it, so the three columns end on one line. */
+.rv-col { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 3mm; overflow: hidden; }
+.rv-col:last-child { grid-template-rows: minmax(0, 1fr); }
+.rv-card { min-width: 0; min-height: 0; overflow: hidden; padding: 2.2mm 2.6mm 2.4mm; border: .2mm solid var(--rv-line); border-radius: 2mm; }
+.rv-card h2 { display: flex; align-items: baseline; justify-content: space-between; gap: 2mm; margin-bottom: 1.8mm; font-size: 7.4pt; line-height: 1.2; }
+.rv-card h2 small { color: var(--rv-faint); font-size: 5.6pt; font-weight: 600; }
 
-  .rv-paint { display: grid; gap: .42mm; }
-  .rv-paint__row { display: grid; grid-template-columns: 5.6mm repeat(31, 2.42mm) 4mm; gap: .38mm; align-items: center; }
-  .rv-paint__row span { color: var(--rv-faint); font-size: 4.8pt; font-weight: 700; text-transform: uppercase; }
-  .rv-paint__row b { color: var(--rv-muted); font-size: 4.8pt; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
-  .rv-paint__row i,
-  .rv-legend i { height: 2.42mm; border-radius: .4mm; background: #fff; box-shadow: inset 0 0 0 .12mm #ddd7cf; }
-  .rv-paint__row i.is-future { background: #f6f3ef; box-shadow: none; }
-  .rv-paint__row i.is-missed { background: #ece7e0; box-shadow: none; }
-  .print-sheet--review i.is-joker { background: color-mix(in srgb, var(--hz-paint-joker, var(--hz-milestone)) 22%, #fff); box-shadow: inset 0 0 0 .2mm var(--hz-paint-joker, var(--hz-milestone)); }
-  .print-sheet--review i.is-level-1 { background: var(--hz-paint-1, color-mix(in srgb, var(--hz-paint) 34%, #fff)); box-shadow: none; }
-  .print-sheet--review i.is-level-2 { background: var(--hz-paint-2, color-mix(in srgb, var(--hz-paint) 66%, #fff)); box-shadow: none; }
-  .print-sheet--review i.is-level-3 { background: var(--hz-paint); box-shadow: none; }
-  .rv-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 1mm; margin-top: 2mm; color: var(--rv-muted); font-size: 5.2pt; }
-  .rv-legend i { width: 2.42mm; margin-left: 1.4mm; }
-  .rv-legend i:first-child { margin-left: 0; }
+.rv-paint { display: grid; gap: .42mm; }
+.rv-paint__row { display: grid; grid-template-columns: 5.6mm repeat(31, 2.42mm) 4mm; gap: .38mm; align-items: center; }
+.rv-paint__row span { color: var(--rv-faint); font-size: 4.8pt; font-weight: 700; text-transform: uppercase; }
+.rv-paint__row b { color: var(--rv-muted); font-size: 4.8pt; font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
+.rv-paint__row i,
+.rv-legend i { height: 2.42mm; border-radius: .4mm; background: #fff; box-shadow: inset 0 0 0 .12mm #ddd7cf; }
+.rv-paint__row i.is-future { background: #f6f3ef; box-shadow: none; }
+.rv-paint__row i.is-missed { background: #ece7e0; box-shadow: none; }
+.print-sheet--review i.is-joker { background: color-mix(in srgb, var(--hz-paint-joker, var(--hz-milestone)) 22%, #fff); box-shadow: inset 0 0 0 .2mm var(--hz-paint-joker, var(--hz-milestone)); }
+.print-sheet--review i.is-level-1 { background: var(--hz-paint-1, color-mix(in srgb, var(--hz-paint) 34%, #fff)); box-shadow: none; }
+.print-sheet--review i.is-level-2 { background: var(--hz-paint-2, color-mix(in srgb, var(--hz-paint) 66%, #fff)); box-shadow: none; }
+.print-sheet--review i.is-level-3 { background: var(--hz-paint); box-shadow: none; }
+.rv-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 1mm; margin-top: 2mm; color: var(--rv-muted); font-size: 5.2pt; }
+.rv-legend i { width: 2.42mm; margin-left: 1.4mm; }
+.rv-legend i:first-child { margin-left: 0; }
 
-  .print-sheet--review .yr-empty { color: var(--rv-faint); font-size: 6pt; }
+.print-sheet--review .yr-empty { color: var(--rv-faint); font-size: 6pt; }
 
-  .print-sheet--review .yr-trophies { display: flex; flex-wrap: wrap; gap: 1.2mm; }
-  .print-sheet--review .yr-trophies li { display: inline-flex; align-items: center; gap: .8mm; padding: .6mm 1.8mm .6mm 1.2mm; border-radius: 999px; background: color-mix(in srgb, var(--trophy) 9%, #fff); box-shadow: inset 0 0 0 .16mm color-mix(in srgb, var(--trophy) 35%, #fff); font-size: 5.6pt; font-weight: 620; }
-  .print-sheet--review .yr-trophies svg { width: 2.4mm; height: 2.4mm; color: var(--trophy); }
-  .print-sheet--review .yr-trophies small { color: var(--rv-faint); font-size: 5pt; }
+.print-sheet--review .yr-trophies { display: flex; flex-wrap: wrap; gap: 1.2mm; }
+.print-sheet--review .yr-trophies li { display: inline-flex; align-items: center; gap: .8mm; padding: .6mm 1.8mm .6mm 1.2mm; border-radius: 999px; background: color-mix(in srgb, var(--trophy) 9%, #fff); box-shadow: inset 0 0 0 .16mm color-mix(in srgb, var(--trophy) 35%, #fff); font-size: 5.6pt; font-weight: 620; }
+.print-sheet--review .yr-trophies svg { width: 2.4mm; height: 2.4mm; color: var(--trophy); }
+.print-sheet--review .yr-trophies small { color: var(--rv-faint); font-size: 5pt; }
 
-  .print-sheet--review .yr-bars { display: grid; gap: 1.6mm; }
-  .print-sheet--review .yr-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6mm 2mm; align-items: baseline; }
-  .print-sheet--review .yr-bar__name { display: inline-flex; align-items: center; gap: 1.2mm; overflow: hidden; font-size: 6.4pt; font-weight: 620; white-space: nowrap; text-overflow: ellipsis; }
-  .print-sheet--review .yr-bar__name i { width: 1.8mm; height: 1.8mm; border-radius: 50%; background: var(--bar-color); }
-  .print-sheet--review .yr-bar__value { font-size: 6.2pt; font-weight: 680; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .print-sheet--review .yr-bar__value small { color: var(--rv-faint); font-weight: 560; }
-  .print-sheet--review .yr-bar__track { grid-column: 1 / -1; height: 1.5mm; overflow: hidden; border-radius: 999px; background: #f1ede7; }
-  .print-sheet--review .yr-bar__track span { display: block; height: 100%; border-radius: inherit; background: var(--bar-color); }
+.print-sheet--review .yr-bars { display: grid; gap: 1.6mm; }
+.print-sheet--review .yr-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6mm 2mm; align-items: baseline; }
+.print-sheet--review .yr-bar__name { display: inline-flex; align-items: center; gap: 1.2mm; overflow: hidden; font-size: 6.4pt; font-weight: 620; white-space: nowrap; text-overflow: ellipsis; }
+.print-sheet--review .yr-bar__name i { width: 1.8mm; height: 1.8mm; border-radius: 50%; background: var(--bar-color); }
+.print-sheet--review .yr-bar__value { font-size: 6.2pt; font-weight: 680; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.print-sheet--review .yr-bar__value small { color: var(--rv-faint); font-weight: 560; }
+.print-sheet--review .yr-bar__track { grid-column: 1 / -1; height: 1.5mm; overflow: hidden; border-radius: 999px; background: #f1ede7; }
+.print-sheet--review .yr-bar__track span { display: block; height: 100%; border-radius: inherit; background: var(--bar-color); }
 
-  .print-sheet--review .yr-horizon { display: grid; gap: 2.4mm; }
-  .print-sheet--review .yr-sub h5 { display: flex; align-items: center; gap: 1mm; margin-bottom: 1.2mm; color: var(--kind); font-size: 5.4pt; font-weight: 720; letter-spacing: .06em; text-transform: uppercase; }
-  .print-sheet--review .yr-sub h5 span { margin-left: auto; color: var(--rv-faint); font-weight: 600; letter-spacing: 0; text-transform: none; }
-  .print-sheet--review .yr-check { width: 2.6mm; height: 2.6mm; display: grid; place-items: center; border: .2mm solid #c9c3bb; border-radius: .6mm; }
-  .print-sheet--review .yr-check.is-done { border-color: var(--kind); background: var(--kind); color: #fff; }
-  .print-sheet--review .yr-check svg { width: 2mm; height: 2mm; stroke-width: 2.8; }
-  .print-sheet--review .yr-misogi { display: grid; grid-template-columns: 2.6mm minmax(0, 1fr); gap: 1.6mm; }
-  .print-sheet--review .yr-misogi strong { display: block; font-size: 7.2pt; line-height: 1.25; }
-  .print-sheet--review .yr-misogi small,
-  .print-sheet--review .yr-misogi em { display: block; margin-top: .5mm; color: var(--rv-muted); font-size: 5.6pt; }
-  .print-sheet--review .yr-list,
-  .print-sheet--review .yr-habits,
-  .print-sheet--review .yr-commitments { display: grid; gap: .9mm; }
-  .print-sheet--review .yr-list li { display: grid; grid-template-columns: 2.6mm minmax(0, 1fr) auto; align-items: center; gap: 1.4mm; font-size: 6.2pt; }
-  .print-sheet--review .yr-list li span,
-  .print-sheet--review .yr-habits span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-  .print-sheet--review .yr-list li small { color: var(--rv-faint); font-size: 5.2pt; }
-  .print-sheet--review .yr-habits li { display: grid; grid-template-columns: 4mm minmax(0, 1fr) auto; gap: 1.2mm; font-size: 6.2pt; }
-  .print-sheet--review .yr-habits b { color: var(--kind); font-size: 5.8pt; }
-  .print-sheet--review .yr-habits em { font-style: normal; font-weight: 700; }
-  .print-sheet--review .yr-habits .is-empty span { color: var(--rv-faint); }
-  .print-sheet--review .yr-commitments { counter-reset: commitment; }
-  .print-sheet--review .yr-commitments li { position: relative; padding-left: 3.4mm; font-size: 6.2pt; line-height: 1.3; counter-increment: commitment; }
-  .print-sheet--review .yr-commitments li::before { content: counter(commitment); position: absolute; left: 0; color: var(--kind); font-size: 5.8pt; font-weight: 740; }
+.print-sheet--review .yr-horizon { display: grid; gap: 2.4mm; }
+.print-sheet--review .yr-sub h5 { display: flex; align-items: center; gap: 1mm; margin-bottom: 1.2mm; color: var(--kind); font-size: 5.4pt; font-weight: 720; letter-spacing: .06em; text-transform: uppercase; }
+.print-sheet--review .yr-sub h5 span { margin-left: auto; color: var(--rv-faint); font-weight: 600; letter-spacing: 0; text-transform: none; }
+.print-sheet--review .yr-check { width: 2.6mm; height: 2.6mm; display: grid; place-items: center; border: .2mm solid #c9c3bb; border-radius: .6mm; }
+.print-sheet--review .yr-check.is-done { border-color: var(--kind); background: var(--kind); color: #fff; }
+.print-sheet--review .yr-check svg { width: 2mm; height: 2mm; stroke-width: 2.8; }
+.print-sheet--review .yr-misogi { display: grid; grid-template-columns: 2.6mm minmax(0, 1fr); gap: 1.6mm; }
+.print-sheet--review .yr-misogi strong { display: block; font-size: 7.2pt; line-height: 1.25; }
+.print-sheet--review .yr-misogi small,
+.print-sheet--review .yr-misogi em { display: block; margin-top: .5mm; color: var(--rv-muted); font-size: 5.6pt; }
+.print-sheet--review .yr-list,
+.print-sheet--review .yr-habits,
+.print-sheet--review .yr-commitments { display: grid; gap: .9mm; }
+.print-sheet--review .yr-list li { display: grid; grid-template-columns: 2.6mm minmax(0, 1fr) auto; align-items: center; gap: 1.4mm; font-size: 6.2pt; }
+.print-sheet--review .yr-list li span,
+.print-sheet--review .yr-habits span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.print-sheet--review .yr-list li small { color: var(--rv-faint); font-size: 5.2pt; }
+.print-sheet--review .yr-habits li { display: grid; grid-template-columns: 4mm minmax(0, 1fr) auto; gap: 1.2mm; font-size: 6.2pt; }
+.print-sheet--review .yr-habits b { color: var(--kind); font-size: 5.8pt; }
+.print-sheet--review .yr-habits em { font-style: normal; font-weight: 700; }
+.print-sheet--review .yr-habits .is-empty span { color: var(--rv-faint); }
+.print-sheet--review .yr-commitments { counter-reset: commitment; }
+.print-sheet--review .yr-commitments li { position: relative; padding-left: 3.4mm; font-size: 6.2pt; line-height: 1.3; counter-increment: commitment; }
+.print-sheet--review .yr-commitments li::before { content: counter(commitment); position: absolute; left: 0; color: var(--kind); font-size: 5.8pt; font-weight: 740; }
 
-  .print-sheet--review .yr-journal { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2.6mm; }
-  .print-sheet--review .yr-journal h5 { margin-bottom: 1.2mm; color: var(--rv-faint); font-size: 5.4pt; font-weight: 720; letter-spacing: .06em; text-transform: uppercase; }
-  .print-sheet--review .yr-journal ul { display: grid; gap: 1.6mm; }
-  .print-sheet--review .yr-quote { padding: 1.4mm 2mm 1.3mm; border-left: .6mm solid color-mix(in srgb, var(--kind) 60%, #fff); border-radius: .6mm 1.6mm 1.6mm .6mm; background: color-mix(in srgb, var(--kind) 6%, #fff); }
-  .print-sheet--review .yr-quote blockquote { font-size: 6.6pt; line-height: 1.4; }
-  .print-sheet--review .yr-quote small { display: block; margin-top: .6mm; color: var(--rv-faint); font-size: 5pt; }
-}
+.print-sheet--review .yr-journal { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2.6mm; }
+.print-sheet--review .yr-journal h5 { margin-bottom: 1.2mm; color: var(--rv-faint); font-size: 5.4pt; font-weight: 720; letter-spacing: .06em; text-transform: uppercase; }
+.print-sheet--review .yr-journal ul { display: grid; gap: 1.6mm; }
+.print-sheet--review .yr-quote { padding: 1.4mm 2mm 1.3mm; border-left: .6mm solid color-mix(in srgb, var(--kind) 60%, #fff); border-radius: .6mm 1.6mm 1.6mm .6mm; background: color-mix(in srgb, var(--kind) 6%, #fff); }
+.print-sheet--review .yr-quote blockquote { font-size: 6.6pt; line-height: 1.4; }
+.print-sheet--review .yr-quote small { display: block; margin-top: .6mm; color: var(--rv-faint); font-size: 5pt; }

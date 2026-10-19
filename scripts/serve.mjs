@@ -299,9 +299,17 @@ try {
   process.exit(1);
 }
 
+// Exact-path redirects from _redirects (“/privacy /legal/privacy/ 301”), as Cloudflare Pages applies them.
+const redirects = new Map((await fs.readFile(join(root, '_redirects'), 'utf8').catch(() => ''))
+  .split('\n').map(line => line.trim().split(/\s+/))
+  .filter(([from, to]) => from?.startsWith('/') && /^\/(?!\/)/.test(to || ''))
+  .map(([from, to, status]) => [from, { to, status: [301, 302, 307, 308].includes(Number(status)) ? Number(status) : 302 }]));
+
 async function handle(request, response) {
   try {
     const url = new URL(request.url, 'http://localhost');
+    const redirect = redirects.get(url.pathname);
+    if (redirect) { response.writeHead(redirect.status, { location: `${redirect.to}${url.search}`, 'cache-control': 'no-store', [MARKER]: '1' }).end(); return; }
     if (devLicenses && url.pathname === '/api/dev/license') { await devLicense(request, response); return; }
     if (plannerApi && fakeCreem && url.pathname === '/__fake-creem/pay') { fakePayPage(url, response); return; }
     if (plannerApi && url.pathname.startsWith('/api/')) { await handleApi(request, response); return; }

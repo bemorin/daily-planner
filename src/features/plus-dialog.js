@@ -5,17 +5,20 @@ import { CURRENCIES, PERSONAL_GIFTS, PLUS_PRICE, PLUS_UPCOMING, detectCurrency, 
 import { checkoutOptions, claimPurchase, fetchGift, plannerApiEnabled, redeemGift, rememberReferral, startCheckout, trackEvent } from '../lib/planner-api.js';
 import { burst, panelEnter, pulse } from '../ui/motion.js';
 import { readPaint, resolvePaint } from './paint-palettes.js';
-import { paintRows, planCaption, planPreview, recentWeeks, renderPaintStrip, renderPaletteTry, renderPlanRail } from './plus-previews.js';
+import { paintRows, recentWeeks, renderPaletteTry } from './plus-previews.js';
+import { createPlusCycle, cycleStepFor } from './plus-cycle.js';
+import { defaultPlanYear } from './year-plan.js';
 
 /**
  * The "Daily Planner Plus" dialog and its arrivals.
  *
- * One dialog shows, in turn: what Plus adds — the price, three features with
- * small previews drawn from the person's own planner, what is coming to Plus at
- * no extra cost, Get Plus (a Creem checkout) and a field for a gift link, code
- * or licence — or, with Plus, a calm "You have Plus"; a gift ("A gift from Acme
- * Studio"), a purchase being confirmed, a calm explanation when something can't
- * be done, and a small celebration once Plus is active.
+ * One dialog shows, in turn: what Plus adds — the price, the yearly ritual it
+ * gives (Plan it, Print it, Look back: plus-cycle.js, with the real printed
+ * pages), the palettes, what is coming to Plus at no extra cost, Get Plus (a
+ * Creem checkout) and a field for a gift link, code or licence — or, with
+ * Plus, a calm "You have Plus" whose steps open each feature; a gift ("A gift
+ * from Acme Studio"), a purchase being confirmed, a calm explanation when
+ * something can't be done, and a small celebration once Plus is active.
  *
  * It opens on top of whatever dialog is showing — setup, Settings, Horizon —
  * and returns to it when closed. Links that arrive with `?gift=`,
@@ -114,14 +117,26 @@ function writeUnverifiedGift(value) { try { if (value) localStorage.setItem(UNVE
 
 /**
  * @param {object} options
- * @param {() => ({ year: number, plan?: object, progress?: object }|null)} [options.preview]
- *   what the previews are drawn from: planSummary() for the year to plan and the progress model of this year
- * @param {(feature: string) => void} [options.openFeature] opens a Plus feature (with Plus: "Open")
+ * @param {() => ({ plan?: object, progress?: object, print?: Function, review?: Function }|null)} [options.preview]
+ *   what the previews are drawn from: planSummary() for the year to plan, the progress model of this year,
+ *   print(year) the input of buildYearPrintModel() and review(year) the inputs of buildYearReview()
+ * @param {(feature: string) => void} [options.openFeature] opens a Plus feature (with Plus: each step's action)
+ * @param {(year: number) => void} [options.printYear] prints a year on one page (with Plus: "Print the year")
  */
-export function createPlusFeature({ openModal, closeModal, getActiveModal = () => null, openPrivacy = null, flush = () => {}, preview = () => null, openFeature = null, locale = () => globalThis.navigator?.languages?.[0] || globalThis.navigator?.language || 'en-US' }) {
+export function createPlusFeature({ openModal, closeModal, getActiveModal = () => null, openPrivacy = null, flush = () => {}, preview = () => null, openFeature = null, printYear = null, locale = () => globalThis.navigator?.languages?.[0] || globalThis.navigator?.language || 'en-US' }) {
   const modal = () => qs('[data-plus-modal]');
   const root = () => qs('[data-plus]');
   let view = { stage: 'overview' };
+  const leaveFor = feature => { closeModal(modal()); setTimeout(() => openFeature?.(feature), 200); };
+  const cycle = createPlusCycle({
+    modal,
+    data: preview,
+    palette: () => resolvePaint(readPaint(), hasPlus()),
+    onAction: (action, year) => {
+      if (action === 'print') printYear?.(year);
+      else leaveFor(action === 'review' ? 'year-review' : 'year-plan');
+    }
+  });
   // What can be bought right now ({ plus: [...], gift: [...] }); null until asked, a list is null when unknown.
   let options = null;
   // The buyer's currency: the server's choice from their country once it answers, a guess from the browser's languages until then.
@@ -141,28 +156,22 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     return `<ul class="plus-features${compact ? ' plus-features--compact' : ''}">${PLUS_FEATURES.map(feature => `<li class="plus-feature plus-feature--${feature.id}${feature.id === focus ? ' is-focus' : ''}" data-plus-feature="${feature.id}"><span class="plus-feature__icon">${icon(feature.icon)}</span><span><strong>${esc(feature.title)}</strong>${compact ? '' : `<small>${esc(feature.text)}</small>`}</span></li>`).join('')}</ul>`;
   }
 
-  /** The three features, each with a small preview from this planner (or a sample). */
-  function panels(focus, active) {
+  /** Also with Plus: the palettes, tried on the last weeks of this planner's painted year (or a sample). */
+  function palettes(focus, active) {
     let data = null;
     try { data = preview() || null; } catch (_) { data = null; }
     const year = data?.progress?.year || new Date().getFullYear();
-    const plan = planPreview(data?.plan || null);
     const paint = paintRows(data?.progress || null);
-    const current = resolvePaint(readPaint(), active);
-    const visuals = {
-      'year-plan': { visual: renderPlanRail(plan), data: planCaption(plan) },
-      'year-review': { visual: renderPaintStrip(paint, { year }), data: paint.sample ? 'Your own year paints itself as you close days.' : `${paint.closed} days closed in ${year} so far.` },
-      'paint-palettes': { visual: renderPaletteTry(recentWeeks(paint.rows, { year }), { current }), data: active ? 'Choose yours in Horizon, under Progress.' : paint.sample ? 'Hover or tap a palette to try it on these weeks.' : 'Hover or tap a palette to see your last weeks in it.' }
-    };
-    return `<ul class="plus-panels">${PLUS_FEATURES.map(feature => `<li class="plus-panel plus-panel--${feature.id}${feature.id === focus ? ' is-focus' : ''}" data-plus-feature="${feature.id}">
-        <div class="plus-panel__visual">${visuals[feature.id].visual}</div>
-        <div class="plus-panel__copy">
-          <h3><span class="plus-panel__icon">${icon(feature.icon)}</span>${esc(feature.title)}</h3>
-          <p>${esc(feature.text)}</p>
-          <p class="plus-panel__data">${esc(visuals[feature.id].data)}</p>
-          ${active && openFeature ? `<button class="text-button plus-panel__open" type="button" data-plus-open-feature="${feature.id}">Open<span class="sr-only"> ${esc(feature.title)}</span></button>` : ''}
+    const feature = PLUS_FEATURES.find(item => item.id === 'paint-palettes');
+    const hint = active ? 'Choose yours in Horizon, under Progress.' : paint.sample ? 'Tap a colour to try it on these weeks.' : 'Tap a colour to see your last weeks in it.';
+    return `<section class="plus-also" aria-labelledby="plus-also-title">
+        <h3 class="plus-also__title" id="plus-also-title">Also with Plus</h3>
+        <div class="plus-palettes${focus === feature.id ? ' is-focus' : ''}" data-plus-feature="${feature.id}">
+          <span class="plus-palettes__icon">${icon(feature.icon)}</span>
+          <span class="plus-palettes__copy"><strong>${esc(feature.title)}</strong><small>${esc(feature.text)} ${esc(hint)}</small>${active && openFeature ? `<button class="text-button plus-palettes__open" type="button" data-plus-open-feature="${feature.id}">Open<span class="sr-only"> ${esc(feature.title)}</span></button>` : ''}</span>
+          ${renderPaletteTry(recentWeeks(paint.rows, { year }), { current: resolvePaint(readPaint(), active) })}
         </div>
-      </li>`).join('')}</ul>`;
+      </section>`;
   }
 
   function upcoming(active) {
@@ -228,13 +237,14 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
           <p class="plus-status plus-status--header" role="status">${icon('check')}<span>${esc(statusLine())}</span></p>
           <p class="plus-lede">Thank you for supporting Daily Planner. Plus is yours for life, on this planner and every device it syncs to.</p>
         </header>
-        ${panels(focus?.id || '', true)}
+        ${cycle.markup({ step: view.step, active: true })}
+        ${palettes(focus?.id || '', true)}
         ${upcoming(true)}
         <div class="plus-cta plus-cta--done"><div class="plus-cta__row"><button class="primary-button plus-cta__buy" type="button" data-plus-close>Done</button></div></div>
         ${gifts()}
         ${footer}`;
     }
-    const title = focus ? `${focus.title} comes with Plus.` : 'Plan your year, look back on it, paint it your way.';
+    const title = focus ? `${focus.title} comes with Plus.` : `Make ${defaultPlanYear(new Date())} count.`;
     const offer = plusAvailable()
       ? cta()
       : '<p class="plus-note" role="note">Daily Planner Plus isn’t available in this copy of the planner. It’s offered at <a href="https://planner.bemorin.com" target="_blank" rel="noopener">planner.bemorin.com</a> — everything you use here stays free.</p>';
@@ -242,9 +252,10 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
         <p class="modal__eyebrow plus-eyebrow"><span class="plus-mark">${icon('spark')}</span>Daily Planner Plus</p>
         <h2 id="plus-title">${esc(title)}</h2>
         <div class="plus-price-line"><p class="plus-price"><strong>${esc(price())}</strong><span>once — for life</span></p>${plusAvailable() ? `<p class="plus-currency-note">${esc(currencyNote(currency))}</p>` : ''}</div>
-        <p class="plus-lede">The planner stays free, as it is today. Plus adds three things for the year ahead, with no subscription.</p>
+        <p class="plus-lede">Every year, Plus helps you plan the year, print it for your desk and look back on it. The planner itself stays free.</p>
       </header>
-      ${panels(focus?.id || '', false)}
+      ${cycle.markup({ step: view.step, active: false })}
+      ${palettes(focus?.id || '', false)}
       ${upcoming(false)}
       ${offer}
       ${plusAvailable() ? gifts() : ''}
@@ -372,12 +383,23 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     const el = root();
     if (!el) return;
     const views = { overview, gift: giftView, celebrate: celebrateView, 'gift-bought': giftBoughtView, problem: problemView, loading: loadingView };
+    if (view.stage !== 'overview') cycle.closeZoom({ restore: false });
+    // A quiet redraw (prices arriving, say) keeps keyboard focus where it was.
+    const keep = !focus && el.contains(document.activeElement) ? focusSelector(document.activeElement) : '';
     el.innerHTML = (views[view.stage] || overview)();
     el.dataset.plusStage = view.stage;
     bind(el);
     if (animate) panelEnter(el.firstElementChild || el, { distance: 8 });
     if (view.stage === 'celebrate') celebrate(el);
     if (focus && isOpen()) focusPrimary();
+    else if (keep) qs(keep, el)?.focus({ preventScroll: true });
+  }
+
+  /** A selector that finds the same control again after a redraw: its id, else its first data-plus-* attribute. */
+  function focusSelector(node) {
+    if (node.id) return `#${CSS.escape(node.id)}`;
+    const attr = [...node.attributes].find(item => item.name.startsWith('data-plus'));
+    return attr ? `[${attr.name}${attr.value ? `="${CSS.escape(attr.value)}"` : ''}]` : '';
   }
 
   // The first of these that exists takes focus: the step's main action, else a Close button.
@@ -523,14 +545,16 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     });
     qs('[data-plus-redeem-form]', el)?.addEventListener('submit', event => { event.preventDefault(); submitInput(event.currentTarget); });
     qsa('[data-plus-palette]', el).forEach(button => ['pointerenter', 'focus', 'click'].forEach(type => button.addEventListener(type, () => previewPalette(el, button))));
-    qsa('[data-plus-open-feature]', el).forEach(button => button.addEventListener('click', () => { const feature = button.dataset.plusOpenFeature; closeModal(modal()); setTimeout(() => openFeature?.(feature), 200); }));
+    qsa('[data-plus-open-feature]', el).forEach(button => button.addEventListener('click', () => leaveFor(button.dataset.plusOpenFeature)));
+    // Binds the yearly ritual when the overview shows it (and lets go of it otherwise).
+    cycle.mount(el, { active: hasPlus(), onStep: step => { view = { ...view, step }; } });
     qs('[data-plus-copy]', el)?.addEventListener('click', async event => {
       const input = qs('[data-plus-gift-url]', el);
       try { await navigator.clipboard.writeText(input.value); } catch (_) { input.select(); document.execCommand?.('copy'); }
       event.currentTarget.textContent = 'Copied';
     });
-    const focused = qs('.plus-panel.is-focus', el);
-    if (focused) requestAnimationFrame(() => focused.scrollIntoView({ block: 'center' }));
+    const focused = qs('.plus-palettes.is-focus', el);
+    if (focused && !view.scrolled) { view = { ...view, scrolled: true }; requestAnimationFrame(() => focused.scrollIntoView({ block: 'center' })); }
   }
 
   /** Settings card, More menu and the reset note follow the Plus state. */
@@ -546,7 +570,9 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
   /** Opens on what Plus adds; `feature` ('year-plan', 'year-review', 'paint-palettes') puts that one first in mind. */
   function open({ feature = '' } = {}) {
     trackEvent('plus_modal_opened');
-    show({ stage: 'overview', feature: plusFeatureId(feature) }, { animate: false });
+    const id = plusFeatureId(feature);
+    cycle.reset();
+    show({ stage: 'overview', feature: id, step: cycleStepFor(id) }, { animate: false });
     loadOptions();
   }
 

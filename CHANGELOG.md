@@ -2,6 +2,15 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.23.0 — 2026-10-19
+
+- **Daily Planner Plus, a yearly ritual**: the Plus window is built around three steps — Plan it (a guided half hour), Print it (the year on one page, filled in by hand all year) and Look back (Your year in review on one printed page) — with “Make 2027 count.” as its headline. Each step shows the real page: the printed year and the year in review from your own planner, or a sample until there is enough to show, with Enlarge to read them. With Plus, each step has its action (Plan 2027, Print the year, Open your review).
+- From 1 October, Plan your year prepares next year.
+- A finished year's review says “of 219 planning days” instead of “so far”.
+- **Legal pages on this site**: Legal notice, Privacy, Terms and Cookies live at `/legal/` (short links `/privacy`, `/terms`, `/cookies`), linked from the planner, the landing page and the gift page. Owner details come from three new build variables (`DAILY_PLANNER_SUPPORT_EMAIL`, `DAILY_PLANNER_LEGAL_ADDRESS`, `DAILY_PLANNER_LEGAL_REGISTRATION`); the dashboard's Setup checklist says which are missing and lists the links Creem asks for.
+- Landing page: “What this page counts” opens an app-style dialog (with the same anonymous-counts switch as the planner) instead of a paragraph in the footer; the hero says it works on your computer, tablet and phone and installs like an app; “Yours, on every device” shows all three; a “Plan 2027 in 30 minutes” link leads to Plus, now “Make 2027 count.” with the three-step ritual and a printed year map with pen marks.
+- Counted moments on the landing page use the current names (team gift, request form).
+
 ## 1.22.0 — 2026-10-19
 
 - **Day · Week · Horizon**: the year sits beside the day and the week at the top of the planner (V and Y on a keyboard). On a phone, Horizon is the third tab at the bottom, next to Plan and Schedule, and says what comes next; the tab bar stays visible while Horizon is open.

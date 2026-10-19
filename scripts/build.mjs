@@ -32,6 +32,9 @@ await copyTree('docs');
 await copyTree('assets');
 await copyTree('admin');
 await copyTree('welcome');
+await copyTree('legal');
+// Cloudflare Pages reads _redirects from the root of the output (short /privacy, /terms, /cookies links).
+await copyFile('_redirects');
 
 const deploymentConfig = {
   PROJECT_GITHUB_URL: process.env.DAILY_PLANNER_GITHUB_URL || '',
@@ -41,7 +44,11 @@ const deploymentConfig = {
   CLOUD_API_URL: process.env.DAILY_PLANNER_CLOUD_API_URL || '',
   GOOGLE_CLIENT_ID: process.env.DAILY_PLANNER_GOOGLE_CLIENT_ID || '',
   PLANNER_API_URL: process.env.DAILY_PLANNER_API_URL || '',
-  PLUS_PUBLIC_KEY: process.env.DAILY_PLANNER_PLUS_PUBLIC_KEY || ''
+  PLUS_PUBLIC_KEY: process.env.DAILY_PLANNER_PLUS_PUBLIC_KEY || '',
+  // Legal pages: blank details are left out (see legal/legal.js).
+  SUPPORT_EMAIL: process.env.DAILY_PLANNER_SUPPORT_EMAIL || '',
+  LEGAL_ADDRESS: process.env.DAILY_PLANNER_LEGAL_ADDRESS || '',
+  LEGAL_REGISTRATION: process.env.DAILY_PLANNER_LEGAL_REGISTRATION || ''
 };
 await fs.writeFile(resolve(dist, 'runtime-config.js'), `globalThis.__DAILY_PLANNER_CONFIG__ = Object.freeze(${JSON.stringify(deploymentConfig, null, 2)});\n`);
 await copyTree('src');

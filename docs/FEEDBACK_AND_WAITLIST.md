@@ -17,7 +17,7 @@ The API is **off by default**. With `PLANNER_API_URL` blank — the checked-in v
 - Nothing from the planner itself: no tasks, notes, schedules, Horizon content, journal entries or statistics. Plus features (the year plan, the review, palettes) run entirely on the device.
 - Counts carry no identifier: no user ID, device ID, cookie, IP address or user agent is stored. Each count is only `(day, event name, app version) → number`.
 - Activating a gift sends the gift code; confirming a purchase sends the Creem checkout reference. The licence that comes back is stored in the planner's settings, so Google Drive sync and backups carry it to the person's other devices.
-- A partner code from a link like `/welcome/?ref=CODE` stays on the visitor's device (`daily-planner:ref`, 60 days) and is sent only with a checkout, where the API passes it to Creem. The API never stores it. The buyer's country is read by Cloudflare for each checkout request, only to choose the currency, and is never stored by the API (the sales chart uses the country Creem reports with the payment).
+- A partner code from a link like `/welcome/?ref=CODE` stays on the visitor's device (`daily-planner-ui:ref`, 60 days) and is sent only with a checkout, where the API passes it to Creem. The API never stores it. The buyer's country is read by Cloudflare for each checkout request, only to choose the currency, and is never stored by the API (the sales chart uses the country Creem reports with the payment).
 - Local, never-synced flags: `daily-planner-ui:feedback`, `daily-planner-ui:waitlist-joined`, `daily-planner-ui:trophies-seen`, `daily-planner-ui:usage-counts`, `daily-planner-ui:counted` (which day, week or month a count was last sent) and the palette choice `daily-planner-ui:paint`.
 
 ## Privacy notice — shown automatically
@@ -154,12 +154,38 @@ All of this is in the Cloudflare dashboard, under **Workers & Pages → your Pag
 | `EMAIL_DAILY_LIMIT` | Text | optional, default `100` | Resend plan |
 | `PUBLIC_BASE_URL` | Text | optional, default `https://planner.bemorin.com` | your address |
 | `CREEM_TEST_MODE` | Text | optional: `1` forces Creem's test mode (not needed with a `creem_test_` key) | — |
+| `DAILY_PLANNER_SUPPORT_EMAIL` | Text | the contact address shown on the legal pages (an address on your own domain) | your choice (see [Legal pages](#legal-pages)) |
+| `DAILY_PLANNER_LEGAL_ADDRESS` | Text | the postal address shown in the legal notice | your address |
+| `DAILY_PLANNER_LEGAL_REGISTRATION` | Text | optional: SIRET and/or VAT number, e.g. `SIRET 123 456 789 00012` | your registration |
 
 Nothing to set for the currency: Cloudflare tells the API each buyer's country.
 
-**Redeploy after every change** — **Deployments → the latest production deployment → ⋯ → Retry deployment**. Saved values are not used until the next deployment, and two of them (`DAILY_PLANNER_API_URL` and `DAILY_PLANNER_PLUS_PUBLIC_KEY`) are read while the site is built.
+**Redeploy after every change** — **Deployments → the latest production deployment → ⋯ → Retry deployment**. Saved values are not used until the next deployment, and the `DAILY_PLANNER_…` ones (the API URL, the Plus public key and the three legal details) are read while the site is built.
 
 Then open `https://planner.bemorin.com/admin/`: the **Setup** card lists anything still missing, and never shows a secret.
+
+### Legal pages
+
+The site carries its own legal pages, linked from the planner's footer, the landing page and the gift page:
+
+| Page | Address |
+| --- | --- |
+| Legal notice | `/legal/` |
+| Privacy policy | `/legal/privacy/` (short link `/privacy`) |
+| Terms of use and sale | `/legal/terms/` (short link `/terms`) |
+| Cookies and storage | `/legal/cookies/` (short link `/cookies`) |
+
+The short links come from `_redirects` (Cloudflare Pages reads it from the build output; the dev server applies it too), so old links to `bemorin.com/privacy`, `/terms` and `/cookies` land on the right page through the bemorin.com → planner redirect.
+
+Three build variables fill in the publisher's details. Add them in **Settings → Variables and Secrets** as *Text* for **Production** (table above), then **redeploy**: they are read while the site is built.
+
+- `DAILY_PLANNER_SUPPORT_EMAIL` — the contact address. Without it, every "contact us" points to the landing page's "Ask a question" form.
+- `DAILY_PLANNER_LEGAL_ADDRESS` — your postal address, shown in the legal notice and the privacy policy.
+- `DAILY_PLANNER_LEGAL_REGISTRATION` — optional: SIRET and/or VAT number.
+
+A blank value is simply left out; nothing personal is ever written in the repository. The dashboard's **Setup** card says which ones are missing and lists the three addresses Creem asks for during its store review: the terms (`https://planner.bemorin.com/legal/terms/`), the privacy policy (`https://planner.bemorin.com/legal/privacy/`) and the website (`https://planner.bemorin.com/welcome/`).
+
+The pages render the counted moments (`COUNTED_EVENTS`, `LANDING_EVENTS`), the prices and the Plus features from the code itself, so they can't drift. Edit the wording in `legal/*/index.html`, change the "Last updated" date at the top of the page, and have the text checked by a lawyer before relying on it.
 
 ### Protecting the API
 
