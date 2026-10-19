@@ -12,13 +12,15 @@ import { defaultPlanYear } from './year-plan.js';
 /**
  * The "Daily Planner Plus" dialog and its arrivals.
  *
- * One dialog shows, in turn: what Plus adds — the price, the yearly ritual it
- * gives (Plan it, Print it, Look back: plus-cycle.js, with the real printed
- * pages), the palettes, what is coming to Plus at no extra cost, Get Plus (a
- * Creem checkout) and a field for a gift link, code or licence — or, with
- * Plus, a calm "You have Plus" whose steps open each feature; a gift ("A gift
- * from Acme Studio"), a purchase being confirmed, a calm explanation when
- * something can't be done, and a small celebration once Plus is active.
+ * One dialog shows, in turn: what Plus adds — the offer beside the title (the
+ * price, Get Plus: a Creem checkout, and a field for a gift link, code or
+ * licence), the yearly ritual it gives (Plan it, Print it, Look back:
+ * plus-cycle.js, with the real printed pages), the palettes and what is coming
+ * to Plus at no extra cost, with Get Plus in a bar once the offer has scrolled
+ * away — or, with Plus, a calm "You have Plus" whose steps open each feature
+ * and a bar with Done; a gift ("A gift from Acme Studio"), a purchase being
+ * confirmed, a calm explanation when something can't be done, and a small
+ * celebration once Plus is active.
  *
  * It opens on top of whatever dialog is showing — setup, Settings, Horizon —
  * and returns to it when closed. Links that arrive with `?gift=`,
@@ -70,6 +72,8 @@ export const PLUS_FEATURES = Object.freeze([
   { id: 'paint-palettes', icon: 'paint', title: 'Colours for your painted year', text: 'Five more palettes for Progress and your review. Terracotta stays free for everyone.' }
 ]);
 const UPCOMING_STATUS = { Next: 'next', Planned: 'planned', Exploring: 'exploring' };
+/** What Plus gives, in three lines beside the offer. */
+export const PLUS_POINTS = Object.freeze(['A guided half hour to plan your year', 'Your year printed on one page, and your year in review', 'Paid once: everything Plus gets later is included']);
 const FEATURE_ALIASES = { plan: 'year-plan', 'plan-year': 'year-plan', review: 'year-review', 'year-in-review': 'year-review', paint: 'paint-palettes', palettes: 'paint-palettes', palette: 'paint-palettes', colours: 'paint-palettes', colors: 'paint-palettes' };
 
 /** The canonical feature id for unlock(feature), or ''. */
@@ -90,6 +94,16 @@ export function plusProblem(kind, result = {}, { org = '' } = {}) {
   if (result.unavailable) return { icon: 'notice', title: kind === 'purchase' ? 'This copy can’t confirm purchases' : 'Open this gift at planner.bemorin.com', text: kind === 'purchase' ? 'This copy of the planner isn’t connected to Daily Planner’s payments. Open the link from your receipt at planner.bemorin.com.' : 'This copy of the planner isn’t connected to the gift service. Open the same link on planner.bemorin.com to activate it there.', site: true };
   if (result.status === 0) return { icon: 'offline', title: result.offline ? 'You’re offline' : 'The planner couldn’t be reached', text: kind === 'purchase' ? 'Your payment is safe. Plus will be activated as soon as the planner can reach the server — now with Try again, or next time you open it.' : 'Connect to the internet and try again. The gift link keeps working.', retry: true, keep: true };
   if (kind === 'purchase') {
+    // A purchase link that will never work (HTTP 410: refunded, switched off, a test purchase, an expired
+    // checkout) is explained in the server's words, neither tried again nor kept pending.
+    const said = String(result.error || '').trim();
+    if (result.refunded) return { icon: 'notice', title: 'This purchase was refunded', text: said || 'Its Plus was switched off. If this is a mistake, reply to your receipt email.' };
+    if (result.status === 410) {
+      const title = result.test || /test purchase/i.test(said) ? 'This was a test purchase'
+        : result.expired || /expired/i.test(said) ? 'This checkout expired'
+          : result.revoked ? 'This purchase was switched off' : 'This purchase can’t be activated';
+      return { icon: 'notice', title, text: said || 'If you were charged, reply to your receipt email and we’ll sort it out.' };
+    }
     if (result.status === 402) return { icon: 'notice', title: 'Your payment isn’t complete yet', text: 'The payment hasn’t been confirmed yet — this usually takes a moment. Try again shortly; the planner will also try again the next time you open it.', retry: true, keep: true };
     if (result.status === 404) return { icon: 'notice', title: 'We couldn’t find this purchase', text: 'The link from the payment page may be incomplete. If you were charged, reply to your receipt email and we’ll sort it out.' };
     if (result.status === 503) return { icon: 'notice', title: 'Purchases can’t be confirmed right now', text: 'Your payment is safe. The planner will try again the next time you open it.', retry: true, keep: true };
@@ -127,6 +141,9 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
   const modal = () => qs('[data-plus-modal]');
   const root = () => qs('[data-plus]');
   let view = { stage: 'overview' };
+  // The bar with Get Plus shows once the offer's own button has scrolled out of view.
+  let barShown = false;
+  let offerObserver = null;
   const leaveFor = feature => { closeModal(modal()); setTimeout(() => openFeature?.(feature), 200); };
   const cycle = createPlusCycle({
     modal,
@@ -202,27 +219,59 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     if (!view.redeemOpen) return '';
     return `<form class="plus-redeem__form" data-plus-redeem-form novalidate>
         <label class="sr-only" for="plus-redeem-input">Gift link, gift code or licence</label>
-        <input id="plus-redeem-input"${view.inputError ? ' class="is-invalid" aria-invalid="true" aria-describedby="plus-redeem-error"' : ''} name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Paste a gift link, a code like ABCD-EFGH-JKMN, or a licence" value="${escAttr(view.input || '')}">
+        <input id="plus-redeem-input"${view.inputError ? ' class="is-invalid" aria-invalid="true" aria-describedby="plus-redeem-error"' : ''} name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Gift link, code or licence" value="${escAttr(view.input || '')}">
         <button class="secondary-button" type="submit" data-plus-redeem-submit>Activate</button>
       </form>
       ${view.inputError ? `<p class="plus-inline-error" id="plus-redeem-error" role="alert">${esc(view.inputError)}</p>` : ''}`;
   }
 
-  function cta() {
-    const state = buyable();
-    const label = `Get Plus — ${price()}`;
+  /** The price as one unit, "€29 once, for life", with the currency said once, quietly, under it. */
+  function priceBlock() {
+    return `<p class="plus-price"><strong>${esc(price())}</strong><span>once, for life</span></p>
+      ${plusAvailable() ? `<p class="plus-currency-note">${esc(currencyNote(currency))}</p>` : ''}`;
+  }
+
+  /** Get Plus, in the offer (`top`) and in the bar that follows the scroll (`bar`). */
+  function buyButton(place) {
+    if (buyable() === 'no') return '<button class="primary-button plus-cta__buy" type="button" disabled>Coming soon</button>';
+    const waiting = buyable() === 'loading';
     const busy = view.buying === 'plus';
-    const buy = state === 'no'
-      ? '<button class="primary-button plus-cta__buy" type="button" disabled>Coming soon</button>'
-      : `<button class="primary-button plus-cta__buy" type="button" data-plus-checkout${view.buying || state === 'loading' ? ' disabled' : ''}${busy || state === 'loading' ? ' aria-busy="true"' : ''}>${esc(busy ? 'Opening checkout…' : label)}</button>`;
-    return `<div class="plus-cta">
-        ${redeemForm()}
-        <div class="plus-cta__row">
-          ${buy}
+    return `<button class="primary-button plus-cta__buy" type="button" data-plus-checkout="${place}"${view.buying || waiting ? ' disabled' : ''}${busy || waiting ? ' aria-busy="true"' : ''}>${esc(busy ? 'Opening checkout…' : 'Get Plus')}</button>`;
+  }
+
+  /** The offer beside the title: the price, Get Plus and the way in for a gift link or a licence. */
+  function offer() {
+    if (!plusAvailable()) return `<div class="plus-offer">${priceBlock()}</div>`;
+    return `<div class="plus-offer" data-plus-offer>
+        ${priceBlock()}
+        <div class="plus-cta">
+          ${buyButton('top')}
+          ${view.buyError ? `<p class="plus-inline-error" role="alert">${esc(view.buyError)}</p>` : buyable() === 'no' ? '<p class="plus-cta__note">Payments open soon. A gift link or a licence already works.</p>' : ''}
           <button class="text-button plus-cta__redeem" type="button" data-plus-redeem-toggle aria-expanded="${!!view.redeemOpen}">Have a gift link or a licence?</button>
+          ${redeemForm()}
         </div>
-        ${view.buyError ? `<p class="plus-inline-error" role="alert">${esc(view.buyError)}</p>` : state === 'no' ? '<p class="plus-cta__note">Payments open soon. A gift link or a licence already works.</p>' : ''}
       </div>`;
+  }
+
+  /** Get Plus stays in reach once the offer has scrolled away (watchOffer() shows it). */
+  function bar() {
+    if (!plusAvailable() || buyable() === 'no') return '';
+    return `<div class="plus-bar${barShown ? ' is-shown' : ''}" data-plus-bar>
+        <p class="plus-bar__price"><strong>${esc(price())}</strong><span>once, for life</span></p>
+        ${buyButton('bar')}
+      </div>`;
+  }
+
+  function watchOffer(el) {
+    offerObserver?.disconnect();
+    offerObserver = null;
+    const barEl = qs('[data-plus-bar]', el);
+    const target = qs('[data-plus-checkout="top"]', el) || qs('[data-plus-offer]', el);
+    if (!barEl || !target) return;
+    const show = shown => { barShown = shown; barEl.classList.toggle('is-shown', shown); };
+    if (!globalThis.IntersectionObserver) { show(true); return; }
+    offerObserver = new IntersectionObserver(([entry]) => show(!entry.isIntersecting), { root: el, threshold: 0 });
+    offerObserver.observe(target);
   }
 
   function overview() {
@@ -240,26 +289,28 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
         ${cycle.markup({ step: view.step, active: true })}
         ${palettes(focus?.id || '', true)}
         ${upcoming(true)}
-        <div class="plus-cta plus-cta--done"><div class="plus-cta__row"><button class="primary-button plus-cta__buy" type="button" data-plus-close>Done</button></div></div>
         ${gifts()}
-        ${footer}`;
+        ${footer}
+        <div class="plus-bar plus-bar--done is-shown"><button class="primary-button plus-cta__buy" type="button" data-plus-close>Done</button></div>`;
     }
     const title = focus ? `${focus.title} comes with Plus.` : `Make ${defaultPlanYear(new Date())} count.`;
-    const offer = plusAvailable()
-      ? cta()
-      : '<p class="plus-note" role="note">Daily Planner Plus isn’t available in this copy of the planner. It’s offered at <a href="https://planner.bemorin.com" target="_blank" rel="noopener">planner.bemorin.com</a> — everything you use here stays free.</p>';
-    return `<header class="modal__header plus-header">
-        <p class="modal__eyebrow plus-eyebrow"><span class="plus-mark">${icon('spark')}</span>Daily Planner Plus</p>
-        <h2 id="plus-title">${esc(title)}</h2>
-        <div class="plus-price-line"><p class="plus-price"><strong>${esc(price())}</strong><span>once — for life</span></p>${plusAvailable() ? `<p class="plus-currency-note">${esc(currencyNote(currency))}</p>` : ''}</div>
-        <p class="plus-lede">Every year, Plus helps you plan the year, print it for your desk and look back on it. The planner itself stays free.</p>
+    const unavailable = plusAvailable() ? '' : '<p class="plus-note" role="note">Daily Planner Plus isn’t available in this copy of the planner. It’s offered at <a href="https://planner.bemorin.com" target="_blank" rel="noopener">planner.bemorin.com</a> — everything you use here stays free.</p>';
+    return `<header class="modal__header plus-header plus-header--offer">
+        <div class="plus-header__copy">
+          <p class="modal__eyebrow plus-eyebrow"><span class="plus-mark">${icon('spark')}</span>Daily Planner Plus</p>
+          <h2 id="plus-title">${esc(title)}</h2>
+          <p class="plus-lede">Plus adds a yearly ritual to your planner. The planner itself stays free.</p>
+          <ul class="plus-points">${PLUS_POINTS.map(point => `<li>${icon('check')}<span>${esc(point)}</span></li>`).join('')}</ul>
+        </div>
+        ${offer()}
+        ${unavailable}
       </header>
       ${cycle.markup({ step: view.step, active: false })}
       ${palettes(focus?.id || '', false)}
       ${upcoming(false)}
-      ${offer}
       ${plusAvailable() ? gifts() : ''}
-      ${footer}`;
+      ${footer}
+      ${bar()}`;
   }
 
   async function loadOptions() {
@@ -276,8 +327,8 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     if (isOpen() && view.stage === 'overview') render({ focus: false });
   }
 
-  /** Get Plus (`plan` empty) or a personal gift ('gift-1', 'family-5'): off to the Creem checkout. */
-  async function buy(plan = '') {
+  /** Get Plus (`plan` empty; `place` is the button used) or a personal gift ('gift-1', 'family-5'): off to the Creem checkout. */
+  async function buy(plan = '', place = 'top') {
     const item = plan ? 'gift' : 'plus';
     if (view.buying || buyable(item) === 'no') return;
     view = { ...view, buying: plan || 'plus', buyError: '', giftError: '' };
@@ -290,7 +341,8 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     const error = result.error && !result.ok ? result.error : 'The checkout could not be opened. Please try again in a minute.';
     view = { ...view, buying: false, [plan ? 'giftError' : 'buyError']: error };
     render({ focus: false });
-    qs(plan ? `[data-plus-gift="${plan}"]` : '[data-plus-checkout]', root())?.focus({ preventScroll: true });
+    // The error shows in the offer: from the bar, focus goes back up to it.
+    qs(plan ? `[data-plus-gift="${plan}"]` : '[data-plus-checkout="top"]', root())?.focus({ preventScroll: !!plan || place !== 'bar' });
   }
 
   function previewPalette(el, button) {
@@ -532,7 +584,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
 
   function bind(el) {
     qsa('[data-plus-close]', el).forEach(button => button.addEventListener('click', () => closeModal(modal())));
-    qs('[data-plus-checkout]', el)?.addEventListener('click', () => buy());
+    qsa('[data-plus-checkout]', el).forEach(button => button.addEventListener('click', () => buy('', button.dataset.plusCheckout)));
     qsa('[data-plus-gift]', el).forEach(button => button.addEventListener('click', () => buy(button.dataset.plusGift)));
     qs('[data-plus-privacy]', el)?.addEventListener('click', () => openPrivacy?.());
     qs('[data-plus-overview]', el)?.addEventListener('click', () => show({ stage: 'overview' }));
@@ -553,6 +605,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
       try { await navigator.clipboard.writeText(input.value); } catch (_) { input.select(); document.execCommand?.('copy'); }
       event.currentTarget.textContent = 'Copied';
     });
+    watchOffer(el);
     const focused = qs('.plus-palettes.is-focus', el);
     if (focused && !view.scrolled) { view = { ...view, scrolled: true }; requestAnimationFrame(() => focused.scrollIntoView({ block: 'center' })); }
   }
@@ -572,6 +625,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     trackEvent('plus_modal_opened');
     const id = plusFeatureId(feature);
     cycle.reset();
+    barShown = false;
     show({ stage: 'overview', feature: id, step: cycleStepFor(id) }, { animate: false });
     loadOptions();
   }

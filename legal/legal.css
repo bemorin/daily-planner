@@ -173,14 +173,31 @@ code { padding: .1em .35em; border-radius: 5px; background: var(--soft); font-fa
 
 .lg-toc li { counter-increment: toc; }
 
-.lg-toc a { display: flex; gap: 10px; padding: 4px 0; color: var(--muted); line-height: 1.4; text-decoration: none; }
+.lg-toc a { position: relative; display: flex; gap: 10px; padding: 4px 0; color: var(--muted); line-height: 1.4; text-decoration: none; }
 
 .lg-toc a::before { content: counter(toc); min-width: 1.2em; color: var(--faint); font-variant-numeric: tabular-nums; }
 
-.lg-toc a:hover { color: var(--ink); }
+/* The section being read (legal.js) takes the hover colour, with a short
+   mark against the edge of the contents. */
+.lg-toc a::after { content: ""; position: absolute; left: -20px; top: 6px; bottom: 6px; width: 2px; border-radius: 2px; background: var(--ink); opacity: 0; }
+
+.lg-toc a:hover,
+.lg-toc a[aria-current="true"] { color: var(--ink); }
+
+.lg-toc a:hover::before,
+.lg-toc a[aria-current="true"]::before { color: var(--muted); }
+
+.lg-toc a[aria-current="true"]::after { opacity: 1; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .lg-toc a,
+  .lg-toc a::before { transition: color 160ms ease; }
+  .lg-toc a::after { transition: opacity 160ms ease; }
+}
 
 @media (max-width: 999px) {
   .lg-toc ol { grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr)); column-gap: 20px; }
+  .lg-toc a::after { left: -11px; }
 }
 
 /* Document -------------------------------------------------------------------- */

@@ -3,7 +3,7 @@
 // Pages Functions and on Node 20 or newer.
 //
 // Token     DP1.<payload>.<signature>
-//   payload   base64url(UTF-8 JSON { v: 1, p: 'plus', id, src, org?, iat })
+//   payload   base64url(UTF-8 JSON { v: 1, p: 'plus', id, src, gift?, org?, iat })
 //   signature base64url of the raw 64-byte (IEEE P1363 r||s) ECDSA P-256 /
 //             SHA-256 signature over the ASCII bytes of "DP1.<payload>"
 // Keys      PLUS_SIGNING_KEY (server secret) = base64 of the PKCS#8 DER private key
@@ -11,16 +11,21 @@
 // The app verifies with importKey('spki', …, { name: 'ECDSA', namedCurve: 'P-256' })
 // and verify({ name: 'ECDSA', hash: 'SHA-256' }). Nothing about the person is
 // in a licence: a random id, where it came from, a company name for gifts and
-// the day it was made.
+// the day it was made. A licence activated from a gift (since 1.24) also
+// carries `gift`, the gift ref: it names the gift without revealing its code,
+// so refunding the gift revokes every licence activated from it without the
+// server keeping anything per activation.
 //
 // Gift manage key: hex HMAC-SHA256(key = the PKCS#8 DER bytes of
 // PLUS_SIGNING_KEY, message = 'gift-manage:' + CODE without dashes).
-// Deterministic and never stored; rotating PLUS_SIGNING_KEY changes every
-// manage link (and every licence signed afterwards).
+// Gift ref: the first 16 hex characters of the same HMAC over 'gift-ref:' + CODE.
+// Both are deterministic and never stored; rotating PLUS_SIGNING_KEY changes
+// every manage link and gift ref (and every licence signed afterwards).
 
 export const LICENSE_PREFIX = 'DP1';
 export const LICENSE_SOURCES = Object.freeze(['gift', 'purchase', 'manual', 'dev']);
 export const LICENSE_ID_RE = /^[0-9a-f]{16}$/;
+export const GIFT_REF_RE = /^[0-9a-f]{16}$/;
 export const LICENSE_TOKEN_MAX = 2048;
 
 const ALGORITHM = Object.freeze({ name: 'ECDSA', namedCurve: 'P-256' });
@@ -114,16 +119,17 @@ export const isoDay = (date = new Date()) => date.toISOString().slice(0, 10);
 
 /**
  * Sign a Plus licence. `signingKey` is a CryptoKey from importSigningKey() or
- * the base64 secret itself.
- * @param {{ src: 'gift'|'purchase'|'manual'|'dev', id?: string, org?: string, iat?: string }} claims
+ * the base64 secret itself. `gift` is the gift ref of the gift it came from.
+ * @param {{ src: 'gift'|'purchase'|'manual'|'dev', id?: string, gift?: string, org?: string, iat?: string }} claims
  */
-export async function signLicense(signingKey, { src, id = newLicenseId(), org = '', iat = isoDay() } = {}) {
+export async function signLicense(signingKey, { src, id = newLicenseId(), gift = '', org = '', iat = isoDay() } = {}) {
   const key = typeof signingKey === 'string' ? await importSigningKey(signingKey) : signingKey;
   if (!key) throw new Error('PLUS_SIGNING_KEY is not a usable P-256 key.');
   if (!LICENSE_SOURCES.includes(src)) throw new Error(`Unknown licence source: ${src}`);
   if (!LICENSE_ID_RE.test(String(id))) throw new Error('A licence id is 16 hex characters.');
+  if (gift && !GIFT_REF_RE.test(String(gift))) throw new Error('A gift ref is 16 hex characters.');
   if (!ISO_DAY_RE.test(String(iat))) throw new Error('A licence date is an ISO date.');
-  const payload = { v: 1, p: 'plus', id, src, ...(org ? { org: String(org) } : {}), iat };
+  const payload = { v: 1, p: 'plus', id, src, ...(gift ? { gift: String(gift) } : {}), ...(org ? { org: String(org) } : {}), iat };
   const signed = `${LICENSE_PREFIX}.${base64UrlEncode(encoder.encode(JSON.stringify(payload)))}`;
   const signature = await subtle().sign(SIGNATURE, key, encoder.encode(signed));
   return `${signed}.${base64UrlEncode(signature)}`;
@@ -150,17 +156,24 @@ export async function verifyLicense(publicKey, token) {
   return ok ? payload : null;
 }
 
-const manageKeys = new Map();
+const hmacKeys = new Map();
+const plainCode = code => String(code ?? '').replace(/-/g, '').toUpperCase();
 
-/** The manage key of a gift: hex HMAC-SHA256(PKCS#8 bytes of PLUS_SIGNING_KEY, 'gift-manage:' + code). '' without a key. */
-export async function giftManageKey(secret, code) {
+/** Hex HMAC-SHA256 of `message`, keyed with the PKCS#8 bytes of PLUS_SIGNING_KEY; '' without a key. */
+async function signingKeyHmac(secret, message) {
   const text = String(secret ?? '').trim();
   const bytes = base64Decode(text);
   if (!bytes) return '';
-  if (!manageKeys.has(text)) {
-    if (manageKeys.size > 8) manageKeys.clear();
-    manageKeys.set(text, subtle().importKey('raw', bytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']));
+  if (!hmacKeys.has(text)) {
+    if (hmacKeys.size > 8) hmacKeys.clear();
+    hmacKeys.set(text, subtle().importKey('raw', bytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']));
   }
-  const key = await manageKeys.get(text);
-  return toHex(await subtle().sign('HMAC', key, encoder.encode(`gift-manage:${String(code ?? '').replace(/-/g, '').toUpperCase()}`)));
+  const key = await hmacKeys.get(text);
+  return toHex(await subtle().sign('HMAC', key, encoder.encode(message)));
 }
+
+/** The manage key of a gift: hex HMAC-SHA256(PKCS#8 bytes of PLUS_SIGNING_KEY, 'gift-manage:' + code). '' without a key. */
+export const giftManageKey = (secret, code) => signingKeyHmac(secret, `gift-manage:${plainCode(code)}`);
+
+/** The gift ref licences from a gift carry: 16 hex characters of HMAC(…, 'gift-ref:' + code). '' without a key. */
+export const giftRef = async (secret, code) => (await signingKeyHmac(secret, `gift-ref:${plainCode(code)}`)).slice(0, 16);

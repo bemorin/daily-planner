@@ -25,7 +25,15 @@
 //   activated. A purchase stores the Creem checkout id, the licence id and the
 //   buyer's email (from Creem, which is the merchant of record). A payment row
 //   keeps what was sold, when, for how much and the buyer's country, for the
-//   sales chart — no name, no email.
+//   sales chart — no name, no email. The Creem order id of each paid checkout
+//   is kept so a refund can be traced back to it (see server/refunds.js).
+// - Refunds and disputes: Creem's reference, the amount, whether it was full,
+//   the reason Creem gives and what was switched off. A revocation names a
+//   licence id, a checkout, an order or a gift — never who used it. The
+//   buyer's email Creem sends with a refund only goes into the owner's notice.
+// - Licence checks (POST plus/check, about once a week per planner): only the
+//   licence (with its random id) is sent; the answer says whether it was
+//   revoked. Nothing is stored.
 // - Checkouts: the currency follows the buyer's country as Cloudflare sees it
 //   (request.cf.country; the euro area pays in EUR, the rest in USD), which is
 //   read for that request only and never stored. A partner code from a ?ref=
@@ -42,8 +50,9 @@
 import { base32Decode, issueSession, looksLikeSession, timingSafeEqual, TOTP_MIN_SECRET_BYTES, verifySession, verifyTotp, verifyWaitlistRemoveToken, waitlistRemoveToken } from './admin-auth.js';
 import { announcementEmail, createResendMailer, DEFAULT_EMAIL_TIMEOUT_MS, EMAILS_PER_SEND, escapeHtml, htmlDocument, idempotencyKey, parseAddress, plusPurchaseEmail, RESEND_MIN_INTERVAL_MS, textToHtml } from './email.js';
 import { cleanOrg, DEFAULT_PUBLIC_BASE_URL, formatGiftCode, giftBuyerEmail, giftExpiry, giftLimit, giftManageUrl, giftStatus, giftUrl, licenseUrl, newGiftCode, normalizeBaseUrl, normalizeGift, normalizeGiftCode, publicGift, validateGiftFields } from './gifts.js';
-import { giftManageKey, importSigningKey, isoDay, newLicenseId, publicKeyFromSigningKey, signLicense } from './licenses.js';
-import { affiliateCode, CHECKOUT_ID_RE, checkoutSeal, checkoutSealValid, createCheckout, CREEM_ITEMS, creemMode, fetchCheckout, parseCreemProducts, readCheckout, verifyWebhookSignature } from './creem.js';
+import { GIFT_REF_RE, giftManageKey, giftRef, importSigningKey, importVerifyKey, isoDay, LICENSE_ID_RE, LICENSE_TOKEN_MAX, newLicenseId, publicKeyFromSigningKey, signLicense, verifyLicense } from './licenses.js';
+import { affiliateCode, CHECKOUT_ID_RE, checkoutSeal, checkoutSealValid, createCheckout, CREEM_ITEMS, creemMode, fetchCheckout, fetchTransaction, parseCreemProducts, readCheckout, verifyWebhookSignature } from './creem.js';
+import { CREEM_REASONS, OWNER_SOURCE_PREFIX, readRefundEvent, readTransaction, REFUND_EVENTS, refundNoticeEmail, refundScope, refundWaitingEmail, REVOCATION_NOTE_MAX, revocationTarget, shownScope } from './refunds.js';
 import { currencyForCountry, CURRENCIES, giftPlan, isPersonalGift, PERSONAL_GIFTS, priceCents, TEAM_TIERS, validCurrency } from '../src/lib/pricing.js';
 
 export const EVENT_NAMES = new Set([
@@ -149,6 +158,18 @@ const CHECKOUT_FAILED = 'The checkout could not be opened. Please try again in a
 const INVALID_SIGNATURE = 'Invalid signature';
 const UNKNOWN_CHECKOUT_TTL_MS = 10 * 60 * 1000;
 const UNKNOWN_CHECKOUTS_MAX = 500;
+const REFUNDED_PURCHASE = 'This purchase was refunded, so it can’t be activated any more. If this is a mistake, reply to your receipt email.';
+const SWITCHED_OFF_PURCHASE = 'This purchase was switched off, so it can’t be activated any more. If this is a mistake, reply to your receipt email.';
+const CHECKOUT_EXPIRED = 'This checkout expired before it was paid.';
+const GIFT_INACTIVE = 'This gift link is no longer active.';
+const LICENSE_INVALID = 'This licence is not valid.';
+const TRANSACTION_UNREAD = 'The refund’s transaction could not be read from Creem; send the event again later.';
+export const REFUNDS_LISTED = 100;
+// An unmatched refund reads the order of this many recent Creem checkouts that have none recorded yet
+// (paid before 1.24), a few at a time: well within a Worker's 50 outside requests.
+export const ORDER_BACKFILL_MAX = 40;
+const ORDER_BACKFILL_BATCH = 8;
+export const REVOCATIONS_LISTED = 500;
 // Shown on the Creem checkout of a gift; the answer is the name the gift shows:
 // the company for a team gift, the giver for a personal gift (labels ≤ 50 characters).
 const COMPANY_FIELD = Object.freeze({ type: 'text', key: 'company', label: 'Company name, shown to your team', optional: true, text: Object.freeze({ max_length: 80 }) });
@@ -483,10 +504,71 @@ export function createPlannerApi({
     unknownCheckouts.delete(id);
     return null;
   };
-  const rememberCheckout = (id, status, error) => {
+  const rememberCheckout = (id, status, error, flags = {}) => {
     if (unknownCheckouts.size >= UNKNOWN_CHECKOUTS_MAX) unknownCheckouts.delete(unknownCheckouts.keys().next().value);
-    unknownCheckouts.set(id, { until: now().getTime() + UNKNOWN_CHECKOUT_TTL_MS, status, error });
+    unknownCheckouts.set(id, { until: now().getTime() + UNKNOWN_CHECKOUT_TTL_MS, status, error, flags });
   };
+
+  // Refunds (migration 0005, server/refunds.js). Reads tolerate its tables
+  // being missing: nothing counts as revoked until the migration is applied.
+  const creemReady = !!(creem.apiKey && creem.fetch);
+  const giftRefOf = code => giftRef(signingSecret, code);
+  /** gift:<gift ref>, the target that revokes every licence activated from a gift; '' while Plus is off. */
+  const giftTarget = async code => { const ref = await giftRefOf(code); return ref ? revocationTarget('gift', ref) : ''; };
+  let verifyKeyPromise = null;
+  const verifyKey = () => { verifyKeyPromise ||= plusPublicKey().then(key => (key ? importVerifyKey(key) : null)); return verifyKeyPromise; };
+  async function isRevoked(targets) {
+    try { return await store.isRevoked(targets.filter(Boolean)); } catch (error) { if (isMissingTable(error)) return false; throw error; }
+  }
+  /** Every revocation of these targets, oldest first; none while migration 0005 is missing. */
+  async function revocationsOf(targets) {
+    try { return await store.listRevocationsFor(targets.filter(Boolean)); } catch (error) { if (isMissingTable(error)) return []; throw error; }
+  }
+  const byCreem = rows => rows.some(row => CREEM_REASONS.includes(row.reason));
+  /** The answer for a purchase link that no longer works: refunded (by Creem) or switched off (by the owner). */
+  const refusedAnswer = (rows, cors) => (byCreem(rows) ? json(410, { error: REFUNDED_PURCHASE, refunded: true }, cors) : json(410, { error: SWITCHED_OFF_PURCHASE, revoked: true }, cors));
+  /** The Creem order of a paid checkout, so a later refund finds it. Best effort: never blocks a delivery. */
+  async function recordOrder(checkoutId, kind, orderId, mode = '') {
+    if (!orderId) return;
+    try { await store.addOrder({ orderId, checkoutId, kind, mode, createdAt: now().toISOString() }); }
+    catch (error) { safeWarn(`Order ${orderId} of ${checkoutId} not recorded: ${error?.message || error}`); }
+  }
+  /** Reads a Creem checkout's order and records it; true when one was recorded. */
+  async function fetchOrder(checkoutId, kind) {
+    const checkout = await fetchCheckout({ ...creem, checkoutId });
+    const read = checkout ? readCheckout(checkout, products.byId) : null;
+    if (!read?.orderId) return false;
+    await store.addOrder({ orderId: read.orderId, checkoutId, kind, mode: read.mode, createdAt: now().toISOString() });
+    return true;
+  }
+  /** A Creem checkout fulfilled before its order was recorded (before 1.24): read it from Creem once, in the background. */
+  function recordOrderLater(checkoutId, kind) {
+    if (!paymentsConfigured || !checkoutId.startsWith('ch_')) return;
+    const task = (async () => {
+      if (await store.getOrderByCheckout(checkoutId)) return;
+      await fetchOrder(checkoutId, kind);
+    })().catch(error => { if (!isMissingTable(error)) safeWarn(`Order of ${checkoutId} not recorded: ${error?.message || error}`); });
+    try { defer?.(task); } catch (_) {}
+  }
+  /**
+   * A refund whose order is not recorded: read the orders of the latest Creem
+   * checkouts delivered without one (sold before 1.24, links not reopened since),
+   * a few at a time, until `orderId` turns up. Returns its order row or null.
+   */
+  async function backfillOrders(orderId) {
+    if (!creemReady) return null;
+    let rows;
+    try { rows = await store.listCheckoutsWithoutOrder(ORDER_BACKFILL_MAX); } catch (error) { if (isMissingTable(error)) return null; throw error; }
+    // Test purchases can't be read with live keys.
+    rows = rows.filter(row => !(creem.mode === 'live' && isTestRow(row)));
+    for (let start = 0; start < rows.length; start += ORDER_BACKFILL_BATCH) {
+      await Promise.all(rows.slice(start, start + ORDER_BACKFILL_BATCH).map(row => fetchOrder(row.checkoutId, row.kind)
+        .catch(error => safeWarn(`Order of ${row.checkoutId} not read: ${error?.message || error}`))));
+      const order = await store.getOrder(orderId);
+      if (order) return order;
+    }
+    return null;
+  }
 
   // Fire and forget: the 201 never waits for, or fails because of, an email.
   function notifyOwner(entry, dashboardUrl) {
@@ -639,7 +721,10 @@ export function createPlannerApi({
     if (!code) return json(404, { error: GIFT_UNKNOWN }, cors);
     if (method === 'GET') {
       const gift = await store.getGift(code);
-      return gift ? json(200, publicGift(gift, now().toISOString(), await giftPlanOf(gift)), cors) : json(404, { error: GIFT_UNKNOWN }, cors);
+      if (!gift) return json(404, { error: GIFT_UNKNOWN }, cors);
+      // `revoked`: switched off after a refund, a dispute or by the owner; Plus is then switched off where it was activated too.
+      const revoked = await isRevoked([await giftTarget(code), gift.checkoutRef ? revocationTarget('checkout', gift.checkoutRef) : '']);
+      return json(200, { ...publicGift(gift, now().toISOString(), await giftPlanOf(gift)), ...(revoked ? { revoked: true } : {}) }, cors);
     }
     const key = await signer();
     if (!key) return json(503, { error: PLUS_OFF }, cors);
@@ -655,13 +740,18 @@ export function createPlannerApi({
       const updated = { ...gift, ...result.fields };
       return json(200, { ok: true, org: updated.org, message: updated.message }, cors);
     }
-    // Redeem: one atomic increment that can never pass the limit.
+    // Redeem: one atomic increment that can never pass the limit. A revoked gift (or gift checkout) is
+    // never redeemed, even if its link was switched back on by hand.
     const nowIso = now().toISOString();
+    const known = await store.getGift(code);
+    if (!known) return json(404, { error: GIFT_UNKNOWN }, cors);
+    if (await isRevoked([await giftTarget(code), known.checkoutRef ? revocationTarget('checkout', known.checkoutRef) : ''])) return json(410, { error: GIFT_INACTIVE, revoked: true }, cors);
     if (await store.redeemGift(code, nowIso)) {
       const gift = await store.getGift(code);
       let license;
       try {
-        license = await signLicense(key, { src: 'gift', org: gift.org, iat: isoDay(now()) });
+        // The gift ref lets a refund of this gift revoke the licence later, with nothing stored per activation.
+        license = await signLicense(key, { src: 'gift', gift: await giftRefOf(code), org: gift.org, iat: isoDay(now()) });
       } catch (error) {
         await store.unredeemGift(code).catch(() => {});
         throw error;
@@ -672,7 +762,7 @@ export function createPlannerApi({
     if (!gift) return json(404, { error: GIFT_UNKNOWN }, cors);
     const status = giftStatus(gift, nowIso);
     if (status === 'expired') return json(410, { error: 'This gift link has expired.' }, cors);
-    if (status === 'inactive') return json(410, { error: 'This gift link is no longer active.' }, cors);
+    if (status === 'inactive') return json(410, { error: GIFT_INACTIVE }, cors);
     return json(409, { error: 'This gift has been fully claimed.' }, cors);
   }
 
@@ -720,7 +810,10 @@ export function createPlannerApi({
    * gives the same purchase (one licence id) or the same gift, whether the
    * claim or the webhook comes first. The payment row feeds the sales chart;
    * a claim still answers when it cannot be written (migration 0004 missing),
-   * the webhook does not (Creem retries it).
+   * the webhook does not (Creem retries it). The order id is recorded for
+   * refunds, without ever holding up a delivery (migration 0005 missing).
+   * A checkout or an order revoked before delivery (refunded before the buyer
+   * came back, or switched off by the owner) delivers nothing: { refused }.
    */
   async function fulfil(checkoutId, paid, { strict }) {
     const createdAt = now().toISOString();
@@ -728,6 +821,12 @@ export function createPlannerApi({
     const payment = store.addPayment({ checkoutId, kind, plan, seats, amount: paid.amount, currency: paid.currency, country: paid.country, createdAt });
     if (strict) await payment;
     else await payment.catch(error => safeWarn(`Payment ${checkoutId} not recorded: ${error?.message || error}`));
+    await recordOrder(checkoutId, kind, paid.orderId, paid.mode);
+    const blocked = await revocationsOf([revocationTarget('checkout', checkoutId), paid.orderId ? revocationTarget('order', paid.orderId) : '']);
+    if (blocked.length) {
+      await linkRefused(checkoutId, kind, blocked);
+      return { refused: blocked };
+    }
     if (kind === 'plus') {
       await store.addPurchase({ checkoutRef: checkoutId, kind: 'plus', licenseId: newLicenseId(), claims: 0, email: paid.email.slice(0, 254), note: creem.mode === 'test' ? TEST_NOTE : '', createdAt });
       return { purchase: await store.getPurchase(checkoutId) };
@@ -746,6 +845,25 @@ export function createPlannerApi({
     return { gift, plan };
   }
 
+  /**
+   * A checkout refused at delivery: its own target joins every decision that
+   * blocked it (so Restore lets it through again), and a refund that matched
+   * nothing until now names the checkout it paid for.
+   */
+  async function linkRefused(checkoutId, kind, rows) {
+    const target = revocationTarget('checkout', checkoutId);
+    for (const source of new Set(rows.map(row => row.source))) {
+      const group = rows.filter(row => row.source === source);
+      if (group.some(row => row.target === target)) continue;
+      const [first] = group;
+      await store.addRevocations([{ target, source, kind: 'checkout', label: checkoutId, reason: first.reason, note: first.note, createdAt: first.createdAt }]);
+      if (!CREEM_REASONS.includes(first.reason)) continue;
+      const refund = await store.getRefund(source);
+      if (refund && !refund.item) await store.linkRefund(source, { checkoutId, item: kind, revoked: [...new Set([...String(refund.revoked).split(' ').filter(Boolean), target])].join(' ') });
+    }
+    safeWarn(`Checkout ${checkoutId} was paid, but ${byCreem(rows) ? 'refunded' : 'switched off'} before it was delivered (${[...new Set(rows.map(row => row.source))].join(', ')}): nothing was delivered or emailed.`);
+  }
+
   async function claimRoute(request, cors) {
     if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
     const body = await readJson(request);
@@ -759,20 +877,25 @@ export function createPlannerApi({
     // to the planner instead of spending one of its activations here.
     const giftOnly = body?.expect === 'gift';
     const notAGift = () => json(409, { kind: 'plus', error: 'This payment is for Daily Planner Plus: open it in the planner.' }, cors);
+    // A refunded, disputed or switched-off checkout gives nothing any more (its gift link is switched off too).
+    const revoked = await revocationsOf([revocationTarget('checkout', checkoutId)]);
+    if (revoked.length) return refusedAnswer(revoked, cors);
     // Known checkouts are answered from the database, without asking Creem again —
     // except purchases made while testing, once the live keys are in place.
     const purchase = await store.getPurchase(checkoutId);
     if (purchase?.kind === 'plus') {
-      if (creem.mode === 'live' && isTestRow(purchase)) return json(410, { error: TEST_PURCHASE }, cors);
+      if (creem.mode === 'live' && isTestRow(purchase)) return json(410, { error: TEST_PURCHASE, test: true }, cors);
+      if (!giftOnly) recordOrderLater(checkoutId, 'plus');
       return giftOnly ? notAGift() : plusClaimAnswer(purchase, key, cors);
     }
     const existingGift = await store.getGiftByCheckout(checkoutId);
     if (existingGift) {
-      if (creem.mode === 'live' && isTestRow(existingGift)) return json(410, { error: TEST_PURCHASE }, cors);
+      if (creem.mode === 'live' && isTestRow(existingGift)) return json(410, { error: TEST_PURCHASE, test: true }, cors);
+      recordOrderLater(checkoutId, 'gift');
       return giftClaimAnswer(existingGift, cors);
     }
     const remembered = rememberedCheckout(checkoutId);
-    if (remembered) return json(remembered.status, { error: remembered.error }, cors);
+    if (remembered) return json(remembered.status, { error: remembered.error, ...remembered.flags }, cors);
     if (!paymentsConfigured) return json(503, { error: PAYMENTS_OFF }, cors);
 
     let checkout;
@@ -782,14 +905,15 @@ export function createPlannerApi({
       safeWarn(`Creem checkout not read: ${error?.message || error}`);
       return json(502, { error: 'The payment could not be checked right now. Please try again in a minute.' }, cors);
     }
-    const refuse = (status, error) => { rememberCheckout(checkoutId, status, error); return json(status, { error }, cors); };
+    const refuse = (status, error, flags = {}) => { rememberCheckout(checkoutId, status, error, flags); return json(status, { error, ...flags }, cors); };
     if (!checkout) return refuse(404, PAYMENT_UNKNOWN);
     const paid = readCheckout(checkout, products.byId);
     if (!paid.item || !await honoured(paid)) return refuse(404, NOT_PLUS_PAYMENT);
-    if (checkout.status === 'expired') return refuse(410, 'This checkout expired before it was paid.');
+    if (checkout.status === 'expired') return refuse(410, CHECKOUT_EXPIRED, { expired: true });
     if (!paid.paid) return json(402, { error: 'This payment is not complete yet.' }, cors);
     if (giftOnly && paid.item.kind === 'plus') return notAGift();
     const result = await fulfil(checkoutId, paid, { strict: false });
+    if (result.refused) return refusedAnswer(result.refused, cors);
     if (result.gift) return giftClaimAnswer(result.gift, cors, result.plan);
     if (result.purchase?.kind === 'plus') return plusClaimAnswer(result.purchase, key, cors);
     return json(404, { error: PAYMENT_UNKNOWN }, cors);
@@ -879,7 +1003,8 @@ export function createPlannerApi({
   /**
    * POST /api/creem/webhook. The signature covers the raw body, so the body is
    * read as bytes before any JSON parsing. checkout.completed is processed like
-   * a claim (idempotent) and emails the buyer; other events are acknowledged.
+   * a claim (idempotent) and emails the buyer; refund.created and
+   * dispute.created go to refundWebhook(); other events are acknowledged.
    * Any failure answers 5xx so Creem tries again later.
    */
   async function webhookRoute(request, cors) {
@@ -892,7 +1017,9 @@ export function createPlannerApi({
     let event;
     try { event = JSON.parse(new TextDecoder().decode(raw)); } catch { return json(400, { error: 'Invalid JSON' }, cors); }
     const received = () => json(200, { received: true }, cors);
-    if (String(event?.eventType || event?.type || '') !== 'checkout.completed') return received();
+    const type = String(event?.eventType || event?.type || '');
+    if (Object.hasOwn(REFUND_EVENTS, type)) return refundWebhook(event, cors);
+    if (type !== 'checkout.completed') return received();
     // Creem sends the checkout as `object`; `data` (or data.object) is read too, defensively.
     const checkout = [event?.object, event?.data?.object, event?.data].find(value => value && typeof value === 'object' && !Array.isArray(value));
     const checkoutId = String(checkout?.id ?? '').trim();
@@ -912,6 +1039,8 @@ export function createPlannerApi({
     if (!paid.paid) return received();
     if (!await signer()) return json(503, { error: PLUS_OFF }, cors);
     const result = await fulfil(checkoutId, paid, { strict: true });
+    // Refunded or switched off before delivery: nothing to deliver, nobody to email (Creem needs no retry).
+    if (result.refused) return received();
     let email = null;
     if (result.gift && mailer.configured && result.gift.buyerEmail) {
       email = await emailGiftBuyer(result.gift, await manageKeyOf(result.gift.code), BUYER_EMAIL_TIMEOUT_MS, { plan: result.plan });
@@ -934,6 +1063,210 @@ export function createPlannerApi({
     return received();
   }
 
+  // ---- Refunds, disputes and revocations (server/refunds.js) ----------------
+
+  /**
+   * The rows that switch off what a checkout gave: its links (claim and gift
+   * page), its order (so it is never delivered later), its licence (a Plus
+   * purchase) or its gift link and every licence activated from it.
+   */
+  async function checkoutRows({ checkoutId = '', orderId = '', purchase = null, gift = null }) {
+    const rows = [];
+    if (checkoutId) rows.push({ target: revocationTarget('checkout', checkoutId), kind: 'checkout', label: checkoutId });
+    if (orderId) rows.push({ target: revocationTarget('order', orderId), kind: 'order', label: orderId });
+    if (LICENSE_ID_RE.test(String(purchase?.licenseId || ''))) rows.push({ target: revocationTarget('license', purchase.licenseId), kind: 'license', label: purchase.licenseId });
+    if (gift) rows.push(...await giftRows(gift));
+    return rows;
+  }
+
+  /** The row that revokes a gift, with whether its link was on before it was first revoked (Restore brings back exactly that). */
+  async function giftRows(gift) {
+    const target = await giftTarget(gift.code);
+    if (!target) return [];
+    const earlier = (await revocationsOf([target])).find(row => typeof row.wasActive === 'boolean');
+    return [{ target, kind: 'gift', label: formatGiftCode(gift.code), wasActive: earlier ? earlier.wasActive : !!gift.active, code: gift.code }];
+  }
+
+  /** Stores the rows under one decision; a gift's link is switched off right away. Returns the targets. */
+  async function addRevocations(rows, { source, reason, note = '' }) {
+    for (const row of rows) if (row.code) await store.updateGift(row.code, { active: false });
+    const createdAt = now().toISOString();
+    await store.addRevocations(rows.map(({ code, ...row }) => ({ ...row, source, reason, note, createdAt })));
+    return rows.map(row => row.target);
+  }
+
+  function notifyRefund(content, key) {
+    if (!mailer.configured || !owner) return;
+    const task = (async () => {
+      await mailer.send({ ...content, recipients: [owner] }, { timeoutMs: notifyTimeoutMs, idempotency: await idempotencyKey('refund-notice', key) });
+      await store.addEmailSends(today(), EMAIL_SENDS_EVENT, 1);
+    })().catch(error => safeWarn(`Refund notice not sent: ${error?.message || error}`));
+    try { defer?.(task); } catch (_) {}
+  }
+
+  /**
+   * Creem's transaction could not be read: the event is kept as waiting (the
+   * dashboard shows why) and Creem tries again. When its next try fails too,
+   * the owner is emailed, once per refund.
+   */
+  async function refundWaiting(refund, existing, error) {
+    const reason = oneLine(error).slice(0, 160);
+    const note = `Creem’s transaction could not be read: ${reason}`;
+    if (!existing) {
+      await store.addRefund({ id: refund.id, kind: refund.kind, orderId: refund.orderId, transactionId: refund.transactionId, amount: refund.amount, currency: refund.currency, reason: refund.reason, status: 'pending', note, attempts: 1, createdAt: refund.createdAt });
+      return;
+    }
+    await store.retryRefund(refund.id, note);
+    if (await store.markRefundNotified(refund.id)) notifyRefund(refundWaitingEmail({ refund, error: reason, dashboardUrl: `${baseUrl()}/admin/` }), `waiting:${refund.id}`);
+  }
+
+  /**
+   * refund.created and dispute.created, once per refund or dispute id. The
+   * transaction leads to the order recorded when the checkout was paid; an
+   * order not recorded yet is looked for among the latest checkouts delivered
+   * without one. A full refund or a dispute revokes what the checkout gave,
+   * and its order, so a purchase not delivered yet never is; a partial refund
+   * revokes nothing; a refund from the other Creem mode (test or live) than
+   * its order is never matched. Every event is recorded (matched or not) and
+   * the owner is emailed. A refund that matches nothing still answers 200:
+   * Creem would only send it again. One whose transaction can't be read is
+   * kept as waiting and answered 502, so Creem sends it again.
+   */
+  async function refundWebhook(event, cors) {
+    const received = () => json(200, { received: true }, cors);
+    const refund = readRefundEvent(event, now().toISOString());
+    if (!refund?.id) {
+      safeWarn(`Creem webhook: ${refund?.kind || 'refund'} without an id; nothing recorded.`);
+      return received();
+    }
+    const existing = await store.getRefund(refund.id);
+    if (existing && existing.status !== 'pending') return received();
+    let transaction = null;
+    if (refund.transactionId && creemReady) {
+      try {
+        const entity = await fetchTransaction({ ...creem, transactionId: refund.transactionId });
+        transaction = entity ? readTransaction(entity) : null;
+      } catch (error) {
+        safeWarn(`Creem transaction ${refund.transactionId} not read: ${error?.message || error}`);
+        await refundWaiting(refund, existing, String(error?.message || error));
+        return json(502, { error: TRANSACTION_UNREAD }, cors);
+      }
+    }
+    const orderId = refund.orderId || transaction?.orderId || '';
+    let order = orderId ? await store.getOrder(orderId) : null;
+    let checkoutId = order?.checkoutId || refund.checkoutId || '';
+    let purchase = checkoutId ? await store.getPurchase(checkoutId) : null;
+    let gift = checkoutId && !purchase ? await store.getGiftByCheckout(checkoutId) : null;
+    if (orderId && !order && !purchase && !gift) {
+      order = await backfillOrders(orderId);
+      if (order) {
+        checkoutId = order.checkoutId;
+        purchase = await store.getPurchase(checkoutId);
+        gift = purchase ? null : await store.getGiftByCheckout(checkoutId);
+      }
+    }
+    const mode = transaction?.mode || refund.mode || '';
+    const otherMode = order?.mode && mode && order.mode !== mode ? { refund: mode, order: order.mode } : null;
+    if (otherMode) safeWarn(`Creem webhook: ${refund.kind} ${refund.id} is in ${mode} mode but order ${orderId} was paid in ${order.mode} mode; ignored.`);
+    const matched = !otherMode && !!(checkoutId && (purchase || gift || order));
+    const item = matched ? (purchase ? 'plus' : gift ? 'gift' : order?.kind || '') : '';
+    const scope = refundScope(refund, transaction);
+    let revoked = [];
+    let already = false;
+    if (scope === 'full' && !otherMode) {
+      // Unmatched: its order (and checkout, when Creem names it) is still blocked, in case it is delivered later.
+      const rows = await checkoutRows(matched ? { checkoutId, orderId, purchase, gift } : { checkoutId: CHECKOUT_ID_RE.test(refund.checkoutId) ? refund.checkoutId : '', orderId });
+      // Already switched off by another refund or dispute of the same payment: one decision, so one Restore.
+      already = rows.length > 0 && byCreem((await revocationsOf(rows.map(row => row.target))).filter(row => row.source !== refund.id));
+      if (rows.length && !already) revoked = await addRevocations(rows, { source: refund.id, reason: refund.kind });
+    }
+    if (!matched && !otherMode) safeWarn(`Creem webhook: ${refund.kind} ${refund.id} (transaction ${refund.transactionId || 'unknown'}, order ${orderId || 'unknown'}) matches no purchase; nothing was switched off${revoked.length ? ', and its order will not be delivered' : ''}. It is listed in the dashboard.`);
+    const row = {
+      id: refund.id, kind: refund.kind, orderId, transactionId: refund.transactionId, checkoutId: matched ? checkoutId : '', item, amount: refund.amount, currency: refund.currency,
+      fullRefund: scope === 'full', scope: shownScope(refund, transaction), reason: refund.reason, revoked: revoked.join(' '),
+      note: otherMode ? `Ignored: it is in ${otherMode.refund} mode, but its order was paid in ${otherMode.order} mode.` : already ? 'Already switched off by an earlier refund or dispute.' : '',
+      createdAt: refund.createdAt
+    };
+    const written = existing ? await store.completeRefund(row) : await store.addRefund(row);
+    if (written) {
+      const match = matched
+        ? { item, checkoutId, giftCode: gift ? formatGiftCode(gift.code) : '', giftOrg: gift?.org || '', giftRedeemed: gift?.redeemed || 0, amountPaid: transaction?.amountPaid ?? refund.amountPaid, delivered: !!(purchase || gift), already }
+        : { otherMode, blocked: revoked.length > 0 };
+      notifyRefund(refundNoticeEmail({ refund, scope: row.scope, match, dashboardUrl: `${baseUrl()}/admin/` }), refund.id);
+    }
+    return received();
+  }
+
+  /** POST plus/check { license }: { ok, revoked }. Only the licence is read, and nothing is stored. */
+  async function plusCheckRoute(request, cors) {
+    if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+    const body = await readJson(request);
+    const key = await verifyKey();
+    if (!key) return json(503, { error: PLUS_OFF }, cors);
+    const token = typeof body?.license === 'string' ? body.license.trim() : '';
+    const license = token && token.length <= LICENSE_TOKEN_MAX ? await verifyLicense(key, token) : null;
+    if (!license) return json(400, { error: LICENSE_INVALID }, cors);
+    const gift = GIFT_REF_RE.test(String(license.gift || '')) ? revocationTarget('gift', license.gift) : '';
+    return json(200, { ok: true, revoked: await isRevoked([revocationTarget('license', license.id), gift]) }, cors);
+  }
+
+  /**
+   * What the owner pasted to revoke by hand: a licence (its id or the whole
+   * DP1… token), a gift code or a checkout id — a Creem checkout (ch_…) not
+   * delivered yet too, so it never is. Returns { rows, undelivered? } or { error, status }.
+   */
+  async function ownerRevocation(text) {
+    const value = String(text ?? '').trim();
+    if (/^DP1\./.test(value)) {
+      const license = await verifyLicense(await verifyKey(), value);
+      if (!license) return { status: 400, error: 'This licence could not be verified with this server’s key.' };
+      return { rows: [{ target: revocationTarget('license', license.id), kind: 'license', label: license.id }] };
+    }
+    if (LICENSE_ID_RE.test(value.toLowerCase())) return { rows: [{ target: revocationTarget('license', value.toLowerCase()), kind: 'license', label: value.toLowerCase() }] };
+    const code = normalizeGiftCode(value);
+    if (code) {
+      const gift = await store.getGift(code);
+      if (!gift) return { status: 404, error: 'No gift has this code.' };
+      if (!await giftRefOf(code)) return { status: 503, error: PLUS_OFF };
+      return { rows: await checkoutRows({ checkoutId: gift.checkoutRef || '', gift }) };
+    }
+    if (!CHECKOUT_ID_RE.test(value)) return { status: 400, error: 'Paste a licence id (16 letters and digits), a checkout id (ch_…) or a gift code.' };
+    const purchase = await store.getPurchase(value);
+    const gift = purchase ? null : await store.getGiftByCheckout(value);
+    if (gift && !await giftRefOf(gift.code)) return { status: 503, error: PLUS_OFF };
+    if (!purchase && !gift && !value.startsWith('ch_')) return { status: 404, error: 'No purchase or gift has this checkout id.' };
+    return { rows: await checkoutRows({ checkoutId: value, purchase, gift }), undelivered: !purchase && !gift };
+  }
+
+  /** POST admin/revocations { target, note } revokes by hand; DELETE admin/revocations/<source> restores one group. */
+  async function adminRevocations(request, path, cors) {
+    if (path === 'admin/revocations') {
+      if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+      const body = await readJson(request);
+      const note = oneLine(clip(body?.note, 1000));
+      if (note.length > REVOCATION_NOTE_MAX) return json(400, { error: `Keep the note under ${REVOCATION_NOTE_MAX} characters.` }, cors);
+      const found = await ownerRevocation(body?.target);
+      if (found.error) return json(found.status, { error: found.error }, cors);
+      const source = `${OWNER_SOURCE_PREFIX}${newLicenseId()}`;
+      const targets = await addRevocations(found.rows, { source, reason: 'owner', note });
+      return json(201, { source, revoked: targets.length, ...(found.undelivered ? { undelivered: true } : {}) }, cors);
+    }
+    const match = /^admin\/revocations\/([A-Za-z0-9_-]{3,200})$/.exec(path);
+    if (!match) return null;
+    if (request.method !== 'DELETE') return json(405, { error: 'Method not allowed' }, cors);
+    const rows = await store.listRevocationsBySource(match[1]);
+    if (!rows.length) return json(404, { restored: 0 }, cors);
+    const restored = await store.deleteRevocations(match[1]);
+    // A gift link comes back as it was before it was revoked (an owner may have switched it off
+    // by hand first), and only once no other refund, dispute or revocation holds it.
+    for (const row of rows.filter(item => item.kind === 'gift' && item.wasActive !== false)) {
+      const code = normalizeGiftCode(row.label);
+      const gift = code ? await store.getGift(code) : null;
+      if (gift && !await isRevoked([row.target, gift.checkoutRef ? revocationTarget('checkout', gift.checkoutRef) : ''])) await store.updateGift(code, { active: true });
+    }
+    return json(200, { restored }, cors);
+  }
+
   async function setupInfo() {
     const publicKey = await plusPublicKey();
     return {
@@ -953,6 +1286,7 @@ export function createPlannerApi({
         products: { plus: { ...products.ids.plus }, gift: { ...products.ids.gift } },
         webhookSecretSet: !!webhookSecret,
         webhookUrl: `${baseUrl()}/api/creem/webhook`,
+        webhookEvents: ['checkout.completed', ...Object.keys(REFUND_EVENTS)],
         error: products.error
       },
       plus: { configured: !!publicKey, keySet: !!signingSecret, publicKey },
@@ -1096,9 +1430,10 @@ export function createPlannerApi({
       // 0002 or 0003 migration has not been applied yet.
       const teams = Promise.all([store.listTeamRequests({ limit: 200 }), store.teamRequestTotals()]).catch(() => null);
       const plusTables = Promise.all([store.listGifts({ limit: 200 }), store.giftTotals(), store.purchaseTotals(), store.listPurchases({ kind: 'manual', limit: 10 })]).catch(() => null);
-      // Reviews come from migration 0004; without it the rest still loads.
+      // Reviews come from migration 0004, refunds from 0005; without them the rest still loads.
       const reviewRows = store.listReviews({ limit: REVIEWS_LATEST }).catch(() => null);
-      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, setup] = await Promise.all([
+      const refundData = Promise.all([store.listRefunds({ limit: REFUNDS_LISTED }), store.listRevocations({ limit: REVOCATIONS_LISTED })]).catch(() => null);
+      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, refundLists, setup] = await Promise.all([
         store.eventTotals({ sinceDay }).then(publicEvents),
         store.eventDaily({ sinceDay }).then(publicEvents),
         store.listWaitlist(),
@@ -1108,6 +1443,7 @@ export function createPlannerApi({
         store.emailSendsOn(today(), EMAIL_SENDS_EVENT),
         plusTables,
         reviewRows,
+        refundData,
         setupInfo()
       ]);
       const [teamRequests, teamRequestTotals] = teamData || [[], { count: 0, seats: 0 }];
@@ -1118,6 +1454,7 @@ export function createPlannerApi({
         gifts: await Promise.all(giftRows.map(gift => adminGift(gift, nowIso))), giftTotals, plusUnavailable: !plusData,
         plus: { purchases: purchaseTotals.plus, manualLicenses: purchaseTotals.manual, recentLicenses: manualLicenses.map(row => ({ id: row.licenseId, note: row.note, createdAt: row.createdAt })) },
         reviews: reviews || [], reviewsUnavailable: !reviews,
+        refunds: refundLists?.[0] || [], revocations: refundLists?.[1] || [], refundsUnavailable: !refundLists,
         setup
       }, cors);
     }
@@ -1140,6 +1477,10 @@ export function createPlannerApi({
     }
     if (path === 'admin/waitlist/announce') return announce(request, cors);
     if (path === 'admin/licenses') return adminLicense(request, cors);
+    if (path.startsWith('admin/revocations')) {
+      const answer = await adminRevocations(request, path, cors);
+      if (answer) return answer;
+    }
     if (path.startsWith('admin/gifts')) {
       const answer = await adminGifts(request, path, cors);
       if (answer) return answer;
@@ -1167,6 +1508,7 @@ export function createPlannerApi({
       const gift = /^gifts\/([^/]{1,40})(\/redeem)?$/.exec(path);
       if (gift) return await giftRoute(request, gift, cors);
       if (path === 'purchases/claim') return await claimRoute(request, cors);
+      if (path === 'plus/check') return await plusCheckRoute(request, cors);
       if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
       const body = await readJson(request);
       if (path === 'events') {
@@ -1226,7 +1568,8 @@ export function createPlannerApi({
  * In-memory store with optional persistence hooks; used by the dev server and
  * the unit tests. Mirrors the D1 store's behaviour (unique emails, counts,
  * oldest-first announcement order, internal email-send counts, gift limits,
- * one gift, purchase and payment per checkout).
+ * one gift, purchase and payment per checkout, one order and one refund per
+ * Creem id, one revocation per target and source).
  */
 export function createMemoryStore(initial = {}, { onChange = null } = {}) {
   const data = {
@@ -1238,6 +1581,9 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
     purchases: Array.isArray(initial.purchases) ? initial.purchases : [],
     payments: Array.isArray(initial.payments) ? initial.payments : [],
     reviews: Array.isArray(initial.reviews) ? initial.reviews : [],
+    orders: Array.isArray(initial.orders) ? initial.orders : [],
+    refunds: Array.isArray(initial.refunds) ? initial.refunds : [],
+    revocations: Array.isArray(initial.revocations) ? initial.revocations : [],
     nextId: Number(initial.nextId) || 1
   };
   // Data files written before 1.21 call the checkout reference stripeSession.
@@ -1251,6 +1597,9 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
   const byNewest = (a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || b.id - a.id;
   const findGift = code => data.gifts.find(item => item.code === code);
   const GIFT_EDITABLE = ['org', 'message', 'seats', 'active', 'note'];
+  // `notified` stays inside the store, as in D1; rows written before it existed read as they were.
+  const refundOut = ({ notified, ...row }) => ({ scope: '', status: '', note: '', attempts: 0, ...row });
+  const revocationOut = row => ({ wasActive: null, ...row });
   return {
     data,
     async addGift(gift) {
@@ -1359,6 +1708,101 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
     async clearPaymentEmailed(id) {
       const row = data.payments.find(item => item.checkoutId === id);
       if (row) { row.emailedAt = null; changed(); }
+    },
+    async addOrder(row) {
+      if (data.orders.some(item => item.orderId === row.orderId)) return false;
+      data.orders.push({ orderId: row.orderId, checkoutId: row.checkoutId, kind: row.kind, mode: row.mode || '', createdAt: row.createdAt });
+      changed();
+      return true;
+    },
+    async getOrder(id) {
+      const row = data.orders.find(item => item.orderId === id);
+      return row ? { mode: '', ...row } : null;
+    },
+    async getOrderByCheckout(id) {
+      const row = data.orders.find(item => item.checkoutId === id);
+      return row ? { mode: '', ...row } : null;
+    },
+    async listCheckoutsWithoutOrder(limit = 50) {
+      const ordered = new Set(data.orders.map(item => item.checkoutId));
+      const isCreem = ref => typeof ref === 'string' && ref.startsWith('ch_') && !ordered.has(ref);
+      return [
+        ...data.purchases.filter(item => item.kind === 'plus' && isCreem(item.checkoutRef)).map(item => ({ checkoutId: item.checkoutRef, kind: 'plus', note: item.note || '', createdAt: item.createdAt })),
+        ...data.gifts.filter(item => isCreem(item.checkoutRef)).map(item => ({ checkoutId: item.checkoutRef, kind: 'gift', note: item.note || '', createdAt: item.createdAt }))
+      ].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || a.checkoutId.localeCompare(b.checkoutId)).slice(0, limit);
+    },
+    async addRefund(row) {
+      if (data.refunds.some(item => item.id === row.id)) return false;
+      data.refunds.push({ orderId: '', transactionId: '', checkoutId: '', item: '', amount: null, currency: '', scope: '', reason: '', revoked: '', status: '', note: '', ...row, fullRefund: !!row.fullRefund, attempts: Number(row.attempts) || 0, notified: false });
+      changed();
+      return true;
+    },
+    async completeRefund(row) {
+      const index = data.refunds.findIndex(item => item.id === row.id && item.status === 'pending');
+      if (index < 0) return false;
+      const { attempts, notified } = data.refunds[index];
+      data.refunds[index] = { orderId: '', transactionId: '', checkoutId: '', item: '', amount: null, currency: '', scope: '', reason: '', revoked: '', note: '', ...row, fullRefund: !!row.fullRefund, status: '', attempts, notified };
+      changed();
+      return true;
+    },
+    async retryRefund(id, note) {
+      const row = data.refunds.find(item => item.id === id && item.status === 'pending');
+      if (!row) return false;
+      row.attempts = (Number(row.attempts) || 0) + 1;
+      row.note = note || '';
+      changed();
+      return true;
+    },
+    async markRefundNotified(id) {
+      const row = data.refunds.find(item => item.id === id);
+      if (!row || row.notified) return false;
+      row.notified = true;
+      changed();
+      return true;
+    },
+    async linkRefund(id, fields) {
+      const row = data.refunds.find(item => item.id === id);
+      if (!row) return false;
+      Object.assign(row, { checkoutId: fields.checkoutId || '', item: fields.item || '', revoked: fields.revoked || '' });
+      changed();
+      return true;
+    },
+    async getRefund(id) {
+      const row = data.refunds.find(item => item.id === id);
+      return row ? refundOut(row) : null;
+    },
+    async listRefunds({ limit = 100 } = {}) {
+      return [...data.refunds].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || String(a.id).localeCompare(String(b.id))).slice(0, limit)
+        .map(row => ({ ...refundOut(row), inForce: data.revocations.some(item => item.source === row.id) }));
+    },
+    async addRevocations(rows) {
+      let added = 0;
+      for (const row of rows) {
+        if (data.revocations.some(item => item.target === row.target && item.source === row.source)) continue;
+        data.revocations.push({ target: row.target, source: row.source, kind: row.kind, label: row.label || '', reason: row.reason || '', note: row.note || '', wasActive: typeof row.wasActive === 'boolean' ? row.wasActive : null, createdAt: row.createdAt });
+        added += 1;
+      }
+      if (added) changed();
+      return added;
+    },
+    async isRevoked(targets) {
+      return data.revocations.some(item => targets.includes(item.target));
+    },
+    async listRevocationsFor(targets) {
+      return data.revocations.filter(item => targets.includes(item.target)).map(revocationOut)
+        .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)) || String(a.source).localeCompare(String(b.source)) || String(a.target).localeCompare(String(b.target)));
+    },
+    async listRevocations({ limit = 500 } = {}) {
+      return [...data.revocations].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || String(a.source).localeCompare(String(b.source)) || String(a.target).localeCompare(String(b.target))).slice(0, limit).map(revocationOut);
+    },
+    async listRevocationsBySource(source) {
+      return data.revocations.filter(item => item.source === source).sort((a, b) => String(a.target).localeCompare(String(b.target))).map(revocationOut);
+    },
+    async deleteRevocations(source) {
+      const before = data.revocations.length;
+      data.revocations = data.revocations.filter(item => item.source !== source);
+      changed();
+      return before - data.revocations.length;
     },
     async addReview(entry) {
       data.reviews.push({ id: data.nextId++, appVersion: entry.appVersion, rating: entry.rating, text: entry.text, name: entry.name || '', createdAt: entry.createdAt });

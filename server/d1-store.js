@@ -1,6 +1,6 @@
 // Cloudflare D1 implementation of the planner API store.
 // Schema: migrations/0001_planner_api.sql, migrations/0002_team_requests.sql,
-// migrations/0003_plus.sql, migrations/0004_creem_reviews.sql
+// migrations/0003_plus.sql, migrations/0004_creem_reviews.sql, migrations/0005_refunds.sql
 // Every value goes through bound parameters (D1 allows at most 100 per query,
 // so id lists are deleted in chunks).
 // The stripe_session columns of gifts and purchases hold the checkout reference
@@ -17,6 +17,11 @@ const purchaseColumns = 'stripe_session AS checkoutRef, kind, license_id AS lice
 const GIFT_EDITABLE = Object.freeze({ org: 'org', message: 'message', seats: 'seats', active: 'active', note: 'note' });
 const paymentColumns = 'checkout_id AS checkoutId, kind, plan, seats, amount, currency, country, created_at AS createdAt, emailed_at AS emailedAt';
 const reviewColumns = 'id, app_version AS appVersion, rating, text, name, created_at AS createdAt';
+const orderColumns = 'order_id AS orderId, checkout_id AS checkoutId, kind, mode, created_at AS createdAt';
+const refundColumns = 'id, kind, order_id AS orderId, transaction_id AS transactionId, checkout_id AS checkoutId, item, amount, currency, full_refund AS fullRefund, scope, reason, revoked, status, note, attempts, created_at AS createdAt';
+const revocationColumns = 'target, source, kind, label, reason, note, was_active AS wasActive, created_at AS createdAt';
+const refundRow = row => (row ? { ...row, amount: row.amount == null ? null : Number(row.amount), fullRefund: Number(row.fullRefund) === 1, attempts: Number(row.attempts) || 0, ...(row.inForce === undefined ? {} : { inForce: Number(row.inForce) === 1 }) } : null);
+const revocationRow = row => ({ ...row, wasActive: row.wasActive == null ? null : Number(row.wasActive) === 1 });
 const ID_CHUNK = 90;
 const nextDay = day => new Date(Date.parse(`${day}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 
@@ -73,6 +78,53 @@ export function createD1Store(db) {
     listPayments: ({ fromDay, toDay }) => all(`SELECT ${paymentColumns} FROM payments WHERE created_at >= ? AND created_at < ? ORDER BY created_at, checkout_id`, fromDay, nextDay(toDay)),
     markPaymentEmailed: async (id, iso) => await run('UPDATE payments SET emailed_at = ? WHERE checkout_id = ? AND emailed_at IS NULL', iso, id) === 1,
     clearPaymentEmailed: async id => { await run('UPDATE payments SET emailed_at = NULL WHERE checkout_id = ?', id); },
+    // Refunds (migration 0005): the order of each paid checkout, refunds and disputes, revocations.
+    addOrder: async row => await run('INSERT INTO orders (order_id, checkout_id, kind, mode, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(order_id) DO NOTHING',
+      row.orderId, row.checkoutId, row.kind, row.mode || '', row.createdAt) > 0,
+    getOrder: id => all(`SELECT ${orderColumns} FROM orders WHERE order_id = ?`, id).then(([row]) => (row ? { ...row } : null)),
+    getOrderByCheckout: id => all(`SELECT ${orderColumns} FROM orders WHERE checkout_id = ? ORDER BY created_at LIMIT 1`, id).then(([row]) => (row ? { ...row } : null)),
+    /** Creem checkouts (ch_…) delivered as a Plus purchase or a gift whose order is not recorded yet, newest first. */
+    listCheckoutsWithoutOrder: (limit = 50) => all(`SELECT checkoutId, kind, note, createdAt FROM (
+      SELECT stripe_session AS checkoutId, 'plus' AS kind, note, created_at AS createdAt FROM purchases WHERE kind = 'plus' AND substr(stripe_session, 1, 3) = 'ch_'
+      UNION ALL SELECT stripe_session AS checkoutId, 'gift' AS kind, note, created_at AS createdAt FROM gifts WHERE substr(stripe_session, 1, 3) = 'ch_'
+    ) AS paid WHERE NOT EXISTS (SELECT 1 FROM orders WHERE orders.checkout_id = paid.checkoutId) ORDER BY createdAt DESC, checkoutId LIMIT ?`, limit),
+    addRefund: async row => await run('INSERT INTO refunds (id, kind, order_id, transaction_id, checkout_id, item, amount, currency, full_refund, scope, reason, revoked, status, note, attempts, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING',
+      row.id, row.kind, row.orderId || '', row.transactionId || '', row.checkoutId || '', row.item || '', row.amount ?? null, row.currency || '', row.fullRefund ? 1 : 0, row.scope || '', row.reason || '', row.revoked || '', row.status || '', row.note || '', Number(row.attempts) || 0, row.createdAt) > 0,
+    /** A refund waiting for its transaction, now processed. False when it was not waiting (already processed elsewhere). */
+    completeRefund: async row => await run("UPDATE refunds SET kind = ?, order_id = ?, transaction_id = ?, checkout_id = ?, item = ?, amount = ?, currency = ?, full_refund = ?, scope = ?, reason = ?, revoked = ?, status = '', note = ?, created_at = ? WHERE id = ? AND status = 'pending'",
+      row.kind, row.orderId || '', row.transactionId || '', row.checkoutId || '', row.item || '', row.amount ?? null, row.currency || '', row.fullRefund ? 1 : 0, row.scope || '', row.reason || '', row.revoked || '', row.note || '', row.createdAt, row.id) > 0,
+    /** One more failed read of a waiting refund's transaction. */
+    retryRefund: async (id, note) => await run("UPDATE refunds SET attempts = attempts + 1, note = ? WHERE id = ? AND status = 'pending'", note || '', id) > 0,
+    /** True only the first time: the owner is told about a waiting refund once. */
+    markRefundNotified: async id => await run('UPDATE refunds SET notified = 1 WHERE id = ? AND notified = 0', id) === 1,
+    /** A refund matched later, when the checkout it refunded was delivered (and refused). */
+    linkRefund: async (id, fields) => await run('UPDATE refunds SET checkout_id = ?, item = ?, revoked = ? WHERE id = ?', fields.checkoutId || '', fields.item || '', fields.revoked || '', id) > 0,
+    getRefund: id => all(`SELECT ${refundColumns} FROM refunds WHERE id = ?`, id).then(([row]) => refundRow(row)),
+    /** Newest first; `inForce` says whether what the refund revoked is still revoked (not restored). */
+    listRefunds: ({ limit = 100 } = {}) => all(`SELECT ${refundColumns}, EXISTS (SELECT 1 FROM revocations WHERE revocations.source = refunds.id) AS inForce FROM refunds ORDER BY created_at DESC, id LIMIT ?`, limit).then(rows => rows.map(refundRow)),
+    /** Rows already there (same target and source) are kept as they are. Returns how many were added. */
+    async addRevocations(rows) {
+      let added = 0;
+      for (const row of rows) {
+        added += await run('INSERT INTO revocations (target, source, kind, label, reason, note, was_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(target, source) DO NOTHING',
+          row.target, row.source, row.kind, row.label || '', row.reason || '', row.note || '', typeof row.wasActive === 'boolean' ? (row.wasActive ? 1 : 0) : null, row.createdAt);
+      }
+      return added;
+    },
+    /** True when any of the targets is revoked, by any source. */
+    isRevoked: async targets => (targets.length ? (await all(`SELECT 1 AS hit FROM revocations WHERE target IN (${targets.map(() => '?').join(', ')}) LIMIT 1`, ...targets)).length > 0 : false),
+    /** Every revocation of these targets (any source), oldest first. */
+    async listRevocationsFor(targets) {
+      const rows = [];
+      for (let start = 0; start < targets.length; start += ID_CHUNK) {
+        const chunk = targets.slice(start, start + ID_CHUNK);
+        rows.push(...await all(`SELECT ${revocationColumns} FROM revocations WHERE target IN (${chunk.map(() => '?').join(', ')})`, ...chunk));
+      }
+      return rows.map(revocationRow).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)) || String(a.source).localeCompare(String(b.source)) || String(a.target).localeCompare(String(b.target)));
+    },
+    listRevocations: ({ limit = 500 } = {}) => all(`SELECT ${revocationColumns} FROM revocations ORDER BY created_at DESC, source, target LIMIT ?`, limit).then(rows => rows.map(revocationRow)),
+    listRevocationsBySource: source => all(`SELECT ${revocationColumns} FROM revocations WHERE source = ? ORDER BY target`, source).then(rows => rows.map(revocationRow)),
+    deleteRevocations: async source => await run('DELETE FROM revocations WHERE source = ?', source),
     // Reviews (migration 0004): feedback its author agreed may be quoted.
     async addReview(entry) {
       await run('INSERT INTO reviews (app_version, rating, text, name, created_at) VALUES (?, ?, ?, ?, ?)', entry.appVersion, entry.rating, entry.text, entry.name || '', entry.createdAt);

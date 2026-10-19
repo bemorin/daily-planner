@@ -89,12 +89,15 @@ test('the sample review has the shape buildYearReview() gives, and prints throug
   const shape = value => (value && typeof value === 'object' && !Array.isArray(value) ? Object.fromEntries(Object.keys(value).sort().map(key => [key, shape(value[key])])) : Array.isArray(value) ? 'array' : typeof value);
   assert.deepEqual(shape(review), shape(real));
   const html = renderYearReviewPrint(review, progress, { icon });
-  assert.match(html, /Your 2025/);
+  assert.match(html, /<h1>2025, in review<\/h1>/);
   assert.match(html, /1 January – 31 December 2025/);
   assert.match(html, />190</);
   assert.match(html, /Run a marathon/);
   assert.match(html, /412 h/);
   assert.match(html, /Crossing the finish line with Sam/);
+  assert.match(html, /^<div class="rv">/, 'a full year: every part, nothing quiet');
+  ['rv-time', 'rv-kind--misogi', 'rv-kind--adventure', 'rv-kind--habit', 'rv-kind--commitment', 'rv-journal', 'rv-trophies'].forEach(part => assert.match(html, new RegExp(`class="rv-sec ${part}`), part));
+  assert.match(renderYearReviewPrint(review, progress, { icon, palette: 'sunset' }), /^<div class="rv rv--paint-sunset">/);
 });
 
 test('own previews need a printable plan, or 20 closed days for the review', () => {

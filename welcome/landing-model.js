@@ -24,6 +24,9 @@ export function pageCurrency(options, languages) {
 /** The one muted line shown near the prices. */
 export const currencyLine = currency => (currency === 'EUR' ? 'Prices in euros, taxes included.' : 'Prices in US dollars, taxes included.');
 
+/** Under one price (Plus, in its own section): its currency, taxes included. */
+export const taxLine = currency => (currency === 'EUR' ? 'In euros, taxes included' : 'In US dollars, taxes included');
+
 const people = value => new Intl.NumberFormat('en-US').format(value);
 
 /** Every row of the team gift table: the priced tiers, then the quote. */

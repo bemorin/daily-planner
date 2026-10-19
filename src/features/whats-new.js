@@ -6,11 +6,11 @@
  * (1.22.1, 1.22.2…) keep the same note and are never asked about again.
  */
 export const WHATS_NEW = Object.freeze({
-  version: '1.23',
+  version: '1.24',
   items: Object.freeze([
-    'Daily Planner Plus shows its yearly ritual: plan the year in a guided half hour, print it for your desk and fill it in by hand, then look back on one printed page.',
-    'See the real pages before you buy: the printed year and the year in review, from your own planner or a sample. Tap Enlarge to read them.',
-    'From October, Plan your year prepares next year.',
-    'Privacy, terms, cookies and the legal notice now live on planner.bemorin.com, linked at the bottom of Help.'
+    'Your year in review prints as a designed page: big numbers, your painted year in your colours, where the time went, Horizon and your journal.',
+    'The date sits right of ‹ Now ›, so the arrows stay put from one month to the next.',
+    'The Daily Planner Plus window is clearer, with the price and Get Plus side by side.',
+    'Setup asks Light or Dark (your system’s is chosen), and its daily loop reads at a glance.'
   ])
 });

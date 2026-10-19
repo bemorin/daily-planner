@@ -13,6 +13,13 @@ import { PLUS_PUBLIC_KEY } from '../config.js';
  * backups and Google Drive sync carry it to the person's other devices. app.js
  * owns the settings object and connects it here with connectPlus(); every
  * feature asks hasPlus() and listens with onPlusChange().
+ *
+ * A refunded purchase or gift is revoked on the server; about once a week
+ * src/features/plus-check.js asks whether this licence still holds and, when
+ * it doesn't, calls revokePlus(). This device then remembers the licence id
+ * as revoked, so sync, a backup or another tab never brings it back, and keeps
+ * the licence itself aside (never synced or backed up) to ask about it again
+ * each week: when the owner restores it, restorePlus() brings Plus back.
  */
 
 export const PLUS_PRICE = 29;
@@ -28,6 +35,15 @@ const CHECKOUT_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{5,199}$/;
 const BARE_CHECKOUT_RE = /^(?:ch|cs_(?:live|test))_[A-Za-z0-9_-]+$/;
 // Remembers the token this device last verified, so Plus is on from the first paint.
 const VERIFIED_KEY = 'daily-planner-ui:plus-verified';
+// The last licence check with the server, licence ids found revoked, the last
+// revoked licence kept aside to ask about again (`held`: { token, activatedAt,
+// gift }) and a notice to show once: { at, revoked: [id], held, notice:
+// 'purchase'|'gift'|'manual'|'dev'|'restored' }. UI prefix: never synced or backed up.
+export const PLUS_CHECK_KEY = 'daily-planner-ui:plus-checked';
+const REVOKED_MAX = 20;
+const LICENSE_ID_RE = /^[0-9a-f]{16}$/;
+const TOKEN_MAX = 2048;
+const NOTICES = new Set([...SOURCES, 'restored']);
 
 // ---------------------------------------------------------------------------
 // Pure helpers (unit-tested)
@@ -185,6 +201,41 @@ export function plusStatusLine(license, { gift = null, activatedAt = '', locale 
   return since ? `Plus is active · since ${since}` : 'Plus is active';
 }
 
+/** A revoked licence kept aside, cleaned; null when absent or malformed. */
+function heldFrom(value) {
+  const token = String(value?.token || '').trim();
+  if (!value || typeof value !== 'object' || token.length > TOKEN_MAX || !TOKEN_RE.test(token)) return null;
+  const code = normalizeGiftCode(value.gift?.code);
+  return {
+    token,
+    activatedAt: typeof value.activatedAt === 'string' ? value.activatedAt.slice(0, 40) : '',
+    gift: code ? { code, org: String(value.gift.org || '').slice(0, 80) } : null
+  };
+}
+
+/** The licence check record of this device; never throws. */
+export function readPlusCheck(storage = globalThis.localStorage) {
+  let value = null;
+  try { value = JSON.parse(storage?.getItem(PLUS_CHECK_KEY) || 'null'); } catch (_) { value = null; }
+  const at = Number(value?.at);
+  return {
+    at: Number.isFinite(at) && at > 0 ? at : 0,
+    revoked: Array.isArray(value?.revoked) ? value.revoked.filter(id => LICENSE_ID_RE.test(String(id))).slice(-REVOKED_MAX) : [],
+    held: heldFrom(value?.held),
+    notice: NOTICES.has(value?.notice) ? value.notice : ''
+  };
+}
+
+/** Merges `changes` into the check record and saves it. Returns the new record. */
+export function writePlusCheck(changes, storage = globalThis.localStorage) {
+  const next = { ...readPlusCheck(storage), ...changes };
+  try { storage?.setItem(PLUS_CHECK_KEY, JSON.stringify(next)); } catch (_) {}
+  return next;
+}
+
+const licenseIdOf = token => decodePlusToken(token)?.payload.id || '';
+const revokedHere = token => { const id = licenseIdOf(token); return !!id && readPlusCheck().revoked.includes(id); };
+
 // ---------------------------------------------------------------------------
 // Device state
 // ---------------------------------------------------------------------------
@@ -222,10 +273,10 @@ export function onPlusChange(listener) {
   return () => listeners.delete(listener);
 }
 
-/** Re-reads the stored licence and verifies it (after a sync, an import or a reset). */
+/** Re-reads the stored licence and verifies it (after a sync, an import or a reset). A licence revoked here stays off. */
 export async function refreshPlus() {
   const token = plusSettingsFrom(source.read()).plus?.token || '';
-  if (!token || !publicKey) { setCurrent({ license: null, token: '' }); return false; }
+  if (!token || !publicKey || revokedHere(token)) { if (token && token === rememberedToken()) remember(''); setCurrent({ license: null, token: '' }); return false; }
   if (token === current.token && current.license && token === verifiedToken) return true;
   const license = await verifyPlusToken(token, publicKey);
   verifiedToken = license ? token : '';
@@ -246,7 +297,7 @@ export function connectPlus({ read, write, key = PLUS_PUBLIC_KEY } = {}) {
   publicKey = String(key || '');
   verifiedToken = '';
   const token = plusSettingsFrom(source.read()).plus?.token || '';
-  const known = publicKey && token && token === rememberedToken() ? decodePlusToken(token) : null;
+  const known = publicKey && token && token === rememberedToken() && !revokedHere(token) ? decodePlusToken(token) : null;
   current = known ? { license: known.payload, token } : { license: null, token: '' };
   return refreshPlus();
 }
@@ -258,6 +309,9 @@ export async function activatePlusToken(token, { gift = null } = {}) {
   if (!globalThis.crypto?.subtle) return { ok: false, reason: 'insecure', error: 'This browser can only check a licence on a secure (https) page.' };
   const license = await verifyPlusToken(clean, publicKey);
   if (!license) return { ok: false, reason: 'invalid', error: 'This licence couldn’t be verified. Check that it was copied in full.' };
+  // Activated again by hand after it was revoked here (restored after a mistake, say): check it with the server at once.
+  const { revoked, held } = readPlusCheck();
+  if (revoked.includes(license.id)) writePlusCheck({ revoked: revoked.filter(id => id !== license.id), at: 0, ...(licenseIdOf(held?.token) === license.id ? { held: null } : {}) });
   verifiedToken = clean;
   const already = current.token === clean;
   const fields = { plus: { token: clean, activatedAt: already ? plusSettings().plus?.activatedAt || new Date().toISOString() : new Date().toISOString() } };
@@ -268,4 +322,49 @@ export async function activatePlusToken(token, { gift = null } = {}) {
   remember(clean);
   setCurrent({ license, token: clean });
   return { ok: true, license, already };
+}
+
+/**
+ * The server says this licence was revoked (a refund or a dispute): Plus is
+ * removed from this planner's settings, and this device keeps the licence id
+ * as revoked so sync, a backup or another tab never turn it back on. The
+ * licence itself is kept aside on this device only, so the weekly check can
+ * ask about it again. Returns true when Plus was active with that licence.
+ */
+export function revokePlus(token = current.token) {
+  const id = licenseIdOf(token);
+  if (!id) return false;
+  const { revoked } = readPlusCheck();
+  const stored = plusSettingsFrom(source.read());
+  const mine = licenseIdOf(stored.plus?.token) === id;
+  const held = heldFrom({ token, activatedAt: mine ? stored.plus.activatedAt : '', gift: mine ? stored.plusGift : null });
+  writePlusCheck({ revoked: [...revoked.filter(item => item !== id), id].slice(-REVOKED_MAX), held });
+  if (mine) source.write({ plus: null, plusGift: null });
+  if (licenseIdOf(rememberedToken()) === id) remember('');
+  const active = current.license?.id === id;
+  if (active) { verifiedToken = ''; setCurrent({ license: null, token: '' }); }
+  return active;
+}
+
+/**
+ * The server says a licence revoked here is valid again (the owner restored
+ * the purchase or the gift): it leaves the revoked list and, unless another
+ * licence gave Plus meanwhile, goes back into the settings, as it was. Returns
+ * true when Plus is back on this planner.
+ */
+export async function restorePlus(token) {
+  const clean = String(token || '').trim();
+  const id = licenseIdOf(clean);
+  if (!id) return false;
+  const record = readPlusCheck();
+  const held = licenseIdOf(record.held?.token) === id ? record.held : null;
+  writePlusCheck({ revoked: record.revoked.filter(item => item !== id), ...(held ? { held: null } : {}) });
+  if (current.license || !publicKey) return false;
+  const license = await verifyPlusToken(clean, publicKey);
+  if (!license || current.license) return false;
+  verifiedToken = clean;
+  source.write({ plus: { token: clean, activatedAt: held?.activatedAt || new Date().toISOString() }, plusGift: held?.gift || null });
+  remember(clean);
+  setCurrent({ license, token: clean });
+  return true;
 }

@@ -8,7 +8,9 @@
 // trusted only once it is read back from Creem (claims) or arrives in a signed
 // webhook.
 //
-// API     POST /v1/checkouts, GET /v1/checkouts?checkout_id=…, header x-api-key
+// API     POST /v1/checkouts, GET /v1/checkouts?checkout_id=…,
+//         GET /v1/transactions?transaction_id=… (a refund names only its transaction,
+//         whose `order` leads back to the checkout), header x-api-key
 //         https://api.creem.io (live) or https://test-api.creem.io (test)
 //         A partner's code goes in `affiliate_code` (Creem's affiliate program);
 //         Creem refuses an unknown code with HTTP 400.
@@ -26,6 +28,8 @@ export const CREEM_TIMEOUT_MS = 10000;
 export const CREEM_ITEMS = Object.freeze(['plus', 'gift']);
 /** Checkout references: Creem ids (ch_…), older references kept in the database, dev fakes. */
 export const CHECKOUT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{5,199}$/;
+/** Creem ids of orders, transactions, refunds and disputes (ord_…, tran_…, ref_…, disp_…). */
+export const CREEM_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{2,199}$/;
 const PRODUCT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/;
 const SIGNATURE_RE = /^[0-9a-f]{64}$/;
 /** A partner code from a ?ref= link (the planner and the landing page keep the same rule). */
@@ -138,17 +142,44 @@ export async function fetchCheckout({ apiKey, mode = 'live', checkoutId, fetch: 
   return checkout && typeof checkout === 'object' ? checkout : null;
 }
 
+/**
+ * GET /v1/transactions?transaction_id=…. Resolves with the transaction entity
+ * ({ id, order, status, amount_paid, refunded_amount, … }), or null when Creem
+ * does not know the id (404, or 400 for an id it cannot read); rejects otherwise.
+ */
+export async function fetchTransaction({ apiKey, mode = 'live', transactionId, fetch: fetchImpl, timeoutMs = CREEM_TIMEOUT_MS }) {
+  const response = await creemRequest({
+    fetch: fetchImpl,
+    url: `${creemApiBase(mode)}/v1/transactions?transaction_id=${encodeURIComponent(transactionId)}`,
+    init: { method: 'GET', headers: { 'x-api-key': apiKey, accept: 'application/json' } },
+    timeoutMs
+  });
+  if (response.status === 404 || response.status === 400) return null;
+  if (!response.ok) throw new Error(await describeFailure(response));
+  const transaction = await response.json().catch(() => null);
+  return transaction && typeof transaction === 'object' && !Array.isArray(transaction) ? transaction : null;
+}
+
 const objectOrNull = value => (value && typeof value === 'object' && !Array.isArray(value) ? value : null);
 const wholeCents = value => (Number.isInteger(value) && value >= 0 ? value : null);
+/** A Creem id given as a string or as an expanded object; '' when missing or malformed. */
+/** Creem's `mode` of a checkout or a transaction ('test', 'live', 'prod', 'sandbox'…), lower case; '' when absent or odd. */
+export const creemModeOf = value => { const mode = String(value ?? '').trim().toLowerCase(); return /^[a-z][a-z_-]{0,19}$/.test(mode) ? mode : ''; };
+
+export const creemIdOf = value => {
+  const id = String((typeof value === 'string' ? value : objectOrNull(value)?.id) ?? '').trim();
+  return CREEM_ID_RE.test(id) ? id : '';
+};
 
 /**
  * What a checkout bought, read defensively (ids or expanded objects).
- * Returns { completed, paid, productId, item, email, country, org, amount, currency }:
+ * Returns { completed, paid, productId, item, email, country, org, amount, currency, …, orderId }:
  * `item` is { kind: 'plus', plan: '', seats: 1 } or { kind: 'gift', plan, seats } with
  * seats from the plan (a team tier or a personal gift, never from the metadata alone),
  * or null when the product is not one of `products` (Map from parseCreemProducts) or
  * its metadata does not match it. `org` is the name typed on the checkout: the
  * company (`company`) for a team gift, the giver (`from`) for a personal gift.
+ * `orderId` is Creem's order (kept so a later refund can be traced back), '' when absent.
  */
 export function readCheckout(checkout, products = new Map()) {
   const entity = objectOrNull(checkout) || {};
@@ -184,7 +215,9 @@ export function readCheckout(checkout, products = new Map()) {
     currency: CURRENCIES.includes(currency) ? currency : '',
     productCurrency: product?.currency || '',
     requestId: String(entity.request_id ?? ''),
-    seal: { rid: String(metadata.rid ?? ''), currency: String(metadata.currency ?? ''), value: String(metadata.seal ?? '') }
+    seal: { rid: String(metadata.rid ?? ''), currency: String(metadata.currency ?? ''), value: String(metadata.seal ?? '') },
+    orderId: creemIdOf(entity.order),
+    mode: creemModeOf(entity.mode)
   };
 }
 

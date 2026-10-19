@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { THEME_STORAGE_KEY, normalizeThemePreference, readThemePreference, resolveTheme, writeThemePreference } from '../src/ui/theme.js';
+import { THEME_STORAGE_KEY, normalizeThemePreference, pressedThemeOption, readThemePreference, resolveTheme, writeThemePreference } from '../src/ui/theme.js';
 
 function memoryStorage(initial = {}) {
   const data = new Map(Object.entries(initial));
@@ -35,4 +35,18 @@ test('system preference resolves from the device setting', () => {
   assert.equal(resolveTheme('system', false), 'light');
   assert.equal(resolveTheme('light', true), 'light');
   assert.equal(resolveTheme('dark', false), 'dark');
+});
+
+test('setup offers Light and Dark: while following the system it shows the theme the system paints', () => {
+  const pair = ['light', 'dark'];
+  assert.equal(pressedThemeOption('system', true, pair), 'dark');
+  assert.equal(pressedThemeOption('system', false, pair), 'light');
+  assert.equal(pressedThemeOption('light', true, pair), 'light', 'an explicit choice wins over the system');
+  assert.equal(pressedThemeOption('dark', false, pair), 'dark');
+  assert.equal(pressedThemeOption('sepia', true, pair), 'dark', 'an unknown value follows the system');
+});
+
+test('Settings keeps System as its own choice', () => {
+  assert.equal(pressedThemeOption('system', true), 'system');
+  assert.equal(pressedThemeOption('dark', true), 'dark');
 });

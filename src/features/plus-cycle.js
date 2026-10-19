@@ -71,6 +71,8 @@ const ICONS = {
   check: '<path d="m6.5 12.5 3.3 3.3 7.7-8"/>'
 };
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+// Enlarged, a page fitted to the width smaller than this shows at its printed size instead.
+const ZOOM_FIT_FLOOR = 0.8;
 // The review's own icons: progress-view's set, plus the tick of its checkboxes.
 const reviewIcon = name => (name === 'check' ? `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.check}</svg>` : progressIcon(name));
 
@@ -178,15 +180,27 @@ export function createPlusCycle({ modal, data, palette = () => 'terracotta', onA
   // The stage: paper scaled to fit, pen marks, enlarging
   // -------------------------------------------------------------------------
 
+  /**
+   * Scales a page to fit `width` × `height`. The page is A4 landscape, or
+   * taller when its sheet asks for more: its height is read from the page
+   * itself (the sheet sets it), never assumed.
+   */
+  function sizePaper(paper, width, height, options) {
+    const page = paper?.querySelector('.plus-paper__page');
+    if (!page) return 0;
+    const pageHeight = Math.max(PAGE_SIZE.height, page.offsetHeight || 0);
+    const scale = paperScale(width, height * (PAGE_SIZE.height / pageHeight), options);
+    if (!scale) return 0;
+    paper.style.setProperty('--plus-page-height', `${pageHeight}px`);
+    paper.style.setProperty('--plus-paper-scale', String(scale));
+    return scale;
+  }
+
   function fit(root = host) {
-    const stageEl = root?.querySelector('[data-plus-stage]');
-    const paper = stageEl?.querySelector('.plus-paper');
+    const paper = root?.querySelector('[data-plus-stage] .plus-paper');
     if (!paper) return false;
     const area = paper.parentElement;
-    const scale = paperScale(area.clientWidth, area.clientHeight);
-    if (!scale) return false;
-    paper.style.setProperty('--plus-paper-scale', String(scale));
-    return true;
+    return !!sizePaper(paper, area.clientWidth, area.clientHeight);
   }
 
   /** A tick on a milestone, a circled date and a line written by hand, over the printed year (decorative). */
@@ -218,7 +232,7 @@ export function createPlusCycle({ modal, data, palette = () => 'terracotta', onA
     if (day) { const b = box(day); const width = Math.max(b.w, b.h * 1.3) * 1.75; marks.push(mark('circle', b.x + b.w / 2 - width / 2, b.y + b.h / 2 - width * 0.38, width, 650)); }
     if (line) { const b = box(line); const width = Math.min(b.w * 0.6, 150); marks.push(mark('scribble', b.x + 1, b.y + b.h - width * 0.12, width, 1000)); }
     if (!marks.length) return;
-    page.insertAdjacentHTML('beforeend', `<svg class="plus-pen${prefersReducedMotion() ? ' is-still' : ''}" viewBox="0 0 ${PAGE_SIZE.width.toFixed(1)} ${PAGE_SIZE.height.toFixed(1)}" aria-hidden="true">${marks.join('')}</svg>`);
+    page.insertAdjacentHTML('beforeend', `<svg class="plus-pen${prefersReducedMotion() ? ' is-still' : ''}" viewBox="0 0 ${PAGE_SIZE.width.toFixed(1)} ${(page.offsetHeight || PAGE_SIZE.height).toFixed(1)}" aria-hidden="true">${marks.join('')}</svg>`);
   }
 
   function settle(root = host) {
@@ -247,7 +261,9 @@ export function createPlusCycle({ modal, data, palette = () => 'terracotta', onA
     zoom = { layer, behind, trigger };
     const paper = layer.querySelector('.plus-paper');
     const scroller = layer.querySelector('[data-plus-zoom-scroll]');
-    const size = () => paper.style.setProperty('--plus-paper-scale', String(Math.max(1, paperScale(scroller.clientWidth - 32, Infinity, { max: 1.35 }))));
+    // Fits the width (up to 135%) on a desktop; where that would shrink the page much below its
+    // printed size (tablets, phones), it stays printed size and pans.
+    const size = () => { if (sizePaper(paper, scroller.clientWidth - 32, Infinity, { max: 1.35 }) < ZOOM_FIT_FLOOR) paper.style.setProperty('--plus-paper-scale', '1'); };
     size();
     zoom.resize = size;
     globalThis.addEventListener?.('resize', size);

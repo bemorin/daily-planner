@@ -179,6 +179,24 @@ test('the numbers written in the terms match the code', async () => {
   assert.match(terms, /Ask within 14 days of purchase and you are refunded, no questions asked\./);
 });
 
+test('the legal pages say a refund switches Plus off and that the licence is checked about once a week', async () => {
+  const terms = text(await read('legal/terms/index.html'));
+  assert.match(terms, /If you are refunded, Plus is switched off on the planners it was activated on, and a gift link stops working\./);
+  assert.match(terms, /Disputes are handled the same way/);
+  const privacy = text(await read('legal/privacy/index.html'));
+  assert.doesNotMatch(privacy, /never contacts us/, 'Plus does contact the server once a week now');
+  assert.match(privacy, /About once a week, when you are online, the planner sends us only the licence \(with its random id\) to ask whether it is still valid, nothing else/);
+  assert.doesNotMatch(privacy, /licence alone|still valid — no identifier/, 'the licence carries a random id');
+  assert.match(privacy, /so Plus comes back if that is undone/);
+  assert.match(privacy, /Creem’s order reference/);
+  assert.match(privacy, /is not stored in our database: it only appears in the notification email we send ourselves about the refund, through Resend/);
+  assert.doesNotMatch(privacy, /used only to tell us about the refund, and is not kept/);
+  assert.match(privacy, /Refunds, disputes and revoked licences/);
+  const cookies = await read('legal/cookies/index.html');
+  assert.match(cookies, /<code>daily-planner-ui:plus-checked<\/code>/);
+  assert.doesNotMatch(text(cookies), /None of it is sent to us\. /, 'the licence check is the one exception');
+});
+
 test('the 60 days in the privacy and cookies pages match how long a partner code is used', async () => {
   for (const file of ['legal/privacy/index.html', 'legal/cookies/index.html']) assert.match(text(await read(file)), /60 days/, file);
   const stored = new Map();
@@ -204,7 +222,7 @@ test('prices and Plus features in the terms come from src/lib/pricing.js', () =>
 
 test('the cookies page lists every storage key the code uses', async () => {
   const cookies = await read('legal/cookies/index.html');
-  const sources = ['src/lib/planner-api.js', 'src/lib/plus.js', 'src/features/plus-dialog.js', 'src/features/feedback.js', 'src/features/sync-guide.js', 'src/features/progress-view.js', 'src/features/paint-palettes.js', 'src/ui/theme.js', 'src/sync/ledger.js'];
+  const sources = ['src/lib/planner-api.js', 'src/lib/plus.js', 'src/features/plus-check.js', 'src/features/plus-dialog.js', 'src/features/feedback.js', 'src/features/sync-guide.js', 'src/features/progress-view.js', 'src/features/paint-palettes.js', 'src/ui/theme.js', 'src/sync/ledger.js'];
   const keys = new Set();
   for (const file of sources) for (const match of (await read(file)).matchAll(/'(daily-planner-(?:ui|sync):[a-z-]+)'/g)) keys.add(match[1]);
   assert.ok(keys.size >= 12, `found ${keys.size} keys`);

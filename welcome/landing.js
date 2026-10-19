@@ -4,8 +4,9 @@ import * as config from '../src/config.js';
 import { LANDING_EVENTS, trackEvent, plannerApiEnabled, checkoutOptions, startCheckout, rememberReferral, setUsageCountsEnabled, usageCountsEnabled } from '../src/lib/planner-api.js';
 import { animate } from '../src/vendor/motion.js';
 import { PERSONAL_GIFTS, PLUS_PRICE, PLUS_FEATURES, PLUS_UPCOMING, TEAM_TIERS, formatMoney, isPersonalGift } from '../src/lib/pricing.js';
-import { TEAM_ROWS, buyState, checkoutUrl, countedMoments, currencyLine, defaultPlan, lowestPerPerson, monthWeeks, pageCurrency, perPerson, personalOffer, planForPeople, planRow, readCheckoutOptions, ritualYear, statusTone, tierLabel, tierPrice } from './landing-model.js';
+import { TEAM_ROWS, buyState, checkoutUrl, countedMoments, currencyLine, defaultPlan, lowestPerPerson, monthWeeks, pageCurrency, perPerson, personalOffer, planForPeople, planRow, readCheckoutOptions, ritualYear, statusTone, taxLine, tierLabel, tierPrice } from './landing-model.js';
 import { createListbox } from './listbox.js';
+import { createPaletteCard } from './palette-card.js';
 import { createPrivacyDialog } from './privacy-dialog.js';
 import { createStepper } from './stepper.js';
 
@@ -195,8 +196,8 @@ function plusCta(box) {
   const price = PLUS_PRICE[currency];
   const children = [];
   if (state.buyable) {
-    // In the prices, the button names the price; in the Plus section the price sits beside it.
-    const label = box.dataset.plusCta === 'pricing' && Number.isFinite(price) ? `Get Plus — ${money(price)}` : 'Get Plus';
+    // The button names the price, so it reads the same wherever it is.
+    const label = Number.isFinite(price) ? `Get Plus — ${money(price)}` : 'Get Plus';
     children.push(el('button', { class: 'btn btn--primary btn--buy', type: 'button', 'data-buy': 'plus' }, label));
   } else {
     const id = `plus-note-${box.dataset.plusCta || 'x'}`;
@@ -293,6 +294,7 @@ function renderTiers() {
 
 function renderCurrencyCopy() {
   qsa('[data-currency-line]').forEach(node => { node.textContent = currencyLine(currency); });
+  qsa('[data-tax-line]').forEach(node => { node.textContent = taxLine(currency); });
   qsa('[data-min-per-person]').forEach(node => { node.textContent = lowestPerPerson(currency); });
   const pay = qs('[data-faq-pay]');
   if (pay) {
@@ -848,8 +850,8 @@ function setupChrome() {
 
   const dock = qs('[data-dock]');
   const heroCtas = qs('[data-hero-ctas]');
-  // The dock steps aside where it would compete: the team gift, the request form and the final call to action.
-  const quiet = [qs('#teams .band'), qs('[data-form-panel]'), qs('[data-final-cta]')].filter(Boolean);
+  // The dock steps aside where it would compete: the Plus offer, the team gift, the request form and the final call to action.
+  const quiet = [qs('.plus-buy'), qs('#teams .band'), qs('[data-form-panel]'), qs('[data-final-cta]')].filter(Boolean);
   if (dock && heroCtas && 'IntersectionObserver' in window) {
     let pastHero = false;
     const quietVisible = new Set();
@@ -992,7 +994,8 @@ function buildYear(grid, demo) {
       if (/\bl[123]\b/.test(state)) closed += 1;
       if (/\bl[23]\b/.test(state)) mits += 1;
       const painted = /\b(l[123]|joker|miss)\b/.test(state);
-      cells.push(el('span', { class: `cell ${state}`, style: painted ? `--d:${order}` : null }));
+      // --d: the order days were painted in; --w: a diagonal wave for recolouring.
+      cells.push(el('span', { class: `cell ${state}`, style: painted ? `--d:${order};--w:${monthIndex + day}` : null }));
       if (painted) order += 1;
     }
     return el('div', { class: 'rp-paint__row' }, el('span', {}, name[0], el('b', {}, name.slice(1, 3))), el('div', { class: 'rp-paint__cells' }, cells));
@@ -1032,22 +1035,13 @@ function buildPaint() {
 
   buildPrintMonths(PLAN_YEAR);
 
-  const palette = qs('[data-palette-grid]');
-  if (palette) {
-    const cells = [];
-    for (let index = 0; index < 35; index += 1) {
-      const weekday = index % 7;
-      const roll = (index * 7 + index * index) % 10;
-      const state = weekday > 4 ? 'rest' : index === 31 ? 'joker' : roll < 3 ? 'l1' : roll < 7 ? 'l2' : 'l3';
-      cells.push(el('span', { class: `cell ${index > 32 ? '' : state}`, style: `--i:${index}` }));
-    }
-    palette.replaceChildren(...cells);
-  }
+  // Colours for the painted year: a whole year, every level of the palette,
+  // without the jokers' own colour.
+  const palettes = qs('[data-palette-year]');
+  if (palettes) buildYear(palettes, { ...REVIEW, firstClosed: [0, 1], jokers: [] });
 }
 
 /* Scenes: replicas that play near the viewport and pause when they leave --- */
-
-const PALETTES = ['ocean', 'forest', 'plum', 'graphite', 'sunset'];
 
 // A click in a replica: the pointer dips, a ripple spreads, the target presses.
 function click(t, ms, press = '') {
@@ -1196,18 +1190,6 @@ const SCRIPTS = {
       t.remove('s-press', span + 1360);
     }
   },
-  palettes: {
-    length: 10400,
-    loop: true,
-    run(t) {
-      PALETTES.forEach((name, index) => {
-        const at = 1100 + index * 1650;
-        t.add(`pal-${name}`, at);
-        if (index) t.remove(`pal-${PALETTES[index - 1]}`, at);
-      });
-      t.remove(`pal-${PALETTES[PALETTES.length - 1]}`, 1100 + PALETTES.length * 1650);
-    }
-  },
   gift: {
     length: 9200,
     loop: true,
@@ -1224,7 +1206,7 @@ const SCRIPTS = {
 };
 
 // Classes a scene passes through on its way to the final frame.
-const TRANSIENT = ['s-press', 's-sync', 's-finger', 's-press-plan', 's-press-save', 's-save', 's-later', 's-tap', ...PALETTES.map(name => `pal-${name}`),
+const TRANSIENT = ['s-press', 's-sync', 's-finger', 's-press-plan', 's-press-save', 's-save', 's-later', 's-tap',
   'd-cursor', 'd-hover', 'd-press', 'd-click', 'd-modal', 'd-save', 'd-forget', 'd-submit'];
 
 // Moves a replica's pointer onto `target` (a selector inside the scene), in
@@ -1545,6 +1527,7 @@ setupRequest();
 setupChrome();
 setupViewCounts();
 setupScenes();
+createPaletteCard(qs('[data-palette-card]'), { motion: () => motionOn });
 setupReveal();
 setupFaq();
 

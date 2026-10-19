@@ -2,7 +2,7 @@ import { APP_VERSION, PLANNER_API_URL } from '../config.js';
 
 /**
  * Client for the optional owner API (feedback, waitlist, anonymous counts,
- * Daily Planner Plus gifts and purchases).
+ * Daily Planner Plus gifts, purchases and the weekly licence check).
  *
  * When PLANNER_API_URL is blank — the default in public source — nothing here
  * makes a network request. Counts carry only an allow-listed event name and the
@@ -165,9 +165,11 @@ async function postJson(path, body) {
 /**
  * JSON request for the gift, purchase and waitlist-removal routes. Bodies are
  * sent exactly as given. The answer carries the HTTP `status` (0 when the
- * server couldn't be reached) so the caller can explain what happened.
+ * server couldn't be reached) so the caller can explain what happened —
+ * except a success with `ownStatus`, which keeps the answer's own `status`
+ * (a gift's 'available', 'inactive' …) and puts the HTTP one in `httpStatus`.
  */
-async function request(path, { method = 'POST', body } = {}) {
+async function request(path, { method = 'POST', body, ownStatus = false } = {}) {
   if (!plannerApiEnabled()) return { ok: false, status: 0, unavailable: true, error: 'Not available in this version of the planner.' };
   try {
     const response = await fetch(`${PLANNER_API_URL}/${path}`, method === 'GET'
@@ -175,6 +177,7 @@ async function request(path, { method = 'POST', body } = {}) {
       : { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) return { ...data, ok: false, status: response.status, error: data.error || 'Something went wrong. Please try again.' };
+    if (ownStatus && typeof data.status === 'string') return { ...data, ok: true, httpStatus: response.status };
     return { ...data, ok: true, status: response.status };
   } catch (_) {
     const offline = globalThis.navigator?.onLine === false;
@@ -186,11 +189,21 @@ export const joinWaitlist = payload => postJson('waitlist', payload);
 /** Removes an address with the token the server returned when it joined. */
 export const leaveWaitlist = ({ email, token }) => request('waitlist/remove', { body: { email, token } });
 export const sendFeedback = payload => postJson('feedback', { platform: platformLabel(), ...payload });
-/** Gift codes go in the path in their canonical XXXX-XXXX-XXXX form. */
-export const fetchGift = code => request(`gifts/${encodeURIComponent(code)}`, { method: 'GET' });
+/**
+ * Gift codes go in the path in their canonical XXXX-XXXX-XXXX form. A gift that
+ * was read keeps its own `status` ('available', 'claimed', 'expired',
+ * 'inactive'), so a switched-off or refunded link is explained as such.
+ */
+export const fetchGift = code => request(`gifts/${encodeURIComponent(code)}`, { method: 'GET', ownStatus: true });
 export const redeemGift = code => request(`gifts/${encodeURIComponent(code)}/redeem`, { body: {} });
 /** Confirms a Creem checkout (`checkout_id` on the return URL) and returns a licence or a gift. */
 export const claimPurchase = (checkout, { expect = '' } = {}) => request('purchases/claim', { body: expect ? { checkout, expect } : { checkout } });
+/**
+ * Asks whether a Plus licence still holds: { ok, revoked } (a refund or a
+ * dispute revokes it). Only the licence is sent — no identifier, no app
+ * version, nothing from the planner (src/features/plus-check.js, about once a week).
+ */
+export const checkPlusLicense = license => request('plus/check', { body: { license } });
 /**
  * Which items and currencies can be bought right now, and the visitor's currency
  * chosen by the server from their country: { plus: ['EUR','USD'], gift: [...],

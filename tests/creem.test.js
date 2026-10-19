@@ -35,7 +35,7 @@ function checkout(id, { item = 'plus', currency = 'EUR', plan = 'up-to-50', stat
   return {
     id, object: 'checkout', mode: 'test', status, units: 1, request_id: 'dp_0123456789abcdef',
     product: expanded ? { id: productId, object: 'product', price: cents, currency } : productId,
-    ...(status === 'completed' || orderStatus === 'pending' ? { order: { id: 'ord_1', object: 'order', status: orderStatus, type: 'onetime', amount: cents, amount_paid: cents, currency: currency.toLowerCase() } } : {}),
+    ...(status === 'completed' || orderStatus === 'pending' ? { order: { id: `ord_${id}`, object: 'order', status: orderStatus, type: 'onetime', amount: cents, amount_paid: cents, currency: currency.toLowerCase() } } : {}),
     customer: { id: 'cust_1', object: 'customer', email, name: 'Ada Buyer', country },
     custom_fields: [
       ...(company ? [{ type: 'text', key: 'company', label: 'Company name, shown to your team', optional: true, text: { max_length: 80, value: company } }] : []),
@@ -417,7 +417,8 @@ test('claims that cannot be honoured: pending, expired, unknown, not ours, wrong
   assert.equal((await claim('ch_orderpending')).status, 402);
   assert.equal(await store.getPurchase('ch_pending12345'), null, 'nothing stored before payment');
   assert.equal(await store.getPayment('ch_pending12345'), null);
-  assert.deepEqual(await asJson(await claim('ch_expired12345')), { status: 410, body: { error: 'This checkout expired before it was paid.' } });
+  assert.deepEqual(await asJson(await claim('ch_expired12345')), { status: 410, body: { error: 'This checkout expired before it was paid.', expired: true } });
+  assert.deepEqual(await asJson(await claim('ch_expired12345')), { status: 410, body: { error: 'This checkout expired before it was paid.', expired: true } }, 'remembered with its flag');
   assert.deepEqual(await asJson(await claim('ch_missing12345')), { status: 404, body: { error: PAYMENT_UNKNOWN } });
   for (const id of ['ch_tshirt123456', 'ch_wrongplan123', 'ch_mismatch1234']) assert.deepEqual(await asJson(await claim(id)), { status: 404, body: { error: NOT_PLUS_PAYMENT } }, id);
   const reads = creem.reads();
@@ -478,7 +479,7 @@ test('the webhook checks the signature on the raw body before anything else', as
   assert.equal(off.status, 503);
   assert.match(off.body.error, /CREEM_WEBHOOK_SECRET/);
   // Other events and checkouts that are not ours are acknowledged and ignored.
-  for (const other of [{ eventType: 'subscription.paid', object: {} }, { eventType: 'refund.created', object: { id: 'ref_1' } }, { type: 'checkout.completed', data: checkout('ch_tshirt123456', { product: 'prod_tshirt' }) }, { eventType: 'checkout.completed', object: { status: 'completed' } }]) {
+  for (const other of [{ eventType: 'subscription.paid', object: {} }, { eventType: 'checkout.expired', object: { id: 'ch_expired12345' } }, { type: 'checkout.completed', data: checkout('ch_tshirt123456', { product: 'prod_tshirt' }) }, { eventType: 'checkout.completed', object: { status: 'completed' } }]) {
     assert.deepEqual(await asJson(await sendWebhook(api, other)), { status: 200, body: { received: true } }, JSON.stringify(other).slice(0, 60));
   }
   assert.match(warnings.join('\n'), /not for a Daily Planner product \(prod_tshirt\)/);
@@ -713,7 +714,7 @@ test('the setup summary shows Creem, email and Plus without ever showing a secre
     payments: {
       provider: 'creem', configured: true, apiKeySet: true, mode: 'test',
       products: { plus: { EUR: 'prod_plus_eur', USD: 'prod_plus_usd' }, gift: { EUR: 'prod_gift_eur', USD: 'prod_gift_usd' } },
-      webhookSecretSet: true, webhookUrl: 'https://planner.bemorin.com/api/creem/webhook', error: ''
+      webhookSecretSet: true, webhookUrl: 'https://planner.bemorin.com/api/creem/webhook', webhookEvents: ['checkout.completed', 'refund.created', 'dispute.created'], error: ''
     },
     plus: { configured: true, keySet: true, publicKey: KEYS.publicKey },
     publicBaseUrl: 'https://planner.bemorin.com',
@@ -730,7 +731,7 @@ test('the setup summary shows Creem, email and Plus without ever showing a secre
   assert.deepEqual(off.payments, {
     provider: 'creem', configured: false, apiKeySet: false, mode: '',
     products: { plus: { EUR: '', USD: '' }, gift: { EUR: '', USD: '' } },
-    webhookSecretSet: false, webhookUrl: 'https://staging.example/api/creem/webhook', error: 'CREEM_GIFT_USD is not a product id (prod_…).'
+    webhookSecretSet: false, webhookUrl: 'https://staging.example/api/creem/webhook', webhookEvents: ['checkout.completed', 'refund.created', 'dispute.created'], error: 'CREEM_GIFT_USD is not a product id (prod_…).'
   });
 });
 
@@ -802,7 +803,7 @@ test('purchases made with test keys are refused once the live keys are in place'
   assert.equal((await testing.api(post('purchases/claim', { checkout: 'ch_testgift001a' }))).status, 200);
   const live = setup({ store, creemApiKey: 'creem_live_key' });
   for (const id of ['ch_testplus001a', 'ch_testgift001a']) {
-    assert.deepEqual(await asJson(await live.api(post('purchases/claim', { checkout: id }))), { status: 410, body: { error: 'This was a test purchase, made before payments went live.' } }, id);
+    assert.deepEqual(await asJson(await live.api(post('purchases/claim', { checkout: id }))), { status: 410, body: { error: 'This was a test purchase, made before payments went live.', test: true } }, id);
   }
 });
 
