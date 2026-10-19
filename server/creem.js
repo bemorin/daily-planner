@@ -1,21 +1,24 @@
-// Creem checkouts for Daily Planner Plus and team gifts. Creem is the
+// Creem checkouts for Daily Planner Plus and gift links. Creem is the
 // merchant of record: it takes the payment, charges VAT and sends the receipt.
 //
 // The owner creates four one-time, tax-inclusive products in Creem (Plus EUR,
-// Plus USD, Team gift EUR, Team gift USD). The API opens every checkout itself
-// with the amount from src/lib/pricing.js: Plus uses the product price, a gift
-// sends custom_price for its pack. A checkout is then trusted only once it is
-// read back from Creem (claims) or arrives in a signed webhook.
+// Plus USD, Gift EUR, Gift USD). The API opens every checkout itself with the
+// amount from src/lib/pricing.js: Plus uses the product price, a gift (a team
+// tier or a personal gift) sends custom_price for its plan. A checkout is then
+// trusted only once it is read back from Creem (claims) or arrives in a signed
+// webhook.
 //
 // API     POST /v1/checkouts, GET /v1/checkouts?checkout_id=…, header x-api-key
 //         https://api.creem.io (live) or https://test-api.creem.io (test)
+//         A partner's code goes in `affiliate_code` (Creem's affiliate program);
+//         Creem refuses an unknown code with HTTP 400.
 // Webhook header creem-signature = hex HMAC-SHA256(raw body, CREEM_WEBHOOK_SECRET)
 // Env     CREEM_API_KEY, CREEM_WEBHOOK_SECRET, CREEM_PLUS_EUR, CREEM_PLUS_USD,
 //         CREEM_GIFT_EUR, CREEM_GIFT_USD, CREEM_TEST_MODE ('1'; a creem_test_ key also means test)
 // `fetch` is injectable so tests never reach the network.
 
 import { timingSafeEqual } from './admin-auth.js';
-import { CURRENCIES, teamTier } from '../src/lib/pricing.js';
+import { CURRENCIES, giftPlan, isPersonalGift } from '../src/lib/pricing.js';
 
 export const CREEM_API_URL = 'https://api.creem.io';
 export const CREEM_TEST_API_URL = 'https://test-api.creem.io';
@@ -25,6 +28,8 @@ export const CREEM_ITEMS = Object.freeze(['plus', 'gift']);
 export const CHECKOUT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{5,199}$/;
 const PRODUCT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{2,127}$/;
 const SIGNATURE_RE = /^[0-9a-f]{64}$/;
+/** A partner code from a ?ref= link (the planner and the landing page keep the same rule). */
+export const AFFILIATE_CODE_RE = /^[A-Za-z0-9_-]{2,64}$/;
 const ENV_NAMES = Object.freeze({ plus: { EUR: 'CREEM_PLUS_EUR', USD: 'CREEM_PLUS_USD' }, gift: { EUR: 'CREEM_GIFT_EUR', USD: 'CREEM_GIFT_USD' } });
 const encoder = new TextEncoder();
 
@@ -69,6 +74,12 @@ export function creemMode(apiKey, testMode = '') {
 
 export const creemApiBase = mode => (mode === 'test' ? CREEM_TEST_API_URL : CREEM_API_URL);
 
+/** The partner code sent with a checkout, trimmed, or '' when it is missing or malformed. */
+export function affiliateCode(value) {
+  const code = typeof value === 'string' ? value.trim() : '';
+  return AFFILIATE_CODE_RE.test(code) ? code : '';
+}
+
 async function describeFailure(response) {
   const body = await response.json().catch(() => null);
   const message = Array.isArray(body?.message) ? body.message.join(', ') : body?.message ?? body?.error ?? '';
@@ -89,7 +100,10 @@ async function creemRequest({ fetch: fetchImpl, url, init, timeoutMs }) {
   }
 }
 
-/** POST /v1/checkouts. Resolves with the CheckoutEntity ({ id, checkout_url, … }); rejects on any failure. */
+/**
+ * POST /v1/checkouts. Resolves with the CheckoutEntity ({ id, checkout_url, … });
+ * rejects on any failure (an HTTP failure carries Creem's `status`).
+ */
 export async function createCheckout({ apiKey, mode = 'live', body, fetch: fetchImpl, timeoutMs = CREEM_TIMEOUT_MS }) {
   const response = await creemRequest({
     fetch: fetchImpl,
@@ -97,7 +111,11 @@ export async function createCheckout({ apiKey, mode = 'live', body, fetch: fetch
     init: { method: 'POST', headers: { 'x-api-key': apiKey, 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body) },
     timeoutMs
   });
-  if (!response.ok) throw new Error(await describeFailure(response));
+  if (!response.ok) {
+    const failure = new Error(await describeFailure(response));
+    failure.status = response.status;
+    throw failure;
+  }
   const checkout = await response.json().catch(() => null);
   if (!checkout || typeof checkout !== 'object') throw new Error('Creem answered without a checkout');
   return checkout;
@@ -127,8 +145,10 @@ const wholeCents = value => (Number.isInteger(value) && value >= 0 ? value : nul
  * What a checkout bought, read defensively (ids or expanded objects).
  * Returns { completed, paid, productId, item, email, country, org, amount, currency }:
  * `item` is { kind: 'plus', plan: '', seats: 1 } or { kind: 'gift', plan, seats } with
- * seats from TEAM_TIERS (never from the metadata alone), or null when the product is not
- * one of `products` (Map from parseCreemProducts) or its metadata does not match it.
+ * seats from the plan (a team tier or a personal gift, never from the metadata alone),
+ * or null when the product is not one of `products` (Map from parseCreemProducts) or
+ * its metadata does not match it. `org` is the name typed on the checkout: the
+ * company (`company`) for a team gift, the giver (`from`) for a personal gift.
  */
 export function readCheckout(checkout, products = new Map()) {
   const entity = objectOrNull(checkout) || {};
@@ -144,13 +164,17 @@ export function readCheckout(checkout, products = new Map()) {
   if (product && (!metadata.kind || metadata.kind === product.kind)) {
     if (product.kind === 'plus') item = { kind: 'plus', plan: '', seats: 1 };
     else {
-      const tier = teamTier(String(metadata.plan ?? ''));
-      if (tier) item = { kind: 'gift', plan: tier.plan, seats: tier.seats };
+      const plan = giftPlan(String(metadata.plan ?? ''));
+      if (plan) item = { kind: 'gift', plan: plan.plan, seats: plan.seats };
     }
   }
   const fields = Array.isArray(entity.custom_fields) ? entity.custom_fields : [];
-  const company = fields.find(field => field?.key === 'company');
-  const org = String(company?.text?.value ?? company?.value ?? '').trim();
+  const answer = key => {
+    const field = fields.find(entry => entry?.key === key);
+    return String(field?.text?.value ?? field?.value ?? '').trim();
+  };
+  const keys = isPersonalGift(item?.plan) ? ['from', 'company'] : ['company', 'from'];
+  const org = keys.map(answer).find(Boolean) || '';
   const email = String(customer?.email ?? entity.customer_email ?? '').trim().toLowerCase();
   const country = /^[A-Za-z]{2}$/.test(String(customer?.country ?? '')) ? String(customer.country).toUpperCase() : '';
   const amount = wholeCents(order?.amount_paid) ?? wholeCents(order?.amount);
@@ -159,6 +183,7 @@ export function readCheckout(checkout, products = new Map()) {
     completed, paid, productId, item, email, country, org, amount,
     currency: CURRENCIES.includes(currency) ? currency : '',
     productCurrency: product?.currency || '',
+    requestId: String(entity.request_id ?? ''),
     seal: { rid: String(metadata.rid ?? ''), currency: String(metadata.currency ?? ''), value: String(metadata.seal ?? '') }
   };
 }
@@ -166,8 +191,8 @@ export function readCheckout(checkout, products = new Map()) {
 /**
  * The seal our API puts in a checkout's metadata: an HMAC (with the Plus
  * signing secret) of what it sells. Creem's product links let anyone add
- * metadata, so a team gift is honoured only with a valid seal — a link opened
- * by hand cannot claim a bigger pack than it paid for.
+ * metadata, so a gift is honoured only with a valid seal — a link opened by
+ * hand cannot claim a bigger pack than it paid for.
  */
 export async function checkoutSeal(secret, { kind, plan = '', currency, rid }) {
   return (await webhookSignature(`checkout-seal:${kind}|${plan}|${currency}|${rid}`, secret)).slice(0, 32);
@@ -177,6 +202,8 @@ export async function checkoutSeal(secret, { kind, plan = '', currency, rid }) {
 export async function checkoutSealValid(secret, paid) {
   const { rid, currency, value } = paid?.seal || {};
   if (!secret || !paid?.item || !rid || !/^[0-9a-f]{32}$/.test(value) || currency !== paid.productCurrency) return false;
+  // The seal belongs to the checkout our API opened: when Creem reports the request id, it must be the sealed one.
+  if (paid.requestId && paid.requestId !== rid) return false;
   return timingSafeEqual(await checkoutSeal(secret, { kind: paid.item.kind, plan: paid.item.plan, currency, rid }), value);
 }
 

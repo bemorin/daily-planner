@@ -1,12 +1,14 @@
 // Imported as a namespace so a value missing from an older config.js reads as
 // undefined instead of failing the whole module.
 import * as config from '../../src/config.js';
-import { trackEvent, plannerApiEnabled, claimPurchase } from '../../src/lib/planner-api.js';
-import { giftPageParams, isDefaultCompany } from '../landing-model.js';
+import { trackEvent, plannerApiEnabled, claimPurchase, rememberReferral } from '../../src/lib/planner-api.js';
+import { giftAudience, giftPageParams, isDefaultCompany } from '../landing-model.js';
 
 /* ============================================================================
    Your gift page (/welcome/thanks/): a private page with the gift link, the
-   seats used and the message the team sees.
+   seats used and the message people see. A team gift speaks to a company
+   ("your people", "company name"); Give Plus and Plus Family speak to one
+   person giving Plus to someone, or to their family (COPY below).
 
    ?checkout_id=…         back from the payment page (Creem): POST /purchases/claim
    ?session=…             an older confirmation link: claimed the same way
@@ -100,7 +102,7 @@ function showLoading(text) {
 
 const ERRORS = {
   off: ['Gifts can’t be looked up here', 'This copy of the site runs without its API, so there’s no gift to show. Open the link from your email on planner.bemorin.com.'],
-  empty: ['Nothing to show yet', 'This is the gift page of a team gift. Open it from the link in your email.'],
+  empty: ['Nothing to show yet', 'This page shows a gift link once it’s bought. Open it from the link in your email.'],
   unpaid: ['Your payment is still being confirmed', 'This usually takes a few seconds. Check again in a moment; the gift link will also arrive by email once the payment is confirmed.'],
   noSession: ['We couldn’t find this payment', 'The link may be incomplete. Open your gift page from the link in your email, or ask us and we’ll send your gift link.'],
   paymentsOff: ['Card payments aren’t switched on yet', 'This site can’t confirm card payments yet. If you’ve paid, ask us and we’ll send your gift link.'],
@@ -155,14 +157,131 @@ function readGift(data) {
     redeemed: number(data.redeemed),
     available: data.available !== false,
     status: typeof data.status === 'string' ? data.status : '',
-    expiresAt: typeof data.expiresAt === 'string' ? data.expiresAt : ''
+    expiresAt: typeof data.expiresAt === 'string' ? data.expiresAt : '',
+    // 'gift-1', 'family-5', a team tier, or '' for a gift made in the dashboard;
+    // left out by an older server (the number of seats decides then).
+    ...(typeof data.plan === 'string' ? { plan: data.plan } : {})
   };
+}
+
+/* Words for whom the gift is for ------------------------------------------- */
+
+const COPY = {
+  team: {
+    lead: 'Forward the link below to your people. Each person who opens it activates Daily Planner Plus for life on their own planner. No accounts, no names collected.',
+    about: 'This is your gift page: a private page with your gift link, the seats used and the message your team sees. Its link is also in your email.',
+    linkFine: 'Share it only with the people it’s for: whoever opens it uses a seat.',
+    promptBefore: 'Before you forward it, ',
+    promptLink: 'add your company name',
+    seatsTitle: 'Seats used',
+    messageTitle: 'What people see',
+    messageFine: 'Shown with the gift when someone opens the link.',
+    fromLabel: 'From',
+    fromPlaceholder: 'Your company name',
+    orgPrompt: 'Add your company name before you forward the link: people see it as “A gift from …” when they open it.',
+    orgPromptLocked: 'No company name yet. To add it before you forward the link, open this page from the link in your email.',
+    nameMissing: 'Enter the name people will see.',
+    forwardTitle: 'Ready to forward',
+    chatLabel: 'Slack or Teams',
+    ownTitle: 'Your own planner',
+    ownText: 'To get Plus yourself, open the gift link too: it uses one seat, like everyone else’s.',
+    ownLabel: 'Open your own planner',
+    ownHref: '../../'
+  },
+  one: {
+    lead: 'Send this link to the person you’re giving Plus to. When they open it, Daily Planner Plus is theirs for life, on their own planner. No account needed.',
+    about: 'This is your gift page: a private page with the gift link, whether it has been opened, and what they see with the gift. Its link is also in your email.',
+    linkFine: 'Send it only to the person it’s for: the first person to open it gets Plus.',
+    promptBefore: 'Before you send it, ',
+    promptLink: 'add your name',
+    seatsTitle: 'Opened',
+    messageTitle: 'What they see',
+    messageFine: 'Shown with the gift when they open the link.',
+    fromLabel: 'From (shown with the gift)',
+    fromPlaceholder: 'Your name',
+    orgPrompt: 'Add your name before you send the link: they see it as “A gift from …” when they open it.',
+    orgPromptLocked: 'No name yet. To add yours before you send the link, open this page from the link in your email.',
+    nameMissing: 'Enter the name they will see.',
+    forwardTitle: 'Ready to send',
+    chatLabel: 'Message',
+    ownTitle: 'Plus for yourself',
+    ownText: 'This link is for the person you’re giving it to. To have Plus on your own planner too, get it for yourself.',
+    ownLabel: 'Get Plus',
+    ownHref: '../#pricing'
+  },
+  family: {
+    lead: 'Send this link to your family. Each person who opens it gets Daily Planner Plus for life, on their own planner. No accounts needed.',
+    about: 'This is your gift page: a private page with the gift link, how many people have opened it, and what they see with the gift. Its link is also in your email.',
+    linkFine: 'Share it only with your family: each person who opens it uses one of the places.',
+    promptBefore: 'Before you send it, ',
+    promptLink: 'add your name',
+    seatsTitle: 'People who opened it',
+    messageTitle: 'What they see',
+    messageFine: 'Shown with the gift when someone opens the link.',
+    fromLabel: 'From (shown with the gift)',
+    fromPlaceholder: 'Your name',
+    orgPrompt: 'Add your name before you send the link: they see it as “A gift from …” when they open it.',
+    orgPromptLocked: 'No name yet. To add yours before you send the link, open this page from the link in your email.',
+    nameMissing: 'Enter the name they will see.',
+    forwardTitle: 'Ready to send',
+    chatLabel: 'Message',
+    ownTitle: 'Your own planner',
+    ownText: 'To get Plus yourself, open the gift link too: it counts as one of the places.',
+    ownLabel: 'Open your own planner',
+    ownHref: '../../'
+  }
+};
+
+const audience = () => giftAudience(state.gift);
+const copy = () => COPY[audience()] || COPY.team;
+
+function renderAudience() {
+  const words = copy();
+  const text = (selector, value) => { const node = qs(selector); if (node) node.textContent = value; };
+  text('[data-ready-lead]', words.lead);
+  text('[data-ready-about]', words.about);
+  text('[data-link-fine]', words.linkFine);
+  text('[data-prompt-before]', words.promptBefore);
+  text('[data-prompt-link]', words.promptLink);
+  text('[data-seats-title]', words.seatsTitle);
+  text('[data-message-title]', words.messageTitle);
+  text('[data-message-fine]', words.messageFine);
+  text('[data-org-label]', words.fromLabel);
+  text('[data-forward-title]', words.forwardTitle);
+  text('[data-chat-label]', words.chatLabel);
+  text('[data-own-title]', words.ownTitle);
+  text('[data-own-text]', words.ownText);
+  text('[data-own-label]', words.ownLabel);
+  const own = qs('[data-own-link]');
+  if (own) own.href = words.ownHref;
+  qs('[data-message-form]').elements.org.autocomplete = audience() === 'team' ? 'organization' : 'name';
 }
 
 // The name people see, or none yet: the buyer typed no company at checkout.
 const companyName = gift => (isDefaultCompany(gift.org) ? '' : gift.org.trim());
 
 function forwardEmail(gift) {
+  const kind = audience();
+  if (kind !== 'team') {
+    const name = companyName(gift);
+    const family = kind === 'family';
+    return {
+      subject: family ? 'A gift for the family: Daily Planner Plus' : 'A gift for you: Daily Planner Plus',
+      body: [
+        family ? 'Hi all,' : 'Hi,',
+        '',
+        `I’m giving ${family ? 'each of you' : 'you'} Daily Planner Plus: a calm planner for your days, your weeks and your year, with a guided session to plan the year ahead and a one-page review of the year.`,
+        '',
+        'Open this link on the device you plan on, and Plus is activated on your planner, for life:',
+        state.url,
+        '',
+        `There’s no account to create and nothing to install. Your planner stays private: it lives in your own browser${family ? ', and nobody else can see it' : ''}.`,
+        '',
+        'Happy planning!',
+        ...(name ? [name] : [])
+      ].join('\n')
+    };
+  }
   const org = companyName(gift) || 'our company';
   return {
     subject: `A year-end gift from ${org}: Daily Planner Plus`,
@@ -181,7 +300,11 @@ function forwardEmail(gift) {
   };
 }
 
-const forwardChat = () => `Our year-end gift to everyone: Daily Planner Plus, a private planner for your days and your year. Open this link to activate it on your planner, for life (no account needed): ${state.url}`;
+function forwardChat() {
+  const kind = audience();
+  if (kind === 'team') return `Our year-end gift to everyone: Daily Planner Plus, a private planner for your days and your year. Open this link to activate it on your planner, for life (no account needed): ${state.url}`;
+  return `I’m giving ${kind === 'family' ? 'each of you' : 'you'} Daily Planner Plus, a private planner for your days and your year. Open this link to activate it on your planner, for life (no account needed): ${state.url}`;
+}
 
 function renderSeats() {
   const gift = state.gift;
@@ -192,11 +315,15 @@ function renderSeats() {
   const left = Math.max(0, gift.seats - gift.redeemed);
   const until = dateText(gift.expiresAt);
   const expired = gift.expiresAt && Date.parse(gift.expiresAt) < Date.now();
+  const kind = audience();
+  const untilText = until ? ` · Can be activated until ${until}` : '';
   let note;
   if (gift.status === 'inactive') note = 'This link has been switched off. Plus stays on every planner where it was activated; write to us to switch it back on.';
   else if (expired) note = `This link expired on ${until}. Plus stays on every planner where it was activated.`;
+  else if (kind === 'one') note = gift.redeemed ? 'Opened: Plus is active on their planner.' : `Not opened yet${untilText}`;
   else if (!gift.available) note = 'Fully claimed: the link no longer activates Plus. Plus stays on every planner where it was activated.';
-  else note = `${count(left)} ${left === 1 ? 'seat' : 'seats'} left${until ? ` · Can be activated until ${until}` : ''}`;
+  else if (kind === 'family') note = `${count(left)} ${left === 1 ? 'place' : 'places'} left${untilText}`;
+  else note = `${count(left)} ${left === 1 ? 'seat' : 'seats'} left${untilText}`;
   qs('[data-seats-note]').textContent = note;
 }
 
@@ -224,23 +351,23 @@ function renderCompanyPrompt() {
   const field = qs('[data-org-field]');
   field.classList.toggle('is-prompt', missing);
   qs('[data-org-prompt]').hidden = !missing;
-  qs('[data-org-prompt-text]').textContent = state.key
-    ? 'Add your company name before you forward the link: people see it as “A gift from …” when they open it.'
-    : 'No company name yet. To add it before you forward the link, open this page from the link in your email.';
+  qs('[data-org-prompt-text]').textContent = state.key ? copy().orgPrompt : copy().orgPromptLocked;
   qs('[data-link-prompt]').hidden = !missing || !state.key;
   const input = qs('[data-message-form]').elements.org;
-  input.placeholder = missing ? 'Your company name' : '';
+  input.placeholder = missing ? copy().fromPlaceholder : '';
   input.setAttribute('aria-describedby', missing ? 'org-prompt org-hint' : 'org-hint');
 }
 
 function readyTitle(gift) {
-  const name = companyName(gift);
+  // A team gift is "for" the company; a personal gift's name is the giver's.
+  const name = audience() === 'team' ? companyName(gift) : '';
   qs('[data-ready-title]').textContent = name ? `Your gift for ${name} is ready` : 'Your gift is ready';
   document.title = name ? `Your gift page, ${name} — Daily Planner` : 'Your gift page — Daily Planner';
 }
 
 function showReady() {
   const gift = state.gift;
+  renderAudience();
   readyTitle(gift);
   qs('[data-gift-url]').value = state.url;
   renderSeats();
@@ -324,7 +451,7 @@ function setupActions() {
     refresh.disabled = false;
     if (result.ok) {
       const fresh = readGift(result.data);
-      state.gift = { ...state.gift, seats: fresh.seats, redeemed: fresh.redeemed, available: fresh.available, status: fresh.status, expiresAt: fresh.expiresAt };
+      state.gift = { ...state.gift, seats: fresh.seats, redeemed: fresh.redeemed, available: fresh.available, status: fresh.status, expiresAt: fresh.expiresAt, ...('plan' in fresh ? { plan: fresh.plan } : {}) };
       renderSeats();
       setStatus(seatsStatus, `Updated at ${new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date())}.`);
     } else {
@@ -347,7 +474,7 @@ function setupActions() {
     const org = form.elements.org.value.trim();
     const message = form.elements.message.value.trim();
     if (!org) {
-      setStatus(messageStatus, 'Enter the name people will see.', true);
+      setStatus(messageStatus, copy().nameMissing, true);
       form.elements.org.focus();
       return;
     }
@@ -365,7 +492,7 @@ function setupActions() {
       readyTitle(state.gift);
       renderForward();
       renderCompanyPrompt();
-      setStatus(messageStatus, 'Saved. People see it from now on.');
+      setStatus(messageStatus, audience() === 'team' ? 'Saved. People see it from now on.' : 'Saved. They see it from now on.');
     } else if (result.status === 403) {
       setStatus(messageStatus, 'This page can’t change the gift. Open it from the gift page link in your email.', true);
     } else if (result.status === 0) {
@@ -379,6 +506,8 @@ function setupActions() {
 /* Start -------------------------------------------------------------------- */
 
 function start() {
+  // A partner's link that leads here is remembered like on the landing page.
+  rememberReferral();
   setupActions();
   if (!apiOn) return showError('off', { about: true });
   const opened = giftPageParams(location.search);

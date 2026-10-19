@@ -9,6 +9,8 @@
 
 import { createTrendsView } from './trends-view.js';
 import { dayOf, normalizeSeries, seriesWindow } from './trends.js';
+// The landing page's stepper (− value +): no browser spin arrows on Seats.
+import { createStepper } from '../welcome/stepper.js';
 
 const SESSION_KEY = 'daily-planner-owner-session';
 const LEGACY_TOKEN_KEY = 'daily-planner-owner-token';
@@ -629,7 +631,9 @@ let giftRows = [];
 let giftPanel = null; // { mode: 'edit' | 'delete', code }
 let giftBusy = false;
 let emailReady = false;
+const SEATS_STEPPER = { min: 1, max: 100000, noun: 'seats', prefix: 'owner-stepper' };
 const giftForm = $('[data-owner-gift-form]');
+const seatsStepper = createStepper(giftForm.elements.seats, SEATS_STEPPER);
 const currencyPicker = createDropdown($('[data-owner-gift-currency]'), { items: CURRENCIES, value: 'EUR' });
 
 function updateGiftEmailSwitch() {
@@ -723,6 +727,7 @@ function renderGiftPanel() {
     <div class="owner-actions"><button class="primary-button" type="submit">Save changes</button><button class="text-button" type="button" data-owner-gift-panel-cancel>Cancel</button></div>
     <p class="owner-result" data-owner-gift-panel-result role="status" hidden></p>
   </form>`;
+  createStepper($('input[name="seats"]', panel), SEATS_STEPPER);
   $('input[name="org"]', panel).focus();
 }
 
@@ -788,6 +793,7 @@ giftForm.addEventListener('submit', async event => {
   try {
     const result = await sendJson('admin/gifts', 'POST', { org, seats, message: fields.message.value, note: fields.note.value, currency, amount, buyerEmail, sendEmail });
     giftForm.reset();
+    seatsStepper.sync(); // reset() fires no input event: refresh the − / + buttons
     updateGiftEmailSwitch();
     renderGiftCreated(result);
     showResult('[data-owner-gift-result]', result.emailError ? `Gift created, but the email was not sent: ${result.emailError}` : '', !!result.emailError);

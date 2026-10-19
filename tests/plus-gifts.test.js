@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createMemoryStore, createPlannerApi } from '../server/planner-api.js';
 import { createD1Store } from '../server/d1-store.js';
-import { formatGiftCode, GIFT_CODE_ALPHABET, giftForwardMessage, giftLimit, newGiftCode, normalizeGiftCode, validateGiftFields } from '../server/gifts.js';
+import { formatGiftCode, GIFT_CODE_ALPHABET, giftBuyerEmail, giftForwardMessage, giftLimit, newGiftCode, normalizeGiftCode, validateGiftFields } from '../server/gifts.js';
 import { generatePlusKeyPair, giftManageKey, verifyLicense } from '../server/licenses.js';
 
 const START = Date.parse('2026-10-09T08:00:00Z');
@@ -102,7 +102,7 @@ test('gift codes: 12 characters without look-alikes, dashes optional, case ignor
   assert.equal(normalizeGiftCode('ABCD-EFGH-JKMN'), 'ABCDEFGHJKMN');
   for (const bad of ['ABCD-EFGH-JKMI', 'ABCD-EFGH-JKM0', 'ABCD-EFGH-JKL1', 'ABCDEFGHJKM', 'ABCDEFGHJKMNP', 'ABCD EFGH JKMN', '', null, 'A'.repeat(40)]) assert.equal(normalizeGiftCode(bad), '', String(bad));
   assert.equal(formatGiftCode('ABCDEFGHJKMN'), 'ABCD-EFGH-JKMN');
-  assert.deepEqual([1, 9, 10, 50, 100, 1000, 100000].map(giftLimit), [2, 10, 11, 55, 110, 1100, 110000]);
+  assert.deepEqual([1, 9, 10, 50, 100, 1000, 100000].map(giftLimit), [1, 9, 11, 55, 110, 1100, 110000]);
 });
 
 test('gift fields are validated with human messages', () => {
@@ -145,7 +145,7 @@ test('an invoiced gift: anyone with the link sees it and activates Plus until th
     assert.equal(created.url, `https://planner.bemorin.com/?gift=${gift.code}`, label);
     assert.equal(gift.manageKey, await giftManageKey(KEYS.signingKey, gift.code), label);
     assert.equal(created.manageUrl, `https://planner.bemorin.com/welcome/thanks/?gift=${gift.code}&key=${gift.manageKey}`, label);
-    assert.equal(gift.limit, 4, label);
+    assert.equal(gift.limit, 3, label, 'below 10 seats: exactly the seats');
     assert.equal(gift.source, 'manual', label);
     assert.equal(gift.expiresAt, '2027-10-09T08:00:00.000Z', label);
     assert.equal('emailed' in created, false, 'no email unless asked');
@@ -153,10 +153,10 @@ test('an invoiced gift: anyone with the link sees it and activates Plus until th
     const lower = gift.code.replace(/-/g, '').toLowerCase();
     const info = await asJson(await api(get(`gifts/${lower}`)));
     assert.equal(info.status, 200, label);
-    assert.deepEqual(info.body, { org: 'Acme', message: 'Enjoy planning 2027!', seats: 3, redeemed: 0, available: true, expiresAt: '2027-10-09T08:00:00.000Z', status: 'available' }, label);
+    assert.deepEqual(info.body, { org: 'Acme', message: 'Enjoy planning 2027!', seats: 3, redeemed: 0, available: true, expiresAt: '2027-10-09T08:00:00.000Z', status: 'available', plan: '' }, label);
 
     const ids = new Set();
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 3; index += 1) {
       clock.now += 1000;
       const redeemed = await asJson(await api(post(`gifts/${gift.code}/redeem`)));
       assert.equal(redeemed.status, 200, `${label} activation ${index + 1}`);
@@ -168,12 +168,12 @@ test('an invoiced gift: anyone with the link sees it and activates Plus until th
       assert.equal(payload.iat, '2026-10-09');
       ids.add(payload.id);
     }
-    assert.equal(ids.size, 4, 'one licence id per activation');
-    // seats + max(1, 10%) = 4 activations; the fifth is refused.
+    assert.equal(ids.size, 3, 'one licence id per activation');
+    // Below 10 seats there is no margin: 3 activations; the fourth is refused.
     const full = await asJson(await api(post(`gifts/${gift.code}/redeem`)));
     assert.deepEqual(full, { status: 409, body: { error: 'This gift has been fully claimed.' } }, label);
     const after = (await asJson(await api(get(`gifts/${gift.code}`)))).body;
-    assert.deepEqual([after.redeemed, after.available, after.status], [4, false, 'claimed'], label);
+    assert.deepEqual([after.redeemed, after.available, after.status], [3, false, 'claimed'], label);
     // A request without any body works too.
     assert.equal((await api(new Request(`https://planner.test/api/gifts/${gift.code}/redeem`, { method: 'POST' }))).status, 409);
   });
@@ -389,6 +389,38 @@ test('the forwardable message names the company and the link', () => {
   assert.ok(message.text.includes('Happy 2027!'));
   assert.ok(message.text.includes('until 9 October 2027'));
   assert.ok(message.text.includes('nothing about you is collected'));
+});
+
+test('personal gifts get a message from the giver, to one person or to a family', () => {
+  const url = 'https://planner.bemorin.com/?gift=ABCD-EFGH-JKMN';
+  const one = giftForwardMessage({ org: 'A friend', message: 'Happy birthday!', url, expiresAt: '2027-10-09T08:00:00.000Z', seats: 1, personal: true });
+  assert.equal(one.subject, 'A gift for you: Daily Planner Plus');
+  assert.ok(one.text.startsWith('Hi,\n\nI’m giving you Daily Planner Plus'));
+  for (const part of [url, 'Happy birthday!', 'until 9 October 2027', 'nothing about you is collected']) assert.ok(one.text.includes(part), part);
+  assert.ok(!one.text.includes('A friend'), 'written by the giver, not about them');
+  const family = giftForwardMessage({ org: 'Your family', message: '', url, expiresAt: '2027-10-09T08:00:00.000Z', seats: 5, personal: true });
+  assert.equal(family.subject, 'A gift for the family: Daily Planner Plus');
+  assert.ok(family.text.includes('Each of you opens this link once, on the device where you plan (it works for up to 5 people)'));
+  for (const message of [one, family]) assert.doesNotMatch(`${message.subject}\n${message.text}`, /team|company/i);
+});
+
+test('the buyer email follows what was bought: personal words for a personal gift, the company for a team', () => {
+  const gift = { code: 'ABCDEFGHJKMN', org: 'Camille & co', message: '', seats: 5, expiresAt: '2027-10-09T08:00:00.000Z' };
+  const links = { url: 'https://planner.bemorin.com/?gift=ABCD-EFGH-JKMN', manageUrl: 'https://planner.bemorin.com/welcome/thanks/?gift=ABCD-EFGH-JKMN&key=abc' };
+  const family = giftBuyerEmail({ gift, ...links, plan: 'family-5' });
+  assert.equal(family.subject, 'Your Daily Planner Plus gift is ready');
+  for (const content of [family.text, family.html]) assert.doesNotMatch(content, /team|company/i);
+  for (const part of [links.url, links.manageUrl, 'for up to 5 people', 'Send this link to your family.', 'Each person opens it once']) assert.ok(family.text.includes(part), part);
+  assert.ok(family.html.includes('key=abc') && family.html.includes('&amp;key=abc'), 'links escaped in HTML');
+  const one = giftBuyerEmail({ gift: { ...gift, seats: 1 }, ...links, plan: 'gift-1' });
+  assert.ok(one.text.includes('Your gift link, for one person') && one.text.includes('They open it once'));
+  // A team tier, or a gift made in the dashboard (no plan), keeps the team email.
+  for (const plan of ['up-to-50', '', undefined]) {
+    const team = giftBuyerEmail({ gift, ...links, plan });
+    assert.equal(team.subject, 'Your Daily Planner Plus gift link for Camille & co', String(plan));
+    assert.ok(team.text.includes('A message you can forward to your team:') && team.text.includes('Camille & co is giving you Daily Planner Plus'), String(plan));
+    assert.ok(team.html.includes('Camille &amp; co'), String(plan));
+  }
 });
 
 test('gift routes answer CORS preflights with PATCH for allowed origins', async () => {

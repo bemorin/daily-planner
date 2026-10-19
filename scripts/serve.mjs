@@ -8,6 +8,7 @@
 //   node scripts/serve.mjs --api --data /tmp/api.json   keep the API data in another file
 //   node scripts/serve.mjs --api --fake-email            print emails instead of sending them
 //   node scripts/serve.mjs --api --fake-creem            pretend Creem checkouts (below)
+//   node scripts/serve.mjs --api --country FR            pretend every visitor is in France (prices in EUR)
 //
 // The local API is off by default, so everyday local use never collects
 // anything. With --api it mirrors the production Cloudflare Function
@@ -34,12 +35,20 @@
 // that sends the browser straight back to the return address with
 // ?checkout_id=<id>&order_id=ord_fake&signature=fake, as Creem does after a
 // payment; reading that checkout answers "completed" with what it was opened
-// for (company "Acme Studio" for gifts). Two shortcuts need no checkout:
+// for (company "Acme Studio" for team gifts, from "Camille" for personal
+// gifts). A partner code (affiliate_code) is printed; the code BADCODE is
+// refused with HTTP 400, as Creem refuses an unknown code, so the API's retry
+// without it can be tried. Two shortcuts need no checkout:
 // /?checkout_id=fake_plus unlocks Plus and /welcome/thanks/?checkout_id=fake_gift50
 // makes a 50-seat gift for "Acme Studio". Set CREEM_WEBHOOK_SECRET to try
 // POST /api/creem/webhook too. Without --fake-creem the CREEM_* variables are
 // used, as in production. Links in emails and checkout returns point at this
 // server unless PUBLIC_BASE_URL is set.
+//
+// Currency: in production the buyer's country (from Cloudflare) decides it.
+// Locally the country is unknown, so the page's own guess is used, unless a
+// request carries a CF-IPCountry header or the server runs with --country FR
+// (or US, DE …), which sets that header on every API request without one.
 //
 // Browsers keep planner data per address (host + port), so the server always
 // prefers the same port. If that port already runs Daily Planner, it simply
@@ -80,6 +89,7 @@ const adminTotpSecret = process.env.ADMIN_TOTP_SECRET || '';
 const devDataFile = option('data', '') ? resolve(option('data', '')) : resolve(projectRoot, '.planner-dev', 'api.json');
 const fakeEmail = flag('fake-email');
 const fakeCreem = flag('fake-creem');
+const devCountry = /^[A-Za-z]{2}$/.test(option('country', '')) ? option('country', '').toUpperCase() : '';
 let plannerApi = null;
 let emailMode = 'off';
 let plusMode = 'off';
@@ -121,6 +131,9 @@ const devBaseUrl = () => (process.env.PUBLIC_BASE_URL || `http://localhost:${por
 
 // Stands in for Creem: checkouts opened here (and two shortcuts) are always paid.
 const FAKE_PRODUCTS = { plus: { EUR: 'prod_fake_plus_eur', USD: 'prod_fake_plus_usd' }, gift: { EUR: 'prod_fake_gift_eur', USD: 'prod_fake_gift_usd' } };
+// What the pretend buyer types in the checkout's field: the company (team gift) or their name (personal gift).
+const FAKE_FIELD_ANSWERS = { company: { label: 'Company name, shown to your team', value: 'Acme Studio' }, from: { label: 'Your name, shown with the gift', value: 'Camille' } };
+const FAKE_REFUSED_AFFILIATE = 'BADCODE';
 const fakeCheckouts = new Map([
   ['fake_plus', { product: FAKE_PRODUCTS.plus.EUR, metadata: { kind: 'plus' }, amount: priceCents('plus', '', 'EUR'), currency: 'EUR', successUrl: '/' }],
   ['fake_gift50', { product: FAKE_PRODUCTS.gift.EUR, metadata: { kind: 'gift', plan: 'up-to-50', seats: '50' }, amount: priceCents('gift', 'up-to-50', 'EUR'), currency: 'EUR', successUrl: '/welcome/thanks/' }]
@@ -129,11 +142,13 @@ const fakeJson = (status, body) => new Response(JSON.stringify(body), { status, 
 
 function fakeCheckoutEntity(id, fake, status = 'completed') {
   const gift = fake.metadata?.kind === 'gift';
+  const fields = gift ? fake.fields || ['company'] : [];
+  const buyer = !gift ? { email: 'buyer@example.com', name: 'Sam Buyer' } : fields.includes('from') ? { email: 'camille@example.com', name: 'Camille Martin' } : { email: 'buyer@acme.example', name: 'Ada Lovelace' };
   return {
     id, object: 'checkout', mode: 'test', status, request_id: fake.requestId || null, units: 1, product: fake.product,
     ...(status === 'completed' ? { order: { id: 'ord_fake', object: 'order', status: 'paid', type: 'onetime', amount: fake.amount, amount_paid: fake.amount, currency: fake.currency } } : {}),
-    customer: { id: 'cust_fake', object: 'customer', email: gift ? 'buyer@acme.example' : 'buyer@example.com', name: gift ? 'Ada Lovelace' : 'Sam Buyer', country: 'FR' },
-    custom_fields: gift ? [{ type: 'text', key: 'company', label: 'Company name, shown to your team', optional: true, text: { max_length: 80, value: 'Acme Studio' } }] : [],
+    customer: { id: 'cust_fake', object: 'customer', ...buyer, country: 'FR' },
+    custom_fields: fields.filter(key => FAKE_FIELD_ANSWERS[key]).map(key => ({ type: 'text', key, label: FAKE_FIELD_ANSWERS[key].label, optional: true, text: { max_length: 80, ...(status === 'completed' ? { value: FAKE_FIELD_ANSWERS[key].value } : {}) } })),
     metadata: fake.metadata || {},
     success_url: new URL(fake.successUrl, `${devBaseUrl()}/`).href,
     checkout_url: `${devBaseUrl()}/__fake-creem/pay?checkout=${encodeURIComponent(id)}`
@@ -147,10 +162,16 @@ async function fakeCreemFetch(url, init = {}) {
     const body = JSON.parse(init.body || '{}');
     const [kind, currency] = Object.entries(FAKE_PRODUCTS).flatMap(([item, ids]) => Object.entries(ids).map(([money, id]) => [item, money, id])).find(([, , id]) => id === body.product_id) || [];
     if (!kind) return fakeJson(404, { message: ['Product not found'] });
+    // Like Creem, an unknown partner code refuses the whole checkout.
+    if (body.affiliate_code === FAKE_REFUSED_AFFILIATE) {
+      console.log(`  [fake creem] refused affiliate code ${body.affiliate_code} (HTTP 400)`);
+      return fakeJson(400, { statusCode: 400, message: ['Affiliate code not found'] });
+    }
     const id = `ch_fake_${randomBytes(8).toString('hex')}`;
-    const fake = { product: body.product_id, metadata: body.metadata || {}, amount: body.custom_price ?? priceCents(kind, body.metadata?.plan, currency), currency, successUrl: body.success_url || '/', requestId: body.request_id };
+    const fake = { product: body.product_id, metadata: body.metadata || {}, amount: body.custom_price ?? priceCents(kind, body.metadata?.plan, currency), currency, successUrl: body.success_url || '/', requestId: body.request_id, fields: (body.custom_fields || []).map(field => field?.key) };
     fakeCheckouts.set(id, fake);
-    console.log(`  [fake creem] opened ${id}: ${kind}${fake.metadata.plan ? ` ${fake.metadata.plan}` : ''}, ${(fake.amount / 100).toFixed(2)} ${currency}`);
+    const affiliate = body.affiliate_code ? `, affiliate ${body.affiliate_code}` : '';
+    console.log(`  [fake creem] opened ${id}: ${kind}${fake.metadata.plan ? ` ${fake.metadata.plan}` : ''}, ${(fake.amount / 100).toFixed(2)} ${currency}${affiliate}`);
     return fakeJson(200, fakeCheckoutEntity(id, fake, 'pending'));
   }
   const id = target.searchParams.get('checkout_id') || '';
@@ -245,6 +266,8 @@ async function devLicense(request, response) {
 async function handleApi(request, response) {
   const headers = new Headers();
   Object.entries(request.headers).forEach(([key, value]) => { if (value != null) headers.set(key, Array.isArray(value) ? value.join(', ') : value); });
+  // Stands in for Cloudflare's country header, which decides the currency in production.
+  if (devCountry && !headers.has('cf-ipcountry')) headers.set('cf-ipcountry', devCountry);
   const hasBody = !['GET', 'HEAD', 'OPTIONS'].includes(request.method);
   const webRequest = new Request(new URL(request.url, `http://${/^[A-Za-z0-9.-]+(?::\d{1,5})?$/.test(request.headers.host || '') ? request.headers.host : `localhost:${port}`}`), { method: request.method, headers, body: hasBody ? Readable.toWeb(request) : undefined, duplex: 'half' });
   const result = await plannerApi(webRequest);
@@ -391,6 +414,7 @@ console.log('');
 if (plannerApi) {
   console.log(`  Owner dashboard → ${url}/admin/   (token: ${process.env.ADMIN_TOKEN ? 'from ADMIN_TOKEN' : `${adminToken} — set ADMIN_TOKEN to choose your own`}${adminTotpSecret ? ' · 2FA on' : ''})`);
   console.log(`  Email: ${emailMode} · Plus: ${plusMode} · Creem: ${creemLabel}`);
+  if (devCountry) console.log(`  Visitors are treated as in ${devCountry} (currency from the country, as in production)`);
 }
 console.log('  Your plans stay in this browser. Press Ctrl+C to stop the server.');
 console.log('');

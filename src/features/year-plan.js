@@ -304,7 +304,7 @@ export function isHorizonMostlyEmpty(d, keyDateCount = 0) {
 
 /**
  * @param {object} options
- * @param {object} options.ctx Horizon context (yearData, persist, keyDates, openPeriod, openCalendar, confirm, printYear, getYear, shiftYear, track?)
+ * @param {object} options.ctx Horizon context (yearData, persist, keyDates, openPeriod, openCalendar, openList, confirm, printYear, getYear, shiftYear, track?)
  * @param {(options: object) => {el: HTMLElement, close: Function}} options.overlay mounts an overlay over the Horizon dialog
  * @param {(name: string, className?: string) => string} options.icon
  * @param {(year: number, target: 'close'|'horizon'|'print', typed: boolean) => void} options.onLeave called after the session closes
@@ -452,6 +452,40 @@ export function createYearPlan({ ctx, overlay, icon, onLeave }) {
     return `<header class="yp-step__head"><span class="hz-eyebrow">${esc(eyebrow)}</span><h3 tabindex="-1">${esc(title)}</h3>${lead ? `<p>${esc(lead)}</p>` : ''}</header>`;
   }
 
+  // The month of a mini-adventure: the app's own list, not a native select.
+  function monthLabel(month, item) {
+    if (month === 'custom') return rangeLabel(item?.startDate, item?.endDate);
+    return month === -1 ? 'Any month' : monthName(session.year, month);
+  }
+
+  function monthTrigger(id, index, month, item) {
+    const label = monthLabel(month, item);
+    return `<button type="button" class="yp-month${month === -1 ? '' : ' has-value'}" data-plan-adventure-month="${escAttr(id)}" data-plan-index="${index}" aria-haspopup="listbox" aria-expanded="false" aria-label="${escAttr(`Month for mini-adventure ${index + 1}: ${label}`)}"><span>${esc(label)}</span>${icon('chevronDown')}</button>`;
+  }
+
+  function openMonthMenu(trigger) {
+    const id = trigger.dataset.planAdventureMonth;
+    const draft = session.drafts.adventures.find(entry => entry.id === id);
+    const item = data().miniAdventures.find(entry => entry.id === id);
+    const current = item ? adventureMonth(item, session.year) : (draft?.month ?? -1);
+    const items = [
+      ...(current === 'custom' ? [{ value: 'custom', label: monthLabel('custom', item) }] : []),
+      { value: -1, label: 'Any month' },
+      ...Array.from({ length: 12 }, (_, m) => ({ value: m, label: monthName(session.year, m) }))
+    ];
+    ctx.openList(trigger, items, current, choice => {
+      if (!session) return;
+      const month = choice.value === 'custom' ? 'custom' : Number(choice.value);
+      if (draft) draft.month = month;
+      const d = data();
+      const saved = d.miniAdventures.find(entry => entry.id === id);
+      if (saved && month !== 'custom') { upsertAdventure(d, id, { month }, session.year, session.created); persist(); }
+      trigger.outerHTML = monthTrigger(id, Number(trigger.dataset.planIndex), month, d.miniAdventures.find(entry => entry.id === id));
+      refreshChrome();
+      requestAnimationFrame(() => el(`[data-plan-adventure-month="${CSS.escape(id)}"]`)?.focus({ preventScroll: true }));
+    }, { compact: true, alignSelected: true, minWidth: 168, label: `Month for mini-adventure ${Number(trigger.dataset.planIndex) + 1}` });
+  }
+
   function chip(attr, id, startKey, endKey, empty) {
     const value = startKey ? rangeLabel(startKey, endKey) : empty;
     return `<button type="button" class="hz-date-chip${startKey ? ' has-value' : ''}" ${attr}="${escAttr(id)}" aria-label="${escAttr(`${empty}${startKey ? ` (currently ${value})` : ''}`)}">${icon('calendar')}<span>${esc(value)}</span></button>`;
@@ -488,11 +522,9 @@ export function createYearPlan({ ctx, overlay, icon, onLeave }) {
         const item = d.miniAdventures.find(entry => entry.id === draft.id);
         const done = !!item && (!!item.done || item.status === 'done');
         const month = item ? adventureMonth(item, session.year) : draft.month;
-        const custom = month === 'custom' ? `<option value="custom" selected>${esc(rangeLabel(item.startDate, item.endDate))}</option>` : '';
-        const options = Array.from({ length: 12 }, (_, m) => `<option value="${m}" ${month === m ? 'selected' : ''}>${esc(monthName(session.year, m))}</option>`).join('');
         return `<div class="yp-adventure${done ? ' is-done' : ''}"><span class="yp-adventure__index" aria-hidden="true">${done ? icon('check') : index + 1}</span>
           <input type="text" data-plan-adventure="${escAttr(draft.id)}" ${index === 0 ? 'data-plan-autofocus' : ''} value="${escAttr(item?.text ?? draft.text ?? '')}" maxlength="180" placeholder="${escAttr(['A night under the stars', 'A city you have never seen', 'Learn something with your hands', 'A day completely offline', 'A trip with an old friend', 'Something that scares you a little'][index])}" aria-label="${escAttr(`Mini-adventure ${index + 1}`)}">
-          <label class="yp-month"><span class="sr-only">${esc(`Month for mini-adventure ${index + 1}`)}</span><select data-plan-adventure-month="${escAttr(draft.id)}">${custom}<option value="-1" ${month === -1 ? 'selected' : ''}>Any month</option>${options}</select>${icon('chevronDown')}</label></div>`;
+          ${monthTrigger(draft.id, index, month, item)}</div>`;
       }).join('');
       return `${stepHead('Step 4 · Mini-adventures', 'Six experiences that break the routine.', 'Small enough to happen, different enough to remember. Roughly one every two months keeps the year from blurring. A month is enough for now.')}
         <div class="yp-adventures">${cards}</div>`;
@@ -589,15 +621,6 @@ export function createYearPlan({ ctx, overlay, icon, onLeave }) {
   function onChange(event) {
     if (!session) return;
     const target = event.target;
-    if (target.dataset.planAdventureMonth) {
-      const id = target.dataset.planAdventureMonth;
-      const draft = session.drafts.adventures.find(entry => entry.id === id);
-      const month = target.value === 'custom' ? 'custom' : Number(target.value);
-      if (draft) draft.month = month;
-      const d = data();
-      if (d.miniAdventures.some(entry => entry.id === id)) { upsertAdventure(d, id, { month }, session.year, session.created); persist(); }
-      refreshChrome();
-    }
     if (target.dataset.planHabit) {
       const d = data();
       if (setHabit(d, Number(target.dataset.planHabit), target.value.trim(), session.year, today())) { target.value = target.value.trim(); persist(); }
@@ -646,6 +669,7 @@ export function createYearPlan({ ctx, overlay, icon, onLeave }) {
     if (dataset.planYear) { setYear(Number(dataset.planYear)); return; }
     if ('planOpenHorizon' in dataset) { close('horizon'); return; }
     if ('planPrint' in dataset) { close('print'); return; }
+    if (dataset.planAdventureMonth) { event.stopPropagation(); openMonthMenu(target); return; }
     if ('planAddKeydate' in dataset) {
       const draft = { id: uid('keydate'), text: '', startDate: '', endDate: '' };
       session.drafts.keydates.push(draft);

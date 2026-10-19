@@ -224,6 +224,30 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .owner-form-grid .form-field > span em { margin-left: 4px; }
 
+/* Seats: − value + (welcome/stepper.js) instead of the browser's spin arrows. */
+.owner input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+.owner input[type="number"]::-webkit-inner-spin-button,
+.owner input[type="number"]::-webkit-outer-spin-button { margin: 0; -webkit-appearance: none; appearance: none; }
+
+.owner-stepper { display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px; min-height: 38px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-strong); transition: border-color 130ms ease, box-shadow 130ms ease; }
+
+.owner-stepper:focus-within { border-color: var(--line-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 5%, transparent); }
+
+.owner .form-field .owner-stepper__input { min-width: 0; min-height: 36px; padding: 0 4px; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-variant-numeric: tabular-nums; text-align: center; }
+
+.owner-stepper__btn { display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+
+.owner-stepper__btn--down { border-right: 1px solid var(--line); border-radius: 8px 0 0 8px; }
+
+.owner-stepper__btn--up { border-left: 1px solid var(--line); border-radius: 0 8px 8px 0; }
+
+.owner-stepper__btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
+
+.owner-stepper__btn:hover { background: var(--soft); color: var(--ink); }
+
+.owner-stepper__btn[aria-disabled="true"] { background: transparent; color: var(--faint); cursor: default; }
+
 /* Same height and type as the inputs beside it. */
 .owner-form-grid .owner-select { min-height: 38px; font-size: var(--planner-control-font); font-weight: var(--planner-control-weight); }
 

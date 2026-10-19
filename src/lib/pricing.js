@@ -2,8 +2,10 @@
  * Prices and the Plus promise — one source for the landing page, the planner
  * and the owner API, which charges these exact amounts at checkout (Creem).
  *
- * OWNER DECISIONS: every price, the badge, PLUS_UPCOMING (what Plus promises
- * next) and the currency rule. Change them here only, then redeploy.
+ * OWNER DECISIONS: every price, the badge, PERSONAL_GIFTS, PLUS_UPCOMING (what
+ * Plus promises next) and the currency rule (the euro area pays in EUR, the rest
+ * of the world in USD; the server decides from the buyer's country). Change them
+ * here only, then redeploy.
  * Prices are whole units of the currency (29 = 29.00) and include any tax
  * (set the Creem products to "tax inclusive").
  */
@@ -20,6 +22,18 @@ export const TEAM_TIERS = Object.freeze([
   Object.freeze({ plan: 'up-to-100', seats: 100, price: Object.freeze({ EUR: 995, USD: 995 }) }),
   Object.freeze({ plan: 'up-to-500', seats: 500, price: Object.freeze({ EUR: 2995, USD: 2995 }) }),
   Object.freeze({ plan: 'up-to-1000', seats: 1000, price: Object.freeze({ EUR: 4995, USD: 4995 }) })
+]);
+
+/**
+ * Personal gifts — PROPOSAL, confirm the prices: the same gift link as a team
+ * gift, bought by a person for someone else ('gift-1', the price of Plus) or for
+ * a household ('family-5', up to five people). The buyer gets the link to send.
+ */
+export const PERSONAL_GIFTS = Object.freeze([
+  Object.freeze({ plan: 'gift-1', seats: 1, price: PLUS_PRICE, label: 'Give Plus', note: 'For one person, for life' }),
+  // Never cheaper per person than the smallest team pack (195 / 10 = 19.50), so
+  // a company never saves by buying family packs; about 30% less than five Plus.
+  Object.freeze({ plan: 'family-5', seats: 5, price: Object.freeze({ EUR: 99, USD: 99 }), label: 'Plus Family', note: 'Up to 5 people in one household, for life' })
 ]);
 
 /** Above the last tier: a quote, asked for with the request form. */
@@ -48,12 +62,22 @@ export const PLUS_UPCOMING = Object.freeze([
 export const EURO_REGIONS = Object.freeze(new Set(['AT', 'BE', 'BG', 'CY', 'DE', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PT', 'SI', 'SK', 'AD', 'MC', 'SM', 'VA', 'ME', 'XK']));
 
 export const teamTier = plan => TEAM_TIERS.find(tier => tier.plan === plan) || null;
+/** Any plan a gift link can be bought for: a team tier or a personal gift. */
+export const giftPlan = plan => teamTier(plan) || PERSONAL_GIFTS.find(gift => gift.plan === plan) || null;
+export const isPersonalGift = plan => PERSONAL_GIFTS.some(gift => gift.plan === plan);
 export const validCurrency = value => (CURRENCIES.includes(value) ? value : '');
+
+/** The currency a country pays in (ISO 3166 alpha-2), or '' when the country is unknown. */
+export function currencyForCountry(country) {
+  const code = String(country || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code) || code === 'XX' || code === 'T1') return '';
+  return EURO_REGIONS.has(code) ? 'EUR' : 'USD';
+}
 
 /** Amount charged in cents, or 0 when the item, plan or currency is unknown. */
 export function priceCents(item, plan, currency) {
   if (!validCurrency(currency)) return 0;
-  const units = item === 'plus' ? PLUS_PRICE[currency] : item === 'gift' ? teamTier(plan)?.price?.[currency] : 0;
+  const units = item === 'plus' ? PLUS_PRICE[currency] : item === 'gift' ? giftPlan(plan)?.price?.[currency] : 0;
   return Number.isFinite(units) && units > 0 ? Math.round(units * 100) : 0;
 }
 

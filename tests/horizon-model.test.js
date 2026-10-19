@@ -7,7 +7,8 @@ import {
   dayInRange,
   habitQuarterForMonth,
   habitQuarterBounds,
-  habitActivityStats
+  habitActivityStats,
+  horizonTabLine
 } from '../src/features/horizon-model.js';
 import { ymdKey } from '../src/lib/dates.js';
 
@@ -55,4 +56,18 @@ test('habit tracking may start mid-quarter without changing quarter bounds', () 
   assert.equal(stats.elapsed, 2);
   assert.equal(stats.done, 2);
   assert.equal(stats.longest, 2);
+});
+
+test('the Horizon tab says what comes next on the year, else the days left', () => {
+  const model = (upcoming, extra = {}) => ({ isCurrentYear: true, todayKey: '2026-10-21', daysInYear: 365, dayOfYear: 294, upcoming, ...extra });
+  const keyDate = { kind: 'keydate', startDate: '2026-11-14', endDate: '2026-11-14' };
+  const october = { kind: 'adventure', startDate: '2026-10-01', endDate: '2026-10-31' };
+  assert.match(horizonTabLine(model([keyDate])), /^Next 14\s/);
+  assert.match(horizonTabLine(model([october, keyDate])), /^Next 14\s/, 'a period under way does not hide what comes next');
+  assert.equal(horizonTabLine(model([october, { kind: 'keydate', startDate: '2026-10-21', endDate: '' }, keyDate])), 'Today');
+  assert.equal(horizonTabLine(model([october])), '71 days left');
+  assert.equal(horizonTabLine(model([], { dayOfYear: 364 })), '1 day left');
+  assert.equal(horizonTabLine(model([], { dayOfYear: 365 })), 'Last day of the year');
+  assert.equal(horizonTabLine(model([keyDate], { isCurrentYear: false })), '');
+  assert.equal(horizonTabLine(null), '');
 });

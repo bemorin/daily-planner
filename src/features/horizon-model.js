@@ -87,3 +87,19 @@ export function habitActivityStats(data, index, year, todayInput = new Date()) {
     quarterDays
   };
 }
+
+/**
+ * Horizon in a few words, for the phone's Horizon tab (pure). `model` is
+ * buildHorizonModel() of the current year: "Today" when something on the year
+ * starts today, else the next start ("Next 14 Nov"), else the days left in the
+ * year ("71 days left"). Periods already under way don't hide what comes next.
+ */
+export function horizonTabLine(model) {
+  if (!model?.isCurrentYear) return '';
+  const upcoming = Array.isArray(model.upcoming) ? model.upcoming : [];
+  if (upcoming.some(event => event.startDate === model.todayKey)) return 'Today';
+  const next = upcoming.find(event => event.startDate > model.todayKey);
+  if (next) return `Next ${rangeLabel(next.startDate)}`;
+  const left = model.daysInYear - model.dayOfYear;
+  return left > 0 ? `${left} ${left === 1 ? 'day' : 'days'} left` : 'Last day of the year';
+}

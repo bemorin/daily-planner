@@ -6,8 +6,8 @@ import { APP_VERSION, snap, minTaskSlots, scheduleTopPad, scheduleBottomPad, PRO
 import { createPrintFeature } from './src/features/print.js';
 import { pipStyles } from './src/features/pip-styles.js';
 import { openPipDatePicker } from './src/features/pip-date-picker.js';
-import { rangeLabel, horizonCountdown, rangeOverlapsMonth, dayInRange, habitQuarterForMonth, habitChecked, habitQuarterBounds, habitActivityStats } from './src/features/horizon-model.js';
-import { createHorizonView } from './src/features/horizon-view.js';
+import { rangeLabel, horizonCountdown, rangeOverlapsMonth, dayInRange, habitQuarterForMonth, habitChecked, habitQuarterBounds, habitActivityStats, horizonTabLine } from './src/features/horizon-model.js';
+import { buildHorizonModel, createHorizonView } from './src/features/horizon-view.js';
 import { modalEnter, modalExit, popoverEnter, panelEnter, resetMotion } from './src/ui/motion.js';
 import { createThemeController } from './src/ui/theme.js';
 import { createAppTooltips } from './src/ui/tooltip.js';
@@ -32,6 +32,7 @@ import { createBlankDay, normalizeDayState } from './src/state/day-state.js';
 import { normalizePlannerSettings } from './src/state/settings-state.js';
 import { buildPlannerBackup, formatStorageBytes } from './src/state/planner-backup.js';
 import { openDatePopover, openDateRangePopover } from './src/ui/calendar-popover.js';
+import { openListbox } from './src/ui/listbox.js';
 import { createStatsFeature } from './src/features/stats.js';
 import { createWeekFeature } from './src/features/week.js';
 import { searchPlannerDays, searchSnippet } from './src/features/search.js';
@@ -271,15 +272,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       todayButton.dataset.tooltip = 'Go to now';
       todayButton.setAttribute('aria-label', 'Go to now');
     }
-    const weekButton = qs('[data-week-view]');
-    if (weekButton) {
-      const active = plannerRangeView === 'week';
-      weekButton.classList.toggle('is-active', active);
-      weekButton.setAttribute('aria-pressed', String(active));
-      weekButton.setAttribute('aria-label', active ? 'Show day' : 'Show week');
-      weekButton.dataset.tooltip = active ? 'Day view' : 'Week view';
-      qs('[data-week-view-label]', weekButton).textContent = active ? 'Day' : 'Week';
-    }
+    viewSwitch.sync();
     const prevButton = qs('[data-prev]');
     const nextButton = qs('[data-next]');
     if (prevButton) {
@@ -661,8 +654,18 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     resizeWeekBlock,
     moveWeekBlock
   });
-  // The phone's Plan / Schedule dock and the Day view's "Plan" heading: what each side holds, in a few words.
-  const viewSwitch = createViewSwitch({ qs, qsa, summary: () => { const now = new Date(); const days = plannerRangeView === 'week' ? planningWeekDates(date) : [date]; return viewSummaries(days.map(day => ({ key: ymd(day), state: viewStateForDate(day) })), { todayKey: ymd(now), nowMinutes: now.getHours() * 60 + now.getMinutes() }); } });
+  // What the phone's Horizon tab says. A year never opened in Horizon is read as empty, not created.
+  const horizonTabSummary = now => { const year = now.getFullYear(); const known = !!settings.horizon?.years?.[year]; return horizonTabLine(buildHorizonModel(known ? horizonYearData(year) : { misogi: '', misogiMilestones: [], miniAdventures: [], meaningful: [], habits: [] }, year, known ? horizonYearKeyDates(year) : [], now)); };
+  // Day · Week · Horizon (header) and Plan · Schedule · Horizon (phone bar), with what each holds in a few words.
+  const viewSwitch = createViewSwitch({
+    qs, qsa,
+    summary: () => { const now = new Date(); const days = plannerRangeView === 'week' ? planningWeekDates(date) : [date]; return { ...viewSummaries(days.map(day => ({ key: ymd(day), state: viewStateForDate(day) })), { todayKey: ymd(now), nowMinutes: now.getHours() * 60 + now.getMinutes() }), horizon: horizonTabSummary(now) }; },
+    range: () => plannerRangeView,
+    setRange: view => { if (view !== plannerRangeView) toggleWeekView(); },
+    openHorizon: () => openHorizon('year', date),
+    closeHorizon: () => closeModal(qs('[data-horizon-modal]')),
+    setPane: view => setMobileView(view)
+  });
 
 
   createDaySwipeNavigation({
@@ -1596,6 +1599,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     // Re-opening the dialog that is already on top keeps its stack (a double Enter must not orphan the one underneath).
     if (stackOverCurrent) { modal.dataset.stackedOver = 'true'; stackedReturns.set(modal, { parent: activeModal, opener: document.activeElement }); } else if (activeModal !== modal) { delete modal.dataset.stackedOver; stackedReturns.delete(modal); }
     activeModal = modal;
+    // Each opening gets a number, so a close started just before can tell it was reopened.
+    modal.dataset.openSeq = String(Number(modal.dataset.openSeq || 0) + 1);
     modal.hidden = false;
     document.body.classList.add('has-modal');
     // Never leave typing focus in the page behind a dialog (Safari doesn't move focus to a clicked button).
@@ -1623,7 +1628,10 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     stackedReturns.delete(modal);
     modal.classList.remove('is-open');
     modalExit(qs('.modal__panel', modal));
+    const closing = modal.dataset.openSeq;
     setTimeout(() => {
+      // Reopened within the closing animation (e.g. Week then Horizon at once): leave it open.
+      if (modal.dataset.openSeq !== closing) return;
       modal.hidden = true;
       if (returnModal) {
         if (categoryReturn) categoryReturnModal = null;
@@ -1673,30 +1681,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     openModal(modal, null, { stack: !!confirmationReturnModal });
   }
 
-  function openListPopover(anchor, items, selected, onSelect, options = {}) {
-    closePopover();
-    const popover = document.createElement('div');
-    popover.className = `app-popover app-popover--list${options.compact ? ' is-compact' : ''}${options.timeMenu ? ' is-time-menu' : ''}${options.className ? ` ${options.className}` : ''}`;
-    popover.setAttribute('role', 'listbox');
-    if (options.minWidth) popover.style.minWidth = `${options.minWidth}px`;
-    items.forEach(item => {
-      const isSelected = String(item.value) === String(selected);
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = `popover-option${isSelected ? ' is-selected' : ''}${item.className ? ` ${item.className}` : ''}`;
-      button.setAttribute('role', 'option');
-      button.setAttribute('aria-selected', String(isSelected));
-      if (isSelected) button.dataset.selectedOption = 'true';
-      button.innerHTML = `${item.color ? `<span class="category-dot" style="background:${item.color}"></span>` : ''}<span>${esc(item.label)}</span>${isSelected ? checkSvg() : ''}`;
-      button.addEventListener('click', e => {
-        e.stopPropagation();
-        onSelect(item);
-        closePopover();
-      });
-      popover.append(button);
-    });
-    showPopover(anchor, popover, options);
-  }
+  // The app's own dropdown list (keyboard and screen-reader ready): src/ui/listbox.js.
+  function openListPopover(anchor, items, selected, onSelect, options = {}) { openListbox({ showPopover, closePopover }, anchor, items, selected, onSelect, options); }
 
   function openColorPopover(anchor, selected, onSelect, options = {}) {
     closePopover();
@@ -2892,6 +2878,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     confirm: requestConfirmation,
     openCalendar: openCalendarPopover,
     openPeriod: openPeriodCalendarPopover,
+    openList: openListPopover,
     openEvent: openHorizonYearEventPopover,
     openNewKeyDate: openNewKeyDatePopover,
     showPopover,
@@ -3500,7 +3487,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   const openStats = () => { statsFeature.ensureWeek(); renderStats(); openModal(qs('[data-stats-modal]')); trackOncePer('day', 'stats_opened'); };
   qs('[data-journal-open]').addEventListener('click', openJournal);
   qs('[data-open-work-open]').addEventListener('click', openUnresolvedModal);
-  qsa('[data-horizon-open]').forEach(button => button.addEventListener('click', () => { const mobileMenu = qs('[data-mobile-more-menu]'); if (mobileMenu) mobileMenu.hidden = true; openHorizon('year', date); }));
   qs('[data-horizon-scroll]')?.addEventListener('scroll', () => closeAllPopovers(), { passive: true });
   qs('[data-settings-open]').addEventListener('click', () => { renderCategorySettings(); renderSettingsHours(); renderPlanningWeek(); openModal(qs('[data-settings-modal]')); });
   qs('[data-end-day-open]').addEventListener('click', handleEndDayButton);
@@ -3608,7 +3594,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     renderNewCategoryColorTrigger();
   }, { allowAuto: true }));
   qsa('[data-modal-close]').forEach(btn => btn.addEventListener('click', () => closeModal(btn.closest('.modal'))));
-  qsa('[data-mobile-view]').forEach(btn => btn.addEventListener('click', () => setMobileView(btn.dataset.mobileView)));
   qs('[data-search-input]').addEventListener('input', e => { renderSearchResults(e.target.value); syncSearchClear(); });
   qs('[data-search-clear]').addEventListener('click', () => { const input = qs('[data-search-input]'); input.value = ''; renderSearchResults(''); syncSearchClear(); input.focus({ preventScroll: true }); });
   qs('[data-search-results]').addEventListener('click', e => { const button = e.target.closest('[data-search-date]'); if (button) goToSearchResult(button); });
@@ -3658,6 +3643,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
         j: '[data-journal-modal]',
         u: '[data-open-work-modal]',
         y: '[data-horizon-modal]',
+        v: '[data-horizon-modal]',
         s: '[data-stats-modal]',
         g: '[data-settings-modal]',
         h: '[data-help-modal]'

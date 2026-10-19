@@ -1,30 +1,38 @@
 // Imported as a namespace so a value missing from an older config.js reads as
 // undefined instead of failing the whole module.
 import * as config from '../src/config.js';
-import { trackEvent, plannerApiEnabled, checkoutOptions, startCheckout } from '../src/lib/planner-api.js';
+import { trackEvent, plannerApiEnabled, checkoutOptions, startCheckout, rememberReferral } from '../src/lib/planner-api.js';
 import { animate } from '../src/vendor/motion.js';
-import { CURRENCIES, PLUS_PRICE, PLUS_FEATURES, PLUS_UPCOMING, TEAM_TIERS, detectCurrency, formatMoney } from '../src/lib/pricing.js';
-import { TEAM_ROWS, buyState, checkoutUrl, defaultPlan, lowestPerPerson, perPerson, planForPeople, planRow, readCheckoutOptions, rememberCurrency, statusTone, storedCurrency, tierLabel, tierPrice } from './landing-model.js';
+import { PERSONAL_GIFTS, PLUS_PRICE, PLUS_FEATURES, PLUS_UPCOMING, TEAM_TIERS, formatMoney, isPersonalGift } from '../src/lib/pricing.js';
+import { TEAM_ROWS, buyState, checkoutUrl, currencyLine, defaultPlan, lowestPerPerson, pageCurrency, perPerson, personalOffer, planForPeople, planRow, readCheckoutOptions, statusTone, tierLabel, tierPrice } from './landing-model.js';
+import { createListbox } from './listbox.js';
+import { createStepper } from './stepper.js';
 
 /* ============================================================================
    LANDING — copy the owner may want to change without touching markup.
    Prices, what Plus adds and what it promises next live in
    src/lib/pricing.js (shared with the planner and the server, which charges
    exactly those amounts). Online checkout is Creem, through the owner API:
-   GET /api/checkout says what can be bought in which currency.
+   GET /api/checkout says what can be bought, and in which currency this
+   visitor pays (the euro area in EUR, everyone else in USD; no switch).
 
    PROPOSALS TO CONFIRM BEFORE PUBLISHING (owner decision pending):
-   - `pricingNote` (check the tax line with your accountant);
-   - `replyDelay` (left blank on purpose: no response time is promised).
+   - `pricingNote` (check the wording with your accountant);
+   - `replyDelay` (left blank on purpose: no response time is promised);
+   - `supportEmail` (left blank on purpose: fill it in yourself).
    ============================================================================ */
 const LANDING = {
-  pricingNote: 'One-time payments. Prices include tax. Receipts and invoices come from Creem, our payment partner.',
+  // Shown after "Prices in euros, taxes included." under the prices.
+  pricingNote: 'One-time payments. Receipts and invoices come from Creem, our payment partner.',
   // Optional add-on, shown under the team prices (and as a request type) when
   // enabled. Off: no workshops, travel or live sessions are sold for now.
   talk: { enabled: false, label: 'A remote talk by Ben (45 minutes)', price: 'On quote' },
   // When PLANNER_API_URL is blank, requests become an email to this address.
   // Left blank too, the form stays visible but cannot be sent.
   contactEmail: '',
+  // A reachable support address, shown as "Support: …" in the footer when set
+  // (the payment provider's review asks for one that matches this site).
+  supportEmail: '',
   // Optional promise shown after a request, e.g. 'within two working days'.
   replyDelay: '',
   landingUrl: 'https://planner.bemorin.com/welcome/#teams',
@@ -60,6 +68,11 @@ const TIMING_LABELS = {
   later: 'Later'
 };
 
+// One-click choices under "Number of people".
+const PEOPLE_CHOICES = [10, 25, 50, 100, 500, 1000];
+const PEOPLE_MIN = 2;
+const PEOPLE_MAX = 100000;
+
 const KINDS = {
   invoice: { label: 'Invoice', title: 'Get it by invoice', intro: 'Tell us where to send the invoice. You’ll get it by email, then the gift link once it’s paid.', submit: 'Request the invoice', done: 'Thanks, your request is in. The invoice will follow by email' },
   quote: { label: 'Quote', title: 'Ask for a quote', intro: 'Tell us about your organisation, and you’ll get a quote by email.', submit: 'Ask for a quote', done: 'Thanks, your request is in. The quote will follow by email' },
@@ -75,6 +88,7 @@ const track = name => { if (apiOn) trackEvent(name); };
 const reduceQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 const smoothBehavior = () => (reduceQuery.matches ? 'auto' : 'smooth');
 const EASE_OUT = [0.22, 1, 0.36, 1];
+const CHECK_ICON = '<svg class="i"><use href="#i-check"/></svg>';
 
 // Same rule as the server: a plain domain (letters, digits, dots, hyphens).
 const EMAIL_RE = /^[^\s@<>()[\]\\,;:"?&=%/#]{1,64}@[a-z0-9](?:[a-z0-9.-]{0,188}[a-z0-9])?\.[a-z]{2,24}$/i;
@@ -86,18 +100,25 @@ function el(tag, attrs = {}, ...children) {
     if (value === false || value == null) return;
     if (key === 'class') node.className = value;
     else if (key === 'style') node.style.cssText = value;
+    else if (key === 'html') node.innerHTML = value;
     else node.setAttribute(key, value === true ? '' : String(value));
   });
   children.flat().forEach(child => { if (child != null) node.append(child instanceof Node ? child : String(child)); });
   return node;
 }
 
-/* Currency: euro area pays in EUR, everyone else in USD ------------------- */
+const okMark = () => el('span', { class: 'ok', 'aria-hidden': 'true', html: CHECK_ICON });
 
-let currency = storedCurrency() || detectCurrency();
+/* Currency: the euro area pays in EUR, everyone else in USD --------------- */
+
+// A first guess from the browser's languages; the server's answer (from the
+// visitor's country) replaces it as soon as it arrives, before the prices
+// are on screen. There is no switch.
+let currency = pageCurrency(null);
 const money = value => formatMoney(value, currency);
+const currencyName = () => (currency === 'EUR' ? 'euros' : 'US dollars');
 
-/* What can be bought online: asked once, when prices come near ------------ */
+/* What can be bought online, and in which currency: asked once, on load ---- */
 
 const sale = { options: readCheckoutOptions(null), pending: null };
 
@@ -108,6 +129,7 @@ function loadSaleOptions() {
     sale.pending = checkoutOptions().then(result => {
       sale.options = readCheckoutOptions(result);
       sale.pending = null;
+      currency = pageCurrency(sale.options);
       renderOffers();
       return sale.options;
     });
@@ -117,24 +139,38 @@ function loadSaleOptions() {
 
 const saleFor = item => buyState({ apiOn, options: sale.options, item, currency });
 
-/* Offer: Plus, team tiers, talk -------------------------------------------- */
+/* Offer: Plus, personal gifts, team tiers, talk ---------------------------- */
 
 function renderPlusLists() {
-  qsa('[data-plus-features]').forEach(list => {
-    list.replaceChildren(...PLUS_FEATURES.map(feature => el('li', {}, feature.title)));
+  // The four lines of the Plus card: everything in Free, then what Plus adds.
+  qsa('[data-plus-lines]').forEach(list => {
+    list.replaceChildren(...['Everything in Free', ...PLUS_FEATURES.map(feature => feature.title)].map(text => el('li', {}, okMark(), text)));
   });
-  // The promise: what Plus gets next, at no extra cost, with its status. A
-  // list in the Plus card of the prices; four columns (with headings) in the
-  // Plus section.
+  // The promise: what Plus gets next, at no extra cost, with its status. Four
+  // columns with headings in the Plus section; titles and chips only in the
+  // Plus card of the prices.
+  const chip = next => el('span', { class: `chip chip--${statusTone(next.status)}` }, el('span', { class: 'sr-only' }, 'Status: '), next.status);
   qsa('[data-plus-upcoming]').forEach(list => {
+    if (list.hasAttribute('data-compact')) {
+      list.replaceChildren(...PLUS_UPCOMING.map(next => el('li', {}, el('span', { class: 'teaser__name' }, next.title), chip(next))));
+      return;
+    }
     const detailed = list.hasAttribute('data-detailed');
     list.replaceChildren(...PLUS_UPCOMING.map(next => el('li', { class: 'soon__item' },
       el('span', { class: 'soon__mark', 'aria-hidden': 'true' }),
       el('div', { class: 'soon__body' },
         el('div', { class: 'soon__top' },
           el(detailed ? 'h4' : 'b', { class: 'soon__name' }, next.title),
-          el('span', { class: `chip chip--${statusTone(next.status)}` }, el('span', { class: 'sr-only' }, 'Status: '), next.status)),
+          chip(next)),
         el('span', { class: 'soon__text' }, next.text)))));
+  });
+  // The comparison: each promised feature, included in Plus when it ships.
+  qsa('[data-compare-upcoming]').forEach(body => {
+    const head = body.querySelector('.cmp__group');
+    body.replaceChildren(...(head ? [head] : []), ...PLUS_UPCOMING.map(next => el('tr', {},
+      el('th', { scope: 'row' }, el('span', { class: 'cmp__name' }, next.title), chip(next)),
+      el('td', {}, el('span', { class: 'no', 'aria-hidden': 'true' }), el('span', { class: 'sr-only' }, 'Not included')),
+      el('td', {}, el('span', { class: 'soon-ok' }, el('span', { class: 'soon-ok__mark', 'aria-hidden': 'true' }), el('span', { class: 'soon-ok__text' }, 'Included when it ships'))))));
   });
   qsa('[data-faq-upcoming]').forEach(node => { node.textContent = upcomingSentence(); });
 }
@@ -153,14 +189,17 @@ function upcomingSentence() {
 
 function plusCta(box) {
   const state = saleFor('plus');
+  const price = PLUS_PRICE[currency];
   const children = [];
   if (state.buyable) {
-    children.push(el('button', { class: 'btn btn--primary btn--buy', type: 'button', 'data-buy': 'plus' }, 'Buy Plus'));
+    // In the prices, the button names the price; in the Plus section the price sits beside it.
+    const label = box.dataset.plusCta === 'pricing' && Number.isFinite(price) ? `Get Plus — ${money(price)}` : 'Get Plus';
+    children.push(el('button', { class: 'btn btn--primary btn--buy', type: 'button', 'data-buy': 'plus' }, label));
   } else {
     const id = `plus-note-${box.dataset.plusCta || 'x'}`;
     children.push(el('button', { class: 'btn btn--primary btn--buy', type: 'button', disabled: true, 'aria-describedby': id }, 'Coming soon'));
     children.push(state.reason === 'currency'
-      ? el('p', { class: 'buy__note', id }, `Not on sale in ${currency} yet. `, el('button', { class: 'linklike', type: 'button', 'data-cur-switch': state.other }, `Show prices in ${state.other}`))
+      ? el('p', { class: 'buy__note', id }, `Plus isn’t on sale in ${currencyName()} yet. Everything else is free: `, el('a', { href: '../', 'data-cta': 'app' }, 'open the planner'), '.')
       : el('p', { class: 'buy__note', id }, 'Plus isn’t on sale here yet. Everything else is free: ', el('a', { href: '../', 'data-cta': 'app' }, 'open the planner'), '.'));
   }
   children.push(el('p', { class: 'buy__error', role: 'alert', 'data-buy-error': true, hidden: true }));
@@ -172,6 +211,33 @@ function renderPlus() {
   qsa('[data-plus-price]').forEach(node => { node.textContent = Number.isFinite(price) ? money(price) : ''; });
   qsa('[data-free-price]').forEach(node => { node.textContent = money(0); });
   qsa('[data-plus-cta]').forEach(plusCta);
+}
+
+/* Give Plus and Plus Family: a gift link bought online, sent by the buyer. */
+function renderGifts() {
+  const list = qs('[data-gift-list]');
+  if (!list) return;
+  const state = saleFor('gift');
+  list.replaceChildren(...PERSONAL_GIFTS.map(gift => {
+    const offer = personalOffer(gift.plan, currency);
+    const price = offer.amount == null ? '' : money(offer.amount);
+    const buyable = state.buyable && offer.amount != null;
+    return el('button', {
+      class: 'gift-btn',
+      type: 'button',
+      'data-buy': buyable ? 'gift' : null,
+      'data-plan': gift.plan,
+      disabled: !buyable,
+      'aria-label': `${gift.label}, ${gift.note.toLowerCase()}, ${price}`
+    }, el('span', { class: 'gift-btn__icon', 'aria-hidden': 'true', html: '<svg class="i"><use href="#i-gift"/></svg>' }),
+    el('span', { class: 'gift-btn__name' }, gift.label),
+    el('span', { class: 'gift-btn__note' }, gift.note),
+    el('span', { class: 'gift-btn__price' }, price));
+  }));
+  qsa('[data-gift-price]').forEach(node => {
+    const offer = personalOffer(node.dataset.giftPrice, currency);
+    if (offer?.amount != null) node.textContent = money(offer.amount);
+  });
 }
 
 function renderTalk() {
@@ -196,7 +262,7 @@ function renderTiers() {
     const price = tierPrice(row, currency);
     const named = tierLabel(row).toLowerCase();
     const quote = price == null;
-    const look = `btn btn--tier ${row.highlight ? 'btn--primary' : 'btn--ghost'}`;
+    const look = `btn btn--tier ${row.highlight ? 'btn--light' : 'btn--outline-light'}`;
     const actions = [];
     if (quote) {
       actions.push(el('a', { class: look, href: '#request', 'data-request': 'quote', 'data-plan': row.plan, 'aria-label': `Ask for a quote for ${named}` }, 'Ask for a quote'));
@@ -207,9 +273,8 @@ function renderTiers() {
       actions.push(el('a', { class: look, href: '#request', 'data-request': 'invoice', 'data-plan': row.plan, 'aria-label': `Get the team gift for ${named} by invoice` }, 'Get it by invoice'));
     }
     return el('div', { class: `tier${row.highlight ? ' is-highlight' : ''}${quote ? ' tier--quote' : ''}` },
-      el('div', { class: 'tier__who' },
-        el('b', {}, tierLabel(row), row.badge ? el('span', { class: 'tier__badge' }, row.badge) : null),
-        el('small', {}, quote ? (row.note || '') : `${perPerson(row, currency)} per person`)),
+      el('b', { class: 'tier__who' }, tierLabel(row), row.badge ? el('span', { class: 'tier__badge' }, row.badge) : null),
+      el('small', { class: 'tier__per' }, quote ? (row.note || '') : `${perPerson(row, currency)} per person`),
       el('div', { class: 'tier__price' }, quote ? 'On quote' : money(price)),
       el('div', { class: 'tier__act' }, actions),
       el('p', { class: 'buy__error tier__error', role: 'alert', 'data-buy-error': true, hidden: true }));
@@ -224,6 +289,7 @@ function renderTiers() {
 }
 
 function renderCurrencyCopy() {
+  qsa('[data-currency-line]').forEach(node => { node.textContent = currencyLine(currency); });
   qsa('[data-min-per-person]').forEach(node => { node.textContent = lowestPerPerson(currency); });
   const pay = qs('[data-faq-pay]');
   if (pay) {
@@ -234,73 +300,86 @@ function renderCurrencyCopy() {
 }
 
 function renderOffers() {
-  qsa('[data-cur]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.cur === currency)));
   renderPlus();
+  renderGifts();
   renderTiers();
   renderCurrencyCopy();
   renderPlanOptions();
   updateManagerLink();
 }
 
-function setCurrency(next, { animated = false } = {}) {
-  if (!CURRENCIES.includes(next) || next === currency) return;
-  currency = next;
-  rememberCurrency(currency);
-  renderOffers();
-  if (animated && !reduceQuery.matches) {
-    qsa('.tier__price, .tier__who small, .offer__price, .plus-buy__price b').forEach((node, index) => {
-      try { animate(node, { opacity: [0, 1], transform: ['translateY(5px)', 'none'] }, { duration: 0.32, delay: (index % 6) * 0.025, ease: EASE_OUT }); } catch (_) { /* static is fine */ }
-    });
-  }
-}
-
 function setupOffers() {
-  const group = qs('[data-currency]');
   const note = qs('[data-pricing-note]');
   if (note) note.textContent = LANDING.pricingNote;
   renderTalk();
   renderPlusLists();
-  if (group) {
-    group.hidden = false;
-    group.addEventListener('click', event => {
-      const button = event.target.closest('[data-cur]');
-      if (button) setCurrency(button.dataset.cur, { animated: true });
-    });
-  }
-  document.addEventListener('click', event => {
-    const button = event.target.closest('[data-cur-switch]');
-    if (button) setCurrency(button.dataset.curSwitch, { animated: true });
-  });
   renderOffers();
-
-  // Ask what's on sale once, a little before the prices come into view.
-  const near = [qs('#pricing'), qs('.plus-buy')].filter(Boolean);
-  if (apiOn && near.length && 'IntersectionObserver' in window) {
-    const observer = new IntersectionObserver(entries => {
-      if (!entries.some(entry => entry.isIntersecting)) return;
-      observer.disconnect();
-      loadSaleOptions();
-    }, { rootMargin: '900px 0px' });
-    near.forEach(node => observer.observe(node));
-  }
+  // Asked at once, so the prices are in the visitor's currency before they
+  // scroll to them, and never change under their eyes.
+  loadSaleOptions();
 }
 
-/* Buy: Plus or a team gift, through the owner API's Creem checkout -------- */
+/* Compare plans: one disclosure with a smooth height change ---------------- */
+
+function setupCompare() {
+  const box = qs('[data-compare]');
+  const toggle = box && qs('[data-compare-toggle]', box);
+  const panel = box && qs('[data-compare-panel]', box);
+  if (!toggle || !panel) return;
+  let open = false;
+  let controls = null;
+  const canAnimate = () => !reduceQuery.matches && typeof Element.prototype.animate === 'function';
+  const settle = () => {
+    panel.style.removeProperty('height');
+    panel.style.removeProperty('opacity');
+    box.classList.remove('is-moving');
+    if (!open) panel.hidden = true;
+  };
+  const show = next => {
+    const from = panel.hidden ? 0 : panel.getBoundingClientRect().height;
+    open = next;
+    toggle.setAttribute('aria-expanded', String(open));
+    box.classList.toggle('is-open', open);
+    try { controls?.stop(); } catch (_) { /* already settled */ }
+    controls = null;
+    panel.hidden = false;
+    if (!canAnimate()) {
+      settle();
+      return;
+    }
+    const to = open ? panel.scrollHeight : 0;
+    box.classList.add('is-moving');
+    const run = animate(panel, { height: [`${from}px`, `${to}px`], opacity: [open && !from ? 0 : 1, open ? 1 : 0] }, { duration: open ? 0.46 : 0.32, ease: open ? EASE_OUT : [0.4, 0, 0.2, 1] });
+    controls = run;
+    run.finished.then(() => { if (controls === run) { controls = null; settle(); } }, () => {});
+  };
+  // Without JavaScript the table simply shows; with it, it starts folded.
+  panel.hidden = true;
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.addEventListener('click', () => show(!open));
+}
+
+/* Buy: Plus, a personal gift or a team gift, through Creem ----------------- */
 
 function buyError(button, text) {
-  const box = button.closest('[data-plus-cta], .tier');
+  const box = button.closest('[data-plus-cta], [data-gifts], .tier');
   const error = box && qs('[data-buy-error]', box);
   if (!error) return;
   error.textContent = text;
   error.hidden = !text;
 }
 
+const busyLabels = new WeakMap();
+
 function setBusy(button, busy) {
   if (busy) {
-    button.dataset.label = button.textContent;
-    button.textContent = button.dataset.buy === 'plus' ? 'Opening checkout…' : 'Opening…';
-  } else if (button.dataset.label) {
-    button.textContent = button.dataset.label;
+    busyLabels.set(button, [...button.childNodes]);
+    const label = button.dataset.buy === 'plus' ? 'Opening checkout…' : 'Opening…';
+    if (button.classList.contains('gift-btn')) button.replaceChildren(el('span', { class: 'gift-btn__name' }, label));
+    else button.textContent = label;
+  } else if (busyLabels.has(button)) {
+    button.replaceChildren(...busyLabels.get(button));
+    busyLabels.delete(button);
   }
   button.disabled = busy;
   button.classList.toggle('is-busy', busy);
@@ -309,21 +388,28 @@ function setBusy(button, busy) {
 
 let openRequest = () => {};
 
-async function buy(button) {
-  const item = button.dataset.buy;
-  const plan = button.dataset.plan || '';
-  if (item === 'plus') track('plus_checkout_clicked');
+async function buy(clicked) {
+  const item = clicked.dataset.buy;
+  const plan = clicked.dataset.plan || '';
+  const personal = item === 'gift' && isPersonalGift(plan);
+  // Loading the sale options can re-render the offers: always act on the button now on the page.
+  const selector = `[data-buy="${CSS.escape(item)}"]${plan ? `[data-plan="${CSS.escape(plan)}"]` : ':not([data-plan])'}`;
+  const current = () => (clicked.isConnected ? clicked : qs(selector) || clicked);
+  // A personal gift is Plus bought for someone else; teams have their own count.
+  if (item === 'plus' || personal) track('plus_checkout_clicked');
   else track('pack_checkout_clicked');
-  buyError(button, '');
-  setBusy(button, true);
+  buyError(current(), '');
+  setBusy(current(), true);
   await loadSaleOptions();
+  const button = current();
+  setBusy(button, true);
   const state = saleFor(item);
   if (!state.buyable) {
-    // On sale nowhere (or not in this currency) after all: show the honest
-    // state, and for a team gift go on with the invoice request.
+    // Not on sale online after all: show the honest state, and for a team
+    // gift go on with the invoice request.
     setBusy(button, false);
     renderOffers();
-    if (item === 'gift') openRequest({ kind: 'invoice', plan });
+    if (item === 'gift' && !personal) openRequest({ kind: 'invoice', plan });
     return;
   }
   const result = await startCheckout({ item, plan, currency });
@@ -333,8 +419,8 @@ async function buy(button) {
     location.assign(url);
     return;
   }
-  setBusy(button, false);
-  buyError(button, result.error || 'The checkout could not be opened. Please try again in a minute.');
+  setBusy(current(), false);
+  buyError(current(), result.error || 'The checkout could not be opened. Please try again in a minute.');
 }
 
 function setupBuy() {
@@ -351,10 +437,16 @@ function setupBuy() {
   });
 }
 
-/* Footer: privacy notice and configured links ----------------------------- */
+/* Footer: privacy notice, support address and configured links ------------ */
 
 function renderFooter() {
   if (apiOn) qsa('[data-privacy]').forEach(node => { node.hidden = false; });
+  const support = qs('[data-support]');
+  const email = String(LANDING.supportEmail || '').trim();
+  if (support && EMAIL_RE.test(email)) {
+    support.replaceChildren('Support: ', el('a', { href: `mailto:${email}` }, email));
+    support.hidden = false;
+  }
   const social = qs('[data-social]');
   const links = [['PROJECT_GITHUB_URL', 'GitHub'], ['SOCIAL_X_URL', 'X'], ['SOCIAL_LINKEDIN_URL', 'LinkedIn']]
     .map(([key, label]) => [httpsUrl(configUrl(key)), label])
@@ -409,17 +501,15 @@ async function copyText(text) {
 /* Requests: invoice, quote or question ------------------------------------ */
 
 const requestMode = apiOn ? 'api' : (EMAIL_RE.test(LANDING.contactEmail || '') ? 'mailto' : 'off');
-const request = { kind: 'invoice', peopleTouched: false, opened: false, quoted: false };
+const request = { kind: 'invoice', peopleTouched: false, opened: false, quoted: false, plan: null, timing: null, people: null };
+
+const planOptions = () => TEAM_ROWS.map(row => {
+  const price = tierPrice(row, currency);
+  return { value: row.plan, label: tierLabel(row), hint: price == null ? 'On quote' : money(price) };
+});
 
 function renderPlanOptions() {
-  const select = qs('[data-plan-select]');
-  if (!select) return;
-  const current = select.value || defaultPlan();
-  select.replaceChildren(...TEAM_ROWS.map(row => {
-    const price = tierPrice(row, currency);
-    return el('option', { value: row.plan }, `${tierLabel(row)} · ${price == null ? 'on quote' : money(price)}`);
-  }));
-  select.value = planRow(current) ? current : defaultPlan();
+  request.plan?.setOptions(planOptions(), defaultPlan());
 }
 
 function setupRequest() {
@@ -438,14 +528,18 @@ function setupRequest() {
   const kindNote = qs('[data-kind-note]', form);
   const done = qs('[data-form-done]', panel);
   const doneText = qs('[data-form-done-text]', panel);
-  const select = field('plan');
   const size = field('teamSize');
 
   if (LANDING.talk?.enabled && kindGroup && !qs('input[value="talk"]', kindGroup)) {
     kindGroup.append(el('label', {}, el('input', { type: 'radio', name: 'kind', value: 'talk' }), el('span', {}, KINDS.talk.label)));
   }
 
-  renderPlanOptions();
+  // The app's own dropdowns and number stepper, instead of the browser's.
+  const plan = createListbox(qs('[data-listbox="plan"]', form), { options: planOptions(), value: defaultPlan(), onChange: chosen => planChosen(chosen) });
+  request.plan = plan;
+  request.timing = createListbox(qs('[data-listbox="timing"]', form), { options: Object.entries(TIMING_LABELS).map(([value, label]) => ({ value, label })), value: 'december-2026' });
+  const people = createStepper(size, { min: PEOPLE_MIN, max: PEOPLE_MAX, quick: PEOPLE_CHOICES, noun: 'people', onChange: count => peopleChanged(count) });
+  request.people = people;
 
   if (requestMode === 'api') {
     qs('[data-privacy-line]', form).hidden = false;
@@ -463,20 +557,39 @@ function setupRequest() {
     submit.disabled = false;
   }
 
-  function setPlan(plan, prefill) {
-    if (!planRow(plan)) return;
-    select.value = plan;
-    if (prefill) {
-      const row = planRow(plan);
-      size.value = row.seats ? String(row.seats) : '';
-      request.peopleTouched = false;
-      setError(size, '');
-    }
+  // The plan and the number of people stay in step: the plan is always the
+  // smallest one that fits the number (planForPeople), and choosing a plan
+  // fills in its number unless the number typed already fits it.
+  function fillPeople(row) {
+    people.set(row?.seats || '');
+    size.placeholder = row?.seats ? 'e.g. 40' : `More than ${new Intl.NumberFormat('en-US').format(Math.max(...TEAM_TIERS.map(tier => tier.seats)))}`;
+    request.peopleTouched = false;
+    setError(size, '');
+  }
+
+  function setPlan(value, prefill) {
+    const row = planRow(value);
+    if (!row) return;
+    plan.setValue(value);
+    if (prefill) fillPeople(row);
+  }
+
+  function planChosen(value) {
+    const count = people.value;
+    if (count == null || planForPeople(count) !== value) fillPeople(planRow(value));
+    applyKind();
+  }
+
+  function peopleChanged(count) {
+    if (count == null || count < PEOPLE_MIN) return;
+    const next = planForPeople(count);
+    if (next && next !== plan.value) plan.setValue(next);
+    applyKind();
   }
 
   // An invoice needs a price; a tier without one is quoted.
   function matchKindToPlan() {
-    const priced = tierPrice(planRow(select.value), currency) != null;
+    const priced = tierPrice(planRow(plan.value), currency) != null;
     request.quoted = request.kind === 'invoice' && !priced;
     if (request.quoted) setKind('quote', false);
   }
@@ -484,20 +597,10 @@ function setupRequest() {
   // "Pay by invoice" chosen while the plan is on quote: move to the priced
   // tier that fits the number of people, if there is one.
   function pricePlanForInvoice() {
-    if (tierPrice(planRow(select.value), currency) != null) return;
-    const count = Number(size.value);
+    if (tierPrice(planRow(plan.value), currency) != null) return;
+    const count = people.value;
     const fit = TEAM_TIERS.find(tier => !count || count <= tier.seats);
-    if (fit) select.value = fit.plan;
-  }
-
-  function fitPlanToPeople() {
-    const count = Number(size.value);
-    if (!/^\d+$/.test(size.value.trim()) || count < 2) return;
-    const current = planRow(select.value);
-    const fits = current && (current.seats ? count <= current.seats : count > Math.max(...TEAM_TIERS.map(tier => tier.seats)));
-    if (fits) return;
-    const next = planForPeople(count);
-    if (next) select.value = next;
+    if (fit) plan.setValue(fit.plan);
   }
 
   function setKind(kind, apply = true) {
@@ -512,7 +615,7 @@ function setupRequest() {
     title.textContent = copy.title;
     intro.textContent = requestMode === 'mailto' ? 'Fill this in and your email app will open with the request, ready to send.' : copy.intro;
     // Below the choice, so the buttons never move under the pointer.
-    kindNote.textContent = request.quoted ? `${tierLabel(planRow(select.value))}: it starts with a quote, and the invoice follows.` : '';
+    kindNote.textContent = request.quoted ? `${tierLabel(planRow(plan.value))}: it starts with a quote, and the invoice follows.` : '';
     kindNote.hidden = !request.quoted;
     submit.textContent = requestMode === 'mailto' ? 'Write the request email' : copy.submit;
     const asking = request.kind === 'question' || request.kind === 'talk';
@@ -532,11 +635,11 @@ function setupRequest() {
     track('team_form_opened');
   }
 
-  function open({ kind, plan }) {
+  function open({ kind, plan: chosen }) {
     showForm();
     setKind(kind || request.kind, false);
-    if (plan) setPlan(plan, true);
-    else if (!size.value) setPlan(select.value || defaultPlan(), true);
+    if (chosen) setPlan(chosen, true);
+    else if (!size.value) setPlan(plan.value || defaultPlan(), true);
     applyKind();
     noteOpened();
     panel.scrollIntoView({ block: 'start', behavior: smoothBehavior() });
@@ -561,14 +664,11 @@ function setupRequest() {
     setKind(event.target.value);
   });
 
-  select.addEventListener('change', () => {
-    setPlan(select.value, !request.peopleTouched || !size.value);
-    applyKind();
-  });
-  size.addEventListener('input', () => { request.peopleTouched = true; });
-  size.addEventListener('change', () => {
-    fitPlanToPeople();
-    applyKind();
+  // Typing: the plan follows as soon as the number makes sense.
+  size.addEventListener('input', () => {
+    request.peopleTouched = true;
+    const typed = size.value.trim();
+    if (/^\d+$/.test(typed) && Number(typed) >= PEOPLE_MIN) peopleChanged(Math.min(Number(typed), PEOPLE_MAX));
   });
 
   const updateCount = () => { counter.textContent = `${field('message').value.length}/1000`; };
@@ -594,7 +694,7 @@ function setupRequest() {
     event.preventDefault();
     if (requestMode === 'off') return;
     errorBox.hidden = true;
-    fitPlanToPeople();
+    peopleChanged(people.value);
     applyKind();
     const values = readForm(form, request.kind);
     const invalid = validate(form, values);
@@ -660,6 +760,12 @@ function readForm(form, kind) {
   };
 }
 
+// A dropdown's value sits in a hidden input; errors and focus go to its button.
+function fieldNode(form, name) {
+  const node = qs(`[name="${name}"]`, form);
+  return node?.type === 'hidden' ? qs('.lb__trigger', node.closest('.lb')) || node : node;
+}
+
 function setError(field, message) {
   const ids = (field.getAttribute('aria-describedby') || '').split(/\s+/);
   const box = ids.map(id => document.getElementById(id)).find(node => node?.classList.contains('field__err'));
@@ -675,13 +781,14 @@ function validate(form, values) {
     ['name', !values.name ? 'Enter your name.' : (values.name.length > 80 ? 'Keep your name under 80 characters.' : '')],
     ['company', !values.company ? 'Enter your company.' : (values.company.length > 120 ? 'Keep the company name under 120 characters.' : '')],
     ['plan', planRow(values.plan) ? '' : 'Choose a plan.'],
-    ['teamSize', /^\d+$/.test(values.teamSize) && count >= 2 && count <= 100000 ? '' : 'Enter the number of people, from 2 to 100,000.'],
+    ['teamSize', /^\d+$/.test(values.teamSize) && count >= PEOPLE_MIN && count <= PEOPLE_MAX ? '' : 'Enter the number of people, from 2 to 100,000.'],
     ['message', values.message.length > 1000 ? 'Keep the message under 1,000 characters.' : (asking && !values.message ? 'Write your question.' : '')],
     ['consent', requestMode !== 'api' || values.consent ? '' : 'Tick this box so we can reply to you.']
   ];
   let first = null;
   checks.forEach(([name, message]) => {
-    const field = qs(`[name="${name}"]`, form);
+    const field = fieldNode(form, name);
+    if (!field) return;
     setError(field, message);
     if (message && !first) first = field;
   });
@@ -1340,8 +1447,12 @@ if (params.get('checkout_id') || params.get('session')) location.replace(`./than
 // welcome. If it gave up waiting for this module, stay static.
 motionOn = html.classList.contains('js-anim') && !reduceQuery.matches;
 
+// A partner's link (?ref=CODE) is remembered for a later purchase.
+if (apiOn) rememberReferral();
+
 buildPaint();
 setupOffers();
+setupCompare();
 setupBuy();
 renderFooter();
 setupManagerEmail();

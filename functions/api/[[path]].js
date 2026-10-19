@@ -13,6 +13,8 @@
 // Payments through Creem: secret `CREEM_API_KEY`, secret `CREEM_WEBHOOK_SECRET`
 // (for /api/creem/webhook), the product ids `CREEM_PLUS_EUR`, `CREEM_PLUS_USD`,
 // `CREEM_GIFT_EUR`, `CREEM_GIFT_USD`, and optional `CREEM_TEST_MODE` = 1.
+// The checkout currency follows the buyer's country from Cloudflare
+// (request.cf.country): EUR in the euro area, USD elsewhere.
 // Setup guide: docs/FEEDBACK_AND_WAITLIST.md
 
 import { createPlannerApi } from '../../server/planner-api.js';

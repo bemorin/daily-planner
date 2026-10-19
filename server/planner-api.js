@@ -19,12 +19,18 @@
 //   The device that joined gets a removal token so people can leave the list
 //   on their own.
 // - Daily Planner Plus (see server/licenses.js, server/gifts.js, server/creem.js):
-//   licences are signed tokens kept in the person's own planner. A team gift
-//   stores the company, its message, the seat count and a counter of
-//   activations — never who activated. A purchase stores the Creem checkout
-//   id, the licence id and the buyer's email (from Creem, which is the
-//   merchant of record). A payment row keeps what was sold, when, for how
-//   much and the buyer's country, for the sales chart — no name, no email.
+//   licences are signed tokens kept in the person's own planner. A gift
+//   stores the company (or, for a personal gift, the giver's name), its
+//   message, the seat count and a counter of activations — never who
+//   activated. A purchase stores the Creem checkout id, the licence id and the
+//   buyer's email (from Creem, which is the merchant of record). A payment row
+//   keeps what was sold, when, for how much and the buyer's country, for the
+//   sales chart — no name, no email.
+// - Checkouts: the currency follows the buyer's country as Cloudflare sees it
+//   (request.cf.country; the euro area pays in EUR, the rest in USD), which is
+//   read for that request only and never stored. A partner code from a ?ref=
+//   link is passed to Creem as affiliate_code and not stored (a code Creem
+//   refuses is named in the server log so the owner can see it).
 // - Reviews: feedback whose author ticked that it may be quoted, with the
 //   name they chose to give (optional). Deletable.
 //
@@ -37,8 +43,8 @@ import { base32Decode, issueSession, looksLikeSession, timingSafeEqual, TOTP_MIN
 import { announcementEmail, createResendMailer, DEFAULT_EMAIL_TIMEOUT_MS, EMAILS_PER_SEND, escapeHtml, htmlDocument, idempotencyKey, parseAddress, plusPurchaseEmail, RESEND_MIN_INTERVAL_MS, textToHtml } from './email.js';
 import { cleanOrg, DEFAULT_PUBLIC_BASE_URL, formatGiftCode, giftBuyerEmail, giftExpiry, giftLimit, giftManageUrl, giftStatus, giftUrl, licenseUrl, newGiftCode, normalizeBaseUrl, normalizeGift, normalizeGiftCode, publicGift, validateGiftFields } from './gifts.js';
 import { giftManageKey, importSigningKey, isoDay, newLicenseId, publicKeyFromSigningKey, signLicense } from './licenses.js';
-import { CHECKOUT_ID_RE, checkoutSeal, checkoutSealValid, createCheckout, CREEM_ITEMS, creemMode, fetchCheckout, parseCreemProducts, readCheckout, verifyWebhookSignature } from './creem.js';
-import { CURRENCIES, priceCents, TEAM_TIERS, teamTier, validCurrency } from '../src/lib/pricing.js';
+import { affiliateCode, CHECKOUT_ID_RE, checkoutSeal, checkoutSealValid, createCheckout, CREEM_ITEMS, creemMode, fetchCheckout, parseCreemProducts, readCheckout, verifyWebhookSignature } from './creem.js';
+import { currencyForCountry, CURRENCIES, giftPlan, isPersonalGift, PERSONAL_GIFTS, priceCents, TEAM_TIERS, validCurrency } from '../src/lib/pricing.js';
 
 export const EVENT_NAMES = new Set([
   'onboarding_completed',
@@ -104,7 +110,16 @@ export const TEAM_PLAN_LABELS = Object.freeze({
   'up-to-1000': 'Up to 1,000 people',
   'over-1000': 'Over 1,000 people'
 });
+// Team requests keep their own list (quotes included); personal gifts are never requested.
 export const TEAM_PLANS = new Set(Object.keys(TEAM_PLAN_LABELS));
+/** Every plan a gift link can be bought for online, with the label used in gift notes ("Creem · Give Plus"). */
+export const GIFT_PLAN_LABELS = Object.freeze(Object.fromEntries([
+  ...TEAM_TIERS.map(tier => [tier.plan, TEAM_PLAN_LABELS[tier.plan] || tier.plan]),
+  ...PERSONAL_GIFTS.map(gift => [gift.plan, gift.label])
+]));
+// The name a paid gift shows when the buyer left the checkout field empty.
+const GIFT_ORG_FALLBACK = Object.freeze({ 'gift-1': 'A friend', 'family-5': 'Your family' });
+const TEAM_ORG_FALLBACK = 'Your company';
 export const TEAM_CURRENCIES = new Set(['EUR', 'USD']);
 export const TEAM_KIND_LABELS = Object.freeze({ invoice: 'Invoice', quote: 'Quote', talk: 'Talk', question: 'Question' });
 export const TEAM_REQUEST_KINDS = new Set(Object.keys(TEAM_KIND_LABELS));
@@ -129,12 +144,15 @@ const EMAIL_IN_FLIGHT_MS = 2 * 60 * 1000;
 const NOT_PLUS_PAYMENT = 'This payment is not for Daily Planner Plus.';
 const PAYMENTS_OFF = 'Payments are not configured.';
 const CHECKOUT_OFF = 'Payments are not set up yet.';
+const CURRENCY_NAMES = Object.freeze({ EUR: 'euros', USD: 'US dollars' });
 const CHECKOUT_FAILED = 'The checkout could not be opened. Please try again in a minute.';
 const INVALID_SIGNATURE = 'Invalid signature';
 const UNKNOWN_CHECKOUT_TTL_MS = 10 * 60 * 1000;
 const UNKNOWN_CHECKOUTS_MAX = 500;
-// Shown on the Creem checkout of a team gift; its answer names the company in the gift.
+// Shown on the Creem checkout of a gift; the answer is the name the gift shows:
+// the company for a team gift, the giver for a personal gift (labels ≤ 50 characters).
 const COMPANY_FIELD = Object.freeze({ type: 'text', key: 'company', label: 'Company name, shown to your team', optional: true, text: Object.freeze({ max_length: 80 }) });
+const FROM_FIELD = Object.freeze({ type: 'text', key: 'from', label: 'Your name, shown with the gift', optional: true, text: Object.freeze({ max_length: 80 }) });
 export const REVIEW_NAME_MAX = 60;
 export const REVIEWS_LATEST = 50;
 export const SERIES_DEFAULT_DAYS = 400;
@@ -355,6 +373,18 @@ export function teamRequestEmail(entry, dashboardUrl = '') {
 const isMissingTable = error => /no such table/i.test(String(error?.message || ''));
 
 /**
+ * The buyer's country (ISO alpha-2) as Cloudflare sees it: request.cf.country,
+ * else the CF-IPCountry header (the dev server and tests set it); '' when unknown.
+ */
+export function requestCountry(request) {
+  const value = String(request?.cf?.country || request?.headers?.get?.('cf-ipcountry') || '').trim();
+  return /^[A-Za-z]{2}$/.test(value) ? value.toUpperCase() : '';
+}
+
+/** The currency the buyer pays in: EUR in the euro area, USD elsewhere, '' when the country is unknown. */
+export const buyerCurrency = request => currencyForCountry(requestCountry(request));
+
+/**
  * @param {object} options
  * @param {object} options.store            createMemoryStore() or createD1Store()
  * @param {string} [options.adminToken]     ADMIN_TOKEN; admin routes answer 503 without it
@@ -559,18 +589,32 @@ export function createPlannerApi({
   }
 
   /**
+   * The plan a gift was bought for ('gift-1', 'family-5', 'up-to-50' …), or ''
+   * for a gift made in the dashboard. Read from its payment row, else from the
+   * note the checkout gave it ("Creem · Give Plus"), as gifts have no plan column.
+   */
+  async function giftPlanOf(gift) {
+    if (!gift?.checkoutRef) return '';
+    const payment = await store.getPayment(gift.checkoutRef).catch(() => null);
+    if (payment?.kind === 'gift' && giftPlan(payment.plan)) return payment.plan;
+    return Object.keys(GIFT_PLAN_LABELS).find(plan => String(gift.note).endsWith(`Creem · ${GIFT_PLAN_LABELS[plan]}`)) || '';
+  }
+
+  /**
    * Email the buyer the gift link, the manage link and a message to forward —
    * once per gift: emailed_at is claimed first, and released if Resend refuses.
+   * `plan` (else read with giftPlanOf) picks the wording: personal or team.
    */
-  async function emailGiftBuyer(gift, manageKey, timeoutMs, { resend = false } = {}) {
+  async function emailGiftBuyer(gift, manageKey, timeoutMs, { resend = false, plan } = {}) {
     if (!mailer.configured) return { emailed: false, error: 'Email is not set up (RESEND_API_KEY and EMAIL_FROM).' };
     if (!gift.buyerEmail) return { emailed: false, error: 'There is no buyer email address.' };
     // `resend`: send even though another request reserved it moments ago. The
     // Idempotency-Key makes Resend drop the copy if that other send went out.
     if (!await store.markGiftEmailed(gift.code, now().toISOString()) && !resend) return { emailed: false, already: true };
     const base = baseUrl();
+    const bought = plan ?? await giftPlanOf(gift);
     try {
-      await mailer.send({ ...giftBuyerEmail({ gift, url: giftUrl(base, gift.code), manageUrl: giftManageUrl(base, gift.code, manageKey) }), replyTo: owner, recipients: [{ email: gift.buyerEmail }] }, { timeoutMs, idempotency: await idempotencyKey('gift-buyer', gift.code) });
+      await mailer.send({ ...giftBuyerEmail({ gift, url: giftUrl(base, gift.code), manageUrl: giftManageUrl(base, gift.code, manageKey), plan: bought }), replyTo: owner, recipients: [{ email: gift.buyerEmail }] }, { timeoutMs, idempotency: await idempotencyKey('gift-buyer', gift.code) });
     } catch (error) {
       if (!resend) await store.clearGiftEmailed(gift.code).catch(() => {});
       return { emailed: false, error: String(error?.message || error) };
@@ -579,9 +623,9 @@ export function createPlannerApi({
     return { emailed: true };
   }
 
-  function emailGiftBuyerLater(gift, manageKey) {
+  function emailGiftBuyerLater(gift, manageKey, plan) {
     if (!mailer.configured || !gift.buyerEmail || gift.emailedAt) return;
-    const task = emailGiftBuyer(gift, manageKey, BUYER_EMAIL_TIMEOUT_MS)
+    const task = emailGiftBuyer(gift, manageKey, BUYER_EMAIL_TIMEOUT_MS, { plan })
       .then(result => { if (result.error) safeWarn(`Gift email not sent: ${result.error}`); })
       .catch(error => safeWarn(`Gift email not sent: ${error?.message || error}`));
     try { defer?.(task); } catch (_) {}
@@ -595,7 +639,7 @@ export function createPlannerApi({
     if (!code) return json(404, { error: GIFT_UNKNOWN }, cors);
     if (method === 'GET') {
       const gift = await store.getGift(code);
-      return gift ? json(200, publicGift(gift, now().toISOString()), cors) : json(404, { error: GIFT_UNKNOWN }, cors);
+      return gift ? json(200, publicGift(gift, now().toISOString(), await giftPlanOf(gift)), cors) : json(404, { error: GIFT_UNKNOWN }, cors);
     }
     const key = await signer();
     if (!key) return json(503, { error: PLUS_OFF }, cors);
@@ -632,13 +676,15 @@ export function createPlannerApi({
     return json(409, { error: 'This gift has been fully claimed.' }, cors);
   }
 
-  async function giftClaimAnswer(gift, cors) {
+  /** `plan`: what the checkout bought ('gift-1', 'up-to-50' …), read with giftPlanOf when not given. */
+  async function giftClaimAnswer(gift, cors, plan) {
     const manageKey = await manageKeyOf(gift.code);
-    emailGiftBuyerLater(gift, manageKey);
+    const bought = plan ?? await giftPlanOf(gift);
+    emailGiftBuyerLater(gift, manageKey, bought);
     const base = baseUrl();
     return json(200, {
       kind: 'gift', code: formatGiftCode(gift.code), url: giftUrl(base, gift.code), seats: gift.seats, redeemed: gift.redeemed,
-      org: gift.org, message: gift.message, manageKey, manageUrl: giftManageUrl(base, gift.code, manageKey), expiresAt: gift.expiresAt
+      org: gift.org, message: gift.message, manageKey, manageUrl: giftManageUrl(base, gift.code, manageKey), expiresAt: gift.expiresAt, plan: bought
     }, cors);
   }
 
@@ -687,16 +733,17 @@ export function createPlannerApi({
       return { purchase: await store.getPurchase(checkoutId) };
     }
     const gift = await createGift({
-      org: cleanOrg(paid.org) || 'Your company',
+      // The name typed on the checkout: the company, or the giver of a personal gift.
+      org: cleanOrg(paid.org) || GIFT_ORG_FALLBACK[plan] || TEAM_ORG_FALLBACK,
       seats,
       source: 'creem',
       checkoutRef: checkoutId,
       buyerEmail: paid.email.slice(0, 254),
       currency: paid.currency,
       amount: paid.amount,
-      note: `${creem.mode === 'test' ? `${TEST_NOTE} · ` : ''}Creem · ${TEAM_PLAN_LABELS[plan] || plan}`
+      note: `${creem.mode === 'test' ? `${TEST_NOTE} · ` : ''}Creem · ${GIFT_PLAN_LABELS[plan] || plan}`
     });
-    return { gift };
+    return { gift, plan };
   }
 
   async function claimRoute(request, cors) {
@@ -743,16 +790,36 @@ export function createPlannerApi({
     if (!paid.paid) return json(402, { error: 'This payment is not complete yet.' }, cors);
     if (giftOnly && paid.item.kind === 'plus') return notAGift();
     const result = await fulfil(checkoutId, paid, { strict: false });
-    if (result.gift) return giftClaimAnswer(result.gift, cors);
+    if (result.gift) return giftClaimAnswer(result.gift, cors, result.plan);
     if (result.purchase?.kind === 'plus') return plusClaimAnswer(result.purchase, key, cors);
     return json(404, { error: PAYMENT_UNKNOWN }, cors);
   }
 
-  /** What can be bought right now: currencies with a product, while payments and Plus are set up. */
+  /**
+   * What can be bought right now (currencies with a product, while payments and
+   * Plus are set up) and `currency`, the one this buyer pays in: from their
+   * country, '' when it is unknown (local development).
+   */
   async function checkoutOptions(request) {
     const ready = paymentsConfigured && !testOnProduction(request) && !!await signer();
     const currencies = item => (ready ? CURRENCIES.filter(currency => products.ids[item][currency]) : []);
-    return { plus: currencies('plus'), gift: currencies('gift'), test: ready && creem.mode === 'test' };
+    return { plus: currencies('plus'), gift: currencies('gift'), currency: buyerCurrency(request), test: ready && creem.mode === 'test' };
+  }
+
+  /**
+   * Open the Creem checkout. A partner code Creem refuses (HTTP 400: unknown,
+   * paused or mistyped) must never block a sale: the checkout is opened again,
+   * once, without it, and the owner is told in the logs.
+   */
+  async function openCheckout(payload) {
+    try {
+      return await createCheckout({ ...creem, body: payload });
+    } catch (error) {
+      if (!payload.affiliate_code || error?.status !== 400) throw error;
+      const { affiliate_code: refused, ...plain } = payload;
+      safeWarn(`Creem refused the affiliate code "${refused}" (${error.message}); the checkout is opened without it.`);
+      return createCheckout({ ...creem, body: plain });
+    }
   }
 
   async function checkoutRoute(request, cors) {
@@ -760,16 +827,25 @@ export function createPlannerApi({
     if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
     const body = await readJson(request);
     const item = typeof body?.item === 'string' ? body.item : '';
-    if (!CREEM_ITEMS.includes(item)) return json(400, { error: 'Choose Daily Planner Plus or a team gift.' }, cors);
-    const currency = validCurrency(typeof body?.currency === 'string' ? body.currency.trim().toUpperCase() : '');
+    if (!CREEM_ITEMS.includes(item)) return json(400, { error: 'Choose Daily Planner Plus or a gift.' }, cors);
+    // The buyer's country decides (the euro area pays in EUR, everyone else in
+    // USD), whatever the page sent; the page's currency counts only when the
+    // country is unknown.
+    const asked = validCurrency(typeof body?.currency === 'string' ? body.currency.trim().toUpperCase() : '');
+    const currency = buyerCurrency(request) || asked;
     if (!currency) return json(400, { error: 'Choose a currency: EUR or USD.' }, cors);
-    const tier = item === 'gift' ? teamTier(typeof body?.plan === 'string' ? body.plan : '') : null;
-    if (item === 'gift' && !tier) return json(400, { error: 'Choose how many people the team gift is for.' }, cors);
+    const gift = item === 'gift' ? giftPlan(typeof body?.plan === 'string' ? body.plan : '') : null;
+    if (item === 'gift' && !gift) return json(400, { error: 'Choose which gift to buy.' }, cors);
+    if (!paymentsConfigured || testOnProduction(request) || !await signer()) return json(503, { error: CHECKOUT_OFF }, cors);
     const productId = products.ids[item][currency];
-    if (!paymentsConfigured || !productId || testOnProduction(request) || !await signer()) return json(503, { error: CHECKOUT_OFF }, cors);
+    if (!productId) {
+      // Never switched to another currency: the buyer would pay a price they were not shown.
+      const elsewhere = CURRENCIES.some(other => products.ids[item][other]);
+      return json(503, { error: elsewhere ? `Payments in ${CURRENCY_NAMES[currency]} are not set up yet.` : CHECKOUT_OFF }, cors);
+    }
     const base = returnBase(request);
     const rid = `dp_${newLicenseId()}`;
-    const plan = tier?.plan || '';
+    const plan = gift?.plan || '';
     const seal = await checkoutSeal(signingSecret, { kind: item, plan, currency, rid });
     const payload = item === 'plus'
       ? { product_id: productId, request_id: rid, success_url: `${base}/`, metadata: { kind: 'plus', currency, rid, seal } }
@@ -778,13 +854,16 @@ export function createPlannerApi({
         request_id: rid,
         units: 1,
         custom_price: priceCents('gift', plan, currency),
-        custom_fields: [COMPANY_FIELD],
+        custom_fields: [isPersonalGift(plan) ? FROM_FIELD : COMPANY_FIELD],
         success_url: `${base}/welcome/thanks/`,
-        metadata: { kind: 'gift', plan, seats: String(tier.seats), currency, rid, seal }
+        metadata: { kind: 'gift', plan, seats: String(gift.seats), currency, rid, seal }
       };
+    // A partner's code (from a ?ref= link) goes to Creem only: never in the metadata, the return address or our database.
+    const ref = affiliateCode(body?.ref);
+    if (ref) payload.affiliate_code = ref;
     let checkout;
     try {
-      checkout = await createCheckout({ ...creem, body: payload });
+      checkout = await openCheckout(payload);
     } catch (error) {
       safeWarn(`Creem checkout not opened: ${error?.message || error}`);
       return json(502, { error: CHECKOUT_FAILED }, cors);
@@ -835,14 +914,14 @@ export function createPlannerApi({
     const result = await fulfil(checkoutId, paid, { strict: true });
     let email = null;
     if (result.gift && mailer.configured && result.gift.buyerEmail) {
-      email = await emailGiftBuyer(result.gift, await manageKeyOf(result.gift.code), BUYER_EMAIL_TIMEOUT_MS);
+      email = await emailGiftBuyer(result.gift, await manageKeyOf(result.gift.code), BUYER_EMAIL_TIMEOUT_MS, { plan: result.plan });
       // The gift page may have started the same email moments ago and could still
       // fail: send it here too (Resend keeps one copy per Idempotency-Key).
       if (email.already) {
         const current = await store.getGift(result.gift.code);
         const startedAt = Date.parse(current?.emailedAt || '');
         if (Number.isFinite(startedAt) && now().getTime() - startedAt < EMAIL_IN_FLIGHT_MS) {
-          email = await emailGiftBuyer(current, await manageKeyOf(current.code), BUYER_EMAIL_TIMEOUT_MS, { resend: true });
+          email = await emailGiftBuyer(current, await manageKeyOf(current.code), BUYER_EMAIL_TIMEOUT_MS, { resend: true, plan: result.plan });
         }
       }
     }

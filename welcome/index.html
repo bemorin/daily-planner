@@ -272,7 +272,50 @@
       </div>
     </section>
 
-    <section class="section section--tint" id="week" aria-labelledby="week-title">
+    <section class="section section--tint" id="progress" aria-labelledby="progress-title">
+      <div class="wrap">
+        <div class="split split--visual-first">
+          <div class="split__visual" data-reveal>
+            <div class="rp-scale rp-scale--pad">
+              <div class="rp rp--progress s-in s-toast" data-scene="progress" data-final="s-in s-toast" aria-hidden="true">
+                <div class="rp-card">
+                  <div class="rp-stats">
+                    <span><small>Days closed</small><b data-count data-from="0" data-paint-total>0</b><em>This year</em></span>
+                    <span class="rp-stats__streak"><small>Current streak</small><b><svg class="i"><use href="#i-flame"/></svg><span data-count="20" data-from="0">20</span><i>days</i></b><em>Close today to keep it going</em></span>
+                    <span><small>Jokers this month</small><b class="rp-jokers"><i></i><i class="is-left"></i></b><em>1 of 2 left</em></span>
+                    <span><small>Trophies</small><b><span data-count="11" data-from="10">11</span><i>/20</i></b><em>Next: Thirty outcomes</em></span>
+                  </div>
+                  <div class="rp-paint" data-paint></div>
+                  <ul class="rp-paint__legend"><li class="l1">Closed</li><li class="l2">+ main outcome</li><li class="l3">+ winning habit</li><li class="lj">Joker used</li></ul>
+                </div>
+                <div class="rp-toast"><span class="rp-toast__badge"><svg class="i"><use href="#i-flame"/></svg></span><span><small>Trophy unlocked</small><b>A month, unbroken</b></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="split__copy" data-reveal-each>
+            <h2 id="progress-title">Watch your year paint itself</h2>
+            <p class="lead">Every day you close paints a square of the year: deeper when the main outcome got done, deepest when you also kept your winning habit.</p>
+            <ul class="ticks">
+              <li>A forgiving streak. It only counts your planning days, and two jokers a month cover the days life gets in the way.</li>
+              <li>Twenty trophies, all visible from day one with their progress. They’re earned by what you do in your life, not by time spent in the app.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="trophies" aria-hidden="true" data-reveal>
+          <div class="rp-scale">
+            <div class="rp rp--trophies s-in" data-scene="trophies" data-final="s-in">
+              <div class="rp-trophy is-unlocked" style="--t:var(--misogi)"><span class="rp-trophy__badge"><svg class="i"><use href="#i-flame"/></svg></span><span><b>A month, unbroken</b><small>Unlocked today</small></span></div>
+              <div class="rp-trophy" style="--t:var(--keydate);--p:.8"><span class="rp-trophy__badge"><svg class="i"><use href="#i-target"/></svg><i><svg class="i"><use href="#i-lock"/></svg></i></span><span><b>Thirty outcomes delivered</b><small>Close thirty days with the main outcome done.</small><span class="rp-meter"><i></i><em>24/30</em></span></span></div>
+              <div class="rp-trophy" style="--t:var(--adventure);--p:.6667"><span class="rp-trophy__badge"><svg class="i"><use href="#i-flag"/></svg><i><svg class="i"><use href="#i-lock"/></svg></i></span><span><b>Six adventures lived</b><small>Live all six mini-adventures.</small><span class="rp-meter"><i></i><em>4/6</em></span></span></div>
+              <div class="rp-trophy" style="--t:var(--misogi);--p:0"><span class="rp-trophy__badge"><svg class="i"><use href="#i-mountain"/></svg><i><svg class="i"><use href="#i-lock"/></svg></i></span><span><b>Misogi accomplished</b><small>Complete the challenge that defines your year.</small><span class="rp-meter"><i></i><em>0/1</em></span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="week" aria-labelledby="week-title">
       <div class="wrap split">
         <div class="split__copy" data-reveal-each>
           <h2 id="week-title">Your week, in blocks</h2>
@@ -335,7 +378,7 @@
       </div>
     </section>
 
-    <section class="section" id="tools" aria-labelledby="tools-title">
+    <section class="section section--tint" id="tools" aria-labelledby="tools-title">
       <div class="wrap">
         <div class="section__intro" data-reveal-each>
           <h2 id="tools-title">Everything else in the planner, kept small</h2>
@@ -475,7 +518,7 @@
       </div>
     </section>
 
-    <section class="section section--tint" id="year" aria-labelledby="year-title">
+    <section class="section" id="year" aria-labelledby="year-title">
       <div class="wrap">
         <div class="section__intro" data-reveal-each>
           <h2 id="year-title">Horizon: the year in view</h2>
@@ -535,49 +578,6 @@
             </ul>
             <p class="print-note"><svg class="i"><use href="#i-print"/></svg><span><b>Your year on one page.</b> Print it from Horizon and keep it by your desk, where you’ll see it every day.</span></p>
             <p class="credit">The Misogi, the mini-adventures and the one-habit-per-quarter rhythm come from <a href="https://jesseitzler.com/" rel="noopener">Jesse Itzler</a>.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="progress" aria-labelledby="progress-title">
-      <div class="wrap">
-        <div class="split split--visual-first">
-          <div class="split__visual" data-reveal>
-            <div class="rp-scale rp-scale--pad">
-              <div class="rp rp--progress s-in s-toast" data-scene="progress" data-final="s-in s-toast" aria-hidden="true">
-                <div class="rp-card">
-                  <div class="rp-stats">
-                    <span><small>Days closed</small><b data-count data-from="0" data-paint-total>0</b><em>This year</em></span>
-                    <span class="rp-stats__streak"><small>Current streak</small><b><svg class="i"><use href="#i-flame"/></svg><span data-count="20" data-from="0">20</span><i>days</i></b><em>Close today to keep it going</em></span>
-                    <span><small>Jokers this month</small><b class="rp-jokers"><i></i><i class="is-left"></i></b><em>1 of 2 left</em></span>
-                    <span><small>Trophies</small><b><span data-count="11" data-from="10">11</span><i>/20</i></b><em>Next: Thirty outcomes</em></span>
-                  </div>
-                  <div class="rp-paint" data-paint></div>
-                  <ul class="rp-paint__legend"><li class="l1">Closed</li><li class="l2">+ main outcome</li><li class="l3">+ winning habit</li><li class="lj">Joker used</li></ul>
-                </div>
-                <div class="rp-toast"><span class="rp-toast__badge"><svg class="i"><use href="#i-flame"/></svg></span><span><small>Trophy unlocked</small><b>A month, unbroken</b></span></div>
-              </div>
-            </div>
-          </div>
-          <div class="split__copy" data-reveal-each>
-            <h2 id="progress-title">Watch your year paint itself</h2>
-            <p class="lead">Every day you close paints a square of the year: deeper when the main outcome got done, deepest when you also kept your winning habit.</p>
-            <ul class="ticks">
-              <li>A forgiving streak. It only counts your planning days, and two jokers a month cover the days life gets in the way.</li>
-              <li>Twenty trophies, all visible from day one with their progress. They’re earned by what you do in your life, not by time spent in the app.</li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="trophies" aria-hidden="true" data-reveal>
-          <div class="rp-scale">
-            <div class="rp rp--trophies s-in" data-scene="trophies" data-final="s-in">
-              <div class="rp-trophy is-unlocked" style="--t:var(--misogi)"><span class="rp-trophy__badge"><svg class="i"><use href="#i-flame"/></svg></span><span><b>A month, unbroken</b><small>Unlocked today</small></span></div>
-              <div class="rp-trophy" style="--t:var(--keydate);--p:.8"><span class="rp-trophy__badge"><svg class="i"><use href="#i-target"/></svg><i><svg class="i"><use href="#i-lock"/></svg></i></span><span><b>Thirty outcomes delivered</b><small>Close thirty days with the main outcome done.</small><span class="rp-meter"><i></i><em>24/30</em></span></span></div>
-              <div class="rp-trophy" style="--t:var(--adventure);--p:.6667"><span class="rp-trophy__badge"><svg class="i"><use href="#i-flag"/></svg><i><svg class="i"><use href="#i-lock"/></svg></i></span><span><b>Six adventures lived</b><small>Live all six mini-adventures.</small><span class="rp-meter"><i></i><em>4/6</em></span></span></div>
-              <div class="rp-trophy" style="--t:var(--misogi);--p:0"><span class="rp-trophy__badge"><svg class="i"><use href="#i-mountain"/></svg><i><svg class="i"><use href="#i-lock"/></svg></i></span><span><b>Misogi accomplished</b><small>Complete the challenge that defines your year.</small><span class="rp-meter"><i></i><em>0/1</em></span></span></div>
-            </div>
           </div>
         </div>
       </div>
@@ -845,7 +845,10 @@
           <p class="plus-buy__note">Every Plus feature for one person, today’s and those to come. No subscription, nothing to renew.</p>
           <div class="plus-buy__act">
             <div class="buy" data-plus-cta="plus"><button class="btn btn--primary btn--buy" type="button" disabled>Coming soon</button></div>
-            <a class="plus-buy__alt" href="#teams">Giving it to a team?<svg class="i"><use href="#i-arrow"/></svg></a>
+            <div class="plus-buy__alts">
+              <a class="plus-buy__alt" href="#gifts">Give it as a gift<svg class="i"><use href="#i-arrow"/></svg></a>
+              <a class="plus-buy__alt" href="#teams">Giving it to a team?<svg class="i"><use href="#i-arrow"/></svg></a>
+            </div>
           </div>
         </div>
       </div>
@@ -918,89 +921,28 @@
             <p class="seats__fine">The link can be activated for 12 months. A small margin covers people who set the planner up again on a new device.</p>
           </div>
 
+          <section class="prices" id="team-prices" aria-labelledby="team-prices-title">
+            <div class="prices__head">
+              <h3 id="team-prices-title">Team gift prices</h3>
+              <p>One price for the company, by number of people, paid once.</p>
+            </div>
+            <div class="tiers" data-tiers>
+              <noscript><p class="tiers__fallback">From €195 for up to 10 people to €4,995 for up to 1,000 people, paid once. Larger organisations are quoted.</p></noscript>
+            </div>
+            <div class="talk" data-talk hidden></div>
+            <div class="prices__foot">
+              <p class="prices__fine"><svg class="i"><use href="#i-link"/></svg><span data-gift-after><b>Right after paying, you land on your gift page</b> with the link to forward, the seats used and the message your team sees. Its link also arrives by email.</span></p>
+              <p class="prices__currency" data-currency-line>Prices in euros, taxes included.</p>
+            </div>
+          </section>
+
           <div class="band__actions">
-            <a class="btn btn--light" href="#pricing">See prices</a>
             <a class="btn btn--outline-light" href="#teams" data-manager-mail><svg class="i"><use href="#i-mail"/></svg>Send this to my manager</a>
             <button class="btn btn--text-light" type="button" data-manager-copy><svg class="i"><use href="#i-copy"/></svg>Copy message</button>
             <a class="btn btn--text-light" href="#request" data-request="question">Ask a question</a>
             <p class="band__status" data-copy-status role="status" aria-live="polite"></p>
           </div>
         </div>
-      </div>
-    </section>
-
-    <section class="section" id="pricing" aria-labelledby="pricing-title">
-      <div class="wrap">
-        <div class="pricing__head">
-          <div class="section__intro" data-reveal-each>
-            <h2 id="pricing-title">Free to use. Paid once for more.</h2>
-            <p class="lead">The planner is free, with every feature above. Plus and the team gift are one-time payments: no subscription, nothing to renew.</p>
-          </div>
-          <div class="cur" role="group" aria-label="Currency" data-currency hidden>
-            <button type="button" data-cur="EUR" aria-pressed="true">€ EUR</button>
-            <button type="button" data-cur="USD" aria-pressed="false">$ USD</button>
-          </div>
-        </div>
-        <div class="offers" data-reveal-each>
-          <article class="offer offer--free" aria-labelledby="offer-free">
-            <div class="offer__head">
-              <h3 class="offer__name" id="offer-free">Free</h3>
-              <p class="offer__price"><span data-free-price>€0</span> <small>forever</small></p>
-              <p class="offer__sub">Everything in the planner, for as long as you use it.</p>
-            </div>
-            <ul class="squares">
-              <li>Day and Week views with time blocks</li>
-              <li>Close day, Unresolved, the journal and time stats</li>
-              <li>Horizon: Misogi, mini-adventures, commitments, habits and year map</li>
-              <li>Progress: the painted year, the streak and twenty trophies</li>
-              <li>Search, floating mode, export, backup and print</li>
-              <li>Works offline and installs as an app</li>
-              <li>Free sync through your own Google Drive</li>
-            </ul>
-            <div class="offer__foot">
-              <a class="btn btn--ghost" href="../" data-cta="app">Open the planner</a>
-            </div>
-          </article>
-          <article class="offer offer--plus" aria-labelledby="offer-plus">
-            <div class="offer__head">
-              <h3 class="offer__name" id="offer-plus"><svg class="i"><use href="#i-spark"/></svg>Plus</h3>
-              <p class="offer__price"><span data-plus-price>€29</span> <small>once</small></p>
-              <p class="offer__sub">For one person, for life, on all your devices. No subscription.</p>
-            </div>
-            <ul class="squares" data-plus-features>
-              <li>Plan your year</li>
-              <li>Your year in review</li>
-              <li>Colours for your painted year</li>
-            </ul>
-            <section class="soon" aria-labelledby="soon-pricing">
-              <div class="soon__head">
-                <h4 id="soon-pricing">Coming to Plus</h4>
-                <p>Included, at no extra cost</p>
-              </div>
-              <ul class="soon__list" data-plus-upcoming>
-                <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><b class="soon__name">Sync without Google</b><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></div><span class="soon__text">Your planner on all your devices with a Daily Planner account, encrypted on your device before it leaves it.</span></div></li>
-                <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><b class="soon__name">Your calendar beside your day</b><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></div><span class="soon__text">See Google, Outlook or iCloud events next to your blocks, read-only.</span></div></li>
-                <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><b class="soon__name">Share your year</b><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></div><span class="soon__text">An image of your painted year or your Misogi, ready to post.</span></div></li>
-                <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><b class="soon__name">An evening nudge</b><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></div><span class="soon__text">A gentle reminder to close the day, at the time you choose.</span></div></li>
-              </ul>
-              <p class="soon__foot">Buy once: everything Plus gets later is yours.</p>
-            </section>
-            <div class="offer__foot buy" data-plus-cta="pricing"><button class="btn btn--primary btn--buy" type="button" disabled>Coming soon</button></div>
-          </article>
-          <article class="offer offer--team" aria-labelledby="offer-team">
-            <div class="offer__head">
-              <h3 class="offer__name" id="offer-team"><svg class="i"><use href="#i-gift"/></svg>Team gift</h3>
-              <p class="offer__price">Plus for everyone</p>
-              <p class="offer__sub">One price for the company, by number of people. <a href="#seats">How seats work</a></p>
-            </div>
-            <div class="tiers" data-tiers>
-              <noscript><p class="tiers__fallback">From €195 for up to 10 people to €4,995 for up to 1,000 people, paid once. Larger organisations are quoted.</p></noscript>
-            </div>
-            <div class="talk" data-talk hidden></div>
-            <p class="offer__fine"><svg class="i"><use href="#i-link"/></svg><span data-gift-after><b>Right after paying, you land on your gift page</b> with the link to forward, the seats used and the message your team sees. Its link also arrives by email.</span></p>
-          </article>
-        </div>
-        <p class="pricing__note"><svg class="i"><use href="#i-shield"/></svg><span data-pricing-note>One-time payments. Prices include tax. Receipts and invoices come from Creem, our payment partner.</span></p>
 
         <div class="band request" id="request" data-form-panel data-reveal>
           <form class="team-form" data-team-form novalidate aria-labelledby="request-title">
@@ -1020,21 +962,26 @@
               <label class="field"><span>Work email</span><input type="email" name="email" autocomplete="email" required maxlength="254" placeholder="you@company.com" aria-describedby="err-email"><small class="field__err" id="err-email"></small></label>
               <label class="field"><span>Your name</span><input type="text" name="name" autocomplete="name" required maxlength="80" aria-describedby="err-name"><small class="field__err" id="err-name"></small></label>
               <label class="field"><span>Company</span><input type="text" name="company" autocomplete="organization" required maxlength="120" aria-describedby="err-company"><small class="field__err" id="err-company"></small></label>
-              <label class="field"><span>Plan</span><select name="plan" data-plan-select aria-describedby="err-plan">
-                <option value="up-to-10">Up to 10 people</option>
-                <option value="up-to-50" selected>Up to 50 people</option>
-                <option value="up-to-100">Up to 100 people</option>
-                <option value="up-to-500">Up to 500 people</option>
-                <option value="up-to-1000">Up to 1,000 people</option>
-                <option value="over-1000">More than 1,000 people</option>
-              </select><small class="field__err" id="err-plan"></small></label>
-              <label class="field"><span>Number of people</span><input type="number" name="teamSize" inputmode="numeric" required min="2" max="100000" step="1" placeholder="e.g. 40" aria-describedby="err-teamSize"><small class="field__err" id="err-teamSize"></small></label>
-              <label class="field"><span>When to send it</span><select name="timing">
-                <option value="december-2026" selected>Before the holidays (December 2026)</option>
-                <option value="january-2027">January 2027</option>
-                <option value="q1-2027">Later in Q1 2027</option>
-                <option value="later">Later</option>
-              </select></label>
+              <div class="field">
+                <span id="plan-label">Plan</span>
+                <div class="lb" data-listbox="plan">
+                  <input type="hidden" name="plan" value="up-to-50">
+                  <button class="lb__trigger" type="button" id="plan-trigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="plan-label plan-trigger" aria-describedby="err-plan"><span class="lb__value">Up to 50 people</span><svg class="i lb__chev"><use href="#i-down"/></svg></button>
+                </div>
+                <small class="field__err" id="err-plan"></small>
+              </div>
+              <div class="field">
+                <label for="team-size">Number of people</label>
+                <input type="number" id="team-size" name="teamSize" inputmode="numeric" required min="2" max="100000" step="1" placeholder="e.g. 40" aria-describedby="err-teamSize">
+                <small class="field__err" id="err-teamSize"></small>
+              </div>
+              <div class="field">
+                <span id="timing-label">When to send it</span>
+                <div class="lb" data-listbox="timing">
+                  <input type="hidden" name="timing" value="december-2026">
+                  <button class="lb__trigger" type="button" id="timing-trigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="timing-label timing-trigger"><span class="lb__value">Before the holidays (December 2026)</span><svg class="i lb__chev"><use href="#i-down"/></svg></button>
+                </div>
+              </div>
               <label class="field field--wide"><span data-message-label>Anything else? <em>Optional</em></span><textarea name="message" rows="3" maxlength="1000" aria-describedby="err-message message-count"></textarea><small class="field__err" id="err-message"></small><small class="field__count" id="message-count" data-message-count>0/1000</small></label>
             </div>
             <div class="hp" aria-hidden="true"><label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
@@ -1059,7 +1006,121 @@
       </div>
     </section>
 
-    <section class="section section--tint" id="faq" aria-labelledby="faq-title">
+    <section class="section section--tint" id="pricing" aria-labelledby="pricing-title">
+      <div class="wrap">
+        <div class="section__intro" data-reveal-each>
+          <h2 id="pricing-title">Free to use. Paid once for more.</h2>
+          <p class="lead">The planner is free, with everything above. Plus adds what helps with the year itself, for one payment: no subscription, nothing to renew.</p>
+        </div>
+
+        <div class="plans" data-reveal-each>
+          <article class="plan plan--free" aria-labelledby="plan-free">
+            <div class="plan__head">
+              <h3 class="plan__name" id="plan-free">Free</h3>
+              <p class="plan__price"><span data-free-price>€0</span></p>
+              <p class="plan__sub">The whole planner, for as long as you use it. No account, no card, and your plans stay in your browser.</p>
+            </div>
+            <ul class="oks">
+              <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Day and Week views, with time blocks</li>
+              <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Close the day, Unresolved, the journal and time stats</li>
+              <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Horizon and Progress: your year on one page, painted as you go</li>
+              <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Works offline, installs as an app, syncs through your Google Drive</li>
+            </ul>
+            <div class="plan__cta"><a class="btn btn--ghost" href="../" data-cta="app">Open the planner</a></div>
+          </article>
+
+          <article class="plan plan--plus" aria-labelledby="plan-plus">
+            <div class="plan__head">
+              <h3 class="plan__name" id="plan-plus"><svg class="i"><use href="#i-spark"/></svg>Plus</h3>
+              <p class="plan__price"><span data-plus-price>€29</span> <small>once</small></p>
+              <p class="plan__sub">For the year itself: plan it in one sitting, review it on one page. For one person, for life, on all your devices.</p>
+            </div>
+            <ul class="oks" data-plus-lines>
+              <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Everything in Free</li>
+              <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Plan your year</li>
+              <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Your year in review</li>
+              <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Colours for your painted year</li>
+            </ul>
+            <div class="plan__cta buy" data-plus-cta="pricing"><button class="btn btn--primary btn--buy" type="button" disabled>Coming soon</button></div>
+            <div class="plan__more">
+              <section class="gifts" id="gifts" aria-labelledby="gifts-title" data-gifts>
+                <h4 class="gifts__title" id="gifts-title"><svg class="i"><use href="#i-gift"/></svg>Give it as a gift</h4>
+                <div class="gifts__list" data-gift-list>
+                  <button class="gift-btn" type="button" disabled><span class="gift-btn__name">Give Plus</span><span class="gift-btn__note">For one person, for life</span><span class="gift-btn__price">€29</span></button>
+                  <button class="gift-btn" type="button" disabled><span class="gift-btn__name">Plus Family</span><span class="gift-btn__note">Up to 5 people in one household, for life</span><span class="gift-btn__price">€99</span></button>
+                </div>
+                <p class="gifts__note">After paying, you get a link to send. Plus is theirs for life as soon as they open it.</p>
+                <p class="buy__error" role="alert" data-buy-error hidden></p>
+              </section>
+              <section class="teaser" aria-labelledby="teaser-title">
+                <h4 class="teaser__title" id="teaser-title">Coming to Plus — included</h4>
+                <ul class="teaser__list" data-plus-upcoming data-compact>
+                  <li><span class="teaser__name">Sync without Google</span><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></li>
+                  <li><span class="teaser__name">Your calendar beside your day</span><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></li>
+                  <li><span class="teaser__name">Share your year</span><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></li>
+                  <li><span class="teaser__name">An evening nudge</span><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></li>
+                </ul>
+              </section>
+            </div>
+          </article>
+        </div>
+
+        <div class="compare" data-compare data-reveal>
+          <button class="compare__toggle" type="button" aria-expanded="true" aria-controls="compare-panel" data-compare-toggle><span>Compare plans</span><svg class="i"><use href="#i-down"/></svg></button>
+          <div class="compare__panel" id="compare-panel" data-compare-panel>
+            <div class="compare__inner">
+              <table class="cmp">
+                <caption class="sr-only">Free and Plus, feature by feature</caption>
+                <thead>
+                  <tr><th scope="col"><span class="sr-only">Feature</span></th><th scope="col">Free</th><th scope="col">Plus</th></tr>
+                </thead>
+                <tbody>
+                  <tr class="cmp__group"><th scope="rowgroup" colspan="2">Your days</th><td></td></tr>
+                  <tr><th scope="row">Day and Week views, with time blocks</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Close day: move, save or forget what’s unfinished</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Unresolved: one short list for work that slipped</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Journal of memories and lessons</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Time stats by category</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Search, floating mode, print and export</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                </tbody>
+                <tbody>
+                  <tr class="cmp__group"><th scope="rowgroup" colspan="2">Your year</th><td></td></tr>
+                  <tr><th scope="row">Horizon: Misogi, mini-adventures, commitments, habits and year map</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Progress: the painted year, the streak and twenty trophies</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Print your year on one page</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                </tbody>
+                <tbody class="cmp__plus">
+                  <tr class="cmp__group"><th scope="rowgroup" colspan="2">Only in Plus</th><td></td></tr>
+                  <tr><th scope="row">Plan your year: a guided session of about 30 minutes</th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Your year in review, on one printable page</th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Five more palettes for the painted year</th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                </tbody>
+                <tbody>
+                  <tr class="cmp__group"><th scope="rowgroup" colspan="2">Everywhere</th><td></td></tr>
+                  <tr><th scope="row">Works offline</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Installs as an app on phone and computer</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Sync through your own Google Drive</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                </tbody>
+                <tbody class="cmp__soon" data-compare-upcoming>
+                  <tr class="cmp__group"><th scope="rowgroup" colspan="2">Coming to Plus</th><td></td></tr>
+                  <tr><th scope="row"><span class="cmp__name">Sync without Google</span><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="soon-ok"><span class="soon-ok__mark" aria-hidden="true"></span><span class="soon-ok__text">Included when it ships</span></span></td></tr>
+                  <tr><th scope="row"><span class="cmp__name">Your calendar beside your day</span><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="soon-ok"><span class="soon-ok__mark" aria-hidden="true"></span><span class="soon-ok__text">Included when it ships</span></span></td></tr>
+                  <tr><th scope="row"><span class="cmp__name">Share your year</span><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="soon-ok"><span class="soon-ok__mark" aria-hidden="true"></span><span class="soon-ok__text">Included when it ships</span></span></td></tr>
+                  <tr><th scope="row"><span class="cmp__name">An evening nudge</span><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="soon-ok"><span class="soon-ok__mark" aria-hidden="true"></span><span class="soon-ok__text">Included when it ships</span></span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="pricing__foot">
+          <p class="pricing__note"><svg class="i"><use href="#i-shield"/></svg><span><span data-currency-line>Prices in euros, taxes included.</span> <span data-pricing-note>One-time payments. Receipts and invoices come from Creem, our payment partner.</span></span></p>
+          <a class="pricing__teams" href="#teams">Buying for a team? See the team gift<svg class="i"><use href="#i-arrow"/></svg></a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="faq" aria-labelledby="faq-title">
       <div class="wrap faq">
         <div class="faq__intro" data-reveal-each>
           <h2 id="faq-title">Questions</h2>
@@ -1122,8 +1183,16 @@
                 <div class="qa__a"><p>No. You pay <span data-plus-price>€29</span> once and keep Plus for life, with the Plus features added later. It’s saved in your planner’s settings, so Google Drive sync and backups carry it to your other devices.</p></div>
               </details>
               <details class="qa" name="faq">
+                <summary>Can I give Plus to someone?</summary>
+                <div class="qa__a"><p>Yes. Choose Give Plus (<span data-gift-price="gift-1">€29</span>) for one person, or Plus Family (<span data-gift-price="family-5">€99</span>) for up to 5 people in one household. Right after paying, you get a link to send, by email or in a message. Whoever opens it gets Plus for life on their own planner, with your name and a message if you add them. No account needed, and the link can be activated for 12 months.</p></div>
+              </details>
+              <details class="qa" name="faq">
                 <summary>How do I pay?</summary>
                 <div class="qa__a"><p>By card, through Creem, our payment partner. Creem is the merchant of record: it charges the right VAT for where you are, included in the price, and emails you the receipt and invoice. A team gift can also be paid by bank transfer against an invoice.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>Which currencies do you charge in?</summary>
+                <div class="qa__a"><p>Euros in the euro area and US dollars everywhere else, with the same numbers. The checkout charges the currency of the country you pay from, so the price you see is the price you pay, taxes included.</p></div>
               </details>
             </div>
           </div>
@@ -1141,10 +1210,6 @@
               <details class="qa" name="faq">
                 <summary>Can we pay by invoice?</summary>
                 <div class="qa__a"><p data-faq-pay>Yes. Choose a team size and send the request: you’ll receive an invoice to pay by bank transfer, then the gift link once it’s paid. It’s one payment, with no subscription.</p></div>
-              </details>
-              <details class="qa" name="faq">
-                <summary>Which currencies do you charge in?</summary>
-                <div class="qa__a"><p>Euros in the euro area and US dollars elsewhere, with the same numbers. The page picks one from your browser’s region; the EUR / USD switch above the prices changes it.</p></div>
               </details>
               <details class="qa" name="faq">
                 <summary>How long does the gift link work?</summary>
@@ -1181,6 +1246,7 @@
         <a href="#teams">Teams</a>
         <a href="#pricing">Pricing</a>
         <a href="#request" data-request="question">Ask a question</a>
+        <span class="foot__support" data-support hidden></span>
         <span class="foot__social" data-social hidden></span>
       </nav>
       <nav class="foot__legal" aria-label="Legal">
@@ -1191,7 +1257,7 @@
     </div>
     <div class="wrap foot__privacy" id="privacy" data-privacy hidden>
       <h2>What this page counts and stores</h2>
-      <p>This page counts a few anonymous events per day, such as page views, the sections people scroll to and button clicks, without any identifier: no cookies, and no IP address stored. “Buy” sends only what you chose and the currency, to open the payment page; your card details go to Creem, our payment partner, never to this site. If you send a request, what you submit (email, name, company, plan, number of people, timing and message) is stored only to reply to you, and deleted on request.</p>
+      <p>This page counts a few anonymous events per day, such as page views, the sections people scroll to and button clicks, without any identifier: no cookies, and no IP address stored. Prices are in euros in the euro area and in US dollars elsewhere: the server reads the country of your connection for that request (from Cloudflare) and never stores it. A purchase sends only what you chose, to open the payment page, along with a partner’s referral code if you came through a partner’s link (it’s kept on this device for 60 days for that purpose only); your card details go to Creem, our payment partner, never to this site. If you send a request, what you submit (email, name, company, plan, number of people, timing and message) is stored only to reply to you, and deleted on request.</p>
     </div>
   </footer>
 

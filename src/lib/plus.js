@@ -177,7 +177,9 @@ export function plusStatusLine(license, { gift = null, activatedAt = '', locale 
     return parsed && !Number.isNaN(parsed.valueOf()) ? parsed.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   };
   const org = license.org || gift?.org || '';
-  if (license.src === 'gift' && org) return `Plus is active · from ${org}`;
+  // The server's fallback names for a personal gift with no name typed read as plain words.
+  const giver = org === 'A friend' ? 'a friend' : org === 'Your family' ? 'your family' : org;
+  if (license.src === 'gift' && giver) return `Plus is active · from ${giver}`;
   if (license.src === 'purchase' && date(license.iat)) return `Plus is active · purchased on ${date(license.iat)}`;
   const since = date(activatedAt) || date(license.iat);
   return since ? `Plus is active · since ${since}` : 'Plus is active';

@@ -1,8 +1,8 @@
 import { qs, qsa } from '../lib/dom.js';
 import { esc, escAttr, safeUrl } from '../lib/text.js';
 import { activatePlusToken, hasPlus, isCheckoutReference, normalizeGiftCode, onPlusChange, parsePlusInput, plusAvailable, plusLicense, plusSettings, plusStatusLine } from '../lib/plus.js';
-import { CURRENCIES, PLUS_PRICE, PLUS_UPCOMING, detectCurrency, formatMoney } from '../lib/pricing.js';
-import { checkoutOptions, claimPurchase, fetchGift, plannerApiEnabled, redeemGift, startCheckout, trackEvent } from '../lib/planner-api.js';
+import { CURRENCIES, PERSONAL_GIFTS, PLUS_PRICE, PLUS_UPCOMING, detectCurrency, formatMoney, isPersonalGift, validCurrency } from '../lib/pricing.js';
+import { checkoutOptions, claimPurchase, fetchGift, plannerApiEnabled, redeemGift, rememberReferral, startCheckout, trackEvent } from '../lib/planner-api.js';
 import { burst, panelEnter, pulse } from '../ui/motion.js';
 import { readPaint, resolvePaint } from './paint-palettes.js';
 import { paintRows, planCaption, planPreview, recentWeeks, renderPaintStrip, renderPaletteTry, renderPlanRail } from './plus-previews.js';
@@ -45,6 +45,21 @@ const ICONS = {
 };
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 
+/** The one muted line under the price: the currency is the buyer's (euro area: EUR, elsewhere: USD), taxes included. */
+export const currencyNote = currency => (currency === 'EUR' ? 'Prices in euros, taxes included.' : 'Prices in US dollars, taxes included.');
+
+/** A personal gift button: "Give Plus — €29", "Plus Family — up to 5 people — €99". */
+export function giftLabel(gift, currency) {
+  const price = formatMoney(gift.price?.[currency], currency);
+  return gift.seats > 1 ? `${gift.label} — up to ${gift.seats} people — ${price}` : `${gift.label} — ${price}`;
+}
+
+/** Who a gift is from, as a sentence reads it: the server's fallbacks ("A friend", "Your family") in lower case. */
+export function giverName(org) {
+  const name = String(org || '').trim();
+  return name === 'A friend' || name === 'Your family' ? name.toLowerCase() : name;
+}
+
 /** What Plus adds, in the order the dialog lists it. Ids match the Plus feature modules. */
 export const PLUS_FEATURES = Object.freeze([
   { id: 'year-plan', icon: 'plan', title: 'Plan your year', text: 'A guided half hour that fills Horizon — Misogi, milestones, adventures, commitments, habits and key dates — and prints your year on one page.' },
@@ -67,7 +82,8 @@ export function plusFeatureId(name) {
  * pending and is tried again at the next launch.
  */
 export function plusProblem(kind, result = {}, { org = '' } = {}) {
-  const from = org ? ` Ask ${org}` : ' Ask the person who sent it';
+  const name = String(org || '').trim();
+  const from = name && giverName(name) === name ? ` Ask ${name}` : ' Ask the person who sent it';
   if (result.unavailable) return { icon: 'notice', title: kind === 'purchase' ? 'This copy can’t confirm purchases' : 'Open this gift at planner.bemorin.com', text: kind === 'purchase' ? 'This copy of the planner isn’t connected to Daily Planner’s payments. Open the link from your receipt at planner.bemorin.com.' : 'This copy of the planner isn’t connected to the gift service. Open the same link on planner.bemorin.com to activate it there.', site: true };
   if (result.status === 0) return { icon: 'offline', title: result.offline ? 'You’re offline' : 'The planner couldn’t be reached', text: kind === 'purchase' ? 'Your payment is safe. Plus will be activated as soon as the planner can reach the server — now with Try again, or next time you open it.' : 'Connect to the internet and try again. The gift link keeps working.', retry: true, keep: true };
   if (kind === 'purchase') {
@@ -106,15 +122,20 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
   const modal = () => qs('[data-plus-modal]');
   const root = () => qs('[data-plus]');
   let view = { stage: 'overview' };
-  // Which currencies Get Plus can charge right now ({ plus: [...] }); null until asked, plus: null when unknown.
+  // What can be bought right now ({ plus: [...], gift: [...] }); null until asked, a list is null when unknown.
   let options = null;
+  // The buyer's currency: the server's choice from their country once it answers, a guess from the browser's languages until then.
   let currency = detectCurrency();
-  let currencyChosen = false;
 
   const isOpen = () => !modal()?.hidden && modal()?.classList.contains('is-open');
   const price = (value = currency) => formatMoney(PLUS_PRICE[value], value);
-  const statusLine = () => plusStatusLine(plusLicense(), { gift: plusSettings().plusGift, activatedAt: plusSettings().plus?.activatedAt, locale: locale() });
-  const buyable = () => (options === null ? 'loading' : options.plus === null || options.plus.includes(currency) ? 'yes' : 'no');
+  const statusLine = () => {
+    const license = plusLicense();
+    const gift = plusSettings().plusGift;
+    return plusStatusLine(license && { ...license, org: giverName(license.org) }, { gift: gift && { ...gift, org: giverName(gift.org) }, activatedAt: plusSettings().plus?.activatedAt, locale: locale() });
+  };
+  const buyable = (item = 'plus') => (options === null ? 'loading' : options[item] === null || options[item]?.includes(currency) ? 'yes' : 'no');
+  const giftsOffered = () => plannerApiEnabled() && plusAvailable() && buyable('gift') !== 'no';
 
   function featureList(focus = '', { compact = false } = {}) {
     return `<ul class="plus-features${compact ? ' plus-features--compact' : ''}">${PLUS_FEATURES.map(feature => `<li class="plus-feature plus-feature--${feature.id}${feature.id === focus ? ' is-focus' : ''}" data-plus-feature="${feature.id}"><span class="plus-feature__icon">${icon(feature.icon)}</span><span><strong>${esc(feature.title)}</strong>${compact ? '' : `<small>${esc(feature.text)}</small>`}</span></li>`).join('')}</ul>`;
@@ -153,8 +174,19 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
       </section>`;
   }
 
-  function currencySwitch() {
-    return `<span class="plus-currency" role="group" aria-label="Currency">${CURRENCIES.map(code => `<button type="button" data-plus-currency="${code}" aria-pressed="${code === currency}">${code}</button>`).join('')}</span>`;
+  /** Personal gifts, below the main action: quiet, for someone else or a household. */
+  function gifts() {
+    if (!giftsOffered()) return '';
+    const waiting = buyable('gift') === 'loading' || !!view.buying;
+    const buttons = PERSONAL_GIFTS.map(gift => {
+      const busy = view.buying === gift.plan;
+      return `<button class="secondary-button plus-gifts__buy" type="button" data-plus-gift="${gift.plan}"${waiting ? ' disabled' : ''}${busy ? ' aria-busy="true"' : ''}>${icon(gift.seats > 1 ? 'team' : 'gift')}<span>${esc(busy ? 'Opening checkout…' : giftLabel(gift, currency))}</span></button>`;
+    }).join('');
+    return `<section class="plus-gifts" aria-labelledby="plus-gifts-title">
+        <p class="plus-gifts__lead"><strong id="plus-gifts-title">Give Plus to someone</strong><span>You get a link to send. Plus is theirs for life once they open it, any time within a year.</span></p>
+        <div class="plus-gifts__row">${buttons}</div>
+        ${view.giftError ? `<p class="plus-inline-error" role="alert">${esc(view.giftError)}</p>` : ''}
+      </section>`;
   }
 
   function redeemForm() {
@@ -170,9 +202,10 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
   function cta() {
     const state = buyable();
     const label = `Get Plus — ${price()}`;
+    const busy = view.buying === 'plus';
     const buy = state === 'no'
       ? '<button class="primary-button plus-cta__buy" type="button" disabled>Coming soon</button>'
-      : `<button class="primary-button plus-cta__buy" type="button" data-plus-checkout${view.buying || state === 'loading' ? ` disabled aria-busy="true"` : ''}>${esc(view.buying ? 'Opening checkout…' : label)}</button>`;
+      : `<button class="primary-button plus-cta__buy" type="button" data-plus-checkout${view.buying || state === 'loading' ? ' disabled' : ''}${busy || state === 'loading' ? ' aria-busy="true"' : ''}>${esc(busy ? 'Opening checkout…' : label)}</button>`;
     return `<div class="plus-cta">
         ${redeemForm()}
         <div class="plus-cta__row">
@@ -198,6 +231,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
         ${panels(focus?.id || '', true)}
         ${upcoming(true)}
         <div class="plus-cta plus-cta--done"><div class="plus-cta__row"><button class="primary-button plus-cta__buy" type="button" data-plus-close>Done</button></div></div>
+        ${gifts()}
         ${footer}`;
     }
     const title = focus ? `${focus.title} comes with Plus.` : 'Plan your year, look back on it, paint it your way.';
@@ -207,37 +241,45 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     return `<header class="modal__header plus-header">
         <p class="modal__eyebrow plus-eyebrow"><span class="plus-mark">${icon('spark')}</span>Daily Planner Plus</p>
         <h2 id="plus-title">${esc(title)}</h2>
-        <div class="plus-price-line"><p class="plus-price"><strong>${esc(price())}</strong><span>once — for life</span></p>${plusAvailable() ? currencySwitch() : ''}</div>
+        <div class="plus-price-line"><p class="plus-price"><strong>${esc(price())}</strong><span>once — for life</span></p>${plusAvailable() ? `<p class="plus-currency-note">${esc(currencyNote(currency))}</p>` : ''}</div>
         <p class="plus-lede">The planner stays free, as it is today. Plus adds three things for the year ahead, with no subscription.</p>
       </header>
       ${panels(focus?.id || '', false)}
       ${upcoming(false)}
       ${offer}
+      ${plusAvailable() ? gifts() : ''}
       ${footer}`;
   }
 
   async function loadOptions() {
-    if (!plannerApiEnabled() || !plusAvailable()) { options = { plus: [] }; return; }
+    if (!plannerApiEnabled() || !plusAvailable()) { options = { plus: [], gift: [] }; return; }
     const result = await checkoutOptions();
-    if (result.ok) options = { plus: Array.isArray(result.plus) ? result.plus.filter(code => CURRENCIES.includes(code)) : [] };
-    else if (!options) options = { plus: null };
-    // Show a price that can be paid: switch once to a currency that is set up.
-    if (!currencyChosen && options.plus?.length && !options.plus.includes(currency)) currency = options.plus[0];
+    const list = value => (Array.isArray(value) ? value.filter(code => CURRENCIES.includes(code)) : []);
+    if (result.ok) {
+      options = { plus: list(result.plus), gift: list(result.gift) };
+      // The server decides from the buyer's country; when it can't tell, show a price that can be paid.
+      const chosen = validCurrency(result.currency);
+      if (chosen) currency = chosen;
+      else if (options.plus.length && !options.plus.includes(currency)) currency = options.plus[0];
+    } else if (!options) options = { plus: null, gift: null };
     if (isOpen() && view.stage === 'overview') render({ focus: false });
   }
 
-  async function buy() {
-    if (view.buying || buyable() === 'no') return;
-    view = { ...view, buying: true, buyError: '' };
+  /** Get Plus (`plan` empty) or a personal gift ('gift-1', 'family-5'): off to the Creem checkout. */
+  async function buy(plan = '') {
+    const item = plan ? 'gift' : 'plus';
+    if (view.buying || buyable(item) === 'no') return;
+    view = { ...view, buying: plan || 'plus', buyError: '', giftError: '' };
     render({ focus: false });
     trackEvent('plus_checkout_clicked');
     flush();
-    const result = await startCheckout({ item: 'plus', currency });
+    const result = await startCheckout(plan ? { item, plan, currency } : { item, currency });
     const href = result.ok ? checkoutHref(result.url) : '';
     if (href) { globalThis.location.assign(href); return; }
-    view = { ...view, buying: false, buyError: result.error && !result.ok ? result.error : 'The checkout could not be opened. Please try again in a minute.' };
+    const error = result.error && !result.ok ? result.error : 'The checkout could not be opened. Please try again in a minute.';
+    view = { ...view, buying: false, [plan ? 'giftError' : 'buyError']: error };
     render({ focus: false });
-    qs('[data-plus-checkout]', root())?.focus({ preventScroll: true });
+    qs(plan ? `[data-plus-gift="${plan}"]` : '[data-plus-checkout]', root())?.focus({ preventScroll: true });
   }
 
   function previewPalette(el, button) {
@@ -262,16 +304,16 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
 
   function giftView() {
     const { gift, busy, error } = view;
-    const org = gift.org || '';
+    const org = giverName(gift.org);
     const owned = hasPlus();
     return `<div class="plus-gift">
         <span class="plus-gift__mark">${icon('gift')}</span>
         <p class="modal__eyebrow">A gift for you</p>
         <h2 id="plus-title">${esc(org ? `A gift from ${org}` : 'A gift of Daily Planner Plus')}</h2>
-        ${gift.message ? `<blockquote class="plus-gift__message">${esc(gift.message)}${org ? `<cite>— ${esc(org)}</cite>` : ''}</blockquote>` : ''}
+        ${gift.message ? `<blockquote class="plus-gift__message">${esc(gift.message)}${gift.org ? `<cite>— ${esc(gift.org)}</cite>` : ''}</blockquote>` : ''}
         <p class="plus-gift__lead">Daily Planner Plus, for life — on this planner and the devices it syncs to.</p>
         ${featureList('', { compact: true })}
-        ${owned ? '<p class="plus-note" role="note">Plus is already active on this planner, so there’s no need to use a place in this gift — keep it for a colleague.</p>' : ''}
+        ${owned ? '<p class="plus-note" role="note">Plus is already active on this planner, so there’s no need to use a place in this gift — keep it for someone else.</p>' : ''}
         ${error ? `<p class="plus-inline-error" role="alert">${esc(error)}</p>` : ''}
         <div class="plus-sheet__actions">
           <button class="text-button" type="button" data-plus-close>${owned ? 'Close' : 'Later'}</button>
@@ -282,7 +324,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
   }
 
   function celebrateView() {
-    const org = view.org || '';
+    const org = giverName(view.org);
     const dots = Array.from({ length: 14 }, (_, index) => {
       const angle = (index / 14) * Math.PI * 2 + (index % 2 ? 0.2 : 0);
       const radius = index % 2 ? 50 : 64;
@@ -301,10 +343,13 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
   function giftBoughtView() {
     const { gift, checkout } = view;
     const seats = Number(gift.seats) || 0;
+    // Give Plus and Plus Family are bought by a person for someone else; the rest are team gifts.
+    const personal = isPersonalGift(gift.plan) || (!gift.plan && seats > 0 && seats <= 5);
+    const people = seats ? ` · ${seats} ${seats === 1 ? 'person' : 'people'}` : '';
     return sheet({
-      mark: 'gift', tone: 'gift', eyebrow: seats ? `Team gift · ${seats} ${seats === 1 ? 'person' : 'people'}` : 'Team gift',
-      title: gift.org ? `Your gift for ${gift.org} is ready.` : 'Your team gift is ready.',
-      body: `<p>Share this one link with your people: each person who opens it activates Plus for life. We’ve also emailed it to you, with a message you can forward.</p>
+      mark: 'gift', tone: 'gift', eyebrow: `${personal ? 'Gift' : 'Team gift'}${people}`,
+      title: personal ? 'Your gift is ready.' : gift.org ? `Your gift for ${gift.org} is ready.` : 'Your team gift is ready.',
+      body: `<p>${personal ? (seats > 1 ? 'Send this link to the people you’re giving Plus to: each person who opens it activates Plus for life.' : 'Send this link to the person you’re giving Plus to: opening it activates Plus for life.') : 'Share this one link with your people: each person who opens it activates Plus for life.'} We’ve also emailed it to you, with a message you can forward.</p>
         <div class="plus-link"><input readonly value="${escAttr(safeUrl(gift.url || ''))}" aria-label="Gift link" data-plus-gift-url><button class="secondary-button" type="button" data-plus-copy>Copy link</button></div>
         <p class="plus-fine"><a href="./welcome/thanks/?checkout_id=${encodeURIComponent(checkout || '')}" target="_blank" rel="noopener">Open the gift page</a> to edit the message and see how many places are used.</p>`,
       buttons: '<button class="primary-button" type="button" data-plus-close>Done</button>'
@@ -434,7 +479,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     }
     if (result.kind === 'gift') {
       writePending('');
-      show({ stage: 'gift-bought', checkout, gift: { url: result.url, org: result.org, seats: result.seats } });
+      show({ stage: 'gift-bought', checkout, gift: { url: result.url, org: result.org, seats: result.seats, plan: result.plan || '' } });
       return;
     }
     const activated = await activate(result.license);
@@ -465,7 +510,8 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
 
   function bind(el) {
     qsa('[data-plus-close]', el).forEach(button => button.addEventListener('click', () => closeModal(modal())));
-    qs('[data-plus-checkout]', el)?.addEventListener('click', buy);
+    qs('[data-plus-checkout]', el)?.addEventListener('click', () => buy());
+    qsa('[data-plus-gift]', el).forEach(button => button.addEventListener('click', () => buy(button.dataset.plusGift)));
     qs('[data-plus-privacy]', el)?.addEventListener('click', () => openPrivacy?.());
     qs('[data-plus-overview]', el)?.addEventListener('click', () => show({ stage: 'overview' }));
     qs('[data-plus-redeem-gift]', el)?.addEventListener('click', redeem);
@@ -476,13 +522,6 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
       qs(view.redeemOpen ? '#plus-redeem-input' : '[data-plus-redeem-toggle]', root())?.focus({ preventScroll: true });
     });
     qs('[data-plus-redeem-form]', el)?.addEventListener('submit', event => { event.preventDefault(); submitInput(event.currentTarget); });
-    qsa('[data-plus-currency]', el).forEach(button => button.addEventListener('click', () => {
-      currency = button.dataset.plusCurrency;
-      currencyChosen = true;
-      view = { ...view, buyError: '' };
-      render({ focus: false });
-      qs(`[data-plus-currency="${currency}"]`, root())?.focus({ preventScroll: true });
-    }));
     qsa('[data-plus-palette]', el).forEach(button => ['pointerenter', 'focus', 'click'].forEach(type => button.addEventListener(type, () => previewPalette(el, button))));
     qsa('[data-plus-open-feature]', el).forEach(button => button.addEventListener('click', () => { const feature = button.dataset.plusOpenFeature; closeModal(modal()); setTimeout(() => openFeature?.(feature), 200); }));
     qs('[data-plus-copy]', el)?.addEventListener('click', async event => {
@@ -508,7 +547,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
   function open({ feature = '' } = {}) {
     trackEvent('plus_modal_opened');
     show({ stage: 'overview', feature: plusFeatureId(feature) }, { animate: false });
-    if (!hasPlus()) loadOptions();
+    loadOptions();
   }
 
   /**
@@ -517,6 +556,8 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
    * is tried again quietly.
    */
   function handleLaunch(search = globalThis.location?.search || '') {
+    // A partner's link (?ref=CODE) is kept on this device so a later purchase credits them.
+    rememberReferral(search);
     const params = new URLSearchParams(search);
     const gift = params.get('gift');
     const purchase = params.get('checkout_id') ?? params.get('purchase');
