@@ -35,6 +35,10 @@
   --pal-plum: #7b4a8b;
   --pal-graphite: #454b54;
   --pal-sunset: #b9355f;
+  --pal-graphite-1: color-mix(in srgb, #454b54 44%, var(--surface-strong));
+  --pal-sunset-1: color-mix(in srgb, #eda23a 52%, var(--surface-strong));
+  --pal-sunset-2: #e2704c;
+  --pal-sunset-joker: #5b7ea3;
   --c-deep: #5f7084;
   --c-admin: #746e67;
   --c-health: #5f755b;
@@ -86,6 +90,10 @@
     --pal-plum: #c69bd8;
     --pal-graphite: #b8bec8;
     --pal-sunset: #ee7d9c;
+    --pal-graphite-1: color-mix(in srgb, #b8bec8 40%, var(--surface-strong));
+    --pal-sunset-1: color-mix(in srgb, #f5a524 62%, var(--surface-strong));
+    --pal-sunset-2: #e9805e;
+    --pal-sunset-joker: #90b2d4;
     --c-deep: #8195ab;
     --c-admin: #9a928a;
     --c-health: #86a281;
@@ -726,23 +734,37 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 
+/* The end of the form: consent and fine print on the left, the button on the
+   right, where the eye finishes the form; stacked on a phone, button last. */
+.team-form__foot { display: grid; gap: 18px; margin-top: 4px; padding-top: 22px; border-top: 1px solid var(--band-line); }
+
+.team-form__fine { display: grid; align-content: center; justify-items: start; gap: 8px; min-width: 0; }
+
 .consent { display: inline-flex; align-items: flex-start; gap: 12px; cursor: pointer; }
 
 .consent input { width: 22px; height: 22px; flex: 0 0 auto; margin: 1px 0 0; accent-color: var(--band-accent); }
 
-.field__err--consent { margin-top: -10px; }
+.field__err--consent { margin-top: -4px; padding-left: 34px; }
 
-.form-privacy { color: var(--band-muted); font-size: .88rem; }
+.form-privacy { max-width: 54em; color: var(--band-muted); font-size: .88rem; line-height: 1.5; }
+
+.consent:not([hidden]) ~ .form-privacy { padding-left: 34px; }
 
 .form-privacy a { color: var(--band-ink); text-underline-offset: 3px; }
 
 .form-error { padding: 12px 14px; border-radius: 11px; background: color-mix(in srgb, var(--band-error) 14%, transparent); color: var(--band-ink); }
 
-.team-form__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.team-form__actions { display: flex; justify-content: flex-end; }
+
+.btn--send { min-width: 13.5rem; }
 
 .team-form .btn[disabled] { opacity: .5; cursor: not-allowed; }
 
-.form-off { margin-top: -6px; color: var(--band-accent); font-weight: 600; }
+.form-off { color: var(--band-accent); font-weight: 600; }
+
+@media (min-width: 640px) {
+  .team-form__foot { grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 40px; }
+}
 
 .form-done { display: flex; align-items: flex-start; gap: 14px; padding: 18px; border: 1px solid var(--band-line); border-radius: 16px; background: var(--band-field); font-size: 1.05rem; }
 
@@ -754,7 +776,7 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .form-done:focus { outline: 0; }
 
-@media (max-width: 559.98px) {
+@media (max-width: 639.98px) {
   .team-form__actions .btn { width: 100%; }
 }
 
@@ -1757,60 +1779,317 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 .steps li::before { content: counter(step); width: 26px; height: 26px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 999px; background: color-mix(in srgb, var(--paint) 12%, var(--surface-strong)); color: var(--paint); font-size: .8rem; font-weight: 740; }
 
+/* Colours for the painted year beside “Paid once”: one row on a wide screen,
+   the palettes in full width above a horizontal “Paid once” below that. */
 .plus-more { display: grid; gap: 18px; margin-top: clamp(64px, 8vw, 104px); }
 
-@media (min-width: 960px) {
-  .plus-more { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+@media (min-width: 1200px) {
+  .plus-more { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 }
 
-.plus-card { display: grid; align-content: start; gap: 8px; padding: clamp(20px, 2.6vw, 28px); border: 1px solid var(--line); border-radius: 20px; background: var(--surface-strong); }
+.plus-card { display: grid; align-content: start; gap: 8px; min-width: 0; padding: clamp(20px, 2.6vw, 30px); border: 1px solid var(--line); border-radius: 22px; background: var(--surface-strong); }
 
-.plus-card h3 { display: flex; align-items: center; gap: 10px; font-size: 1.08rem; }
+.plus-card h3 { display: flex; align-items: center; gap: 10px; font-size: clamp(1.1rem, 1.04rem + .25vw, 1.22rem); letter-spacing: -.02em; }
 
-.plus-card h3 svg.i { width: 21px; height: 21px; color: var(--paint); }
+.plus-card h3 svg.i { width: 22px; height: 22px; color: var(--paint); }
 
 .plus-card p { max-width: 36em; color: var(--muted); }
 
-.plus-card--paint { gap: 22px; }
+/* The palettes: each swatch is a button; the painted year takes the colours of
+   the one under the pointer, the focused one, or the one pressed (palette-card.js). */
+.plus-card--paint { grid-template-areas: "head" "preview" "swatches"; gap: 20px; }
 
-.plus-card__copy { display: grid; align-content: start; gap: 8px; }
+.pal__head { grid-area: head; display: grid; gap: 8px; }
 
-/* Paid once: a short statement, centred in the row beside the palettes. */
-.plus-card--once { align-content: center; gap: 10px; }
+.pal__swatches { grid-area: swatches; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 8px; }
 
-.plus-card--once h3 { display: grid; justify-items: start; gap: 14px; font-size: 1.15rem; }
+.pal__preview { grid-area: preview; min-width: 0; }
 
-.plus-card--once h3 svg.i { width: 44px; height: 44px; padding: 10px; border-radius: 14px; background: color-mix(in srgb, var(--paint) 10%, var(--surface-strong)); }
+.pal-sw { --paint-1: initial; --paint-2: initial; --paint-joker: initial; }
 
-@media (min-width: 600px) {
-  .plus-card--paint { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: center; }
+.pal-sw--terracotta,
+.plus-card--paint[data-palette="terracotta"] { --paint: var(--misogi); }
+
+.pal-sw--ocean,
+.plus-card--paint[data-palette="ocean"] { --paint: var(--pal-ocean); }
+
+.pal-sw--forest,
+.plus-card--paint[data-palette="forest"] { --paint: var(--pal-forest); }
+
+.pal-sw--plum,
+.plus-card--paint[data-palette="plum"] { --paint: var(--pal-plum); }
+
+.pal-sw--graphite,
+.plus-card--paint[data-palette="graphite"] { --paint: var(--pal-graphite); --paint-1: var(--pal-graphite-1); }
+
+.pal-sw--sunset,
+.plus-card--paint[data-palette="sunset"] { --paint: var(--pal-sunset); --paint-1: var(--pal-sunset-1); --paint-2: var(--pal-sunset-2); --paint-joker: var(--pal-sunset-joker); }
+
+.pal-sw {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "ramp name" "ramp tag";
+  align-items: center;
+  gap: 3px 11px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 8px 12px 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-strong);
+  color: var(--ink);
+  font-size: .93rem;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
 }
 
-.plus-buy { display: grid; align-items: center; gap: 12px 32px; margin-top: 18px; padding: clamp(20px, 3vw, 28px) clamp(20px, 3vw, 32px); border: 1px solid color-mix(in srgb, var(--paint) 32%, var(--line)); border-radius: 20px; background: color-mix(in srgb, var(--paint) 5%, var(--surface-strong)); }
+.pal-sw:hover { border-color: color-mix(in srgb, var(--paint) 50%, var(--line-strong)); background: color-mix(in srgb, var(--paint) 4%, var(--surface-strong)); }
+
+.pal-sw[aria-pressed="true"] { border-color: var(--paint); box-shadow: inset 0 0 0 1px var(--paint); background: color-mix(in srgb, var(--paint) 8%, var(--surface-strong)); }
+
+.pal-sw:focus-visible { outline-offset: 2px; border-radius: 14px; }
+
+/* A paint chip: the palette's three levels side by side. */
+.pal-sw__ramp { grid-area: ramp; width: 34px; height: 34px; display: flex; overflow: hidden; border-radius: 9px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 6%, transparent); }
+
+.pal-sw__ramp i { flex: 1 1 0; }
+
+.pal-sw__ramp i:nth-child(1) { background: var(--paint-1, color-mix(in srgb, var(--paint) 34%, var(--surface-strong))); }
+
+.pal-sw__ramp i:nth-child(2) { background: var(--paint-2, color-mix(in srgb, var(--paint) 66%, var(--surface-strong))); }
+
+.pal-sw__ramp i:nth-child(3) { background: var(--paint); }
+
+.pal-sw__name { grid-area: name; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Free or Plus: the planner's own Plus badge, and a quiet outline for Free. */
+.pal-sw__tag,
+.pal-year__tag {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  height: 19px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 16%, var(--surface-strong)), color-mix(in srgb, var(--paint) 12%, var(--surface-strong)));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
+  color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+  font-size: .7rem;
+  font-weight: 720;
+  letter-spacing: .02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pal-sw__tag { grid-area: tag; }
+
+:is(.pal-sw__tag, .pal-year__tag).is-free { background: none; box-shadow: inset 0 0 0 1px var(--line-strong); color: var(--muted); }
+
+/* The painted year, larger than in the Progress replica. */
+.pal-year { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 1.1em; height: 100%; padding: 1.3em 1.4em 1.25em; border: 1px solid var(--line); border-radius: 1.25em; background: var(--surface); font-size: clamp(9px, 2.6cqi, 13px); }
+
+.pal-year__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1em; }
+
+.pal-year__title { display: grid; gap: .15em; min-width: 0; }
+
+.pal-year__title small { color: var(--faint); font-size: max(.68em, 10px); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+
+.pal-year__title b { color: var(--paint); font-size: 1.75em; font-weight: 750; letter-spacing: -.04em; line-height: 1.05; }
+
+.pal-year__tag { height: 1.75em; padding: 0 .75em; font-size: .78em; }
+
+.pal-year__grid { align-content: center; }
+
+.pal-year .cell { border-radius: .26em; }
+
+.pal-year .cell.l1,
+.pal-year .pal-year__legend .l1::before { background: var(--paint-1, color-mix(in srgb, var(--paint) 34%, var(--surface-strong))); }
+
+.pal-year .cell.l2,
+.pal-year .pal-year__legend .l2::before { background: var(--paint-2, color-mix(in srgb, var(--paint) 66%, var(--surface-strong))); }
+
+.pal-year .cell.joker { background: color-mix(in srgb, var(--paint-joker, var(--milestone)) 22%, var(--surface-strong)); box-shadow: inset 0 0 0 1.5px var(--paint-joker, var(--milestone)); }
+
+.pal-year .pal-year__legend { margin-top: 0; }
+
+.pal-year .pal-year__legend li { font-size: max(.7em, 10.5px); }
+
+.pal-year .pal-year__legend li::before { width: 1.1em; height: 1.1em; }
+
+/* Recolouring sweeps across the year, from January 1 to December 31. */
+.motion-ok .pal-year .cell { transition: background-color 420ms ease calc(var(--w, 0) * 7ms), box-shadow 420ms ease calc(var(--w, 0) * 7ms); }
+
+.motion-ok .pal-year .pal-year__legend li::before { transition: background-color 420ms ease 120ms; }
+
+.motion-ok .plus-card--paint :is(.pal-year__title b, h3 svg.i) { transition: color 300ms ease; }
+
+.motion-ok .pal-sw { transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 160ms cubic-bezier(.22, 1, .36, 1); }
+
+.motion-ok .pal-sw:active { transform: scale(.98); }
+
+@media (min-width: 640px) {
+  .pal__swatches { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pal-sw { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "ramp name tag"; min-height: 50px; }
+  .pal-sw__ramp { width: 30px; height: 30px; border-radius: 8px; }
+}
+
+/* Wide enough: the swatches as a list beside the painted year. */
+@media (min-width: 960px) {
+  .plus-card--paint { grid-template-columns: minmax(196px, 13.5rem) minmax(0, 1fr); grid-template-areas: "head head" "swatches preview"; gap: 24px 24px; }
+  .pal__swatches { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+}
+
+/* Paid once: the same Plus on every device, then the words. Beside the
+   palettes it fills its column: the devices centred, the words at the foot. */
+.plus-card--once { align-content: center; gap: 26px; }
+
+.once__devices { display: flex; align-items: center; justify-content: center; min-height: 116px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+
+.once__devices { --dev: 58px; --dev-gap: 28px; }
+
+.once__device { position: relative; width: var(--dev); height: var(--dev); flex: 0 0 auto; display: grid; place-items: center; border-radius: 17px; background: color-mix(in srgb, var(--paint) 9%, var(--surface-strong)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--paint) 16%, transparent); color: var(--paint); }
+
+.once__device > svg.i { width: calc(var(--dev) * .48); height: calc(var(--dev) * .48); }
+
+.once__device + .once__device { margin-left: var(--dev-gap); }
+
+.once__device + .once__device::before { content: ""; position: absolute; right: calc(100% + 4px); top: 50%; width: calc(var(--dev-gap) - 8px); border-top: 1.5px dashed color-mix(in srgb, var(--paint) 45%, var(--line-strong)); }
+
+.once__device > i { position: absolute; right: -6px; top: -6px; width: 21px; height: 21px; display: grid; place-items: center; border-radius: 999px; background: var(--paint); box-shadow: 0 0 0 2.5px var(--surface-strong); color: var(--surface-strong); }
+
+.once__device > i svg.i { width: 13px; height: 13px; stroke-width: 2.8; }
+
+.once__copy { display: grid; gap: 8px; }
+
+@media (min-width: 1200px) {
+  .plus-card--once { grid-template-rows: minmax(0, 1fr) auto; align-content: stretch; }
+  .once__devices { --dev: 68px; --dev-gap: 34px; }
+}
+
+@media (min-width: 760px) and (max-width: 1199.98px) {
+  .plus-card--once { grid-template-columns: minmax(0, 13.5rem) minmax(0, 1fr); align-items: center; gap: 24px; }
+  .once__devices { --dev: 48px; --dev-gap: 22px; min-height: 100px; padding-inline: 12px; }
+}
+
+/* Get Plus: the closing offer of the Plus section. What you get on the left,
+   the price and the button on a raised card on the right, the ways to give it
+   underneath. On a phone: the words, the price and button, then the list. */
+.plus-buy {
+  display: grid;
+  grid-template-areas: "head" "offer" "list" "alts";
+  gap: 24px;
+  margin-top: 18px;
+  padding: clamp(22px, 3.6vw, 48px);
+  border: 1px solid color-mix(in srgb, var(--paint) 26%, var(--line));
+  border-radius: 28px;
+  background: radial-gradient(110% 130% at 0% 0%, color-mix(in srgb, var(--paint) 9%, transparent), transparent 62%), var(--surface-strong);
+}
+
+.plus-buy__head { grid-area: head; display: grid; align-content: start; gap: 10px; }
+
+.plus-buy__kicker { display: inline-flex; align-items: center; gap: 8px; color: var(--paint); font-size: .92rem; font-weight: 700; }
+
+.plus-buy__kicker svg.i { width: 19px; height: 19px; }
+
+.plus-buy__title { max-width: 18em; font-size: clamp(1.55rem, 1.25rem + 1.1vw, 2.15rem); font-weight: 740; line-height: 1.1; letter-spacing: -.036em; }
+
+.plus-buy__note { max-width: 32em; color: var(--muted); }
+
+/* The price card: one price, its currency, the button, why it’s safe. */
+.plus-buy__offer {
+  grid-area: offer;
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: clamp(20px, 2.4vw, 28px);
+  border: 1px solid color-mix(in srgb, var(--paint) 38%, var(--line));
+  border-radius: 20px;
+  background: var(--surface-strong);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--paint) 10%, transparent), 0 28px 60px -38px color-mix(in srgb, var(--paint) 72%, transparent);
+}
+
+.plus-buy__price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+
+.plus-buy__price b { font-size: clamp(2.7rem, 2.2rem + 1.8vw, 3.5rem); font-weight: 780; letter-spacing: -.05em; line-height: 1.02; font-variant-numeric: tabular-nums; }
+
+.plus-buy__price span { font-size: 1.06rem; font-weight: 680; letter-spacing: -.012em; }
+
+.plus-buy__tax { color: var(--muted); font-size: .9rem; }
+
+.plus-buy__cta { justify-items: stretch; margin-top: 18px; }
+
+.plus-buy__cta .btn { width: 100%; min-height: 54px; font-size: 1.04rem; }
+
+.plus-buy__trust { display: flex; align-items: flex-start; gap: 9px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--muted); font-size: .87rem; line-height: 1.45; }
+
+.plus-buy__trust svg.i { width: 18px; height: 18px; margin-top: 1px; color: var(--paint); }
+
+/* What you get: the pricing table's ticks. */
+.plus-buy__list { grid-area: list; gap: 16px; }
+
+.plus-buy__list li > span:last-child { display: grid; gap: 1px; }
+
+.plus-buy__list b { font-weight: 690; letter-spacing: -.012em; }
+
+.plus-buy__list b + span { color: var(--muted); font-size: .93rem; font-weight: 500; }
+
+/* Other ways to give it: quiet tiles, name and price. */
+.plus-buy__alts { grid-area: alts; display: grid; gap: 8px; padding-top: 22px; border-top: 1px solid var(--line); }
+
+.plus-buy__alt {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 18px;
+  grid-template-areas: "icon name go" "icon price go";
+  align-items: center;
+  gap: 0 12px;
+  min-height: 58px;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.plus-buy__alt:hover { border-color: color-mix(in srgb, var(--paint) 45%, var(--line-strong)); background: color-mix(in srgb, var(--paint) 4%, var(--surface-strong)); }
+
+.plus-buy__alt > svg.i { grid-area: icon; width: 21px; height: 21px; color: var(--paint); }
+
+.plus-buy__alt-name { grid-area: name; font-size: .95rem; font-weight: 660; letter-spacing: -.01em; line-height: 1.3; }
+
+.plus-buy__alt-price { grid-area: price; color: var(--muted); font-size: .86rem; line-height: 1.35; font-variant-numeric: tabular-nums; }
+
+.plus-buy__alt > .plus-buy__alt-go { grid-area: go; width: 18px; height: 18px; color: var(--muted); }
+
+.plus-buy__alt:hover .plus-buy__alt-go { color: var(--ink); transform: translateX(2px); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .plus-buy__alt { transition: border-color 140ms ease, background-color 140ms ease; }
+  .plus-buy__alt-go { transition: transform 200ms cubic-bezier(.22, 1, .36, 1), color 140ms ease; }
+}
+
+@media (min-width: 760px) {
+  .plus-buy { grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); grid-template-areas: "head offer" "list offer" "alts alts"; gap: 30px clamp(32px, 5vw, 72px); }
+  .plus-buy__offer { align-self: start; }
+}
 
 @media (min-width: 960px) {
-  .plus-buy { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .plus-buy__alts { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 }
 
-.plus-buy__price { display: flex; align-items: baseline; gap: 10px; }
+/* Narrower: the words across the top, the list beside the price card. */
+@media (min-width: 760px) and (max-width: 1099.98px) {
+  .plus-buy { grid-template-areas: "head head" "list offer" "alts alts"; }
+  .plus-buy__title { max-width: none; }
+}
 
-.plus-buy__price b { font-size: clamp(2rem, 1.6rem + 1.4vw, 2.6rem); font-weight: 760; letter-spacing: -.045em; line-height: 1; }
-
-.plus-buy__price span { color: var(--muted); font-weight: 620; }
-
-.plus-buy__note { color: var(--muted); }
-
-.plus-buy__act { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; }
-
-.plus-buy__act .buy { max-width: 22em; }
-
-.plus-buy__alts { display: grid; gap: 6px; }
-
-.plus-buy__alt { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-weight: 620; text-decoration: none; }
-
-.plus-buy__alt:hover { text-decoration: underline; text-underline-offset: 3px; }
-
-.plus-buy__alt svg.i { width: 18px; height: 18px; }
+@media (min-width: 1100px) {
+  .plus-buy__list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 32px; }
+}
 
 /* Everything else: the compact tools ------------------------------------------ */
 
@@ -3502,55 +3781,6 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
   .rp-scale--print { overflow: hidden; padding: 1em 0 2.4em .7em; -webkit-mask-image: linear-gradient(to right, #000 76%, transparent 99%); mask-image: linear-gradient(to right, #000 76%, transparent 99%); }
   .rp-scale--print .rp-pp { box-shadow: var(--shadow-pop), inset 0 0 0 1px color-mix(in srgb, var(--line) 75%, transparent); }
 }
-
-/* Plus: colours for the painted year ------------------------------------------ */
-
-.rp--pal { --paint: var(--misogi); font-size: clamp(10px, 3.4cqi, 13px); }
-
-.rp--pal.pal-ocean { --paint: var(--pal-ocean); }
-
-.rp--pal.pal-forest { --paint: var(--pal-forest); }
-
-.rp--pal.pal-plum { --paint: var(--pal-plum); }
-
-.rp--pal.pal-graphite { --paint: var(--pal-graphite); }
-
-.rp--pal.pal-sunset { --paint: var(--pal-sunset); }
-
-.rp-pal { display: grid; gap: 1em; padding: 1.2em; border: 1px solid var(--line); border-radius: 1.1em; background: var(--surface); }
-
-.rp-pal__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: .3em; }
-
-.rp-pal__grid .cell { border-radius: .3em; }
-
-.motion-ok .rp--pal .cell { transition: background-color 420ms ease calc(var(--i) * 12ms); }
-
-.rp-pal__swatches { display: flex; flex-wrap: wrap; gap: .35em; }
-
-.sw { display: inline-flex; align-items: center; gap: .4em; padding: .3em .65em .3em .35em; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); font-size: .66em; font-weight: 650; }
-
-.sw i { width: 1.15em; height: 1.15em; border-radius: 999px; background: var(--sw); }
-
-.sw--terracotta { --sw: var(--misogi); }
-
-.sw--ocean { --sw: var(--pal-ocean); }
-
-.sw--forest { --sw: var(--pal-forest); }
-
-.sw--plum { --sw: var(--pal-plum); }
-
-.sw--graphite { --sw: var(--pal-graphite); }
-
-.sw--sunset { --sw: var(--pal-sunset); }
-
-.rp--pal:not(.pal-ocean, .pal-forest, .pal-plum, .pal-graphite, .pal-sunset) .sw--terracotta,
-.rp--pal.pal-ocean .sw--ocean,
-.rp--pal.pal-forest .sw--forest,
-.rp--pal.pal-plum .sw--plum,
-.rp--pal.pal-graphite .sw--graphite,
-.rp--pal.pal-sunset .sw--sunset { background: var(--surface-strong); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--sw); }
-
-.motion-ok .sw { transition: background-color 220ms ease, color 220ms ease, box-shadow 220ms ease; }
 
 /* Team gift: one link, one activation, one seat -------------------------------- */
 

@@ -201,6 +201,38 @@ test('Horizon features open the dialog on themselves, and problems are explained
   assert.match(plusProblem('purchase', { status: 0 }).text, /payment is safe/);
 });
 
+test('a refunded purchase link is explained once, not retried and not kept pending', () => {
+  const refunded = plusProblem('purchase', { status: 410, refunded: true, error: 'This purchase was refunded on 3 October.' });
+  assert.equal(refunded.title, 'This purchase was refunded');
+  assert.equal(refunded.text, 'This purchase was refunded on 3 October.', 'the server’s words when it gives them');
+  assert.equal(refunded.icon, 'notice');
+  assert.equal(refunded.retry, undefined, 'no Try again');
+  assert.equal(refunded.keep, undefined, 'the pending purchase is cleared');
+  assert.equal(plusProblem('purchase', { status: 410, refunded: true }).text, 'Its Plus was switched off. If this is a mistake, reply to your receipt email.');
+  assert.equal(plusProblem('purchase', { refunded: true, error: '  ' }).title, 'This purchase was refunded');
+  assert.match(plusProblem('gift', { status: 410 }).title, /expired/, 'gifts keep their own 410 cases');
+});
+
+test('every other 410 of a purchase link says what it is, in the server’s words, once', () => {
+  const cases = [
+    [{ status: 410, test: true, error: 'This was a test purchase, made before payments went live.' }, 'This was a test purchase'],
+    [{ status: 410, error: 'This was a test purchase, made before payments went live.' }, 'This was a test purchase'],
+    [{ status: 410, expired: true, error: 'This checkout expired before it was paid.' }, 'This checkout expired'],
+    [{ status: 410, error: 'This checkout expired before it was paid.' }, 'This checkout expired'],
+    [{ status: 410, revoked: true, error: 'This purchase was switched off, so it can’t be activated any more.' }, 'This purchase was switched off'],
+    [{ status: 410, error: 'Gone.' }, 'This purchase can’t be activated']
+  ];
+  for (const [result, title] of cases) {
+    const problem = plusProblem('purchase', result);
+    assert.equal(problem.title, title, JSON.stringify(result));
+    assert.notEqual(problem.title, 'This purchase was refunded', 'refunded only when the server says so');
+    assert.equal(problem.text, result.error, 'the server’s own words');
+    assert.equal(problem.retry, undefined, 'no Try again');
+    assert.equal(problem.keep, undefined, 'the pending purchase is cleared');
+  }
+  assert.match(plusProblem('purchase', { status: 410 }).text, /reply to your receipt email/);
+});
+
 test('the Plus dialog names the currency once and labels the personal gifts', () => {
   assert.equal(currencyNote('EUR'), 'Prices in euros, taxes included.');
   assert.equal(currencyNote('USD'), 'Prices in US dollars, taxes included.');

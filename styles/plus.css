@@ -4,14 +4,26 @@
 
 .modal--plus .modal__panel { width: min(760px, 100%); max-height: min(900px, calc(100dvh - 2rem)); }
 
-/* Taller than other dialogs, for the stage; the scroll keeps core.css's 50px for the close button. */
-.modal--plus .modal__scroll { max-height: calc(min(900px, 100dvh - 2rem) - 50px); }
+/* Taller than other dialogs, for the stage; the scroll keeps core.css's 50px for the close button.
+   Its side and bottom padding are variables: the Get Plus bar bleeds to the edges by exactly as
+   much, so it can never be wider than the scroll area (a stray 1px made a sideways scrollbar). */
+.modal--plus .modal__scroll { --plus-pad-x: 1.25rem; --plus-pad-b: 1.1rem; max-height: calc(min(900px, 100dvh - 2rem) - 50px); padding: 0 var(--plus-pad-x) var(--plus-pad-b); }
+
+/* The bar is the last thing in the scroll and brings its own bottom padding, so it rests flush at the end too. */
+.modal--plus .modal__scroll:has(> .plus-bar) { padding-bottom: 0; }
 
 .plus-dialog { --plus-accent: var(--hz-misogi, #a5522e); --plus-green: var(--hz-habit, #4f7350); }
 
-.plus-header { margin-bottom: 16px; }
+.plus-header { margin-bottom: 26px; }
 
-.plus-header h2 { max-width: 36ch; font-size: 1.3rem; font-weight: 700; line-height: 1.22; letter-spacing: -.03em; text-wrap: balance; }
+.plus-header h2 { max-width: 30ch; margin: 2px 0 0; font-size: 1.5rem; font-weight: 720; line-height: 1.16; letter-spacing: -.035em; text-wrap: balance; }
+
+/* Without Plus: what it is on the left, the offer on the right (stacked on phones). */
+.modal__header.plus-header--offer { display: grid; grid-template-columns: minmax(0, 1fr) 236px; align-items: start; gap: 18px 30px; padding-right: 0; }
+
+.plus-header__copy { min-width: 0; padding-top: 2px; }
+
+.plus-header--offer .plus-note { grid-column: 1 / -1; margin: 0; }
 
 .plus-eyebrow { display: inline-flex; align-items: center; gap: 6px; }
 
@@ -34,18 +46,27 @@
 
 .plus-mark svg { width: 16px; height: 16px; }
 
-.plus-price-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin-top: 12px; }
+/* The offer: the price and "once, for life" read as one unit, the currency in a quiet line under it. */
+.plus-offer { margin-top: 8px; padding: 18px 18px 10px; border-radius: 18px; background: var(--surface-strong); box-shadow: 0 1px 2px rgba(25, 22, 17, .05), 0 12px 30px rgba(25, 22, 17, .07), inset 0 0 0 1px color-mix(in srgb, var(--line) 85%, transparent); }
 
-.plus-price { display: flex; align-items: baseline; gap: 9px; margin: 0; }
+.plus-offer:not([data-plus-offer]) { padding-bottom: 18px; }
 
-.plus-price strong { font-size: 2.1rem; font-weight: 720; line-height: 1; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
+.plus-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 0; }
 
-.plus-price span { color: var(--muted); font-size: .9rem; font-weight: 620; letter-spacing: -.01em; }
+.plus-price strong { font-size: 2.3rem; font-weight: 720; line-height: 1; letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
+
+.plus-price span { color: var(--ink); font-size: .86rem; font-weight: 640; letter-spacing: -.01em; }
 
 /* No currency to choose: the buyer's country decides, said once, quietly. */
-.plus-currency-note { margin: 0; color: var(--faint); font-size: .74rem; font-weight: 560; }
+.plus-currency-note { margin: 7px 0 0; color: var(--faint); font-size: .7rem; font-weight: 560; line-height: 1.4; }
 
-.modal__header .plus-lede { max-width: 54ch; margin: 10px 0 0; color: var(--muted); font-size: .8rem; line-height: 1.55; }
+.modal__header .plus-lede { max-width: 46ch; margin: 10px 0 0; color: var(--muted); font-size: .84rem; line-height: 1.55; text-wrap: pretty; }
+
+.plus-points { display: grid; gap: 7px; margin: 16px 0 0; padding: 0; list-style: none; }
+
+.plus-points li { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: start; gap: 9px; color: var(--ink); font-size: .8rem; font-weight: 560; line-height: 1.45; }
+
+.plus-points svg { width: 18px; height: 18px; margin-top: 1px; fill: none; stroke: var(--plus-green); stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
 
 .plus-status { width: fit-content; display: inline-flex; align-items: center; gap: 7px; margin: 12px 0 0; padding: 6px 12px 6px 9px; border-radius: 999px; background: color-mix(in srgb, var(--plus-green) 13%, var(--surface-strong)); color: color-mix(in srgb, var(--plus-green) 82%, var(--ink)); font-size: .76rem; font-weight: 650; }
 
@@ -70,7 +91,7 @@
 .plus-stage--review,
 .plus-caption--review { --step-kind: var(--step-review); }
 
-.plus-steps { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 15px; background: color-mix(in srgb, var(--soft) 70%, var(--surface)); }
+.plus-steps { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 15px; background: color-mix(in srgb, var(--soft) 85%, var(--surface)); }
 
 .plus-steps__indicator { position: absolute; z-index: 0; border-radius: 11px; background: var(--surface-strong); box-shadow: 0 1px 2px rgba(28, 25, 21, .08), inset 0 0 0 1px var(--line); pointer-events: none; }
 
@@ -96,10 +117,10 @@
 .plus-step:hover strong,
 .plus-step.is-active strong { color: var(--ink); }
 
-.plus-panel { margin-top: 14px; }
+.plus-panel { margin-top: 18px; }
 
 /* The stage: a desk under the page, the same size for every step. */
-.plus-stage { position: relative; aspect-ratio: 297 / 186; overflow: hidden; border-radius: 15px; background: radial-gradient(130% 100% at 50% 0%, color-mix(in srgb, var(--step-kind) 8%, var(--soft)), color-mix(in srgb, var(--soft) 92%, var(--paper))); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 85%, transparent); }
+.plus-stage { position: relative; aspect-ratio: 297 / 186; overflow: hidden; border-radius: 18px; background: radial-gradient(130% 100% at 50% 0%, color-mix(in srgb, var(--step-kind) 8%, var(--soft)), color-mix(in srgb, var(--soft) 92%, var(--paper))); }
 
 .plus-stage__paper { position: absolute; inset: 44px 24px 20px; display: grid; place-items: center; cursor: zoom-in; }
 
@@ -122,7 +143,7 @@
 /* A printed page on screen: the real print sheet (print.css, year.css) at its
    printed size inside an A4 landscape page, scaled down by plus-cycle.js. White
    paper with light colours in both themes, as it prints. */
-.plus-paper { --plus-paper-scale: .5; position: relative; width: calc(297mm * var(--plus-paper-scale)); height: calc(210mm * var(--plus-paper-scale)); flex: 0 0 auto; border-radius: 2px; background: #fff; box-shadow: 0 1px 1px rgba(25, 22, 17, .07), 0 8px 22px rgba(25, 22, 17, .13), 0 22px 48px rgba(25, 22, 17, .09); }
+.plus-paper { --plus-paper-scale: .5; position: relative; width: calc(297mm * var(--plus-paper-scale)); height: calc(var(--plus-page-height, 210mm) * var(--plus-paper-scale)); flex: 0 0 auto; border-radius: 2px; background: #fff; box-shadow: 0 1px 1px rgba(25, 22, 17, .07), 0 8px 22px rgba(25, 22, 17, .13), 0 22px 48px rgba(25, 22, 17, .09); }
 /* The page is restyled whenever its scale changes: no transitions inside it (reduced motion turns them on everywhere). */
 .plus-paper,
 .plus-paper * { transition: none; }
@@ -133,7 +154,7 @@
   --paper: #f6f3ed; --surface: #fbfaf7; --surface-strong: #fff; --ink: #1c1a17; --muted: #706a62; --faint: #9a948d; --line: #ddd8d0; --line-strong: #c7c0b6; --soft: #efebe4; --accent: #8b6b4f;
   --hz-misogi: #a5522e; --hz-milestone: #b97a46; --hz-adventure: #2f6d70; --hz-keydate: #5d4f8f; --hz-habit: #4f7350; --hz-commitment: #8b6b4f;
   --hz-paint: #a5522e; --hz-paint-1: initial; --hz-paint-2: initial; --hz-paint-joker: initial;
-  position: absolute; top: 0; left: 0; width: 297mm; height: 210mm; overflow: hidden; padding: 6mm; background: #fff; color: #171613; color-scheme: light; transform: scale(var(--plus-paper-scale)); transform-origin: 0 0; pointer-events: none;
+  position: absolute; top: 0; left: 0; width: 297mm; min-height: 210mm; overflow: hidden; padding: 6mm; background: #fff; color: #171613; color-scheme: light; transform: scale(var(--plus-paper-scale)); transform-origin: 0 0; pointer-events: none;
 }
 
 /* The palette chosen on this device, in its light colours (styles/year.css). */
@@ -259,13 +280,13 @@
 .plus-session__next svg { width: 14px; height: 14px; }
 
 /* What the step is, when it happens and, with Plus, its action. */
-.plus-caption { display: grid; justify-items: start; gap: 4px; padding: 2px 2px 12px; }
+.plus-caption { display: grid; justify-items: start; gap: 5px; padding: 0 2px 14px; }
 
 .plus-caption__when { margin: 0; color: color-mix(in srgb, var(--step-kind) 88%, var(--ink)); font-size: .64rem; font-weight: 720; letter-spacing: .07em; text-transform: uppercase; }
 
 .plus-caption__title { margin: 0; font-size: 1.02rem; font-weight: 700; letter-spacing: -.02em; line-height: 1.3; }
 
-.plus-caption__text { margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.55; }
+.plus-caption__text { max-width: 64ch; margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.55; }
 
 .plus-caption__note { color: color-mix(in srgb, var(--step-kind) 70%, var(--ink)); font-weight: 600; }
 
@@ -274,7 +295,7 @@
 .plus-caption__action svg { width: 16px; height: 16px; color: var(--step-kind); }
 
 /* The ritual starts again: said once, quietly. */
-.plus-loop { display: flex; align-items: center; gap: 9px; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: .78rem; font-weight: 600; line-height: 1.45; }
+.plus-loop { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 14px 0 0; color: var(--muted); font-size: .78rem; font-weight: 600; line-height: 1.45; text-align: center; }
 
 .plus-loop svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--plus-accent); }
 
@@ -289,20 +310,25 @@
 
 .plus-zoom__close svg { width: 20px; height: 20px; }
 
-.plus-zoom__scroll { min-height: 0; display: grid; place-items: start center; overflow: auto; overscroll-behavior: contain; padding: 20px 16px max(28px, env(safe-area-inset-bottom)); outline: 0; }
+/* A stable gutter: the page is sized to the width before a classic scrollbar would take its share. */
+.plus-zoom__scroll { min-height: 0; display: grid; place-items: start center; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 20px 16px max(28px, env(safe-area-inset-bottom)); outline: 0; }
 
 .plus-zoom__scroll:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
 
 .plus-paper--zoom { cursor: auto; }
 
+/* The sections after the ritual share one rhythm: a title, then one calm surface or list. */
+.plus-also,
+.plus-upcoming,
+.plus-gifts { margin-top: 34px; }
+
+.plus-also__title,
+.plus-upcoming h3 { margin: 0 0 10px; font-size: .9rem; font-weight: 700; letter-spacing: -.015em; }
+
 /* Also with Plus: the palettes, tried on the last weeks of the painted year. */
-.plus-also { margin-top: 20px; }
+.plus-palettes { --plus-kind: var(--hz-keydate, #5d4f8f); display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px 16px; padding: 16px 18px; border-radius: 18px; background: color-mix(in srgb, var(--soft) 60%, var(--surface)); transition: box-shadow 160ms ease; }
 
-.plus-also__title { margin: 0 0 8px; font-size: .84rem; font-weight: 680; letter-spacing: -.01em; }
-
-.plus-palettes { --plus-kind: var(--hz-keydate, #5d4f8f); display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface-strong); transition: border-color 160ms ease, box-shadow 160ms ease; }
-
-.plus-palettes.is-focus { border-color: color-mix(in srgb, var(--plus-kind) 55%, var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--plus-kind) 14%, transparent); }
+.plus-palettes.is-focus { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--plus-kind) 50%, var(--line)), 0 0 0 4px color-mix(in srgb, var(--plus-kind) 10%, transparent); }
 
 .plus-palettes__icon { width: 34px; height: 34px; display: grid; place-items: center; align-self: start; border-radius: 10px; background: color-mix(in srgb, var(--plus-kind) 13%, var(--surface-strong)); color: var(--plus-kind); }
 
@@ -359,15 +385,11 @@
 
 /* Coming to Plus: a promise, so it reads apart from what Plus is today */
 
-.plus-upcoming { margin-top: 14px; padding: 14px 16px 12px; border: 1px dashed color-mix(in srgb, var(--line-strong) 85%, transparent); border-radius: 15px; }
-
-.plus-upcoming h3 { margin: 0; font-size: .84rem; font-weight: 680; letter-spacing: -.01em; }
-
 .plus-upcoming h3 span { color: var(--muted); font-weight: 560; }
 
-.plus-upcoming ul { display: grid; margin: 8px 0 0; padding: 0; list-style: none; }
+.plus-upcoming ul { display: grid; margin: 0; padding: 0 2px; list-style: none; }
 
-.plus-upcoming li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+.plus-upcoming li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 11px 0; border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent); }
 
 .plus-upcoming li:first-child { border-top: 0; }
 
@@ -383,31 +405,51 @@
 
 .plus-chip--exploring { background: transparent; box-shadow: inset 0 0 0 1px var(--line-strong); }
 
-.plus-promise { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; padding-top: 11px; border-top: 1px solid var(--line); color: var(--ink); font-size: .8rem; font-weight: 650; }
+.plus-promise { display: flex; align-items: center; gap: 9px; margin: 8px 0 0; padding: 11px 14px; border-radius: 12px; background: color-mix(in srgb, var(--plus-green) 9%, var(--surface)); color: color-mix(in srgb, var(--plus-green) 55%, var(--ink)); font-size: .8rem; font-weight: 650; }
 
 .plus-promise svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--plus-green); stroke-width: 2.1; }
 
-/* Get Plus: stays in reach while the dialog scrolls */
+/* Get Plus: in the offer, and in a bar that follows the scroll once the offer is out of view. */
 
-.plus-cta { position: sticky; z-index: 2; bottom: -1rem; margin: 14px -1rem -1rem; padding: 12px 1rem 1rem; border-top: 1px solid var(--line); background: var(--surface); }
+.plus-offer { min-width: 0; }
 
-.plus-dialog .plus-cta.plus-cta--done { position: static; margin: 16px 0 0; padding: 0; border-top: 0; background: none; }
+.plus-offer .plus-cta { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; margin-top: 16px; }
 
-.plus-cta__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.plus-dialog .plus-cta__buy { min-height: 44px; padding: 0 22px; border-radius: 12px; font-size: .84rem; font-weight: 680; }
 
-.plus-cta .plus-cta__buy { min-width: 180px; min-height: 44px; padding: 0 22px; border-radius: 11px; font-size: .84rem; font-weight: 680; }
+.plus-offer .plus-cta__buy { width: 100%; }
 
-.plus-cta .plus-cta__buy:disabled { cursor: default; opacity: 1; background: var(--soft); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.plus-dialog .plus-cta__buy:disabled { cursor: default; opacity: 1; background: var(--soft); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
 
-.plus-cta .plus-cta__buy[aria-busy="true"] { background: color-mix(in srgb, var(--ink) 80%, var(--paper)); color: var(--paper); box-shadow: none; }
+.plus-dialog .plus-cta__buy[aria-busy="true"] { background: color-mix(in srgb, var(--ink) 80%, var(--paper)); color: var(--paper); box-shadow: none; }
 
-.plus-cta__redeem { min-height: 44px; }
+.plus-offer .plus-cta__redeem { min-height: 38px; justify-self: center; padding-inline: 10px; font-size: .72rem; }
 
-.plus-cta__note { margin: 8px 0 0; color: var(--muted); font-size: .74rem; }
+.plus-cta__note { margin: 6px 0 2px; color: var(--muted); font-size: .72rem; line-height: 1.45; text-align: center; }
 
-.plus-cta + .plus-teams { margin-top: 26px; }
+.plus-offer .plus-inline-error { margin: 8px 0 2px; }
+
+/* Bleeds to the scroll area's edges by its padding (the variables above), no further. */
+.plus-bar { position: sticky; z-index: 3; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 28px calc(-1 * var(--plus-pad-x)) 0; padding: 12px var(--plus-pad-x) var(--plus-pad-b); border-top: 1px solid var(--line); background: var(--surface); visibility: hidden; opacity: 0; transform: translateY(10px); transition: opacity 180ms ease, transform 240ms cubic-bezier(.22, 1, .36, 1), visibility 0s linear 240ms; }
+
+.plus-bar.is-shown { visibility: visible; opacity: 1; transform: none; transition-delay: 0s; }
+
+.plus-bar__price { display: flex; align-items: baseline; gap: 7px; margin: 0; }
+
+.plus-bar__price strong { font-size: 1.2rem; font-weight: 720; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+
+.plus-bar__price span { color: var(--muted); font-size: .78rem; font-weight: 620; }
+
+.plus-bar .plus-cta__buy { min-width: 168px; }
+
+/* With Plus, the bar holds Done and is always there. */
+.plus-bar--done { justify-content: flex-end; }
 
 .plus-redeem__form { display: flex; gap: 8px; margin: 0 0 10px; }
+
+.plus-offer .plus-redeem__form { flex-direction: column; gap: 6px; margin: 2px 0 4px; }
+
+.plus-offer .plus-redeem__form input { width: 100%; }
 
 .plus-redeem__form input,
 .plus-link input { min-width: 0; flex: 1 1 auto; min-height: 40px; padding: 8px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-strong); color: var(--ink); outline: 0; font: inherit; font-size: .8rem; font-weight: 560; }
@@ -430,7 +472,7 @@
 
 .plus-note a { color: var(--ink); font-weight: 620; }
 
-.plus-teams { display: flex; align-items: center; gap: 10px; margin: 16px 0 0; color: var(--muted); font-size: .78rem; line-height: 1.45; }
+.plus-teams { display: flex; align-items: center; gap: 10px; margin: 30px 0 0; padding-top: 18px; border-top: 1px solid color-mix(in srgb, var(--line) 80%, transparent); color: var(--muted); font-size: .78rem; line-height: 1.45; }
 
 .plus-teams__icon { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; background: var(--soft); color: var(--ink); }
 
@@ -438,17 +480,17 @@
 
 .plus-teams a { color: var(--ink); font-weight: 650; text-decoration-color: color-mix(in srgb, var(--accent) 65%, transparent); text-underline-offset: 3px; }
 
-.plus-dialog .privacy-footnote { margin-top: 14px; }
+.plus-dialog .privacy-footnote { margin-top: 12px; padding-top: 0; border-top: 0; color: var(--faint); font-size: .74rem; text-align: left; }
+
+.plus-dialog .privacy-footnote .privacy-link { color: var(--muted); }
 
 /* Personal gifts: two quiet actions under Get Plus, before the team note. */
 
-.plus-gifts { display: grid; gap: 10px; margin: 22px 0 0; }
+.plus-gifts { display: grid; gap: 12px; }
 
-.plus-cta--done + .plus-gifts { margin-top: 22px; }
+.plus-gifts__lead { display: grid; gap: 4px; margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.5; }
 
-.plus-gifts__lead { display: grid; gap: 2px; margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.45; }
-
-.plus-gifts__lead strong { color: var(--ink); font-size: .84rem; font-weight: 680; letter-spacing: -.01em; }
+.plus-gifts__lead strong { color: var(--ink); font-size: .9rem; font-weight: 700; letter-spacing: -.015em; }
 
 .plus-gifts__row { display: flex; flex-wrap: wrap; gap: 8px; }
 
@@ -459,8 +501,6 @@
 .plus-gifts .plus-gifts__buy:disabled { cursor: default; color: var(--muted); }
 
 .plus-gifts .plus-gifts__buy:disabled:not([aria-busy="true"]) { opacity: .6; }
-
-.plus-gifts + .plus-teams { margin-top: 14px; }
 
 /* The compact feature list of a gift */
 
@@ -595,13 +635,20 @@
 @media (max-width: 620px) {
   .modal--plus { align-items: end; padding: 0; }
   .modal--plus .modal__panel { width: 100%; max-height: calc(100dvh - 28px); border-bottom: 0; border-radius: 18px 18px 0 0; }
-  .modal--plus .modal__scroll { max-height: calc(100dvh - 78px); padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
-  .modal--plus .plus-cta { bottom: calc(-1 * max(1rem, env(safe-area-inset-bottom))); margin: 14px -.8rem calc(-1 * max(1rem, env(safe-area-inset-bottom))) -.85rem; padding: 12px .8rem max(1rem, env(safe-area-inset-bottom)) .85rem; }
-  .plus-header h2 { font-size: 1.18rem; }
-  .plus-price strong { font-size: 1.85rem; }
-  .plus-cta__row { flex-direction: column; align-items: stretch; gap: 2px; }
-  .plus-cta .plus-cta__buy { width: 100%; }
-  .plus-upcoming { padding: 12px 13px 10px; }
+  .modal--plus .modal__scroll { --plus-pad-x: 1rem; --plus-pad-b: max(1rem, env(safe-area-inset-bottom)); max-height: calc(100dvh - 78px); }
+  .modal__header.plus-header--offer { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .plus-header { margin-bottom: 22px; }
+  .plus-header h2 { font-size: 1.3rem; }
+  .plus-offer { margin-top: 0; padding: 16px 16px 8px; }
+  .plus-price strong { font-size: 2rem; }
+  .plus-bar { gap: 10px; }
+  .plus-bar .plus-cta__buy { min-width: 0; flex: 0 1 190px; }
+  .plus-bar.plus-bar--done .plus-cta__buy { flex: 1 1 auto; }
+  .plus-also,
+  .plus-upcoming,
+  .plus-gifts { margin-top: 30px; }
+  .plus-palettes { padding: 14px; }
+  .plus-loop { justify-content: flex-start; text-align: left; }
   .plus-gifts__row { flex-direction: column; }
   .plus-gifts .plus-gifts__buy { width: 100%; justify-content: flex-start; }
 }

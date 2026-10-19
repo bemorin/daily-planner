@@ -290,7 +290,7 @@ function showUnavailable(error) {
 function clearRendered() {
   ['[data-owner-kpis]', '[data-owner-funnel]', '[data-owner-team-funnel]', '[data-owner-teams]', '[data-owner-waitlist]', '[data-owner-versions]', '[data-owner-feedback]', '[data-owner-signals]',
     '[data-owner-gifts]', '[data-owner-gift-created]', '[data-owner-gift-panel]', '[data-owner-plus-stats]', '[data-owner-plus-funnel]', '[data-owner-license-created]', '[data-owner-license-list]', '[data-owner-setup]',
-    '[data-owner-reviews]']
+    '[data-owner-reviews]', '[data-owner-refunds]', '[data-owner-revocations]']
     .forEach(selector => { $(selector).innerHTML = ''; });
   trends.clear();
   seriesSession = null;
@@ -303,6 +303,8 @@ function clearRendered() {
   showAnnounceResult('');
   showResult('[data-owner-gift-result]', '');
   showResult('[data-owner-license-result]', '');
+  showResult('[data-owner-revoke-result]', '');
+  revokedState = { gifts: new Map(), licenses: new Map(), sources: new Set() };
 }
 
 function signOut(message = '') {
@@ -657,7 +659,7 @@ function giftRowHtml(row) {
     <td class="num owner-nowrap"><b>${number(row.redeemed)}</b> / ${number(row.seats)}<small class="owner-small">up to ${number(row.limit)}</small>${status}</td>
     <td class="owner-nowrap">${esc(day(row.createdAt))}</td>
     <td class="owner-nowrap">${esc(day(row.expiresAt))}</td>
-    <td class="owner-nowrap">${esc(SOURCE_LABELS[row.source] || row.source || SOURCE_LABELS.manual)}${amount}</td>
+    <td class="owner-nowrap">${esc(SOURCE_LABELS[row.source] || row.source || SOURCE_LABELS.manual)}${amount}${revokedPill(revokedState.gifts.get(row.code))}</td>
     <td><input class="privacy-switch" type="checkbox" role="switch" data-owner-gift-active="${esc(row.code)}"${row.active ? ' checked' : ''} aria-label="Gift link for ${esc(row.org)} is active"></td>
     <td><div class="owner-row-actions">
       <button class="text-button" type="button" data-owner-copy="${esc(row.url)}">Copy link</button>
@@ -900,7 +902,7 @@ function renderPlus(summary, days) {
   $('[data-owner-plus-funnel]').innerHTML = funnelHtml(steps, 'openings', insight);
   const licences = Array.isArray(plus.recentLicenses) ? plus.recentLicenses : [];
   $('[data-owner-license-list]').innerHTML = licences.length
-    ? `<div class="owner-list"><h3>Latest licences made here</h3><ul>${licences.map(item => `<li><span>${esc(when(item.createdAt))}</span><span>${esc(item.note || 'No note')}</span><code>${esc(item.id)}</code></li>`).join('')}</ul></div>`
+    ? `<div class="owner-list"><h3>Latest licences made here</h3><ul>${licences.map(item => `<li><span>${esc(when(item.createdAt))}</span><span>${esc(item.note || 'No note')}${revokedPill(revokedState.licenses.get(item.id), ' ')}</span><code>${esc(item.id)}</code></li>`).join('')}</ul></div>`
     : '';
 }
 
@@ -930,6 +932,156 @@ licenseForm.addEventListener('submit', async event => {
   }
 });
 
+// ---- Refunds and disputes ------------------------------------------------------
+
+const REFUND_REASON_PILLS = { refund: 'Refunded', dispute: 'Disputed', owner: 'Revoked' };
+let revokedState = { gifts: new Map(), licenses: new Map(), sources: new Set() };
+
+/** What is revoked right now (summary.revocations): gift codes and licence ids with their reason, and the groups still in force. */
+function readRevocations(summary) {
+  const rows = Array.isArray(summary.revocations) ? summary.revocations : [];
+  revokedState = {
+    gifts: new Map(rows.filter(row => row.kind === 'gift').map(row => [row.label, row.reason])),
+    licenses: new Map(rows.filter(row => row.kind === 'license').map(row => [row.label, row.reason])),
+    sources: new Set(rows.map(row => row.source))
+  };
+}
+
+// The API says whether a refund's revocations still stand; an older API, from the latest revocations listed.
+const inForce = row => (typeof row.inForce === 'boolean' ? row.inForce : revokedState.sources.has(row.id));
+const revokedPill = (reason, before = '') => (reason ? `${before}<span class="owner-pill owner-pill--inactive">${esc(REFUND_REASON_PILLS[reason] || 'Revoked')}</span>` : '');
+
+function refundPurchaseHtml(row) {
+  if (row.status === 'pending') return `<span class="owner-pill owner-pill--inactive">Waiting</span>${row.transactionId ? `<small class="owner-small">Transaction <code>${esc(row.transactionId)}</code></small>` : ''}`;
+  if (!row.item) return `<span class="owner-pill owner-pill--inactive">Not matched</span>${row.transactionId ? `<small class="owner-small">Transaction <code>${esc(row.transactionId)}</code></small>` : ''}`;
+  const gift = row.item === 'gift' ? giftRows.find(item => item.checkoutRef === row.checkoutId) : null;
+  const title = row.item === 'gift' ? `Gift${gift ? ` <code>${esc(gift.code)}</code>` : ''}` : 'Plus';
+  return `<b>${title}</b>${gift ? `<small class="owner-small">${esc(gift.org)}</small>` : ''}<small class="owner-small"><code>${esc(row.checkoutId)}</code></small>`;
+}
+
+const revokedTargets = row => String(row.revoked || '').split(' ').filter(Boolean);
+
+function refundOutcomeHtml(row) {
+  if (row.status === 'pending') return `${esc(row.note || 'Creem’s transaction could not be read yet.')} Creem sends the event again; nothing is switched off until then.${row.attempts > 1 ? ` <small class="owner-small">${esc(String(row.attempts))} tries so far</small>` : ''}`;
+  const restored = !inForce(row) ? ' <span class="owner-pill">Restored</span>' : '';
+  if (!row.item) {
+    if (row.note) return `${esc(row.note)} Nothing was switched off.`;
+    if (row.revoked) return `Matched no purchase delivered so far, so nothing was switched off; if its payment is delivered later, it will be refused. Find the payment in Creem, then revoke it below if needed.${restored}`;
+    return 'Matched no purchase, so nothing was switched off. Find the payment in Creem, then revoke it below.';
+  }
+  if (!row.fullRefund) return 'Not a full refund: nothing was switched off. You were emailed to decide.';
+  const completes = row.scope === 'completes' ? `A partial refund of ${esc(money(row.amount, row.currency)) || 'part of the price'} completed a full refund. ` : '';
+  if (!row.revoked) return `${completes}${row.note ? esc(row.note) : 'Nothing to switch off.'}`;
+  if (!inForce(row)) return `${completes}<span class="owner-pill">Restored</span>`;
+  const targets = revokedTargets(row);
+  if (!targets.some(target => target.startsWith('license:') || target.startsWith('gift:'))) return `${completes}Refunded before it was delivered: nothing was delivered, and its links say so.`;
+  return `${completes}${row.item === 'gift' ? 'The gift link is off, and so is Plus on every planner that activated it.' : 'The activation link and its licence are off.'}`;
+}
+
+// Creem's reason codes ("requested_by_customer") read as words.
+const reasonText = value => String(value || '').replace(/[_-]+/g, ' ').trim().replace(/^./, character => character.toUpperCase());
+
+function refundRowHtml(row) {
+  const kind = row.kind === 'dispute' ? 'Dispute' : row.status === 'pending' || (row.fullRefund && row.scope !== 'completes') ? 'Refund' : 'Partial refund';
+  const reason = row.reason ? `<small class="owner-small">${esc(reasonText(row.reason))}</small>` : '';
+  const label = row.item === 'gift' ? 'this gift' : row.item ? 'this purchase' : 'this payment';
+  const restore = row.revoked && inForce(row)
+    ? `<button class="text-button" type="button" data-owner-restore="${esc(row.id)}" data-owner-restore-label="${esc(label)}">Restore</button>`
+    : '';
+  return `<tr>
+    <td class="owner-nowrap">${esc(day(row.createdAt))}</td>
+    <td class="owner-nowrap"><b>${esc(kind)}</b>${reason}</td>
+    <td class="num owner-nowrap">${esc(money(row.amount, row.currency)) || '—'}</td>
+    <td>${refundPurchaseHtml(row)}</td>
+    <td>${refundOutcomeHtml(row)}</td>
+    <td class="owner-nowrap">${restore}</td>
+  </tr>`;
+}
+
+/** Revocations made in this dashboard, one line per Revoke (owner_… groups). */
+function ownerRevocationsHtml(rows) {
+  const groups = new Map();
+  rows.filter(row => String(row.source).startsWith('owner_')).forEach(row => { if (groups.has(row.source)) groups.get(row.source).push(row); else groups.set(row.source, [row]); });
+  if (!groups.size) return '';
+  const describe = items => {
+    const gift = items.find(item => item.kind === 'gift');
+    const checkout = items.find(item => item.kind === 'checkout');
+    const license = items.find(item => item.kind === 'license');
+    if (gift) return `Gift <code>${esc(gift.label)}</code> and its activations`;
+    if (checkout && !license) return `Checkout <code>${esc(checkout.label)}</code>, blocked before delivery`;
+    if (checkout) return `Purchase <code>${esc(checkout.label)}</code> and its licence`;
+    return `Licence <code>${esc(license?.label || items[0].label)}</code>`;
+  };
+  const lines = [...groups].map(([source, items]) => `<tr>
+    <td class="owner-nowrap">${esc(when(items[0].createdAt))}</td>
+    <td>${describe(items)}${items[0].note ? `<small class="owner-small">${esc(items[0].note)}</small>` : ''}</td>
+    <td class="owner-nowrap"><button class="text-button" type="button" data-owner-restore="${esc(source)}" data-owner-restore-label="it">Restore</button></td>
+  </tr>`).join('');
+  return `<div class="owner-list"><h3>Revoked by you</h3></div><div class="owner-scroll"><table class="owner-table owner-revoked"><thead><tr><th>Date</th><th>What</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${lines}</tbody></table></div>`;
+}
+
+function renderRefunds(summary) {
+  const target = $('[data-owner-refunds]');
+  const form = $('[data-owner-revoke-form]');
+  if (summary.refundsUnavailable) {
+    target.innerHTML = '<p class="owner-empty">The refunds tables do not exist yet, so refunds are not recorded and nothing is switched off. Apply <code>migrations/0005_refunds.sql</code> to the D1 database (see <code>docs/FEEDBACK_AND_WAITLIST.md</code>).</p>';
+    form.hidden = true;
+    $('[data-owner-revocations]').innerHTML = '';
+    return;
+  }
+  form.hidden = false;
+  const rows = Array.isArray(summary.refunds) ? summary.refunds : [];
+  target.innerHTML = rows.length
+    ? `<div class="owner-scroll"><table class="owner-table owner-refunds"><thead><tr><th>Date</th><th>Kind</th><th class="num">Amount</th><th>Purchase</th><th>What happened</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${rows.map(refundRowHtml).join('')}</tbody></table></div>`
+    : '<p class="owner-empty">No refunds or disputes. Creem reports them here once its webhook sends <code>refund.created</code> and <code>dispute.created</code> (see Setup).</p>';
+  $('[data-owner-revocations]').innerHTML = ownerRevocationsHtml(Array.isArray(summary.revocations) ? summary.revocations : []);
+}
+
+const revokeForm = $('[data-owner-revoke-form]');
+revokeForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  const submit = $('[data-owner-revoke-submit]');
+  if (submit.disabled) return;
+  const target = revokeForm.elements.target.value.trim();
+  if (!target) { showResult('[data-owner-revoke-result]', 'Paste a licence id, a checkout id or a gift code.', true); revokeForm.elements.target.focus(); return; }
+  if (!window.confirm(`Revoke ${target.length > 40 ? 'this licence' : target}? Planners that use it lose Plus at their next check, within about a week.`)) return;
+  submit.disabled = true;
+  showResult('[data-owner-revoke-result]', 'Revoking…');
+  try {
+    const answer = await sendJson('admin/revocations', 'POST', { target, note: revokeForm.elements.note.value });
+    revokeForm.reset();
+    showResult('[data-owner-revoke-result]', answer?.undelivered
+      ? 'Revoked. Nothing has been delivered for this checkout yet; if it is paid and delivered later, it will be refused.'
+      : 'Revoked. Its links stop working now; planners that use it lose Plus at their next check, within about a week.');
+    await load();
+  } catch (error) {
+    if (error.kind === 'unauthorized') handleError(error);
+    else showResult('[data-owner-revoke-result]', failureText(error), true);
+  } finally {
+    submit.disabled = false;
+  }
+});
+
+$('[data-owner-refunds]').closest('.owner-card').addEventListener('click', async event => {
+  const button = event.target.closest('[data-owner-restore]');
+  if (!button) return;
+  if (!window.confirm(`Restore ${button.dataset.ownerRestoreLabel || 'it'}? Its links work again, and planners that already lost Plus get it back at their next weekly check, when they are online.`)) return;
+  button.disabled = true;
+  try {
+    await call(`admin/revocations/${encodeURIComponent(button.dataset.ownerRestore)}`, { method: 'DELETE' });
+  } catch (error) {
+    // "failed" here is usually a 404: already restored. Just refresh.
+    if (error.kind !== 'failed') {
+      button.disabled = false;
+      if (error.kind === 'unauthorized') handleError(error);
+      else showResult('[data-owner-revoke-result]', failureText(error), true);
+      return;
+    }
+  }
+  showResult('[data-owner-revoke-result]', '');
+  await load();
+});
+
 // ---- Setup --------------------------------------------------------------------
 
 const SETUP_STATES = { ok: 'Ready', warn: 'Check', missing: 'Not set' };
@@ -953,9 +1105,9 @@ function paymentsItem(payments) {
     : '<p>Set the secret <code>CREEM_API_KEY</code> (Creem → Developers → API keys), then redeploy. Until then nothing can be bought online.</p>';
   const webhook = payments.webhookSecretSet
     ? '<p>Webhook signing secret set (<code>CREEM_WEBHOOK_SECRET</code>).</p>'
-    : '<p>Webhook signing secret not set (<code>CREEM_WEBHOOK_SECRET</code>). Recommended: without it, a purchase is recorded only when the buyer comes back to the site after paying.</p>';
+    : '<p>Webhook signing secret not set (<code>CREEM_WEBHOOK_SECRET</code>). Recommended: without it, a purchase is recorded only when the buyer comes back to the site after paying, and refunds never switch Plus off.</p>';
   const url = payments.webhookUrl
-    ? `${copyRow('Webhook URL', payments.webhookUrl)}<p>Creem → Developers → Webhooks: add this URL with the event <code>checkout.completed</code>, then paste the signing secret into <code>CREEM_WEBHOOK_SECRET</code>.</p>`
+    ? `${copyRow('Webhook URL', payments.webhookUrl)}<p>Creem → Developers → Webhooks: add this URL with the events <code>checkout.completed</code>, <code>refund.created</code> and <code>dispute.created</code>, then paste the signing secret into <code>CREEM_WEBHOOK_SECRET</code>. The last two switch Plus off after a refund or a dispute.</p>`
     : '';
   const error = payments.error ? `<p class="owner-setup__error">${esc(payments.error)}</p>` : '';
   const state = !payments.configured ? 'missing' : (payments.error || !allProducts || !payments.webhookSecretSet || payments.mode === 'test') ? 'warn' : 'ok';
@@ -1020,9 +1172,10 @@ function setupItems(summary) {
 
   items.push({ title: 'Links in emails', state: 'ok', html: `<p>They start with ${esc(base)}${setup.publicBaseUrlSet ? ' (<code>PUBLIC_BASE_URL</code>)' : ', the default. Set <code>PUBLIC_BASE_URL</code> to change it'}.</p>` });
   items.push(legalItem(base));
-  const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql', summary.reviewsUnavailable && '0004_creem_reviews.sql'].filter(Boolean);
+  const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql', summary.reviewsUnavailable && '0004_creem_reviews.sql', summary.refundsUnavailable && '0005_refunds.sql'].filter(Boolean);
+  const listed = files => (files.length > 1 ? `${files.slice(0, -1).join(', ')} and ${files.at(-1)}` : files[0]);
   items.push(missingTables.length
-    ? { title: 'Database', state: 'missing', html: `<p>Apply ${missingTables.map(file => `<code>migrations/${file}</code>`).join(' and ')} to the D1 database.</p>` }
+    ? { title: 'Database', state: 'missing', html: `<p>Apply ${listed(missingTables.map(file => `<code>migrations/${file}</code>`))} to the D1 database.${summary.refundsUnavailable ? ' Until <code>0005_refunds.sql</code> is applied, refunds are not recorded and nothing is switched off.' : ''}</p>` }
     : { title: 'Database', state: 'ok', html: '<p>All tables are in place.</p>' });
   items.push(setup.twoFactor
     ? { title: 'Owner sign-in', state: 'ok', html: '<p>Two-factor sign-in is on.</p>' }
@@ -1150,8 +1303,10 @@ async function load({ series: refreshSeries = false } = {}) {
     renderFunnel(summary, days);
     renderTeamFunnel(summary, days);
     renderTeams(summary);
+    readRevocations(summary);
     renderGifts(summary);
     renderPlus(summary, days);
+    renderRefunds(summary);
     renderSetup(summary);
     renderWaitlist(summary);
     renderAnnounce(summary);

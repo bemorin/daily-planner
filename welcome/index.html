@@ -96,6 +96,8 @@
     <symbol id="i-stats" viewBox="0 0 24 24"><path d="M5 19.5V11M12 19.5V5M19 19.5v-6"/></symbol>
     <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5c.5 4.3 2.2 6 6.5 6.5-4.3.5-6 2.2-6.5 6.5-.5-4.3-2.2-6-6.5-6.5 4.3-.5 6-2.2 6.5-6.5Z"/><path d="M18.5 15.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5Z"/></symbol>
     <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+    <symbol id="i-family" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="10" r="2.4"/><path d="M15.6 14.5a4.3 4.3 0 0 1 5.4 4.2"/></symbol>
+    <symbol id="i-team" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3"/><path d="M6.8 19.5a5.2 5.2 0 0 1 10.4 0"/><circle cx="5.2" cy="10.2" r="2.1"/><path d="M1.8 17.6a3.6 3.6 0 0 1 4.4-3.3"/><circle cx="18.8" cy="10.2" r="2.1"/><path d="M22.2 17.6a3.6 3.6 0 0 0-4.4-3.3"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5.5 19.5a6.5 6.5 0 0 1 13 0"/></symbol>
     <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.2-1-1.6-1-2.6 0-1 .8-1.7 1.8-1.7h2.2a3.7 3.7 0 0 0 3.7-3.7c0-4.3-3.8-7.3-8.5-7.3Z"/><circle cx="7.8" cy="11.2" r="1"/><circle cx="10.6" cy="7.6" r="1"/><circle cx="15" cy="7.9" r="1"/></symbol>
     <symbol id="i-pip" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="14" rx="2"/><rect x="11.5" y="10.5" width="7" height="5.5" rx="1"/></symbol>
@@ -898,30 +900,40 @@
         </div>
 
         <div class="plus-more" data-reveal-each>
-          <article class="plus-card plus-card--paint">
-            <div class="rp-scale plus-card__visual">
-              <div class="rp rp--pal" data-scene="palettes" data-final="" aria-hidden="true">
-                <div class="rp-pal">
-                  <div class="rp-pal__grid" data-palette-grid></div>
-                  <div class="rp-pal__swatches">
-                    <span class="sw sw--terracotta"><i></i>Terracotta</span>
-                    <span class="sw sw--ocean"><i></i>Ocean</span>
-                    <span class="sw sw--forest"><i></i>Forest</span>
-                    <span class="sw sw--plum"><i></i>Plum</span>
-                    <span class="sw sw--graphite"><i></i>Graphite</span>
-                    <span class="sw sw--sunset"><i></i>Sunset</span>
-                  </div>
+          <article class="plus-card plus-card--paint" data-palette-card data-palette="terracotta" aria-labelledby="palette-title">
+            <div class="pal__head">
+              <h3 id="palette-title"><svg class="i"><use href="#i-palette"/></svg>Colours for your painted year</h3>
+              <p>Five more palettes for the year that paints itself. Terracotta stays free.</p>
+            </div>
+            <div class="pal__swatches" role="group" aria-label="Try a palette" data-palette-swatches>
+              <button class="pal-sw pal-sw--terracotta" type="button" data-swatch="terracotta" aria-pressed="true"><span class="pal-sw__ramp" aria-hidden="true"><i></i><i></i><i></i></span><span class="pal-sw__name">Terracotta</span><span class="sr-only">, </span><span class="pal-sw__tag is-free">Free</span></button>
+              <button class="pal-sw pal-sw--ocean" type="button" data-swatch="ocean" aria-pressed="false"><span class="pal-sw__ramp" aria-hidden="true"><i></i><i></i><i></i></span><span class="pal-sw__name">Ocean</span><span class="sr-only">, </span><span class="pal-sw__tag">Plus</span></button>
+              <button class="pal-sw pal-sw--forest" type="button" data-swatch="forest" aria-pressed="false"><span class="pal-sw__ramp" aria-hidden="true"><i></i><i></i><i></i></span><span class="pal-sw__name">Forest</span><span class="sr-only">, </span><span class="pal-sw__tag">Plus</span></button>
+              <button class="pal-sw pal-sw--plum" type="button" data-swatch="plum" aria-pressed="false"><span class="pal-sw__ramp" aria-hidden="true"><i></i><i></i><i></i></span><span class="pal-sw__name">Plum</span><span class="sr-only">, </span><span class="pal-sw__tag">Plus</span></button>
+              <button class="pal-sw pal-sw--graphite" type="button" data-swatch="graphite" aria-pressed="false"><span class="pal-sw__ramp" aria-hidden="true"><i></i><i></i><i></i></span><span class="pal-sw__name">Graphite</span><span class="sr-only">, </span><span class="pal-sw__tag">Plus</span></button>
+              <button class="pal-sw pal-sw--sunset" type="button" data-swatch="sunset" aria-pressed="false"><span class="pal-sw__ramp" aria-hidden="true"><i></i><i></i><i></i></span><span class="pal-sw__name">Sunset</span><span class="sr-only">, </span><span class="pal-sw__tag">Plus</span></button>
+            </div>
+            <div class="rp-scale pal__preview" data-palette-preview aria-hidden="true">
+              <div class="rp pal-year">
+                <div class="pal-year__head">
+                  <span class="pal-year__title"><small>Your <span data-plan-year data-year-offset="-1">2026</span>, painted in</small><b data-palette-name>Terracotta</b></span>
+                  <span class="pal-year__tag is-free" data-palette-tag>Free</span>
                 </div>
+                <div class="rp-paint pal-year__grid" data-palette-year></div>
+                <ul class="rp-paint__legend pal-year__legend"><li class="l1">Closed</li><li class="l2">+ main outcome</li><li class="l3">+ winning habit</li></ul>
               </div>
             </div>
-            <div class="plus-card__copy">
-              <h3><svg class="i"><use href="#i-palette"/></svg>Colours for your painted year</h3>
-              <p>Five more palettes for the year that paints itself: Ocean, Forest, Plum, Graphite and Sunset. Terracotta stays free.</p>
-            </div>
           </article>
-          <article class="plus-card plus-card--once">
-            <h3><svg class="i"><use href="#i-devices"/></svg>Paid once, on all your devices</h3>
-            <p>No subscription. Plus is saved in your planner’s settings, so Google Drive sync and backups carry it to your other devices.</p>
+          <article class="plus-card plus-card--once" aria-labelledby="once-title">
+            <div class="once__devices" aria-hidden="true">
+              <span class="once__device"><svg class="i"><use href="#i-laptop"/></svg><i><svg class="i"><use href="#i-check"/></svg></i></span>
+              <span class="once__device"><svg class="i"><use href="#i-tablet"/></svg><i><svg class="i"><use href="#i-check"/></svg></i></span>
+              <span class="once__device"><svg class="i"><use href="#i-phone"/></svg><i><svg class="i"><use href="#i-check"/></svg></i></span>
+            </div>
+            <div class="once__copy">
+              <h3 id="once-title">Paid once, on all your devices</h3>
+              <p>No subscription. Plus is saved in your planner’s settings, so Google Drive sync and backups carry it to your other devices.</p>
+            </div>
           </article>
         </div>
 
@@ -940,14 +952,28 @@
         </section>
 
         <div class="plus-buy" data-reveal>
-          <div class="plus-buy__price"><b data-plus-price>€29</b><span>once, for life</span></div>
-          <p class="plus-buy__note">Every Plus feature for one person, today’s and those to come. No subscription, nothing to renew.</p>
-          <div class="plus-buy__act">
-            <div class="buy" data-plus-cta="plus"><button class="btn btn--primary btn--buy" type="button" disabled>Coming soon</button></div>
-            <div class="plus-buy__alts">
-              <a class="plus-buy__alt" href="#gifts">Give it as a gift<svg class="i"><use href="#i-arrow"/></svg></a>
-              <a class="plus-buy__alt" href="#teams">Giving it to a team?<svg class="i"><use href="#i-arrow"/></svg></a>
-            </div>
+          <div class="plus-buy__head">
+            <p class="plus-buy__kicker"><svg class="i"><use href="#i-spark"/></svg>Daily Planner Plus</p>
+            <h3 class="plus-buy__title">Plan it, print it, look back. Every year.</h3>
+            <p class="plus-buy__note">Every Plus feature for one person, today’s and those to come.</p>
+          </div>
+          <div class="plus-buy__offer">
+            <p class="plus-buy__price"><b data-plus-price>€29</b><span>once, for life</span></p>
+            <p class="plus-buy__tax" data-tax-line>In euros, taxes included</p>
+            <div class="buy plus-buy__cta" data-plus-cta="plus"><button class="btn btn--primary btn--buy" type="button" disabled>Coming soon</button></div>
+            <p class="plus-buy__trust"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span>No subscription, no account. Plus is checked on your device.</span></p>
+          </div>
+          <ul class="oks plus-buy__list" aria-label="What you get with Plus">
+            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Plan your year</b> <span>A guided half hour</span></span></li>
+            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Print it</b> <span>Your year on one page, for your desk</span></span></li>
+            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Your year in review</b> <span>One page, ready to print</span></span></li>
+            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Five more palettes</b> <span>For the year that paints itself</span></span></li>
+            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Everything Plus gets later</b> <span>Included, at no extra cost</span></span></li>
+          </ul>
+          <div class="plus-buy__alts">
+            <a class="plus-buy__alt" href="#gifts"><svg class="i" aria-hidden="true"><use href="#i-gift"/></svg><span class="plus-buy__alt-name">Give it as a gift</span><span class="plus-buy__alt-price"><span data-gift-price="gift-1">€29</span>, for one person</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+            <a class="plus-buy__alt" href="#gifts"><svg class="i" aria-hidden="true"><use href="#i-family"/></svg><span class="plus-buy__alt-name">Plus Family</span><span class="plus-buy__alt-price"><span data-gift-price="family-5">€99</span>, up to 5 people at home</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+            <a class="plus-buy__alt" href="#teams"><svg class="i" aria-hidden="true"><use href="#i-team"/></svg><span class="plus-buy__alt-name">Giving it to a team?</span><span class="plus-buy__alt-price">From <span data-min-per-person>€5</span> per person</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
           </div>
         </div>
       </div>
@@ -1084,15 +1110,19 @@
               <label class="field field--wide"><span data-message-label>Anything else? <em>Optional</em></span><textarea name="message" rows="3" maxlength="1000" aria-describedby="err-message message-count"></textarea><small class="field__err" id="err-message"></small><small class="field__count" id="message-count" data-message-count>0/1000</small></label>
             </div>
             <div class="hp" aria-hidden="true"><label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
-            <label class="consent" data-consent-row><input type="checkbox" name="consent" required aria-describedby="err-consent"><span>You may email me about this request.</span></label>
-            <small class="field__err field__err--consent" id="err-consent"></small>
-            <p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request. <a href="#privacy" data-privacy-open="requests">How requests are handled</a></p>
             <p class="form-error" data-form-error role="alert" hidden></p>
-            <div class="team-form__actions">
-              <button class="btn btn--light" type="submit" data-form-submit disabled>Request the invoice</button>
+            <div class="team-form__foot">
+              <div class="team-form__fine">
+                <label class="consent" data-consent-row><input type="checkbox" name="consent" required aria-describedby="err-consent"><span>You may email me about this request.</span></label>
+                <small class="field__err field__err--consent" id="err-consent"></small>
+                <p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request. <a href="#privacy" data-privacy-open="requests">How requests are handled</a></p>
+                <p class="form-off" data-form-off hidden>Requests open when this site’s API is switched on.</p>
+                <noscript><p class="form-off">Sending a request needs JavaScript.</p></noscript>
+              </div>
+              <div class="team-form__actions">
+                <button class="btn btn--light btn--send" type="submit" data-form-submit disabled>Request the invoice</button>
+              </div>
             </div>
-            <p class="form-off" data-form-off hidden>Requests open when this site’s API is switched on.</p>
-            <noscript><p class="form-off">Sending a request needs JavaScript.</p></noscript>
           </form>
           <div class="form-done" data-form-done hidden tabindex="-1">
             <svg class="i"><use href="#i-check"/></svg>

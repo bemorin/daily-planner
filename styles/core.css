@@ -113,7 +113,7 @@ a { color: inherit; }
 .topbar {
   min-height: 60px;
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  grid-template-columns: minmax(0, 1fr) max-content;
   align-items: center;
   gap: 12px;
   padding: 0 0 11px;
@@ -121,15 +121,26 @@ a { color: inherit; }
   white-space: nowrap;
 }
 
+/* View · ‹ Now › · date: the place switch keeps the left edge, the navigator
+   sits at a fixed point between equal halves, and the date reads to its right.
+   A longer month or week label only grows the date to the right; no control
+   moves with it. */
 .date-identity {
   min-width: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-self: start;
+  justify-self: stretch;
   gap: 10px;
 }
 
-.date-title { min-width: 0; flex: 0 1 auto; }
+.date-identity > .view-toggle-button,
+.date-identity > .view-switch { grid-row: 1; grid-column: 1; justify-self: start; }
+
+.date-identity > .date-nav { grid-row: 1; grid-column: 2; }
+
+/* Never wider than its column (its padding sits in the -5px margins of the picker style), so fitHeaderDate() can shorten it. */
+.date-title { grid-row: 1; grid-column: 3; justify-self: start; min-width: 0; max-width: calc(100% + 10px); }
 
 .eyebrow,
 .section-kicker,
@@ -166,7 +177,6 @@ a { color: inherit; }
 .date-nav,
 .actions { display: flex; align-items: center; gap: 3px; flex: 0 0 auto; }
 
-.date-nav { justify-self: center; }
 .actions { justify-self: end; margin-left: 0; }
 
 .icon-button {
@@ -1715,7 +1725,6 @@ textarea,
 }
 
 @media (max-width: 790px) {
-  .topbar { grid-template-columns: max-content minmax(0, 1fr) max-content; }
   .expanded-view-button { display: none; }
   .actions { gap: 0; }
   .date-nav { min-width: 0; }
@@ -3080,6 +3089,13 @@ div.open-work-row__main { cursor: default; }
   .day-closed-actions { grid-template-columns: 1fr 1fr; }
 }
 
+/* Phones and touch-only screens have no keyboard to press: Help leaves the
+   shortcut list and the "press F" hints out. */
+@media (max-width: 760px), (hover: none) and (pointer: coarse) {
+  .help-faq.help-faq--shortcuts,
+  .help-keys { display: none; }
+}
+
 .item-history { display:block; margin-top:2px; color:var(--faint); font-size:.52rem; font-weight:610; line-height:1.2; font-variant-numeric:tabular-nums; }
 
 .item-row.done .item-history { text-decoration:none; }
@@ -3947,11 +3963,13 @@ div.open-work-row__main { cursor: default; }
 
 /* Phone header: every control is a 40px target; the date gives way first
    ("Wed, Oct 7", then "Oct 7"). Horizon lives in the bottom bar (1.22), so
-   Time stats stays in the header down to 340px, then moves into More. */
+   Time stats stays in the header down to 340px, then moves into More. The
+   Now control only shows away from today: it waits at the right end, beside
+   the actions, so neither it nor the date moves when it comes and goes. */
 @media (max-width: 790px) {
-  .topbar { grid-template-columns: minmax(0, max-content) minmax(max-content, 1fr) max-content; }
-  .date-identity { min-width: 0; justify-self: stretch; }
-  .date-nav { justify-self: start; }
+  .date-identity { grid-template-columns: max-content minmax(0, 1fr) auto; }
+  .date-identity > .date-title { grid-column: 2; }
+  .date-identity > .date-nav { grid-column: 3; }
 }
 @media (max-width: 480px) {
   .topbar { gap: 2px; }

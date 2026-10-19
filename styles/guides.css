@@ -8,7 +8,7 @@
 /* Onboarding ---------------------------------------------------------------- */
 
 .modal--onboarding .modal__panel.ob-panel {
-  width: min(940px, calc(100vw - 24px));
+  width: min(940px, 100%);
   height: min(600px, calc(100dvh - 2rem));
   max-height: none;
   display: grid;
@@ -44,7 +44,7 @@
 
 .ob-visual__caption { margin: 14px 0 0; color: var(--muted); font-size: .76rem; text-align: center; }
 
-.ob-content { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow-y: auto; }
+.ob-content { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow-y: auto; container-type: inline-size; }
 
 .onboarding-progress { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 24px 38px 0; }
 
@@ -109,34 +109,44 @@
 
 .onboarding-hours .select-trigger .select-chevron { position: absolute; right: 9px; }
 
-.ob-loop-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; counter-reset: loop; }
+.ob-loop-list { display: grid; margin: 0; padding: 0; list-style: none; counter-reset: loop; }
 
 .ob-loop-list li {
   counter-increment: loop;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  column-gap: 12px;
-  padding: 10px 12px 10px 10px;
-  border-radius: 12px;
-  animation: ob-highlight 12s ease-in-out infinite both;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 14px;
+  row-gap: 2px;
+  padding: 11px 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
 }
 
-.ob-loop-list li:nth-child(2) { animation-delay: 3s; }
-.ob-loop-list li:nth-child(3) { animation-delay: 6s; }
-.ob-loop-list li:nth-child(4) { animation-delay: 9s; }
+.ob-loop-list li:first-child { border-top: 0; padding-top: 2px; }
 
-.ob-loop-list li::before { content: counter(loop); grid-row: span 2; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: .76rem; font-weight: 720; }
+.ob-loop-list li::before { content: counter(loop); grid-row: span 2; width: 22px; height: 22px; margin-top: 1px; display: grid; place-items: center; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: .66rem; font-weight: 750; }
 
-.ob-loop-list b { font-size: .9rem; font-weight: 680; }
+.ob-loop-list b { font-size: .9rem; font-weight: 680; letter-spacing: -.01em; }
 
 .ob-loop-list span { color: var(--muted); font-size: .8rem; line-height: 1.5; }
 
-@keyframes ob-highlight {
-  0%, 25%, 100% { background: transparent; }
-  4%, 21% { background: color-mix(in srgb, var(--accent) 9%, transparent); }
-}
+.theme-switch--compact button { min-height: 38px; }
 
-.theme-switch--compact button { min-height: 34px; }
+/* Setup asks Light or Dark; the system's own is chosen until one is picked. */
+.theme-switch.theme-switch--pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.ob-actions .icon-text-button { gap: 7px; }
+
+.ob-actions .icon-text-button svg { width: 17px; height: 17px; flex: 0 0 auto; }
+
+.ob-back { min-height: 44px; margin-left: -8px; padding: 0 14px 0 8px; }
+
+/* The last step, when its column is narrow: Back and Install share a row, Start planning takes the width below. */
+@container (max-width: 440px) {
+  [data-onboarding-step="4"] .ob-actions { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; }
+  [data-onboarding-step="4"] .ob-actions__right { display: contents; }
+  [data-onboarding-step="4"] .ob-actions__right .secondary-button { justify-self: end; }
+  [data-onboarding-step="4"] .ob-actions__right .primary-button { grid-column: 1 / -1; width: 100%; }
+}
 
 /* Scene 1: the planner itself */
 
@@ -234,29 +244,82 @@
 
 .ob-week__col.is-on .ob-week__block--late { background: color-mix(in srgb, var(--hz-keydate) 20%, var(--surface)); box-shadow: inset 2px 0 0 var(--hz-keydate); }
 
-/* Scene 3: the loop */
+/* Scene 3: the daily loop, drawn like the yearly ritual on the landing page:
+   numbered cards (an illustration, not buttons), arrows between them and a
+   dashed line back to the start. The cards come in one by one and the line
+   draws itself once; with reduced motion it is simply there. */
 
-.ob-loop { position: relative; width: min(290px, 100%); aspect-ratio: 1; margin: 0 auto; border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 999px; }
+.ob-ritual { --reserve: 104px; --card-h: 66px; --gap: 26px; position: relative; }
 
-.ob-loop::after { content: ""; position: absolute; left: 50%; top: -6px; width: 11px; height: 11px; margin-left: -5.5px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 18%, transparent); transform-origin: 5.5px calc(min(290px, 100%) / 2 + 6px); animation: ob-orbit 12s linear infinite; }
+.ob-ritual__steps { width: calc(100% - var(--reserve)); display: grid; gap: var(--gap); margin: 0; padding: 0; list-style: none; }
 
-.ob-loop__node { position: absolute; z-index: 1; width: 92px; height: 44px; display: grid; place-items: center; margin: -22px 0 0 -46px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-strong); box-shadow: 0 8px 20px rgba(25, 22, 17, .08); animation: ob-node 12s ease-in-out infinite both; }
+.ob-ritual__step { position: relative; height: var(--card-h); display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 12px; padding: 0 14px 0 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-strong); }
 
-.ob-loop__node b { font-size: .8rem; font-weight: 700; }
+.ob-ritual__icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--accent) 12%, var(--surface-strong)); color: var(--accent); }
 
-.ob-loop__node--1 { left: 50%; top: 0; }
-.ob-loop__node--2 { left: 100%; top: 50%; animation-delay: 3s; }
-.ob-loop__node--3 { left: 50%; top: 100%; animation-delay: 6s; }
-.ob-loop__node--4 { left: 0; top: 50%; animation-delay: 9s; }
+.ob-ritual__icon svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
-.ob-loop__center { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: .86rem; font-weight: 650; line-height: 1.25; text-align: center; }
+.ob-ritual__icon .icon-fill { fill: currentColor; stroke: none; }
 
-@keyframes ob-orbit { to { transform: rotate(360deg); } }
+.ob-ritual__text { min-width: 0; display: grid; gap: 2px; }
 
-@keyframes ob-node {
-  0%, 25%, 100% { border-color: var(--line); color: var(--ink); transform: none; }
-  4%, 21% { border-color: var(--accent); color: var(--accent); transform: scale(1.08); }
+.ob-ritual__text b { display: flex; align-items: center; gap: 7px; overflow: hidden; font-size: .88rem; font-weight: 700; letter-spacing: -.016em; white-space: nowrap; }
+
+.ob-ritual__n { width: 18px; height: 18px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: .62rem; font-weight: 750; letter-spacing: 0; }
+
+.ob-ritual__text small { overflow: hidden; color: var(--muted); font-size: .74rem; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Between two cards, an arrow under the icons (across them on phones). */
+.ob-ritual__step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 24px;
+  top: 100%;
+  width: 18px;
+  height: var(--gap);
+  background: var(--line-strong);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 26'%3E%3Cpath d='M9 5.5v14M4.5 15 9 19.5l4.5-4.5' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 18px 26px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 18 26'%3E%3Cpath d='M9 5.5v14M4.5 15 9 19.5l4.5-4.5' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 18px 26px no-repeat;
 }
+
+/* Back to the start: beside the cards here, under them on phones. */
+.ob-ritual__loop { position: absolute; overflow: visible; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+.ob-ritual__loop--side { left: calc(100% - var(--reserve)); top: calc(var(--card-h) / 2 - 1px); width: 56px; height: calc(3 * (var(--card-h) + var(--gap)) + 2px); }
+
+.ob-ritual__loop--under { display: none; }
+
+.ob-ritual__line { stroke: color-mix(in srgb, var(--accent) 50%, var(--line-strong)); stroke-width: 1.5; stroke-dasharray: 4 4; }
+
+.ob-ritual__head { stroke: color-mix(in srgb, var(--accent) 80%, var(--line-strong)); stroke-width: 1.5; }
+
+/* The mask that reveals the dashed line along its own path. */
+.ob-ritual__draw { fill: none; stroke: #fff; stroke-width: 8; stroke-dasharray: 1; stroke-dashoffset: 0; }
+
+.ob-ritual__every { position: absolute; left: calc(100% - var(--reserve) + 54px); top: calc(var(--card-h) / 2 + 1.5 * (var(--card-h) + var(--gap))); display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px 5px 9px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 10%, var(--surface-strong)); color: var(--accent); font-size: .74rem; font-weight: 680; white-space: nowrap; transform: translate(-50%, -50%); }
+
+.ob-ritual__every svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .ob-ritual__step { animation: ob-rise 520ms cubic-bezier(.22, 1, .36, 1) both; }
+  .ob-ritual__step:nth-child(2) { animation-delay: 150ms; }
+  .ob-ritual__step:nth-child(3) { animation-delay: 300ms; }
+  .ob-ritual__step:nth-child(4) { animation-delay: 450ms; }
+  .ob-ritual__step:not(:last-child)::after { animation: ob-fade 320ms ease 260ms both; }
+  .ob-ritual__step:nth-child(2)::after { animation-delay: 410ms; }
+  .ob-ritual__step:nth-child(3)::after { animation-delay: 560ms; }
+  .ob-ritual__draw { stroke-dashoffset: 1; animation: ob-draw 1000ms cubic-bezier(.65, 0, .35, 1) 760ms forwards; }
+  .ob-ritual__every { animation: ob-pop 460ms cubic-bezier(.34, 1.56, .64, 1) 1150ms both; }
+  .ob-ritual__head { animation: ob-fade 220ms ease 1700ms both; }
+}
+
+@keyframes ob-rise { from { opacity: 0; transform: translateY(8px); } }
+
+@keyframes ob-fade { from { opacity: 0; } }
+
+@keyframes ob-draw { to { stroke-dashoffset: 0; } }
+
+@keyframes ob-pop { from { opacity: 0; transform: translate(-50%, -50%) scale(.86); } }
 
 /* Scene 4: the year, painted */
 
@@ -819,17 +882,29 @@
   .modal--onboarding .modal__panel.ob-panel { height: calc(100dvh - .9rem); grid-template-columns: minmax(0, 1fr); grid-template-rows: 200px minmax(0, 1fr); }
   .ob-visual { padding: 18px; border-right: 0; border-bottom: 1px solid var(--line); }
   .ob-scene { max-width: 300px; }
-  .ob-scene--1 .ob-app { transform: scale(.82); transform-origin: center; }
+  /* The planner peeks in from the top and fades out, rather than being cut mid-row. */
+  .ob-panel[data-step="1"] .ob-visual { align-items: start; padding-top: 24px; }
+  .ob-scene--1 .ob-app { transform: scale(.86); transform-origin: top center; -webkit-mask-image: linear-gradient(to bottom, #000 50%, transparent 88%); mask-image: linear-gradient(to bottom, #000 50%, transparent 88%); }
   .ob-week { grid-template-columns: 30px repeat(7, minmax(0, 1fr)); gap: 4px; height: 158px; }
   .ob-week__ruler,
   .ob-week__col { grid-template-rows: 12px minmax(0, 1fr); gap: 6px; padding: 7px 4px 8px; }
   .ob-week__ruler { padding-inline: 0; }
   .ob-week__col > b { font-size: .56rem; line-height: 12px; }
   .ob-week__mark { font-size: .5rem; }
-  .ob-loop { width: 150px; }
-  .ob-loop::after { transform-origin: 5.5px 81px; }
-  .ob-loop__node { width: 64px; height: 30px; margin: -15px 0 0 -32px; }
-  .ob-loop__node b { font-size: .68rem; }
+  .ob-ritual { --card-h: 78px; --gap: 16px; padding-bottom: 38px; }
+  .ob-ritual__steps { width: 100%; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .ob-ritual__step { grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: center; gap: 7px; padding: 8px 4px; border-radius: 14px; text-align: center; }
+  .ob-ritual__icon { width: 32px; height: 32px; border-radius: 10px; }
+  .ob-ritual__icon svg { width: 18px; height: 18px; }
+  .ob-ritual__n,
+  .ob-ritual__more,
+  .ob-ritual__text small { display: none; }
+  .ob-ritual__text b { justify-content: center; font-size: .72rem; }
+  .ob-ritual__step:not(:last-child)::after { left: 100%; top: 50%; width: var(--gap); height: 12px; margin-top: -6px; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 12'%3E%3Cpath d='M3 6h9.5M9 2.5 12.5 6 9 9.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 16px 12px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 12'%3E%3Cpath d='M3 6h9.5M9 2.5 12.5 6 9 9.5' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 16px 12px no-repeat; }
+  .ob-ritual__loop--side { display: none; }
+  .ob-ritual__loop--under { display: block; left: calc(12.5% - 7px); top: calc(var(--card-h) + 3px); width: calc(75% + 14px); height: 22px; }
+  .ob-ritual__loop--under path { vector-effect: non-scaling-stroke; }
+  .ob-ritual__every { left: 50%; top: calc(var(--card-h) + 23px); padding: 4px 11px 4px 8px; font-size: .7rem; }
   .ob-year { gap: 10px; }
   .ob-year__paint { width: 100%; max-width: 200px; gap: 4px; margin: 0 auto; }
   .ob-visual__caption { display: none; }

@@ -50,7 +50,7 @@ export function weekPreviewLayout(startHour, endHour) {
   };
 }
 
-export function createOnboarding({ settings, persistSettings, startHour, endHour, time, chevronSvg, openListPopover, openModal, closeModal, seedFirstBlock, afterFinish, openInstall }) {
+export function createOnboarding({ settings, persistSettings, startHour, endHour, time, chevronSvg, openListPopover, openModal, closeModal, seedFirstBlock, afterFinish, openInstall, keepTheme = () => {} }) {
   let step = 1;
   let draftDays = new Set([1, 2, 3, 4, 5]);
   let shownRange = null;
@@ -174,6 +174,8 @@ export function createOnboarding({ settings, persistSettings, startHour, endHour
     const s = settings();
     s.planningDays = [...draftDays].sort((a, b) => a - b);
     s.onboardingComplete = true;
+    // Setup offers Light and Dark only: the one shown (the system's, unless clicked) is kept as the choice.
+    keepTheme();
     seedFirstBlock();
     persistSettings();
     closeModal(modal());

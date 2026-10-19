@@ -132,6 +132,24 @@
         </section>
       </div>
 
+      <section class="owner-card" aria-labelledby="owner-refunds-title">
+        <header><h2 id="owner-refunds-title">Refunds and disputes</h2><p data-owner-refunds-caption>What Creem reports. A full refund or a dispute switches Plus off: the purchase link stops working, or the gift link with every activation made from it. Planners lose Plus at their next weekly check, and get it back the same way after Restore. A partial refund only emails you.</p></header>
+        <div data-owner-refunds></div>
+        <form class="owner-subform" data-owner-revoke-form aria-labelledby="owner-revoke-title" novalidate>
+          <div class="owner-subform__head">
+            <h3 id="owner-revoke-title">Revoke Plus by hand</h3>
+            <p>For a refund that matched no purchase, a dispute settled outside Creem, or a licence made here. A checkout id works before its purchase is delivered too. Restore undoes it.</p>
+          </div>
+          <div class="owner-inline">
+            <label class="form-field"><span>Licence id, checkout id or gift code</span><input name="target" autocomplete="off" spellcheck="false" placeholder="ch_… · 16-character licence id · ABCD-EFGH-JKMN" required></label>
+            <label class="form-field"><span>Note <em>optional · only you see it</em></span><input name="note" maxlength="200" autocomplete="off" placeholder="Refunded by bank transfer"></label>
+            <button class="secondary-button" type="submit" data-owner-revoke-submit>Revoke</button>
+          </div>
+          <p class="owner-result" data-owner-revoke-result role="status" aria-live="polite" hidden></p>
+        </form>
+        <div data-owner-revocations></div>
+      </section>
+
       <section class="owner-card">
         <header class="owner-card__head"><div><h2>Team kit requests</h2><p data-owner-teams-caption>Teams who asked for the team kit. Reply by email; delete on request.</p></div>
           <div class="owner-card__tools"><a class="secondary-button" data-owner-teams-csv href="#" download>Export CSV</a></div></header>

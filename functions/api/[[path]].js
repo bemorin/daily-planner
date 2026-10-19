@@ -11,10 +11,12 @@
 // build needs the matching DAILY_PLANNER_PLUS_PUBLIC_KEY) and `PUBLIC_BASE_URL`
 // for links in emails and checkout returns (default https://planner.bemorin.com).
 // Payments through Creem: secret `CREEM_API_KEY`, secret `CREEM_WEBHOOK_SECRET`
-// (for /api/creem/webhook), the product ids `CREEM_PLUS_EUR`, `CREEM_PLUS_USD`,
+// (for /api/creem/webhook, subscribed to checkout.completed, refund.created and
+// dispute.created), the product ids `CREEM_PLUS_EUR`, `CREEM_PLUS_USD`,
 // `CREEM_GIFT_EUR`, `CREEM_GIFT_USD`, and optional `CREEM_TEST_MODE` = 1.
 // The checkout currency follows the buyer's country from Cloudflare
 // (request.cf.country): EUR in the euro area, USD elsewhere.
+// Refunds and revoked licences need migrations/0005_refunds.sql in the D1 database.
 // Setup guide: docs/FEEDBACK_AND_WAITLIST.md
 
 import { createPlannerApi } from '../../server/planner-api.js';

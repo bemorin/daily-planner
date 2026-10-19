@@ -107,6 +107,10 @@ const ERRORS = {
   noSession: ['We couldn’t find this payment', 'The link may be incomplete. Open your gift page from the link in your email, or ask us and we’ll send your gift link.'],
   paymentsOff: ['Card payments aren’t switched on yet', 'This site can’t confirm card payments yet. If you’ve paid, ask us and we’ll send your gift link.'],
   badCode: ['This gift link looks incomplete', 'A gift code has 12 letters and digits, like ABCD-EFGH-JKLM. Open the page from the link in your email.'],
+  refunded: ['This purchase was refunded', 'This link was switched off, and so was Plus on the planners that activated it. If this is a mistake, reply to your receipt email.'],
+  revoked: ['This gift was switched off', 'This link was switched off, and so was Plus on the planners that activated it. If this is a mistake, reply to your receipt email.'],
+  testPurchase: ['This was a test purchase', 'It was made before payments went live, so it no longer gives a gift link. If you were charged, ask us.'],
+  expired: ['This checkout expired', 'It expired before it was paid, so there is no gift for it. Buy the gift again from the landing page.'],
   noGift: ['We couldn’t find this gift', 'Check that you opened the full link from your email. If it still doesn’t work, ask us.'],
   network: ['The server couldn’t be reached', 'Check your connection, then try again.'],
   offline: ['You’re offline', 'Connect to the internet, then try again.'],
@@ -158,6 +162,8 @@ function readGift(data) {
     available: data.available !== false,
     status: typeof data.status === 'string' ? data.status : '',
     expiresAt: typeof data.expiresAt === 'string' ? data.expiresAt : '',
+    // Switched off after a refund, a dispute or by the owner (Plus was switched off where it was activated too).
+    revoked: data.revoked === true,
     // 'gift-1', 'family-5', a team tier, or '' for a gift made in the dashboard;
     // left out by an older server (the number of seats decides then).
     ...(typeof data.plan === 'string' ? { plan: data.plan } : {})
@@ -318,7 +324,8 @@ function renderSeats() {
   const kind = audience();
   const untilText = until ? ` · Can be activated until ${until}` : '';
   let note;
-  if (gift.status === 'inactive') note = 'This link has been switched off. Plus stays on every planner where it was activated; write to us to switch it back on.';
+  if (gift.revoked) note = 'This link was switched off, and so was Plus on the planners that activated it.';
+  else if (gift.status === 'inactive') note = 'This link has been switched off. Plus stays on every planner where it was activated; write to us to switch it back on.';
   else if (expired) note = `This link expired on ${until}. Plus stays on every planner where it was activated.`;
   else if (kind === 'one') note = gift.redeemed ? 'Opened: Plus is active on their planner.' : `Not opened yet${untilText}`;
   else if (!gift.available) note = 'Fully claimed: the link no longer activates Plus. Plus stays on every planner where it was activated.';
@@ -406,6 +413,9 @@ async function claim(checkout, attempt = 0) {
     return showError('unpaid', { retry: () => claim(checkout, 0) });
   }
   if (result.status === 404) return showError('noSession');
+  if (result.status === 410 && result.refunded) return showError('refunded');
+  if (result.status === 410 && result.revoked) return showError('revoked');
+  if (result.status === 410) return showError(result.expired ? 'expired' : 'testPurchase', { detail: typeof result.error === 'string' ? result.error : '' });
   if (result.status === 503) return showError('paymentsOff');
   if (result.status === 0) return showError(result.offline ? 'offline' : 'network', { retry: () => claim(checkout, attempt) });
   return showError('generic', { retry: () => claim(checkout, attempt), detail: typeof result.error === 'string' ? result.error : '' });
@@ -451,7 +461,7 @@ function setupActions() {
     refresh.disabled = false;
     if (result.ok) {
       const fresh = readGift(result.data);
-      state.gift = { ...state.gift, seats: fresh.seats, redeemed: fresh.redeemed, available: fresh.available, status: fresh.status, expiresAt: fresh.expiresAt, ...('plan' in fresh ? { plan: fresh.plan } : {}) };
+      state.gift = { ...state.gift, seats: fresh.seats, redeemed: fresh.redeemed, available: fresh.available, status: fresh.status, expiresAt: fresh.expiresAt, revoked: fresh.revoked, ...('plan' in fresh ? { plan: fresh.plan } : {}) };
       renderSeats();
       setStatus(seatsStatus, `Updated at ${new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date())}.`);
     } else {

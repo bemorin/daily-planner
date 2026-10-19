@@ -41,9 +41,14 @@
 // without it can be tried. Two shortcuts need no checkout:
 // /?checkout_id=fake_plus unlocks Plus and /welcome/thanks/?checkout_id=fake_gift50
 // makes a 50-seat gift for "Acme Studio". Set CREEM_WEBHOOK_SECRET to try
-// POST /api/creem/webhook too. Without --fake-creem the CREEM_* variables are
-// used, as in production. Links in emails and checkout returns point at this
-// server unless PUBLIC_BASE_URL is set.
+// POST /api/creem/webhook too (with --fake-creem it defaults to a fake secret).
+// Refunds: POST /__fake-creem/refund?checkout=<id> posts a signed refund.created
+// webhook for that paid checkout, as Creem does (add &amount=<cents> for a
+// partial refund, &dispute=1 for a dispute.created instead); GET
+// /v1/transactions?transaction_id=… answers from the same pretend data.
+// Without --fake-creem the CREEM_* variables are used, as in production.
+// Links in emails and checkout returns point at this server unless
+// PUBLIC_BASE_URL is set.
 //
 // Currency: in production the buyer's country (from Cloudflare) decides it.
 // Locally the country is unknown, so the page's own guess is used, unless a
@@ -64,7 +69,7 @@ import { Readable } from 'node:stream';
 import { randomBytes } from 'node:crypto';
 import { createMemoryStore, createPlannerApi } from '../server/planner-api.js';
 import { generatePlusKeyPair, importSigningKey, publicKeyFromSigningKey, signLicense } from '../server/licenses.js';
-import { checkoutSeal, creemMode, creemProductsFromEnv } from '../server/creem.js';
+import { checkoutSeal, creemMode, creemProductsFromEnv, webhookSignature } from '../server/creem.js';
 import { priceCents } from '../src/lib/pricing.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -134,10 +139,14 @@ const FAKE_PRODUCTS = { plus: { EUR: 'prod_fake_plus_eur', USD: 'prod_fake_plus_
 // What the pretend buyer types in the checkout's field: the company (team gift) or their name (personal gift).
 const FAKE_FIELD_ANSWERS = { company: { label: 'Company name, shown to your team', value: 'Acme Studio' }, from: { label: 'Your name, shown with the gift', value: 'Camille' } };
 const FAKE_REFUSED_AFFILIATE = 'BADCODE';
+// Without CREEM_WEBHOOK_SECRET, pretend refunds are signed with this one.
+const FAKE_WEBHOOK_SECRET = 'whsec_fake_dev_only';
 const fakeCheckouts = new Map([
-  ['fake_plus', { product: FAKE_PRODUCTS.plus.EUR, metadata: { kind: 'plus' }, amount: priceCents('plus', '', 'EUR'), currency: 'EUR', successUrl: '/' }],
-  ['fake_gift50', { product: FAKE_PRODUCTS.gift.EUR, metadata: { kind: 'gift', plan: 'up-to-50', seats: '50' }, amount: priceCents('gift', 'up-to-50', 'EUR'), currency: 'EUR', successUrl: '/welcome/thanks/' }]
+  ['fake_plus', { product: FAKE_PRODUCTS.plus.EUR, metadata: { kind: 'plus' }, amount: priceCents('plus', '', 'EUR'), currency: 'EUR', successUrl: '/', orderId: 'ord_fake_plus' }],
+  ['fake_gift50', { product: FAKE_PRODUCTS.gift.EUR, metadata: { kind: 'gift', plan: 'up-to-50', seats: '50' }, amount: priceCents('gift', 'up-to-50', 'EUR'), currency: 'EUR', successUrl: '/welcome/thanks/', orderId: 'ord_fake_gift50' }]
 ]);
+// Pretend transactions, one per refunded checkout: { id, order, amount_paid, refunded_amount, status, currency }.
+const fakeTransactions = new Map();
 const fakeJson = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 function fakeCheckoutEntity(id, fake, status = 'completed') {
@@ -146,7 +155,7 @@ function fakeCheckoutEntity(id, fake, status = 'completed') {
   const buyer = !gift ? { email: 'buyer@example.com', name: 'Sam Buyer' } : fields.includes('from') ? { email: 'camille@example.com', name: 'Camille Martin' } : { email: 'buyer@acme.example', name: 'Ada Lovelace' };
   return {
     id, object: 'checkout', mode: 'test', status, request_id: fake.requestId || null, units: 1, product: fake.product,
-    ...(status === 'completed' ? { order: { id: 'ord_fake', object: 'order', status: 'paid', type: 'onetime', amount: fake.amount, amount_paid: fake.amount, currency: fake.currency } } : {}),
+    ...(status === 'completed' ? { order: { id: fake.orderId, object: 'order', status: 'paid', type: 'onetime', amount: fake.amount, amount_paid: fake.amount, currency: fake.currency } } : {}),
     customer: { id: 'cust_fake', object: 'customer', ...buyer, country: 'FR' },
     custom_fields: fields.filter(key => FAKE_FIELD_ANSWERS[key]).map(key => ({ type: 'text', key, label: FAKE_FIELD_ANSWERS[key].label, optional: true, text: { max_length: 80, ...(status === 'completed' ? { value: FAKE_FIELD_ANSWERS[key].value } : {}) } })),
     metadata: fake.metadata || {},
@@ -157,6 +166,11 @@ function fakeCheckoutEntity(id, fake, status = 'completed') {
 
 async function fakeCreemFetch(url, init = {}) {
   const target = new URL(url);
+  if (target.pathname === '/v1/transactions') {
+    const transaction = fakeTransactions.get(target.searchParams.get('transaction_id') || '');
+    console.log(`  [fake creem] read transaction ${target.searchParams.get('transaction_id')}`);
+    return transaction ? fakeJson(200, { object: 'transaction', mode: 'test', ...transaction }) : fakeJson(404, { message: ['Transaction not found'] });
+  }
   if (target.pathname !== '/v1/checkouts') return fakeJson(404, { message: 'Not found' });
   if (String(init.method || 'GET').toUpperCase() === 'POST') {
     const body = JSON.parse(init.body || '{}');
@@ -168,7 +182,7 @@ async function fakeCreemFetch(url, init = {}) {
       return fakeJson(400, { statusCode: 400, message: ['Affiliate code not found'] });
     }
     const id = `ch_fake_${randomBytes(8).toString('hex')}`;
-    const fake = { product: body.product_id, metadata: body.metadata || {}, amount: body.custom_price ?? priceCents(kind, body.metadata?.plan, currency), currency, successUrl: body.success_url || '/', requestId: body.request_id, fields: (body.custom_fields || []).map(field => field?.key) };
+    const fake = { product: body.product_id, metadata: body.metadata || {}, amount: body.custom_price ?? priceCents(kind, body.metadata?.plan, currency), currency, successUrl: body.success_url || '/', requestId: body.request_id, fields: (body.custom_fields || []).map(field => field?.key), orderId: `ord_fake_${randomBytes(8).toString('hex')}` };
     fakeCheckouts.set(id, fake);
     const affiliate = body.affiliate_code ? `, affiliate ${body.affiliate_code}` : '';
     console.log(`  [fake creem] opened ${id}: ${kind}${fake.metadata.plan ? ` ${fake.metadata.plan}` : ''}, ${(fake.amount / 100).toFixed(2)} ${currency}${affiliate}`);
@@ -201,13 +215,50 @@ function fakePayPage(url, response) {
   response.writeHead(200, headers).end(`<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="0;url=${href}"><title>Fake Creem checkout</title></head><body><p>Pretend payment accepted. Back to <a href="${href}">Daily Planner</a>…</p></body></html>\n`);
 }
 
+/**
+ * POST /__fake-creem/refund?checkout=<id>[&amount=<cents>][&dispute=1]: Creem refunds (or a buyer disputes)
+ * that pretend checkout, and its signed webhook is sent to the API, as Creem does. Answers what the API said.
+ */
+async function fakeRefund(request, url, response) {
+  const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', [MARKER]: '1' };
+  const answer = (status, body) => response.writeHead(status, headers).end(JSON.stringify(body));
+  request.resume();
+  if (request.method !== 'POST') { answer(405, { error: 'POST /__fake-creem/refund?checkout=<id>[&amount=<cents>][&dispute=1]' }); return; }
+  const id = url.searchParams.get('checkout') || '';
+  const fake = fakeCheckouts.get(id);
+  if (!fake) { answer(404, { error: `No pretend checkout ${id} (the dev server forgets them when it restarts).` }); return; }
+  const transactionId = `tran_fake_${id.replace(/[^A-Za-z0-9]/g, '').slice(-24)}`;
+  const transaction = fakeTransactions.get(transactionId) || { id: transactionId, order: fake.orderId, amount: fake.amount, amount_paid: fake.amount, refunded_amount: 0, status: 'paid', currency: fake.currency };
+  const dispute = url.searchParams.get('dispute') === '1';
+  // Refunded in full already (an earlier try, since restored): start again from a paid transaction.
+  if (!dispute && transaction.refunded_amount >= transaction.amount_paid) Object.assign(transaction, { refunded_amount: 0, status: 'paid' });
+  const left = transaction.amount_paid - transaction.refunded_amount;
+  const amount = dispute ? fake.amount : Math.max(0, Math.min(left, Number(url.searchParams.get('amount')) || left));
+  if (dispute) transaction.status = 'chargedBack';
+  else {
+    transaction.refunded_amount += amount;
+    transaction.status = transaction.refunded_amount >= transaction.amount_paid ? 'refunded' : 'partialRefund';
+  }
+  fakeTransactions.set(transactionId, transaction);
+  const created = Date.now();
+  const customer = { id: 'cust_fake', email: fake.metadata?.kind === 'gift' ? 'buyer@acme.example' : 'buyer@example.com' };
+  const object = dispute
+    ? { id: `disp_fake_${randomBytes(6).toString('hex')}`, object: 'dispute', amount, currency: fake.currency, transaction: { id: transactionId, status: 'chargeback' }, customer, created_at: created }
+    : { id: `ref_fake_${randomBytes(6).toString('hex')}`, object: 'refund', status: 'succeeded', refund_amount: amount, refund_currency: fake.currency, reason: 'requested_by_customer', transaction: { id: transactionId, amount: transaction.amount, amount_paid: transaction.amount_paid, status: transaction.status }, customer, created_at: created };
+  const raw = JSON.stringify({ id: `evt_fake_${randomBytes(6).toString('hex')}`, eventType: dispute ? 'dispute.created' : 'refund.created', created_at: created, object });
+  const secret = (process.env.CREEM_WEBHOOK_SECRET || FAKE_WEBHOOK_SECRET).trim();
+  const result = await plannerApi(new Request(`${devBaseUrl()}/api/creem/webhook`, { method: 'POST', headers: { 'content-type': 'application/json', 'creem-signature': await webhookSignature(raw, secret) }, body: raw }));
+  console.log(`  [fake creem] ${dispute ? 'disputed' : 'refunded'} ${id}: ${(amount / 100).toFixed(2)} ${fake.currency} (${object.id}) → webhook HTTP ${result.status}`);
+  answer(200, { refund: object.id, kind: dispute ? 'dispute' : 'refund', amount, currency: fake.currency, transaction: transactionId, webhook: { status: result.status, body: await result.json().catch(() => null) } });
+}
+
 function creemOptions() {
   const env = process.env;
   const options = { creemApiKey: env.CREEM_API_KEY || '', creemWebhookSecret: env.CREEM_WEBHOOK_SECRET || '', creemTestMode: env.CREEM_TEST_MODE || '', creemProducts: creemProductsFromEnv(env) };
   const webhook = options.creemWebhookSecret ? ', webhook on' : '';
   if (fakeCreem) {
-    creemLabel = `fake (/?checkout_id=fake_plus, /welcome/thanks/?checkout_id=fake_gift50${webhook})`;
-    return { ...options, creemApiKey: 'creem_test_fake', creemTestMode: '1', creemProducts: FAKE_PRODUCTS, creemFetch: fakeCreemFetch };
+    creemLabel = `fake (/?checkout_id=fake_plus, /welcome/thanks/?checkout_id=fake_gift50, POST /__fake-creem/refund?checkout=…${webhook})`;
+    return { ...options, creemApiKey: 'creem_test_fake', creemTestMode: '1', creemProducts: FAKE_PRODUCTS, creemFetch: fakeCreemFetch, creemWebhookSecret: options.creemWebhookSecret || FAKE_WEBHOOK_SECRET };
   }
   if (options.creemApiKey) creemLabel = `CREEM_API_KEY (${creemMode(options.creemApiKey, options.creemTestMode)} mode${webhook})`;
   return options;
@@ -312,6 +363,7 @@ async function handle(request, response) {
     if (redirect) { response.writeHead(redirect.status, { location: `${redirect.to}${url.search}`, 'cache-control': 'no-store', [MARKER]: '1' }).end(); return; }
     if (devLicenses && url.pathname === '/api/dev/license') { await devLicense(request, response); return; }
     if (plannerApi && fakeCreem && url.pathname === '/__fake-creem/pay') { fakePayPage(url, response); return; }
+    if (plannerApi && fakeCreem && url.pathname === '/__fake-creem/refund') { await fakeRefund(request, url, response); return; }
     if (plannerApi && url.pathname.startsWith('/api/')) { await handleApi(request, response); return; }
     let pathname = decodeURIComponent(url.pathname);
     if (pathname.endsWith('/')) pathname += 'index.html';

@@ -1,5 +1,5 @@
 /**
- * Appearance preference (System / Light / Dark).
+ * Appearance preference (System / Light / Dark; setup asks only Light or Dark).
  *
  * The preference belongs to the device, not to the planner: it is stored under
  * a key outside the `daily-planner:` namespace so it is never exported in
@@ -36,6 +36,17 @@ export function resolveTheme(preference, systemPrefersDark = false) {
   return value;
 }
 
+/**
+ * The option a control shows as chosen. Settings offers System, Light and
+ * Dark; setup offers only Light and Dark, so while the device follows the
+ * system it shows the theme the system paints (`options` lists a control's
+ * choices).
+ */
+export function pressedThemeOption(preference, systemPrefersDark = false, options = THEME_OPTIONS) {
+  const value = normalizeThemePreference(preference);
+  return options.includes(value) ? value : resolveTheme(value, systemPrefersDark);
+}
+
 export function createThemeController({ doc = document, storage = globalThis.localStorage, onChange = null } = {}) {
   const query = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
   let preference = readThemePreference(storage);
@@ -49,7 +60,8 @@ export function createThemeController({ doc = document, storage = globalThis.loc
     const color = CHROME_COLORS[resolved()];
     doc.querySelectorAll('meta[name="theme-color"]').forEach(meta => meta.setAttribute('content', color));
     doc.querySelectorAll('[data-theme-option]').forEach(button => {
-      const active = button.dataset.themeOption === preference;
+      const group = button.parentElement ? [...button.parentElement.querySelectorAll('[data-theme-option]')].map(option => option.dataset.themeOption) : THEME_OPTIONS;
+      const active = button.dataset.themeOption === pressedThemeOption(preference, !!query?.matches, group);
       button.classList.toggle('is-active', active);
       button.setAttribute('aria-pressed', String(active));
     });

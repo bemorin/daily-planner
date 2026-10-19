@@ -55,13 +55,18 @@ test('the waitlist says it is emailed once, deleted afterwards and can be left f
   assert.match(all, /remove yours at any time from the sync guide/);
 });
 
-test('with Plus configured, the notice says what a gift and a purchase send — and nothing else', () => {
+test('with Plus configured, the notice says what a gift, a purchase and the weekly licence check send — and nothing else', () => {
   assert.deepEqual(ids(privacyNoticeSections({ plannerApi: true, plus: true })), ['local', 'counts', 'submissions', 'plus']);
   assert.deepEqual(ids(privacyNoticeSections({ plannerApi: false, plus: true })), ['local'], 'no API: nothing is sent for Plus either');
   const plusSection = privacyNoticeSections({ plannerApi: true, plus: true }).find(section => section.id === 'plus');
   const words = text([plusSection]);
   assert.match(words, /checked on this device/);
-  assert.match(words, /no account, and nothing else is sent/i);
+  assert.match(words, /There is no account\./);
+  assert.match(words, /About once a week, when you are online, the planner asks our server whether its licence is still valid/);
+  assert.match(words, /switched off after a refunded purchase/);
+  assert.match(words, /It sends only the licence \(with its random id\), nothing else from your planner, and nothing about the request is kept/);
+  assert.doesNotMatch(words, /no identifier/, 'the licence carries a random id');
+  assert.match(words, /or back on if that is undone/);
   assert.match(words, /Activating a gift sends only the gift code/);
   assert.match(words, /a purchase sends only the checkout reference/);
   assert.doesNotMatch(words, /Stripe/);

@@ -18,6 +18,7 @@ import { createFeedbackFeature } from './src/features/feedback.js';
 import { createPrivacyNotice } from './src/features/privacy.js';
 import { createCategoryManager } from './src/features/category-manager.js';
 import { createPlusFeature } from './src/features/plus-dialog.js';
+import { createPlusCheck } from './src/features/plus-check.js';
 import { defaultPlanYear, planSummary } from './src/features/year-plan.js';
 import { adoptPlus, connectPlus, hasPlus, keepPlus, onPlusChange, plusSettingsFrom, refreshPlus } from './src/lib/plus.js';
 import { buildProgressModel, newlyUnlocked } from './src/features/progress-model.js';
@@ -3747,9 +3748,11 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   const openPlusFeature = feature => { if (qs('[data-horizon-modal]').hidden) openHorizon('year', date); if (feature === 'year-plan') horizonView.openPlan(); else if (feature === 'year-review') horizonView.openReview(); else horizonView.setSection('progress'); };
   const plusFeature = createPlusFeature({ openModal, closeModal, getActiveModal: () => activeModal, openPrivacy: privacyNotice.open, flush: flushPlannerForSync, preview: plusPreview, openFeature: openPlusFeature, printYear: year => printFeature.printYear(year) });
   onPlusChange(() => horizonView.refreshPlus());
+  // About once a week, a licence from a refunded purchase or gift switches Plus off here (src/features/plus-check.js).
+  createPlusCheck({ openModal, closeModal, getActiveModal: () => activeModal }).start();
   // Another tab activated Plus (a gift or purchase link opened there): take the licence before this tab saves over it.
   window.addEventListener('storage', event => { if (event.key === 'daily-planner:settings' && adoptPlus(settings, event.newValue)) refreshPlus(); });
-  const onboarding = createOnboarding({ settings: () => settings, persistSettings, startHour, endHour, time, chevronSvg, openListPopover, openModal, closeModal, seedFirstBlock: seedFirstBlockAfterOnboarding, afterFinish: () => { render(); requestAnimationFrame(() => qs('[data-focus]')?.focus({ preventScroll: true })); }, openInstall: () => installFeature.open() });
+  const onboarding = createOnboarding({ settings: () => settings, persistSettings, startHour, endHour, time, chevronSvg, openListPopover, openModal, closeModal, seedFirstBlock: seedFirstBlockAfterOnboarding, afterFinish: () => { render(); requestAnimationFrame(() => qs('[data-focus]')?.focus({ preventScroll: true })); }, openInstall: () => installFeature.open(), keepTheme: () => { if (themeController.get() === 'system') themeController.set(themeController.resolved()); } });
   const fromMenu = action => () => { const menu = qs('[data-mobile-more-menu]'); if (menu) menu.hidden = true; action(); };
   qsa('[data-install-open]').forEach(button => button.addEventListener('click', fromMenu(() => installFeature.open())));
   qsa('[data-sync-guide-open]').forEach(button => button.addEventListener('click', fromMenu(() => syncGuide.open())));

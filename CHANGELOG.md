@@ -2,6 +2,17 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.24.0 — 2026-10-19
+
+- **Refunds switch Plus off.** A full refund or a dispute received from Creem (`refund.created`, `dispute.created`) switches off the purchase's activation link and its licence, or the gift link and every licence activated from it; a partial refund only notifies the owner. Planners ask about once a week, when online, whether their licence still holds (only the licence is sent) and show a one-time notice if it was revoked. A refund that arrives before the purchase is delivered blocks the delivery. The dashboard lists refunds and disputes (including ones still waiting for Creem) and can revoke or restore by hand; a restored licence comes back on its planners at their next weekly check. Run `migrations/0005_refunds.sql` and add the two webhook events in Creem.
+- **Your year in review, printed**: a new one-page design — the year as a typographic title, large figures, the painted year in your palette as the centrepiece, time by category, Horizon results, memories and lessons, and trophies — that stays clean with little data.
+- Planner header: ‹ Now › stays in place and the date reads to its right, whatever the month.
+- Daily Planner Plus window: a price card beside the title (price, currency line, Get Plus, gift link or licence), a sticky Get Plus bar, a calmer page, no sideways scrolling; a refunded purchase link says so.
+- Setup: the daily loop as numbered cards with an “Every day” loop line; Appearance offers Light or Dark with the system's preselected and kept; Install the app and Back have icons.
+- Help hides keyboard shortcuts on phones and touch screens.
+- Landing page: the request form's button sits on the right; “Colours for your painted year” recolours a whole painted year as you try each palette; the Plus offer is one clear block (what you get, a price card, gift, Plus Family and team links). The gift page explains a link switched off after a refund.
+- Legal pages: “On this page” highlights the section you are reading.
+
 ## 1.23.0 — 2026-10-19
 
 - **Daily Planner Plus, a yearly ritual**: the Plus window is built around three steps — Plan it (a guided half hour), Print it (the year on one page, filled in by hand all year) and Look back (Your year in review on one printed page) — with “Make 2027 count.” as its headline. Each step shows the real page: the printed year and the year in review from your own planner, or a sample until there is enough to show, with Enlarge to read them. With Plus, each step has its action (Plan 2027, Print the year, Open your review).
