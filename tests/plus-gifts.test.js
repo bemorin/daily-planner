@@ -102,7 +102,7 @@ test('gift codes: 12 characters without look-alikes, dashes optional, case ignor
   assert.equal(normalizeGiftCode('ABCD-EFGH-JKMN'), 'ABCDEFGHJKMN');
   for (const bad of ['ABCD-EFGH-JKMI', 'ABCD-EFGH-JKM0', 'ABCD-EFGH-JKL1', 'ABCDEFGHJKM', 'ABCDEFGHJKMNP', 'ABCD EFGH JKMN', '', null, 'A'.repeat(40)]) assert.equal(normalizeGiftCode(bad), '', String(bad));
   assert.equal(formatGiftCode('ABCDEFGHJKMN'), 'ABCD-EFGH-JKMN');
-  assert.deepEqual([1, 9, 10, 50, 100, 1000, 100000].map(giftLimit), [2, 10, 11, 55, 110, 1100, 110000]);
+  assert.deepEqual([1, 9, 10, 50, 100, 1000, 100000].map(giftLimit), [1, 9, 11, 55, 110, 1100, 110000]);
 });
 
 test('gift fields are validated with human messages', () => {
@@ -145,7 +145,7 @@ test('an invoiced gift: anyone with the link sees it and activates Plus until th
     assert.equal(created.url, `https://planner.bemorin.com/?gift=${gift.code}`, label);
     assert.equal(gift.manageKey, await giftManageKey(KEYS.signingKey, gift.code), label);
     assert.equal(created.manageUrl, `https://planner.bemorin.com/welcome/thanks/?gift=${gift.code}&key=${gift.manageKey}`, label);
-    assert.equal(gift.limit, 4, label);
+    assert.equal(gift.limit, 3, label, 'below 10 seats: exactly the seats');
     assert.equal(gift.source, 'manual', label);
     assert.equal(gift.expiresAt, '2027-10-09T08:00:00.000Z', label);
     assert.equal('emailed' in created, false, 'no email unless asked');
@@ -156,7 +156,7 @@ test('an invoiced gift: anyone with the link sees it and activates Plus until th
     assert.deepEqual(info.body, { org: 'Acme', message: 'Enjoy planning 2027!', seats: 3, redeemed: 0, available: true, expiresAt: '2027-10-09T08:00:00.000Z', status: 'available', plan: '' }, label);
 
     const ids = new Set();
-    for (let index = 0; index < 4; index += 1) {
+    for (let index = 0; index < 3; index += 1) {
       clock.now += 1000;
       const redeemed = await asJson(await api(post(`gifts/${gift.code}/redeem`)));
       assert.equal(redeemed.status, 200, `${label} activation ${index + 1}`);
@@ -168,12 +168,12 @@ test('an invoiced gift: anyone with the link sees it and activates Plus until th
       assert.equal(payload.iat, '2026-10-09');
       ids.add(payload.id);
     }
-    assert.equal(ids.size, 4, 'one licence id per activation');
-    // seats + max(1, 10%) = 4 activations; the fifth is refused.
+    assert.equal(ids.size, 3, 'one licence id per activation');
+    // Below 10 seats there is no margin: 3 activations; the fourth is refused.
     const full = await asJson(await api(post(`gifts/${gift.code}/redeem`)));
     assert.deepEqual(full, { status: 409, body: { error: 'This gift has been fully claimed.' } }, label);
     const after = (await asJson(await api(get(`gifts/${gift.code}`)))).body;
-    assert.deepEqual([after.redeemed, after.available, after.status], [4, false, 'claimed'], label);
+    assert.deepEqual([after.redeemed, after.available, after.status], [3, false, 'claimed'], label);
     // A request without any body works too.
     assert.equal((await api(new Request(`https://planner.test/api/gifts/${gift.code}/redeem`, { method: 'POST' }))).status, 409);
   });

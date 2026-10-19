@@ -206,7 +206,7 @@ test('the Plus dialog names the currency once and labels the personal gifts', ()
   assert.equal(currencyNote('USD'), 'Prices in US dollars, taxes included.');
   const [one, family] = PERSONAL_GIFTS;
   assert.match(giftLabel(one, 'EUR'), /^Give Plus — (€\s?29|29\s?€)$/);
-  assert.match(giftLabel(family, 'USD'), /^Plus Family — up to 5 people — \$59$/);
+  assert.match(giftLabel(family, 'USD'), /^Plus Family — up to 5 people — \$99$/);
 });
 
 test('a gift from no one in particular reads as a sentence', () => {

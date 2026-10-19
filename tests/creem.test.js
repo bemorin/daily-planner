@@ -861,13 +861,13 @@ test('personal gifts open like team gifts: price and seats from the plan, the gi
       }, `${gift.plan} ${currency}`);
     }
   }
-  assert.deepEqual(creem.calls.map(call => call.body.custom_price), [2900, 2900, 5900, 5900], 'Give Plus at the price of Plus, Plus Family 59');
+  assert.deepEqual(creem.calls.map(call => call.body.custom_price), [2900, 2900, 9900, 9900], 'Give Plus at the price of Plus, Plus Family 99');
   assert.ok(FROM_FIELD.label.length <= 50);
   assert.deepEqual([GIFT_PLAN_LABELS['gift-1'], GIFT_PLAN_LABELS['family-5'], GIFT_PLAN_LABELS['up-to-50'], GIFT_PLAN_LABELS['over-1000']], ['Give Plus', 'Plus Family', 'Up to 50 people', undefined]);
 
   const { byId } = parseCreemProducts(PRODUCTS);
   const family = readCheckout(checkout('ch_family00001', { item: 'gift', plan: 'family-5', from: ' Camille ', metadata: sealed({ kind: 'gift', plan: 'family-5', seats: '500' }, 'EUR') }), byId);
-  assert.deepEqual([family.item, family.org, family.amount], [{ kind: 'gift', plan: 'family-5', seats: 5 }, 'Camille', 5900], 'seats from the plan, never the metadata');
+  assert.deepEqual([family.item, family.org, family.amount], [{ kind: 'gift', plan: 'family-5', seats: 5 }, 'Camille', 9900], 'seats from the plan, never the metadata');
   // A personal gift reads `from` first, a team gift `company` first; either is read when alone.
   const both = { company: 'Acme', from: 'Camille' };
   assert.equal(readCheckout(checkout('ch_x', { item: 'gift', plan: 'gift-1', ...both }), byId).org, 'Camille');
@@ -890,7 +890,7 @@ test('a personal gift becomes a gift link, emailed to the giver in personal word
     const email = resend.calls[0].body;
     assert.deepEqual(email.to, ['camille@example.com'], label);
     assert.equal(email.subject, 'Your Daily Planner Plus gift is ready', label);
-    for (const part of [one.url, one.manageUrl, 'Your gift link, for one person', 'Send this link to the person you are giving Plus to.', 'One extra activation', 'A message you can send with the link', 'Subject: A gift for you: Daily Planner Plus', 'I’m giving you Daily Planner Plus', 'until 9 October 2027', 'Your receipt comes separately from Creem']) {
+    for (const part of [one.url, one.manageUrl, 'Your gift link, for one person', 'Send this link to the person you are giving Plus to.', 'A message you can send with the link', 'Subject: A gift for you: Daily Planner Plus', 'I’m giving you Daily Planner Plus', 'until 9 October 2027', 'Your receipt comes separately from Creem']) {
       assert.ok(email.text.includes(part), `${label}: ${part}`);
     }
     for (const content of [email.subject, email.text, email.html]) assert.doesNotMatch(content, /team|company/i, label);
@@ -910,7 +910,7 @@ test('a personal gift becomes a gift link, emailed to the giver in personal word
     const family = (await asJson(await api(post('purchases/claim', { checkout: 'ch_family512345' })))).body;
     assert.deepEqual([family.org, family.seats, family.plan], ['Your family', 5, 'family-5'], label);
     const familyGift = await store.getGiftByCheckout('ch_family512345');
-    assert.deepEqual([familyGift.note, familyGift.amount, familyGift.currency], ['Test mode · Creem · Plus Family', 5900, 'USD'], label);
+    assert.deepEqual([familyGift.note, familyGift.amount, familyGift.currency], ['Test mode · Creem · Plus Family', 9900, 'USD'], label);
 
     // Give Plus without a name: "A friend".
     const anon = (await asJson(await api(post('purchases/claim', { checkout: 'ch_giftanon1234' })))).body;
@@ -918,8 +918,8 @@ test('a personal gift becomes a gift link, emailed to the giver in personal word
     await settle();
     assert.equal(resend.calls.length, 3, `${label}: one email per gift`);
 
-    // Activation works as for any gift: one seat plus one spare, the giver's name in the licence.
-    for (let index = 0; index < 2; index += 1) {
+    // Activation works as for any gift, with exactly its seat (no spare below 10 seats), the giver's name in the licence.
+    for (let index = 0; index < 1; index += 1) {
       const redeemed = await asJson(await api(post(`gifts/${one.code}/redeem`)));
       assert.equal(redeemed.status, 200, `${label} activation ${index + 1}`);
       assert.equal((await verifyLicense(KEYS.publicKey, redeemed.body.license)).org, 'Camille <3', label);
@@ -928,7 +928,7 @@ test('a personal gift becomes a gift link, emailed to the giver in personal word
 
     // Sales rows carry the plan; the dashboard lists the gifts with their notes.
     const { sales } = (await asJson(await api(get('admin/series?from=2026-10-09&to=2026-10-09', 'secret')))).body;
-    assert.deepEqual(sales.map(row => [row.plan, row.seats, row.amount, row.currency]).sort(), [['family-5', 5, 5900, 'USD'], ['gift-1', 1, 2900, 'EUR'], ['gift-1', 1, 2900, 'EUR']], label);
+    assert.deepEqual(sales.map(row => [row.plan, row.seats, row.amount, row.currency]).sort(), [['family-5', 5, 9900, 'USD'], ['gift-1', 1, 2900, 'EUR'], ['gift-1', 1, 2900, 'EUR']], label);
     const { rows } = (await asJson(await api(get('admin/gifts', 'secret')))).body;
     assert.deepEqual(rows.map(row => row.note).sort(), ['Test mode · Creem · Give Plus', 'Test mode · Creem · Give Plus', 'Test mode · Creem · Plus Family'], label);
   });

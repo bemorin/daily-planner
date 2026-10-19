@@ -6,7 +6,8 @@ Notable changes to published Daily Planner releases.
 
 - **Day · Week · Horizon**: the year sits beside the day and the week at the top of the planner (V and Y on a keyboard). On a phone, Horizon is the third tab at the bottom, next to Plan and Schedule, and says what comes next; the tab bar stays visible while Horizon is open.
 - Every menu in the planner, on the landing page and in the dashboard looks and works like the app's own (keyboard included); number fields use a − / + stepper with one-click choices instead of the browser's arrows.
-- **Give Plus** (one person) and **Plus Family** (up to five people) are sold as gift links, from the landing page and the Plus window.
+- **Give Plus** (one person) and **Plus Family** (up to five people in one household) are sold as gift links, from the landing page and the Plus window. Personal gifts and other gifts under 10 seats activate exactly their seats; team gifts keep their 10% margin for reinstalls.
+- The welcome note in setup is signed Ben Morin.
 - Prices follow the buyer's country: euros in the euro area, US dollars elsewhere. The currency switch is gone and the server charges the right currency.
 - Partner links (`?ref=CODE`) are remembered for 60 days on the device and credited through Creem's affiliate program; a stale code never blocks a purchase.
 - Landing page: pricing shows Free and Plus with a “Compare plans” table, team tiers live in the team gift section, the progress section comes before the week, and “Questions” stays in view beside the FAQ.

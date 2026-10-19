@@ -40,10 +40,10 @@ export function createD1Store(db) {
       .then(([row]) => ({ count: Number(row?.count) || 0, seats: Number(row?.seats) || 0, redeemed: Number(row?.redeemed) || 0, paid: Number(row?.paid) || 0 })),
     /**
      * One activation in a single statement: the WHERE clause re-checks the
-     * limit (seats + max(1, seats / 10)), so concurrent requests can never
+     * limit (giftLimit in gifts.js: seats + max(1, seats / 10) from 10 seats, exactly the seats below), so concurrent requests can never
      * push `redeemed` past it.
      */
-    redeemGift: async (code, nowIso) => await run('UPDATE gifts SET redeemed = redeemed + 1 WHERE code = ? AND active = 1 AND expires_at > ? AND redeemed < seats + MAX(1, seats / 10)', code, nowIso) === 1,
+    redeemGift: async (code, nowIso) => await run('UPDATE gifts SET redeemed = redeemed + 1 WHERE code = ? AND active = 1 AND expires_at > ? AND redeemed < seats + CASE WHEN seats >= 10 THEN MAX(1, seats / 10) ELSE 0 END', code, nowIso) === 1,
     unredeemGift: async code => await run('UPDATE gifts SET redeemed = redeemed - 1 WHERE code = ? AND redeemed > 0', code) === 1,
     async updateGift(code, fields) {
       const names = Object.keys(GIFT_EDITABLE).filter(name => fields[name] !== undefined);

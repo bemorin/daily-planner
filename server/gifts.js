@@ -6,7 +6,8 @@
 // company shares with its people (a team gift), or that a person sends to a
 // friend or to their family (a personal gift: 'gift-1', 'family-5' in
 // src/lib/pricing.js). Each activation uses a seat; the server allows
-// seats + max(1, floor(seats × 10%)) activations (reinstalls), and links can be
+// seats + max(1, floor(seats × 10%)) activations for team gifts of 10 seats or
+// more (reinstalls) and exactly the seats below that; links can be
 // activated for 12 months after creation. Nothing about the people who
 // activate is stored: only a counter.
 
@@ -52,8 +53,14 @@ export function normalizeGiftCode(value) {
 /** "ABCDEFGHJKMN" → "ABCD-EFGH-JKMN". */
 export const formatGiftCode = code => String(code).replace(/-/g, '').replace(/(.{4})(?=.)/g, '$1-');
 
-/** Activations allowed: the seats plus 10% (at least one) for reinstalls. */
-export const giftLimit = seats => Number(seats) + Math.max(1, Math.floor(Number(seats) * 0.1));
+/**
+ * Activations allowed. Team gifts (10 seats or more): the seats plus 10% (at
+ * least one) for people who set the planner up again. Smaller gifts — Give Plus,
+ * Plus Family, small gifts made in the dashboard — get exactly their seats, so a
+ * personal gift can't be shared beyond the people it was bought for.
+ */
+export const TEAM_MARGIN_FROM = 10;
+export const giftLimit = seats => Number(seats) + (Number(seats) >= TEAM_MARGIN_FROM ? Math.max(1, Math.floor(Number(seats) * 0.1)) : 0);
 
 /** ISO time GIFT_VALID_MONTHS after `date`. */
 export function giftExpiry(date) {
@@ -241,8 +248,8 @@ function personalGiftEmail({ gift, url, manageUrl }) {
     linkTitle: family ? `Your gift link, for up to ${people} people` : 'Your gift link, for one person',
     send: family ? 'Send this link to your family.' : 'Send this link to the person you are giving Plus to.',
     how: family
-      ? `Each person opens it once on the device where they plan, and Plus is theirs for life. No account is needed. One extra activation is included in case someone sets up the planner again. The link can be activated until ${until}.`
-      : `They open it once on the device where they plan, and Plus is theirs for life. No account is needed. One extra activation is included in case they set up the planner again. The link can be activated until ${until}.`,
+      ? `Each person opens it once on the device where they plan, and Plus is theirs for life. No account is needed. Each activation uses one of the ${gift.seats} places, so share the link only with them. The link can be activated until ${until}.`
+      : `They open it once on the device where they plan, and Plus is theirs for life. No account is needed. The link works once, so send it only to them. The link can be activated until ${until}.`,
     manage: `(see ${family ? 'how many people have activated it' : 'whether it has been activated'}, change your message or the name shown with the gift). Keep this link to yourself:`,
     forwardTitle: family ? 'A message you can forward to your family' : 'A message you can send with the link',
     receipt: 'Your receipt comes separately from Creem, which handles the payment.'

@@ -31,7 +31,9 @@ export const TEAM_TIERS = Object.freeze([
  */
 export const PERSONAL_GIFTS = Object.freeze([
   Object.freeze({ plan: 'gift-1', seats: 1, price: PLUS_PRICE, label: 'Give Plus', note: 'For one person, for life' }),
-  Object.freeze({ plan: 'family-5', seats: 5, price: Object.freeze({ EUR: 59, USD: 59 }), label: 'Plus Family', note: 'Up to 5 people, for life' })
+  // Never cheaper per person than the smallest team pack (195 / 10 = 19.50), so
+  // a company never saves by buying family packs; about 30% less than five Plus.
+  Object.freeze({ plan: 'family-5', seats: 5, price: Object.freeze({ EUR: 99, USD: 99 }), label: 'Plus Family', note: 'Up to 5 people in one household, for life' })
 ]);
 
 /** Above the last tier: a quote, asked for with the request form. */

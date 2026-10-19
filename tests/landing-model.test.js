@@ -98,7 +98,7 @@ test('the gift page knows when no name was typed at checkout', () => {
 test('personal gifts: their price, and who the gift page speaks to', () => {
   assert.deepEqual(PERSONAL_GIFTS.map(gift => gift.plan), ['gift-1', 'family-5']);
   assert.equal(personalOffer('gift-1', 'EUR').amount, 29);
-  assert.equal(personalOffer('family-5', 'USD').amount, 59);
+  assert.equal(personalOffer('family-5', 'USD').amount, 99);
   assert.equal(personalOffer('family-5', 'GBP').amount, null);
   assert.equal(personalOffer('up-to-50', 'EUR'), null, 'a team tier is not a personal gift');
   assert.equal(PERSONAL_SEATS_MAX, 5);

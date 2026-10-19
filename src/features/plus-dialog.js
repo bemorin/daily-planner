@@ -48,7 +48,7 @@ const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}
 /** The one muted line under the price: the currency is the buyer's (euro area: EUR, elsewhere: USD), taxes included. */
 export const currencyNote = currency => (currency === 'EUR' ? 'Prices in euros, taxes included.' : 'Prices in US dollars, taxes included.');
 
-/** A personal gift button: "Give Plus — €29", "Plus Family — up to 5 people — €59". */
+/** A personal gift button: "Give Plus — €29", "Plus Family — up to 5 people — €99". */
 export function giftLabel(gift, currency) {
   const price = formatMoney(gift.price?.[currency], currency);
   return gift.seats > 1 ? `${gift.label} — up to ${gift.seats} people — ${price}` : `${gift.label} — ${price}`;
