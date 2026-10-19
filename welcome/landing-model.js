@@ -1,4 +1,4 @@
-import { CURRENCIES, TEAM_QUOTE, TEAM_TIERS, formatMoney, validCurrency } from '../src/lib/pricing.js';
+import { CURRENCIES, PERSONAL_GIFTS, TEAM_QUOTE, TEAM_TIERS, detectCurrency, formatMoney, isPersonalGift, validCurrency } from '../src/lib/pricing.js';
 
 /**
  * Pure helpers for the landing page and the gift page: prices per person,
@@ -6,16 +6,23 @@ import { CURRENCIES, TEAM_QUOTE, TEAM_TIERS, formatMoney, validCurrency } from '
  * No DOM here, so tests can import it directly.
  */
 
-/** The visitor's EUR / USD choice, remembered on this browser. */
-export const CURRENCY_KEY = 'daily-planner-landing:currency';
-
-export function storedCurrency(storage = globalThis.localStorage) {
-  try { return validCurrency(storage?.getItem(CURRENCY_KEY) || ''); } catch (_) { return ''; }
+/**
+ * The currency prices are shown in: the server's choice from the visitor's
+ * country when it gave one (GET /api/checkout), else a first guess from the
+ * browser's languages. There is no switch: the euro area pays in EUR, the
+ * rest of the world in USD, and the checkout charges exactly that.
+ */
+export function pageCurrency(options, languages) {
+  const server = validCurrency(options?.currency);
+  if (server) return server;
+  // Country unknown: the language's guess, unless only the other currency is on sale (as in the planner).
+  const guess = detectCurrency(languages);
+  const onSale = [...(options?.plus || []), ...(options?.gift || [])].filter(validCurrency);
+  return !onSale.length || onSale.includes(guess) ? guess : onSale[0];
 }
 
-export function rememberCurrency(value, storage = globalThis.localStorage) {
-  try { if (validCurrency(value)) storage?.setItem(CURRENCY_KEY, value); } catch (_) { /* private mode: the choice lasts for this visit */ }
-}
+/** The one muted line shown near the prices. */
+export const currencyLine = currency => (currency === 'EUR' ? 'Prices in euros, taxes included.' : 'Prices in US dollars, taxes included.');
 
 const people = value => new Intl.NumberFormat('en-US').format(value);
 
@@ -62,14 +69,15 @@ export function planForPeople(count) {
  */
 export function readCheckoutOptions(result) {
   const list = value => (Array.isArray(value) ? CURRENCIES.filter(currency => value.includes(currency)) : []);
-  if (!result || result.ok !== true) return { known: false, plus: [], gift: [], test: false };
-  return { known: true, plus: list(result.plus), gift: list(result.gift), test: result.test === true };
+  if (!result || result.ok !== true) return { known: false, plus: [], gift: [], currency: '', test: false };
+  return { known: true, plus: list(result.plus), gift: list(result.gift), currency: validCurrency(result.currency), test: result.test === true };
 }
 
 /**
  * Whether `item` ('plus' | 'gift') can be bought online in `currency`.
  * reason: 'off' (no API, or nothing on sale), 'currency' (on sale in `other`
- * only), 'unknown' (not asked yet: shown as buyable, checked on click).
+ * only, so not for this visitor), 'unknown' (not asked yet: shown as
+ * buyable, checked on click).
  */
 export function buyState({ apiOn, options, item, currency }) {
   if (!apiOn) return { buyable: false, reason: 'off', other: '' };
@@ -91,10 +99,40 @@ export function statusTone(status) {
 
 /** The company name the server uses when the buyer typed none at checkout. */
 export const DEFAULT_COMPANY = 'Your company';
+/** The same for personal gifts: Give Plus, then Plus Family. */
+export const DEFAULT_FROM = Object.freeze(['A friend', 'Your family']);
 
+/** True when no name was given: the server's placeholder, or nothing at all. */
 export function isDefaultCompany(org) {
-  const value = String(org || '').trim();
-  return !value || value.toLowerCase() === DEFAULT_COMPANY.toLowerCase();
+  const value = String(org || '').trim().toLowerCase();
+  return !value || [DEFAULT_COMPANY, ...DEFAULT_FROM].some(name => name.toLowerCase() === value);
+}
+
+/** A personal gift's offer from PERSONAL_GIFTS, with its price in `currency`. */
+export function personalOffer(plan, currency) {
+  const gift = PERSONAL_GIFTS.find(item => item.plan === plan);
+  const value = gift?.price?.[validCurrency(currency)];
+  return gift ? { ...gift, amount: Number.isFinite(value) && value > 0 ? value : null } : null;
+}
+
+/** Up to this many seats, a gift link reads as a personal gift (Give Plus, Plus Family). */
+export const PERSONAL_SEATS_MAX = Math.max(...PERSONAL_GIFTS.map(gift => gift.seats));
+
+/**
+ * Who a gift is for, from the gift page's answer: 'one' (Give Plus), 'family'
+ * (Plus Family) or 'team'. The plan decides when the server sends one ('' is
+ * a gift made in the dashboard, for a company); from an older server without
+ * it, a gift of a few seats is a personal one (team tiers start at 10).
+ */
+export function giftAudience(gift) {
+  if (typeof gift?.plan === 'string') {
+    const personal = PERSONAL_GIFTS.find(item => item.plan === gift.plan.trim());
+    if (!personal || !isPersonalGift(personal.plan)) return 'team';
+    return personal.seats > 1 ? 'family' : 'one';
+  }
+  const seats = Number(gift?.seats);
+  if (!Number.isFinite(seats) || seats < 1 || seats > PERSONAL_SEATS_MAX) return 'team';
+  return seats > 1 ? 'family' : 'one';
 }
 
 // Creem's checkout ids (ch_…), and older references kept working.

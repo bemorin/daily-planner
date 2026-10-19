@@ -181,11 +181,11 @@ The in-app **How it works** modal contains the complete shortcut reference. Comm
 
 ## Landing page
 
-`welcome/` is the public landing page (served at `/welcome/`): animated replicas of the planner, Daily Planner Plus, the team gift, pricing in EUR or USD, and an FAQ. `welcome/thanks/` is where a company gets its gift link after paying. The page reuses the planner's runtime configuration, makes no request when `PLANNER_API_URL` is blank, and takes every price from `src/lib/pricing.js`, the file the planner and the owner API use too.
+`welcome/` is the public landing page (served at `/welcome/`): animated replicas of the planner, Daily Planner Plus, gifts for a friend, a family or a team, pricing in euros or US dollars (by the visitor's country), and an FAQ. `welcome/thanks/` is where the buyer gets the gift link after paying. The page reuses the planner's runtime configuration, makes no request when `PLANNER_API_URL` is blank, and takes every price from `src/lib/pricing.js`, the file the planner and the owner API use too.
 
 ## Daily Planner Plus
 
-The planner is free. **Plus** is a one-time unlock, for life, that adds new features: **Plan your year** (a guided session that sets up Horizon), **Your year in review** (one printable page), and colours for the painted year. Companies can give Plus to their people as a team gift: one link, each person who opens it activates Plus, no accounts and no names collected. Licences are signed by the owner API and verified on the device; a copy built without `DAILY_PLANNER_PLUS_PUBLIC_KEY` cannot activate Plus. Payments go through Creem, the merchant of record (it charges VAT and sends receipts and invoices); setup is in [`docs/FEEDBACK_AND_WAITLIST.md`](./docs/FEEDBACK_AND_WAITLIST.md).
+The planner is free. **Plus** is a one-time unlock, for life, that adds new features: **Plan your year** (a guided session that sets up Horizon), **Your year in review** (one printable page), and colours for the painted year. Companies can give Plus to their people as a team gift, and anyone can give it to a friend (Give Plus) or a family of up to five (Plus Family): one link, each person who opens it activates Plus, no accounts and no names collected. Licences are signed by the owner API and verified on the device; a copy built without `DAILY_PLANNER_PLUS_PUBLIC_KEY` cannot activate Plus. Payments go through Creem, the merchant of record (it charges VAT and sends receipts and invoices). The euro area pays in euros and everyone else in US dollars, decided by the server from the buyer's country; partners can share `/welcome/?ref=CODE` links through Creem's affiliate program. Setup is in [`docs/FEEDBACK_AND_WAITLIST.md`](./docs/FEEDBACK_AND_WAITLIST.md).
 
 ## Local development
 

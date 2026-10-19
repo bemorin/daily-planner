@@ -191,10 +191,53 @@ export const fetchGift = code => request(`gifts/${encodeURIComponent(code)}`, { 
 export const redeemGift = code => request(`gifts/${encodeURIComponent(code)}/redeem`, { body: {} });
 /** Confirms a Creem checkout (`checkout_id` on the return URL) and returns a licence or a gift. */
 export const claimPurchase = (checkout, { expect = '' } = {}) => request('purchases/claim', { body: expect ? { checkout, expect } : { checkout } });
-/** Which items and currencies can be bought right now: { plus: ['EUR','USD'], gift: [...], test }. */
+/**
+ * Which items and currencies can be bought right now, and the visitor's currency
+ * chosen by the server from their country: { plus: ['EUR','USD'], gift: [...],
+ * currency: 'EUR'|'USD'|'', test }. `currency` is '' when the country is unknown
+ * (then use detectCurrency() from pricing.js).
+ */
 export const checkoutOptions = () => request('checkout', { method: 'GET' });
 /**
- * Opens a Creem checkout for Plus (`item: 'plus'`) or a team gift (`item: 'gift'`, `plan`
- * from TEAM_TIERS) in `currency`. Answers { ok, url } — the caller sends the browser there.
+ * Opens a Creem checkout for Plus (`item: 'plus'`) or a gift link (`item: 'gift'`,
+ * `plan` from TEAM_TIERS or PERSONAL_GIFTS). `currency` is only a hint: the server
+ * charges the currency of the buyer's country when it knows it. A referral code
+ * remembered on this device (rememberReferral) goes along. Answers { ok, url }.
  */
-export const startCheckout = ({ item, plan = '', currency }) => request('checkout', { body: { item, plan, currency } });
+export const startCheckout = ({ item, plan = '', currency }) => {
+  const ref = referralCode();
+  return request('checkout', { body: ref ? { item, plan, currency, ref } : { item, plan, currency } });
+};
+
+/* Referral codes (Creem affiliate program) -------------------------------- */
+
+// Outside the 'daily-planner:' prefix, so backups and sync never carry it.
+export const REFERRAL_KEY = 'daily-planner-ui:ref';
+const REFERRAL_DAYS = 60;
+const REFERRAL_RE = /^[A-Za-z0-9_-]{2,64}$/;
+const REFERRAL_PARAMS = ['ref', 'via', 'aff'];
+
+/**
+ * Keeps the partner code from a link like /welcome/?ref=CODE for 60 days on this
+ * device (the latest link wins), so a purchase made later is credited to that
+ * partner. Returns the code it kept, or ''. Nothing is sent until a checkout.
+ */
+export function rememberReferral(search = globalThis.location?.search || '', { storage = globalThis.localStorage, now = Date.now() } = {}) {
+  let params;
+  try { params = new URLSearchParams(search); } catch (_) { return ''; }
+  const code = REFERRAL_PARAMS.map(name => String(params.get(name) || '').trim()).find(value => REFERRAL_RE.test(value)) || '';
+  if (!code) return '';
+  try { storage?.setItem(REFERRAL_KEY, JSON.stringify({ code, at: now })); } catch (_) { return ''; }
+  return code;
+}
+
+/** The remembered partner code, or '' once it is older than 60 days or unreadable. */
+export function referralCode({ storage = globalThis.localStorage, now = Date.now() } = {}) {
+  try {
+    const saved = JSON.parse(storage?.getItem(REFERRAL_KEY) || 'null');
+    if (!saved || !REFERRAL_RE.test(String(saved.code || '')) || !(now - Number(saved.at) < REFERRAL_DAYS * 86400000)) return '';
+    return saved.code;
+  } catch (_) {
+    return '';
+  }
+}

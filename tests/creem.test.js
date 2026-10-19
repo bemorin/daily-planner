@@ -2,11 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { createMemoryStore, createPlannerApi, EMAIL_SENDS_EVENT, PLUS_CLAIMS_MAX, REVIEWS_LATEST, seriesRange } from '../server/planner-api.js';
+import { createMemoryStore, createPlannerApi, EMAIL_SENDS_EVENT, GIFT_PLAN_LABELS, PLUS_CLAIMS_MAX, requestCountry, REVIEWS_LATEST, seriesRange } from '../server/planner-api.js';
 import { createD1Store } from '../server/d1-store.js';
 import { generatePlusKeyPair, giftManageKey, verifyLicense } from '../server/licenses.js';
-import { CHECKOUT_ID_RE, creemApiBase, creemMode, creemProductsFromEnv, parseCreemProducts, readCheckout, verifyWebhookSignature, webhookSignature } from '../server/creem.js';
-import { priceCents, TEAM_TIERS } from '../src/lib/pricing.js';
+import { affiliateCode, CHECKOUT_ID_RE, creemApiBase, creemMode, creemProductsFromEnv, parseCreemProducts, readCheckout, verifyWebhookSignature, webhookSignature } from '../server/creem.js';
+import { currencyForCountry, PERSONAL_GIFTS, priceCents, TEAM_TIERS } from '../src/lib/pricing.js';
 
 const START = Date.parse('2026-10-09T08:00:00Z');
 const KEYS = await generatePlusKeyPair();
@@ -29,7 +29,7 @@ const asJson = async response => ({ status: response.status, body: await respons
 const jsonResponse = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
 /** A Creem CheckoutEntity as GET /v1/checkouts answers it. */
-function checkout(id, { item = 'plus', currency = 'EUR', plan = 'up-to-50', status = 'completed', orderStatus = 'paid', company = '', email = 'Buyer@Example.com', country = 'fr', amount, product, metadata, expanded = false } = {}) {
+function checkout(id, { item = 'plus', currency = 'EUR', plan = 'up-to-50', status = 'completed', orderStatus = 'paid', company = '', from = '', email = 'Buyer@Example.com', country = 'fr', amount, product, metadata, expanded = false } = {}) {
   const productId = product ?? PRODUCTS[item][currency];
   const cents = amount ?? priceCents(item, plan, currency);
   return {
@@ -37,7 +37,10 @@ function checkout(id, { item = 'plus', currency = 'EUR', plan = 'up-to-50', stat
     product: expanded ? { id: productId, object: 'product', price: cents, currency } : productId,
     ...(status === 'completed' || orderStatus === 'pending' ? { order: { id: 'ord_1', object: 'order', status: orderStatus, type: 'onetime', amount: cents, amount_paid: cents, currency: currency.toLowerCase() } } : {}),
     customer: { id: 'cust_1', object: 'customer', email, name: 'Ada Buyer', country },
-    custom_fields: company ? [{ type: 'text', key: 'company', label: 'Company name, shown to your team', optional: true, text: { max_length: 80, value: company } }] : [],
+    custom_fields: [
+      ...(company ? [{ type: 'text', key: 'company', label: 'Company name, shown to your team', optional: true, text: { max_length: 80, value: company } }] : []),
+      ...(from ? [{ type: 'text', key: 'from', label: 'Your name, shown with the gift', optional: true, text: { max_length: 80, value: from } }] : [])
+    ],
     metadata: metadata ?? sealed(item === 'plus' ? { kind: 'plus' } : { kind: 'gift', plan, seats: '50' }, currency)
   };
 }
@@ -49,13 +52,17 @@ const sealed = (metadata, currency, rid = RID) => ({ ...metadata, currency, rid,
 const pick = (value, keys) => Object.fromEntries(keys.map(key => [key, value[key]]));
 const READ_KEYS = ['completed', 'paid', 'productId', 'item', 'email', 'country', 'org', 'amount', 'currency'];
 
-/** Stand-in for Creem: POST /v1/checkouts makes a pending checkout, GET reads `checkouts`. */
+/**
+ * Stand-in for Creem: POST /v1/checkouts makes a pending checkout, GET reads `checkouts`.
+ * `createStatus`: a status every POST answers, or (body) => status (0: accepted).
+ */
 function fakeCreem(checkouts = {}, { status = 0, createStatus = 0, checkoutUrl } = {}) {
   const calls = [];
   const fetch = async (url, init) => {
     calls.push({ url: String(url), method: init.method, headers: init.headers, body: init.body ? JSON.parse(init.body) : undefined });
     if (init.method === 'POST') {
-      if (createStatus) return jsonResponse(createStatus, { statusCode: createStatus, message: ['product_id must be a string'] });
+      const refused = typeof createStatus === 'function' ? createStatus(calls.at(-1).body) : createStatus;
+      if (refused) return jsonResponse(refused, { statusCode: refused, message: [refused === 400 && calls.at(-1).body.affiliate_code ? 'Affiliate code not found' : 'product_id must be a string'] });
       const id = `ch_created${calls.length}x`;
       return jsonResponse(200, { id, object: 'checkout', status: 'pending', checkout_url: checkoutUrl === undefined ? `https://checkout.creem.io/${id}` : checkoutUrl });
     }
@@ -131,6 +138,13 @@ async function sendWebhook(api, event, { secret = WEBHOOK_SECRET, signature, raw
   return api(new Request('https://planner.test/api/creem/webhook', { method: 'POST', headers: { 'content-type': 'application/json', ...(value === null ? {} : { 'creem-signature': value }) }, body }));
 }
 const completedEvent = object => ({ id: `evt_${object.id}`, eventType: 'checkout.completed', created_at: START, object });
+/** A checkout request from a visitor in `country` (Cloudflare's CF-IPCountry header; '' for none). */
+const fromCountry = (country, method = 'GET', body) => new Request('https://planner.test/api/checkout', {
+  method,
+  headers: { 'content-type': 'application/json', ...(country ? { 'cf-ipcountry': country } : {}) },
+  ...(body === undefined ? {} : { body: JSON.stringify(body) })
+});
+const FROM_FIELD = { type: 'text', key: 'from', label: 'Your name, shown with the gift', optional: true, text: { max_length: 80 } };
 
 test('Creem helpers read products, modes and checkouts defensively', () => {
   assert.deepEqual(creemProductsFromEnv({ CREEM_PLUS_EUR: ' prod_a ', CREEM_PLUS_USD: 'prod_b', CREEM_GIFT_EUR: '', STRIPE_SECRET_KEY: 'x' }), { plus: { EUR: 'prod_a', USD: 'prod_b' }, gift: { EUR: '', USD: '' } });
@@ -183,12 +197,12 @@ test('webhook signatures: hex HMAC-SHA256 of the raw body, compared in constant 
 test('GET /api/checkout lists what can be bought, and nothing while payments are off', async () => {
   const creem = fakeCreem();
   const answer = async options => (await asJson(await setup({ creem, ...options }).api(get('checkout')))).body;
-  assert.deepEqual(await answer({}), { plus: ['EUR', 'USD'], gift: ['EUR', 'USD'], test: true });
-  assert.deepEqual(await answer({ creemApiKey: 'creem_live_key' }), { plus: ['EUR', 'USD'], gift: ['EUR', 'USD'], test: false });
-  assert.deepEqual(await answer({ creemApiKey: 'creem_live_key', creemTestMode: '1' }), { plus: ['EUR', 'USD'], gift: ['EUR', 'USD'], test: true });
-  assert.deepEqual(await answer({ creemProducts: { plus: { EUR: 'prod_plus_eur' } } }), { plus: ['EUR'], gift: [], test: true });
+  assert.deepEqual(await answer({}), { plus: ['EUR', 'USD'], gift: ['EUR', 'USD'], currency: '', test: true });
+  assert.deepEqual(await answer({ creemApiKey: 'creem_live_key' }), { plus: ['EUR', 'USD'], gift: ['EUR', 'USD'], currency: '', test: false });
+  assert.deepEqual(await answer({ creemApiKey: 'creem_live_key', creemTestMode: '1' }), { plus: ['EUR', 'USD'], gift: ['EUR', 'USD'], currency: '', test: true });
+  assert.deepEqual(await answer({ creemProducts: { plus: { EUR: 'prod_plus_eur' } } }), { plus: ['EUR'], gift: [], currency: '', test: true });
   for (const off of [{ creemApiKey: '' }, { creemProducts: {} }, { plusSigningKey: '' }, { plusSigningKey: 'bm90IGEga2V5' }]) {
-    assert.deepEqual(await answer(off), { plus: [], gift: [], test: false }, JSON.stringify(off));
+    assert.deepEqual(await answer(off), { plus: [], gift: [], currency: '', test: false }, JSON.stringify(off));
   }
   assert.equal(creem.calls.length, 0, 'answered without asking Creem');
   assert.equal((await setup().api(request('PATCH', 'checkout', {}))).status, 405);
@@ -234,7 +248,7 @@ test('POST /api/checkout opens a Creem checkout with our product, price and meta
 
   // Test keys never sell on the production address (anyone could pay with a test card).
   const testOnProduction = setup({ creem: fakeCreem(), publicBaseUrl: 'https://planner.test' });
-  assert.deepEqual((await asJson(await testOnProduction.api(get('checkout')))).body, { plus: [], gift: [], test: false });
+  assert.deepEqual((await asJson(await testOnProduction.api(get('checkout')))).body, { plus: [], gift: [], currency: '', test: false });
   assert.equal((await testOnProduction.api(post('checkout', { item: 'plus', currency: 'EUR' }))).status, 503);
   assert.equal(testOnProduction.creem.calls.length, 0);
   const localhost = new Request('http://localhost:8080/api/checkout', { method: 'GET' });
@@ -312,10 +326,10 @@ test('a Creem team gift becomes one gift, emailed once to the buyer (memory and 
     const first = await asJson(await api(post('purchases/claim', { checkout: 'ch_gift50abcdef' })));
     assert.equal(first.status, 200, label);
     const answer = first.body;
-    assert.deepEqual(Object.keys(answer), ['kind', 'code', 'url', 'seats', 'redeemed', 'org', 'message', 'manageKey', 'manageUrl', 'expiresAt'], label);
+    assert.deepEqual(Object.keys(answer), ['kind', 'code', 'url', 'seats', 'redeemed', 'org', 'message', 'manageKey', 'manageUrl', 'expiresAt', 'plan'], label);
     assert.match(answer.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
     assert.equal(answer.url, `https://planner.bemorin.com/?gift=${answer.code}`);
-    assert.deepEqual([answer.kind, answer.seats, answer.redeemed, answer.org, answer.message], ['gift', 50, 0, 'Acme <Studio>', ''], label);
+    assert.deepEqual([answer.kind, answer.seats, answer.redeemed, answer.org, answer.message, answer.plan], ['gift', 50, 0, 'Acme <Studio>', '', 'up-to-50'], label);
     assert.equal(answer.manageKey, await giftManageKey(KEYS.signingKey, answer.code));
     await settle();
     // The buyer gets one email: the link, the manage link and a message to forward.
@@ -790,4 +804,186 @@ test('purchases made with test keys are refused once the live keys are in place'
   for (const id of ['ch_testplus001a', 'ch_testgift001a']) {
     assert.deepEqual(await asJson(await live.api(post('purchases/claim', { checkout: id }))), { status: 410, body: { error: 'This was a test purchase, made before payments went live.' } }, id);
   }
+});
+
+test('the buyer’s country picks the currency: the euro area pays in EUR, everyone else in USD', async () => {
+  // The rule (src/lib/pricing.js): unknown countries, Tor (T1) and XX give ''.
+  assert.deepEqual(['FR', 'de', ' ES ', 'IE', 'US', 'GB', 'CH', 'JP', '', 'XX', 'T1', 'FRA', null].map(currencyForCountry), ['EUR', 'EUR', 'EUR', 'EUR', 'USD', 'USD', 'USD', 'USD', '', '', '', '', '']);
+  const creem = fakeCreem();
+  const { api } = setup({ creem });
+  for (const [country, currency] of [['FR', 'EUR'], ['US', 'USD'], ['GB', 'USD'], ['CH', 'USD'], ['', ''], ['XX', ''], ['F1', '']]) {
+    const { body } = await asJson(await api(fromCountry(country)));
+    assert.deepEqual([body.currency, body.plus, body.gift], [currency, ['EUR', 'USD'], ['EUR', 'USD']], country || 'unknown');
+  }
+  // On Cloudflare, request.cf.country is read first.
+  const onCloudflare = fromCountry('US');
+  Object.defineProperty(onCloudflare, 'cf', { value: { country: 'DE' } });
+  assert.equal((await asJson(await api(onCloudflare))).body.currency, 'EUR');
+  assert.deepEqual([requestCountry(onCloudflare), requestCountry(fromCountry('gb')), requestCountry(fromCountry('')), requestCountry(fromCountry('F1')), requestCountry(null)], ['DE', 'GB', '', '', '']);
+
+  // POST charges the country's currency, with that currency's product and seal, whatever the page sent;
+  // the page's currency counts only when the country is unknown.
+  const cases = [['FR', 'USD', 'EUR'], ['US', 'EUR', 'USD'], ['GB', 'EUR', 'USD'], ['CH', 'EUR', 'USD'], ['DE', undefined, 'EUR'], ['US', 'GBP', 'USD'], ['', 'EUR', 'EUR'], ['', 'usd', 'USD'], ['XX', 'EUR', 'EUR']];
+  for (const [country, asked, charged] of cases) {
+    const label = `${country || 'unknown'} asked ${asked}`;
+    assert.equal((await api(fromCountry(country, 'POST', { item: 'plus', ...(asked === undefined ? {} : { currency: asked }) }))).status, 201, label);
+    const sent = creem.calls.at(-1).body;
+    assert.deepEqual([sent.product_id, sent.metadata.currency, sent.metadata.seal], [PRODUCTS.plus[charged], charged, sealOf({ kind: 'plus' }, charged, sent.request_id)], label);
+  }
+  assert.equal((await api(fromCountry('FR', 'POST', { item: 'gift', plan: 'up-to-10', currency: 'USD' }))).status, 201);
+  const gift = creem.calls.at(-1).body;
+  assert.deepEqual([gift.product_id, gift.custom_price, gift.metadata.currency], ['prod_gift_eur', 19500, 'EUR']);
+  assert.equal((await api(fromCountry('', 'POST', { item: 'plus', currency: 'GBP' }))).status, 400, 'no country and no usable currency');
+
+  // The country's product is missing: a clear 503, never a silent switch to the other currency.
+  const usdOnly = setup({ creem: fakeCreem(), creemProducts: { plus: { USD: 'prod_plus_usd' }, gift: { USD: 'prod_gift_usd' } } });
+  for (const body of [{ item: 'plus', currency: 'USD' }, { item: 'gift', plan: 'gift-1', currency: 'USD' }]) {
+    assert.deepEqual(await asJson(await usdOnly.api(fromCountry('IT', 'POST', body))), { status: 503, body: { error: 'Payments in euros are not set up yet.' } }, body.item);
+  }
+  assert.equal(usdOnly.creem.calls.length, 0);
+  assert.deepEqual(pick((await asJson(await usdOnly.api(fromCountry('IT')))).body, ['plus', 'currency']), { plus: ['USD'], currency: 'EUR' }, 'GET shows it too');
+  assert.equal((await usdOnly.api(fromCountry('US', 'POST', { item: 'plus', currency: 'EUR' }))).status, 201);
+  const eurOnly = setup({ creem: fakeCreem(), creemProducts: { plus: { EUR: 'prod_plus_eur' } } });
+  assert.deepEqual(await asJson(await eurOnly.api(fromCountry('GB', 'POST', { item: 'plus', currency: 'EUR' }))), { status: 503, body: { error: 'Payments in US dollars are not set up yet.' } });
+});
+
+test('personal gifts open like team gifts: price and seats from the plan, the giver’s name on the checkout', async () => {
+  const creem = fakeCreem();
+  const { api } = setup({ creem });
+  for (const gift of PERSONAL_GIFTS) {
+    for (const currency of ['EUR', 'USD']) {
+      assert.equal((await api(post('checkout', { item: 'gift', plan: gift.plan, currency }))).status, 201, `${gift.plan} ${currency}`);
+      const sent = creem.calls.at(-1).body;
+      assert.deepEqual({ ...sent, request_id: 'dp' }, {
+        product_id: PRODUCTS.gift[currency], request_id: 'dp', units: 1, custom_price: gift.price[currency] * 100,
+        custom_fields: [FROM_FIELD], success_url: 'https://planner.test/welcome/thanks/',
+        metadata: sealed({ kind: 'gift', plan: gift.plan, seats: String(gift.seats) }, currency, sent.request_id)
+      }, `${gift.plan} ${currency}`);
+    }
+  }
+  assert.deepEqual(creem.calls.map(call => call.body.custom_price), [2900, 2900, 5900, 5900], 'Give Plus at the price of Plus, Plus Family 59');
+  assert.ok(FROM_FIELD.label.length <= 50);
+  assert.deepEqual([GIFT_PLAN_LABELS['gift-1'], GIFT_PLAN_LABELS['family-5'], GIFT_PLAN_LABELS['up-to-50'], GIFT_PLAN_LABELS['over-1000']], ['Give Plus', 'Plus Family', 'Up to 50 people', undefined]);
+
+  const { byId } = parseCreemProducts(PRODUCTS);
+  const family = readCheckout(checkout('ch_family00001', { item: 'gift', plan: 'family-5', from: ' Camille ', metadata: sealed({ kind: 'gift', plan: 'family-5', seats: '500' }, 'EUR') }), byId);
+  assert.deepEqual([family.item, family.org, family.amount], [{ kind: 'gift', plan: 'family-5', seats: 5 }, 'Camille', 5900], 'seats from the plan, never the metadata');
+  // A personal gift reads `from` first, a team gift `company` first; either is read when alone.
+  const both = { company: 'Acme', from: 'Camille' };
+  assert.equal(readCheckout(checkout('ch_x', { item: 'gift', plan: 'gift-1', ...both }), byId).org, 'Camille');
+  assert.equal(readCheckout(checkout('ch_x', { item: 'gift', plan: 'up-to-10', ...both }), byId).org, 'Acme');
+  assert.equal(readCheckout(checkout('ch_x', { item: 'gift', plan: 'up-to-10', from: 'Camille' }), byId).org, 'Camille');
+  assert.equal(readCheckout(checkout('ch_x', { item: 'gift', plan: 'gift-1', company: 'Acme' }), byId).org, 'Acme');
+});
+
+test('a personal gift becomes a gift link, emailed to the giver in personal words (memory and D1)', async t => {
+  await bothStores(t, async (label, store) => {
+    const creem = fakeCreem({
+      ch_giftone12345: checkout('ch_giftone12345', { item: 'gift', plan: 'gift-1', from: 'Camille <3', email: 'Camille@Example.com' }),
+      ch_family512345: checkout('ch_family512345', { item: 'gift', plan: 'family-5', currency: 'USD', email: 'parent@example.com' }),
+      ch_giftanon1234: checkout('ch_giftanon1234', { item: 'gift', plan: 'gift-1', email: 'anon@example.com' })
+    });
+    const { api, resend, settle } = setup({ store, creem });
+    const one = (await asJson(await api(post('purchases/claim', { checkout: 'ch_giftone12345' })))).body;
+    assert.deepEqual([one.kind, one.seats, one.org, one.plan], ['gift', 1, 'Camille <3', 'gift-1'], label);
+    await settle();
+    const email = resend.calls[0].body;
+    assert.deepEqual(email.to, ['camille@example.com'], label);
+    assert.equal(email.subject, 'Your Daily Planner Plus gift is ready', label);
+    for (const part of [one.url, one.manageUrl, 'Your gift link, for one person', 'Send this link to the person you are giving Plus to.', 'One extra activation', 'A message you can send with the link', 'Subject: A gift for you: Daily Planner Plus', 'I’m giving you Daily Planner Plus', 'until 9 October 2027', 'Your receipt comes separately from Creem']) {
+      assert.ok(email.text.includes(part), `${label}: ${part}`);
+    }
+    for (const content of [email.subject, email.text, email.html]) assert.doesNotMatch(content, /team|company/i, label);
+    assert.ok(email.html.includes(`href="${one.manageUrl.replace(/&/g, '&amp;')}"`), `${label}: escaped manage link`);
+    const stored = await store.getGift(one.code.replace(/-/g, ''));
+    assert.deepEqual([stored.seats, stored.note, stored.amount, stored.currency, stored.source], [1, 'Test mode · Creem · Give Plus', 2900, 'EUR', 'creem'], label);
+    assert.equal((await asJson(await api(get(`gifts/${one.code}`)))).body.plan, 'gift-1', `${label}: the gift page knows what was bought`);
+
+    // Plus Family through the webhook, without a name: "Your family".
+    assert.equal((await sendWebhook(api, completedEvent(creem.checkouts.ch_family512345))).status, 200, label);
+    const familyEmail = resend.calls[1].body;
+    assert.deepEqual([familyEmail.to, familyEmail.subject], [['parent@example.com'], 'Your Daily Planner Plus gift is ready'], label);
+    for (const part of ['Your gift link, for up to 5 people', 'Send this link to your family.', 'A message you can forward to your family', 'Subject: A gift for the family: Daily Planner Plus', 'Hi everyone,', 'it works for up to 5 people']) {
+      assert.ok(familyEmail.text.includes(part), `${label}: ${part}`);
+    }
+    assert.doesNotMatch(familyEmail.text + familyEmail.html, /team|company/i, label);
+    const family = (await asJson(await api(post('purchases/claim', { checkout: 'ch_family512345' })))).body;
+    assert.deepEqual([family.org, family.seats, family.plan], ['Your family', 5, 'family-5'], label);
+    const familyGift = await store.getGiftByCheckout('ch_family512345');
+    assert.deepEqual([familyGift.note, familyGift.amount, familyGift.currency], ['Test mode · Creem · Plus Family', 5900, 'USD'], label);
+
+    // Give Plus without a name: "A friend".
+    const anon = (await asJson(await api(post('purchases/claim', { checkout: 'ch_giftanon1234' })))).body;
+    assert.deepEqual([anon.org, anon.plan], ['A friend', 'gift-1'], label);
+    await settle();
+    assert.equal(resend.calls.length, 3, `${label}: one email per gift`);
+
+    // Activation works as for any gift: one seat plus one spare, the giver's name in the licence.
+    for (let index = 0; index < 2; index += 1) {
+      const redeemed = await asJson(await api(post(`gifts/${one.code}/redeem`)));
+      assert.equal(redeemed.status, 200, `${label} activation ${index + 1}`);
+      assert.equal((await verifyLicense(KEYS.publicKey, redeemed.body.license)).org, 'Camille <3', label);
+    }
+    assert.equal((await api(post(`gifts/${one.code}/redeem`))).status, 409, label);
+
+    // Sales rows carry the plan; the dashboard lists the gifts with their notes.
+    const { sales } = (await asJson(await api(get('admin/series?from=2026-10-09&to=2026-10-09', 'secret')))).body;
+    assert.deepEqual(sales.map(row => [row.plan, row.seats, row.amount, row.currency]).sort(), [['family-5', 5, 5900, 'USD'], ['gift-1', 1, 2900, 'EUR'], ['gift-1', 1, 2900, 'EUR']], label);
+    const { rows } = (await asJson(await api(get('admin/gifts', 'secret')))).body;
+    assert.deepEqual(rows.map(row => row.note).sort(), ['Test mode · Creem · Give Plus', 'Test mode · Creem · Give Plus', 'Test mode · Creem · Plus Family'], label);
+  });
+  // Without its payment row (migration 0004 missing), the plan is read from the gift's note.
+  const store = createMemoryStore();
+  const { api } = setup({ store, creem: fakeCreem({ ch_giftnote1234: checkout('ch_giftnote1234', { item: 'gift', plan: 'family-5' }) }) });
+  const code = (await asJson(await api(post('purchases/claim', { checkout: 'ch_giftnote1234' })))).body.code;
+  store.data.payments = [];
+  assert.equal((await asJson(await api(get(`gifts/${code}`)))).body.plan, 'family-5');
+  await api(request('PATCH', `admin/gifts/${code}`, { note: 'Paid by card' }, 'secret'));
+  assert.equal((await asJson(await api(get(`gifts/${code}`)))).body.plan, '', 'unknown once the note is changed');
+});
+
+test('a partner code goes to Creem as affiliate_code only, and a refused code never blocks the sale', async () => {
+  const creem = fakeCreem();
+  const { api, store, warnings } = setup({ creem });
+  const opened = await asJson(await api(post('checkout', { item: 'plus', currency: 'EUR', ref: ' PARTNER_1 ' })));
+  assert.equal(opened.status, 201);
+  const sent = creem.calls.at(-1).body;
+  assert.equal(sent.affiliate_code, 'PARTNER_1');
+  // Nowhere else: not in the metadata, the return address, the answer or the database.
+  const { affiliate_code: code, ...rest } = sent;
+  assert.equal(code, 'PARTNER_1');
+  for (const elsewhere of [rest, opened.body, store.data]) assert.ok(!JSON.stringify(elsewhere).includes('PARTNER_1'));
+  assert.equal((await api(post('checkout', { item: 'gift', plan: 'family-5', currency: 'USD', ref: 'aff-2026' }))).status, 201);
+  assert.equal(creem.calls.at(-1).body.affiliate_code, 'aff-2026');
+  // Malformed codes are ignored: the checkout opens without one.
+  for (const ref of ['a', 'x'.repeat(65), 'bad code', '<script>', 'AB12?x=1', 'café', 42, ['AB12'], { code: 'AB12' }, null, '']) {
+    assert.equal((await api(post('checkout', { item: 'plus', currency: 'EUR', ref }))).status, 201, JSON.stringify(ref));
+    assert.equal('affiliate_code' in creem.calls.at(-1).body, false, JSON.stringify(ref));
+  }
+  assert.deepEqual([affiliateCode(' ok_1 '), affiliateCode('x'.repeat(64)).length, affiliateCode('x'), affiliateCode(7)], ['ok_1', 64, '', '']);
+  assert.equal(warnings.length, 0);
+
+  // Creem refuses the code (HTTP 400): the same checkout is opened once more without it, and the owner is warned.
+  const picky = fakeCreem({}, { createStatus: body => (body.affiliate_code ? 400 : 0) });
+  const retry = setup({ creem: picky });
+  assert.deepEqual(await asJson(await retry.api(post('checkout', { item: 'gift', plan: 'gift-1', currency: 'EUR', ref: 'STALE_1' }))), { status: 201, body: { url: 'https://checkout.creem.io/ch_created2x' } });
+  assert.equal(picky.calls.length, 2);
+  const { affiliate_code: refused, ...withoutCode } = picky.calls[0].body;
+  assert.equal(refused, 'STALE_1');
+  assert.deepEqual(picky.calls[1].body, withoutCode, 'the same checkout, seal included, without the code');
+  assert.equal(retry.warnings.length, 1);
+  assert.match(retry.warnings[0], /^Creem refused the affiliate code "STALE_1" \(Creem answered HTTP 400: Affiliate code not found\)/);
+  // Only once, only after a 400, only when a code was sent.
+  for (const [createStatus, ref, calls] of [[400, 'STALE_1', 2], [500, 'STALE_1', 1], [400, '', 1]]) {
+    const failing = setup({ creem: fakeCreem({}, { createStatus }) });
+    assert.deepEqual(await asJson(await failing.api(post('checkout', { item: 'plus', currency: 'EUR', ...(ref ? { ref } : {}) }))), { status: 502, body: { error: 'The checkout could not be opened. Please try again in a minute.' } }, `${createStatus} ${ref}`);
+    assert.equal(failing.creem.calls.length, calls, `${createStatus} ${ref}`);
+  }
+});
+
+test('a seal copied onto another checkout is refused when Creem reports a different request id', async () => {
+  const copied = { ...checkout('ch_copiedseal01', { item: 'gift', plan: 'up-to-50' }), request_id: 'dp_someoneelse001' };
+  const { api, store } = setup({ creem: fakeCreem({ ch_copiedseal01: copied }) });
+  assert.deepEqual(await asJson(await api(post('purchases/claim', { checkout: 'ch_copiedseal01' }))), { status: 404, body: { error: NOT_PLUS_PAYMENT } });
+  assert.equal(await store.getGiftByCheckout('ch_copiedseal01'), null);
 });

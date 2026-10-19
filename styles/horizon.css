@@ -1485,3 +1485,22 @@ button.hz-paint__cell:focus-visible { outline: 0; transform: scale(1.35); box-sh
 .horizon-event-popover__calendar-line .task-action { flex: 0 0 auto; }
 .horizon-event-popover__calendar-line .task-action:disabled { opacity: .42; cursor: default; pointer-events: none; }
 
+
+/* Horizon as one of the planner's three places (1.22) ---------------------
+   Tablets and desktops: the dialog starts below the header, so Day · Week ·
+   Horizon stays in view and usable. Phones: the panel ends above the bottom
+   bar, which stays visible over the dialog's backdrop. */
+@media (min-width: 621px) {
+  .modal--horizon { top: var(--horizon-top, 0px); }
+}
+@media (min-width: 791px) {
+  .modal--horizon .modal__panel.hz-shell { height: min(880px, calc(100dvh - var(--horizon-top, 0px) - 2rem)); }
+  body.app-expanded .modal--horizon .modal__panel.hz-shell { height: min(880px, calc(var(--modal-expanded-max-height, 100dvh) - var(--horizon-top, 0px) / var(--app-scale, 1) - 1.5rem)); }
+}
+@media (min-width: 621px) and (max-width: 790px) {
+  .modal--horizon { padding: .75rem; }
+  .modal--horizon .modal__panel.hz-shell { height: calc(100dvh - var(--horizon-top, 0px) - 1.5rem); }
+}
+@media (max-width: 620px) {
+  .modal--horizon .modal__panel.hz-shell { align-self: start; height: calc(100dvh - .9rem - var(--mobile-dock-clearance)); }
+}

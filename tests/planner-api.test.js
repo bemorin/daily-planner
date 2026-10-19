@@ -425,7 +425,8 @@ test('team requests accept a plan, a currency and a kind of request, strictly', 
   for (const currency of ['EUR', 'USD']) assert.equal(validateTeamRequest(team({ currency })).entry.currency, currency);
   for (const kind of ['invoice', 'quote', 'talk', 'question']) assert.equal(validateTeamRequest(team({ kind })).entry.kind, kind);
   // Anything else is stored blank (plan, currency) or as the default kind, never refused.
-  for (const plan of ['up-to-20', 'UP-TO-10', '', null, 10, ['up-to-10']]) assert.equal(validateTeamRequest(team({ plan })).entry.plan, '', String(plan));
+  // Personal gifts are bought online, never requested: a team request keeps its own list.
+  for (const plan of ['up-to-20', 'UP-TO-10', '', null, 10, ['up-to-10'], 'gift-1', 'family-5']) assert.equal(validateTeamRequest(team({ plan })).entry.plan, '', String(plan));
   for (const currency of ['eur', 'GBP', ' EUR', 1]) assert.equal(validateTeamRequest(team({ currency })).entry.currency, '', String(currency));
   for (const kind of ['Invoice', 'call', '', undefined, {}]) assert.equal(validateTeamRequest(team({ kind })).entry.kind, 'quote', String(kind));
 });

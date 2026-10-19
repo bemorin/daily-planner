@@ -1070,7 +1070,8 @@ export function createHorizonView(ctx) {
       return;
     }
     if (event.metaKey || event.ctrlKey || event.altKey || event.key.length !== 1) return;
-    if (event.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+    // Typing in a field or in an open list (its letters find an option) is not a shortcut.
+    if (event.target.closest?.('input, textarea, select, [contenteditable="true"], .app-popover')) return;
     event.stopPropagation();
     if (overlay.onKey?.(event.key)) event.preventDefault();
   }, true);

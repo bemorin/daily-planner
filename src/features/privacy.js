@@ -50,7 +50,9 @@ export function privacyNoticeSections({ plannerApi = false, googleDrive = false,
         title: 'Daily Planner Plus',
         paragraphs: [
           'Plus is checked on this device, from the licence saved with your planner settings. There is no account, and nothing else is sent.',
-          'Activating a gift sends only the gift code, and a purchase sends only the checkout reference, so the payment can be confirmed. Payments themselves are handled by Creem, our payment provider, on its own page.'
+          'Activating a gift sends only the gift code, and a purchase sends only the checkout reference, so the payment can be confirmed. Payments themselves are handled by Creem, our payment provider, on its own page.',
+          'If you came through a partner’s link (one with a referral code, such as ?ref=), that code is kept in this browser for 60 days and sent with a purchase, so the partner is credited. Nothing else goes with it.',
+          'Prices are shown in euros in the euro area and in US dollars elsewhere: the server reads the country of your connection for that one request (from Cloudflare) and never stores it.'
         ]
       });
     }

@@ -1,14 +1,17 @@
-// Team gifts of Daily Planner Plus: codes, limits, validation and the emails
-// sent to the company that bought one. Pure helpers, shared by the router
+// Gifts of Daily Planner Plus: codes, limits, validation and the emails sent
+// to whoever bought one. Pure helpers, shared by the router
 // (server/planner-api.js) and both stores.
 //
 // A gift is ONE link (https://planner.bemorin.com/?gift=XXXX-XXXX-XXXX) that a
-// company shares with its people. Each activation uses a seat; the server
-// allows seats + max(1, floor(seats × 10%)) activations (reinstalls), and links
-// can be activated for 12 months after creation. Nothing about the people who
+// company shares with its people (a team gift), or that a person sends to a
+// friend or to their family (a personal gift: 'gift-1', 'family-5' in
+// src/lib/pricing.js). Each activation uses a seat; the server allows
+// seats + max(1, floor(seats × 10%)) activations (reinstalls), and links can be
+// activated for 12 months after creation. Nothing about the people who
 // activate is stored: only a counter.
 
 import { escapeHtml, htmlDocument, textToHtml } from './email.js';
+import { isPersonalGift } from '../src/lib/pricing.js';
 
 export const GIFT_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const GIFT_CODE_LENGTH = 12;
@@ -90,10 +93,14 @@ export function normalizeGift(row) {
   };
 }
 
-/** What anyone holding the link may see. Never the buyer, the note or the amount. */
-export function publicGift(gift, nowIso) {
+/**
+ * What anyone holding the link may see. Never the buyer, the note or the amount.
+ * `plan` is what was bought online ('gift-1', 'family-5', 'up-to-50' …), '' for a
+ * gift made in the dashboard.
+ */
+export function publicGift(gift, nowIso, plan = '') {
   const status = giftStatus(gift, nowIso);
-  return { org: gift.org, message: gift.message, seats: gift.seats, redeemed: gift.redeemed, available: status === 'available', expiresAt: gift.expiresAt, status };
+  return { org: gift.org, message: gift.message, seats: gift.seats, redeemed: gift.redeemed, available: status === 'available', expiresAt: gift.expiresAt, status, plan };
 }
 
 /** "https://host/path/" → "https://host/path"; '' unless it is an http(s) URL. */
@@ -178,9 +185,29 @@ export function validateGiftFields(body, { create = false, allowed = ['org', 'se
 }
 
 const longDate = iso => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const PLUS_UNLOCKS = 'It unlocks Plan your year, Your year in review and new colours for your painted year, for life. No account, no sign-up: nothing about you is collected.';
 
-/** The message a buyer can forward to the people the gift is for. */
-export function giftForwardMessage({ org, message, url, expiresAt }) {
+/**
+ * The message a buyer can forward to the people the gift is for. A team gift
+ * speaks for the company (`org`); a personal gift (`personal`) is written by
+ * the giver, to one person or, with more than one seat, to a family.
+ */
+export function giftForwardMessage({ org, message, url, expiresAt, seats = 1, personal = false }) {
+  const extra = message ? ['', message] : [];
+  const until = `The link can be activated until ${longDate(expiresAt)}.`;
+  if (personal && Number(seats) > 1) {
+    const people = Number(seats).toLocaleString('en-US');
+    return {
+      subject: 'A gift for the family: Daily Planner Plus',
+      text: ['Hi everyone,', '', 'I’m giving each of you Daily Planner Plus: a lifetime upgrade of Daily Planner, the calm planner that keeps your plans on your own device.', '', `Each of you opens this link once, on the device where you plan (it works for up to ${people} people): ${url}`, '', PLUS_UNLOCKS, ...extra, '', until].join('\n')
+    };
+  }
+  if (personal) {
+    return {
+      subject: 'A gift for you: Daily Planner Plus',
+      text: ['Hi,', '', 'I’m giving you Daily Planner Plus: a lifetime upgrade of Daily Planner, the calm planner that keeps your plans on your own device.', '', `Open this link on the device where you plan: ${url}`, '', PLUS_UNLOCKS, ...extra, '', until].join('\n')
+    };
+  }
   const lines = [
     'Hi everyone,',
     '',
@@ -188,27 +215,91 @@ export function giftForwardMessage({ org, message, url, expiresAt }) {
     '',
     `Open this link on the device where you plan: ${url}`,
     '',
-    'It unlocks Plan your year, Your year in review and new colours for your painted year, for life. No account, no sign-up: nothing about you is collected.',
-    ...(message ? ['', message] : []),
+    PLUS_UNLOCKS,
+    ...extra,
     '',
-    `The link can be activated until ${longDate(expiresAt)}.`
+    until
   ];
   return { subject: `A gift from ${org}: Daily Planner Plus`, text: lines.join('\n') };
 }
 
-/** The one email sent to the buyer of a gift: the link, the manage link and a message to forward. */
-export function giftBuyerEmail({ gift, url, manageUrl }) {
+const link = href => `<a href="${escapeHtml(href)}">${escapeHtml(href)}</a>`;
+const QUOTE_STYLE = 'margin:12px 0;padding:12px 16px;border-left:3px solid #ddd8d0;background:#f7f5f1';
+
+/**
+ * The email to someone who gave Plus to a friend ('gift-1') or to their family
+ * ('family-5'): the link to send, how activation works, the manage link and a
+ * message to forward. Personal wording only: never a team or a company.
+ */
+function personalGiftEmail({ gift, url, manageUrl }) {
+  const family = Number(gift.seats) > 1;
+  const people = Number(gift.seats).toLocaleString('en-US');
+  const forward = giftForwardMessage({ org: gift.org, message: gift.message, url, expiresAt: gift.expiresAt, seats: gift.seats, personal: true });
+  const until = longDate(gift.expiresAt);
+  const parts = {
+    thanks: 'Thank you for giving Daily Planner Plus.',
+    linkTitle: family ? `Your gift link, for up to ${people} people` : 'Your gift link, for one person',
+    send: family ? 'Send this link to your family.' : 'Send this link to the person you are giving Plus to.',
+    how: family
+      ? `Each person opens it once on the device where they plan, and Plus is theirs for life. No account is needed. One extra activation is included in case someone sets up the planner again. The link can be activated until ${until}.`
+      : `They open it once on the device where they plan, and Plus is theirs for life. No account is needed. One extra activation is included in case they set up the planner again. The link can be activated until ${until}.`,
+    manage: `(see ${family ? 'how many people have activated it' : 'whether it has been activated'}, change your message or the name shown with the gift). Keep this link to yourself:`,
+    forwardTitle: family ? 'A message you can forward to your family' : 'A message you can send with the link',
+    receipt: 'Your receipt comes separately from Creem, which handles the payment.'
+  };
+  const html = [
+    `<p>${escapeHtml(parts.thanks)}</p>`,
+    `<p><b>${escapeHtml(parts.linkTitle)}</b>:<br>\n${link(url)}</p>`,
+    `<p>${escapeHtml(parts.send)} ${escapeHtml(parts.how)}</p>`,
+    `<p><b>Manage the gift</b> ${escapeHtml(parts.manage)}<br>\n${link(manageUrl)}</p>`,
+    `<p><b>${escapeHtml(parts.forwardTitle)}</b></p>`,
+    `<div style="${QUOTE_STYLE}"><p><b>${escapeHtml(forward.subject)}</b></p>\n${textToHtml(forward.text)}</div>`,
+    `<p>${escapeHtml(parts.receipt)}</p>`,
+    '<p>Questions? Just reply to this email.</p>'
+  ].join('\n');
+  const text = [
+    parts.thanks,
+    '',
+    `${parts.linkTitle}:`,
+    url,
+    '',
+    `${parts.send} ${parts.how}`,
+    '',
+    `Manage the gift ${parts.manage}`,
+    manageUrl,
+    '',
+    `${parts.forwardTitle}:`,
+    '',
+    `Subject: ${forward.subject}`,
+    '',
+    forward.text,
+    '',
+    parts.receipt,
+    '',
+    '---',
+    'Questions? Just reply to this email.',
+    ''
+  ].join('\n');
+  return { subject: 'Your Daily Planner Plus gift is ready', html: htmlDocument(html), text };
+}
+
+/**
+ * The one email sent to the buyer of a gift: the link, the manage link and a
+ * message to forward. `plan` is what was bought: a personal gift ('gift-1',
+ * 'family-5') gets personal wording, anything else (a team tier, a gift made in
+ * the dashboard) is written for a company.
+ */
+export function giftBuyerEmail({ gift, url, manageUrl, plan = '' }) {
+  if (isPersonalGift(plan)) return personalGiftEmail({ gift, url, manageUrl });
   const seats = Number(gift.seats).toLocaleString('en-US');
   const forward = giftForwardMessage({ org: gift.org, message: gift.message, url, expiresAt: gift.expiresAt });
-  const link = href => `<a href="${escapeHtml(href)}">${escapeHtml(href)}</a>`;
-  const quote = 'margin:12px 0;padding:12px 16px;border-left:3px solid #ddd8d0;background:#f7f5f1';
   const html = [
     `<p>Thank you for giving Daily Planner Plus to ${escapeHtml(gift.org)}.</p>`,
     `<p><b>Your gift link</b> (for up to ${escapeHtml(seats)} people):<br>\n${link(url)}</p>`,
     `<p>Each person opens it once on the device where they plan. It can be activated until ${escapeHtml(longDate(gift.expiresAt))}.</p>`,
     `<p><b>Manage the gift</b> (see how many people activated it, change the message or the company name). Keep this link to yourself:<br>\n${link(manageUrl)}</p>`,
     '<p><b>A message you can forward to your team</b></p>',
-    `<div style="${quote}"><p><b>${escapeHtml(forward.subject)}</b></p>\n${textToHtml(forward.text)}</div>`,
+    `<div style="${QUOTE_STYLE}"><p><b>${escapeHtml(forward.subject)}</b></p>\n${textToHtml(forward.text)}</div>`,
     '<p>Questions? Just reply to this email.</p>'
   ].join('\n');
   const text = [

@@ -3945,9 +3945,9 @@ div.open-work-row__main { cursor: default; }
   color: var(--ink);
 }
 
-/* Phone header (1.21): Horizon has its own button. Every control is a 40px
-   target; the date gives way first ("Wed, Oct 7", then "Oct 7"), and below
-   375px Time stats moves into More so the date keeps room. */
+/* Phone header: every control is a 40px target; the date gives way first
+   ("Wed, Oct 7", then "Oct 7"). Horizon lives in the bottom bar (1.22), so
+   Time stats stays in the header down to 340px, then moves into More. */
 @media (max-width: 790px) {
   .topbar { grid-template-columns: minmax(0, max-content) minmax(max-content, 1fr) max-content; }
   .date-identity { min-width: 0; justify-self: stretch; }
@@ -3964,7 +3964,7 @@ div.open-work-row__main { cursor: default; }
   .topbar { --icon-size: 21px; }
 }
 .mobile-stats-action { display: none; }
-@media (max-width: 374px) {
+@media (max-width: 339px) {
   .topbar .actions > [data-stats-open] { display: none; }
   .mobile-more-menu .mobile-stats-action { display: flex; }
 }
@@ -4000,4 +4000,95 @@ div.open-work-row__main { cursor: default; }
 }
 @media (prefers-reduced-motion: reduce) {
   .plan-head__meter::before { transition: none; }
+}
+
+/* Day · Week · Horizon (1.22): the planner's three places, in the header on
+   tablets and desktops. The pill echoes the Now navigator; the current place
+   sits on a raised surface that slides between them. Below 1100px the labels
+   stay and the icons go. Phones keep the Day / Week toggle here and reach
+   Horizon from the bottom bar. */
+.view-switch {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+.view-switch__indicator {
+  position: absolute;
+  z-index: 0;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  box-shadow: 0 1px 2px rgba(28, 25, 21, .08), inset 0 0 0 1px var(--line);
+  pointer-events: none;
+}
+.view-switch__indicator:not([data-ready]) { opacity: 0; }
+.view-switch button {
+  position: relative;
+  z-index: 1;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 0 9px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: .7rem;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  transition: color 140ms ease, box-shadow 140ms ease;
+}
+.view-switch button svg { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.view-switch button:hover,
+.view-switch button.is-active { color: var(--ink); }
+.view-switch button:focus-visible { outline: 0; color: var(--ink); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+/* Before the indicator has measured itself, the current place still reads as current. */
+.view-switch:not(:has([data-ready])) button.is-active { background: var(--surface-strong); box-shadow: inset 0 0 0 1px var(--line); }
+@media (max-width: 1099px) {
+  .view-switch button { padding: 0 11px; }
+  .view-switch button svg { display: none; }
+}
+@media (min-width: 621px) {
+  .view-toggle-button { display: none; }
+  .date-identity { gap: 14px; }
+  .mobile-view-switch [data-mobile-view="horizon"] { display: none; }
+  /* Horizon opens below the header: its control stays live, the rest waits. */
+  body.is-horizon .date-title,
+  body.is-horizon .date-nav,
+  body.is-horizon .actions { opacity: .4; transition: opacity 170ms ease; }
+}
+@media (max-width: 620px) {
+  .view-switch { display: none; }
+  /* The phone bar: Plan · Schedule · Horizon. It stays above Horizon, below
+     anything opened on top of it (stacked dialogs, popovers). */
+  .mobile-view-switch { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mobile-view-switch__indicator { width: calc((100% - 6px) / 3); }
+  /* Three tabs share a phone's width: the icon leads the name, the summary
+     gets the whole tab below them. */
+  .mobile-view-switch button {
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: center;
+    align-content: center;
+    gap: 2px 6px;
+    padding: 5px 6px;
+  }
+  .mobile-view-switch button svg { width: 17px; height: 17px; justify-self: end; }
+  .mobile-view-switch__text { display: contents; }
+  .mobile-view-switch__text > span { justify-self: start; }
+  .mobile-view-switch__text small { grid-column: 1 / -1; min-width: 0; max-width: 100%; justify-self: center; text-align: center; }
+  body.is-horizon .mobile-view-switch {
+    z-index: calc(var(--z-modal) + 5);
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+  }
 }

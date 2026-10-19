@@ -446,28 +446,38 @@ html[data-paint="sunset"],
 
 .yp-adventure.is-done input { color: var(--muted); text-decoration: line-through; }
 
-.yp-month { position: relative; grid-column: 2; justify-self: start; display: inline-flex; }
-
-.yp-month select {
+.yp-month {
+  grid-column: 2;
+  justify-self: start;
+  max-width: 100%;
   height: 30px;
-  padding: 0 28px 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px 0 11px;
   border: 1px dashed var(--line-strong);
   border-radius: 999px;
-  outline: 0;
-  appearance: none;
   background: transparent;
   color: var(--muted);
   font: inherit;
   font-size: .76rem;
   font-weight: 620;
   cursor: pointer;
+  transition: border-color 130ms ease, background-color 130ms ease, box-shadow 130ms ease, color 130ms ease;
 }
 
-.yp-month:not(:has(option[value="-1"]:checked)) select { border-style: solid; border-color: color-mix(in srgb, var(--hz-adventure) 32%, var(--line)); background: color-mix(in srgb, var(--hz-adventure) 8%, var(--surface-strong)); color: var(--ink); }
+.yp-month span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.yp-month select:focus-visible { border-color: var(--hz-adventure); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hz-adventure) 14%, transparent); }
+.yp-month svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--faint); transition: transform 160ms cubic-bezier(.22,1,.36,1); }
 
-.yp-month svg { position: absolute; top: 50%; right: 9px; width: 14px; height: 14px; color: var(--faint); transform: translateY(-50%); pointer-events: none; }
+.yp-month.has-value { border-style: solid; border-color: color-mix(in srgb, var(--hz-adventure) 32%, var(--line)); background: color-mix(in srgb, var(--hz-adventure) 8%, var(--surface-strong)); color: var(--ink); }
+
+.yp-month:hover { border-color: color-mix(in srgb, var(--hz-adventure) 45%, var(--line-strong)); color: var(--ink); }
+
+.yp-month:focus-visible,
+.yp-month[aria-expanded="true"] { outline: 0; border-color: var(--hz-adventure); box-shadow: 0 0 0 3px color-mix(in srgb, var(--hz-adventure) 14%, transparent); color: var(--ink); }
+
+.yp-month[aria-expanded="true"] svg { transform: rotate(180deg); }
 
 .yp-subhead { margin-bottom: -8px; color: var(--faint); font-size: .68rem; font-weight: 720; letter-spacing: .07em; text-transform: uppercase; }
 

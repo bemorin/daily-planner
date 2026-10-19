@@ -21,7 +21,7 @@ export const PLANNER_API_URL = runtimeValue('PLANNER_API_URL').replace(/\/+$/, '
 // here. Buying goes through the owner API (GET/POST /api/checkout).
 export const PLUS_PUBLIC_KEY = runtimeValue('PLUS_PUBLIC_KEY').replace(/\s+/g, '');
 // Kept in step with package.json by scripts/check.mjs; feedback is grouped by it.
-export const APP_VERSION = '1.21.0';
+export const APP_VERSION = '1.22.0';
 // Public/project links are deployment configuration, not repository defaults.
 
 

@@ -5,18 +5,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { LANDING_EVENTS } from '../src/lib/planner-api.js';
-import { PLUS_UPCOMING, TEAM_QUOTE, TEAM_TIERS } from '../src/lib/pricing.js';
+import { PERSONAL_GIFTS, PLUS_UPCOMING, TEAM_QUOTE, TEAM_TIERS } from '../src/lib/pricing.js';
 import {
-  CURRENCY_KEY, TEAM_ROWS, buyState, checkoutUrl, defaultPlan, giftPageParams, isDefaultCompany, lowestPerPerson,
-  perPerson, planForPeople, planRow, readCheckoutOptions, rememberCurrency, statusTone, storedCurrency, tierLabel, tierPrice
+  PERSONAL_SEATS_MAX, TEAM_ROWS, buyState, checkoutUrl, currencyLine, defaultPlan, giftAudience, giftPageParams, isDefaultCompany,
+  lowestPerPerson, pageCurrency, perPerson, personalOffer, planForPeople, planRow, readCheckoutOptions, statusTone, tierLabel, tierPrice
 } from '../welcome/landing-model.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-
-const memory = () => {
-  const values = new Map();
-  return { getItem: key => (values.has(key) ? values.get(key) : null), setItem: (key, value) => values.set(key, String(value)) };
-};
 
 test('the team table lists every priced tier, then the quote', () => {
   assert.deepEqual(TEAM_ROWS.map(row => row.plan), [...TEAM_TIERS.map(tier => tier.plan), TEAM_QUOTE.plan]);
@@ -46,22 +41,20 @@ test('a number of people picks the smallest tier that fits, or the quote', () =>
   assert.equal(planForPeople('abc'), '');
 });
 
-test('the currency choice is remembered, and only EUR or USD', () => {
-  const storage = memory();
-  assert.equal(storedCurrency(storage), '');
-  rememberCurrency('USD', storage);
-  assert.equal(storage.getItem(CURRENCY_KEY), 'USD');
-  assert.equal(storedCurrency(storage), 'USD');
-  rememberCurrency('GBP', storage);
-  assert.equal(storedCurrency(storage), 'USD', 'an unknown currency is never stored');
-  const broken = { getItem() { throw new Error('denied'); }, setItem() { throw new Error('denied'); } };
-  assert.equal(storedCurrency(broken), '');
-  assert.doesNotThrow(() => rememberCurrency('EUR', broken));
+test('prices show in the server’s currency for the visitor’s country, else a guess from the languages', () => {
+  assert.equal(pageCurrency({ currency: 'EUR' }, ['en-US']), 'EUR', 'the server knows the country: no guessing');
+  assert.equal(pageCurrency({ currency: 'USD' }, ['fr-FR']), 'USD');
+  assert.equal(pageCurrency({ currency: '' }, ['fr-FR']), 'EUR', 'unknown country (local dev): the languages decide');
+  assert.equal(pageCurrency(null, ['en-US']), 'USD');
+  assert.equal(pageCurrency({ currency: 'GBP' }, ['de-DE']), 'EUR', 'an unknown currency is ignored');
+  assert.equal(currencyLine('EUR'), 'Prices in euros, taxes included.');
+  assert.equal(currencyLine('USD'), 'Prices in US dollars, taxes included.');
 });
 
 test('what is on sale: GET /api/checkout answers, read defensively', () => {
-  assert.deepEqual(readCheckoutOptions({ ok: true, plus: ['EUR', 'USD'], gift: ['USD', 'GBP'], test: true }), { known: true, plus: ['EUR', 'USD'], gift: ['USD'], test: true });
-  assert.deepEqual(readCheckoutOptions({ ok: true }), { known: true, plus: [], gift: [], test: false });
+  assert.deepEqual(readCheckoutOptions({ ok: true, plus: ['EUR', 'USD'], gift: ['USD', 'GBP'], currency: 'EUR', test: true }), { known: true, plus: ['EUR', 'USD'], gift: ['USD'], currency: 'EUR', test: true });
+  assert.deepEqual(readCheckoutOptions({ ok: true }), { known: true, plus: [], gift: [], currency: '', test: false });
+  assert.equal(readCheckoutOptions({ ok: true, plus: [], currency: 'GBP' }).currency, '');
   assert.equal(readCheckoutOptions({ ok: false, status: 0 }).known, false, 'unreachable: not known yet');
   assert.equal(readCheckoutOptions(null).known, false);
 });
@@ -91,12 +84,34 @@ test('every promised Plus feature has a status the page can style', () => {
   assert.equal(statusTone('Someday'), 'other');
 });
 
-test('the gift page knows when no company name was typed at checkout', () => {
+test('the gift page knows when no name was typed at checkout', () => {
   assert.equal(isDefaultCompany('Your company'), true);
   assert.equal(isDefaultCompany(' your company '), true);
+  assert.equal(isDefaultCompany('A friend'), true, 'Give Plus without a name');
+  assert.equal(isDefaultCompany('Your family'), true, 'Plus Family without a name');
   assert.equal(isDefaultCompany(''), true);
   assert.equal(isDefaultCompany(undefined), true);
   assert.equal(isDefaultCompany('Acme Studio'), false);
+  assert.equal(isDefaultCompany('Ben'), false);
+});
+
+test('personal gifts: their price, and who the gift page speaks to', () => {
+  assert.deepEqual(PERSONAL_GIFTS.map(gift => gift.plan), ['gift-1', 'family-5']);
+  assert.equal(personalOffer('gift-1', 'EUR').amount, 29);
+  assert.equal(personalOffer('family-5', 'USD').amount, 59);
+  assert.equal(personalOffer('family-5', 'GBP').amount, null);
+  assert.equal(personalOffer('up-to-50', 'EUR'), null, 'a team tier is not a personal gift');
+  assert.equal(PERSONAL_SEATS_MAX, 5);
+  // The server sends the plan: it decides.
+  assert.equal(giftAudience({ plan: 'gift-1', seats: 1 }), 'one');
+  assert.equal(giftAudience({ plan: 'family-5', seats: 5 }), 'family');
+  assert.equal(giftAudience({ plan: 'up-to-10', seats: 10 }), 'team');
+  assert.equal(giftAudience({ plan: '', seats: 3 }), 'team', 'a dashboard gift is for a company');
+  // An older server without the plan: a few seats read as a personal gift.
+  assert.equal(giftAudience({ seats: 1 }), 'one');
+  assert.equal(giftAudience({ seats: 5 }), 'family');
+  assert.equal(giftAudience({ seats: 50 }), 'team');
+  assert.equal(giftAudience({}), 'team');
 });
 
 test('the gift page reads a Creem return, an older confirmation link or a gift page link', () => {
@@ -121,7 +136,40 @@ test('every count the landing page sends is in its notice, and every listed coun
 });
 
 test('no Stripe left on the public pages', async () => {
-  for (const file of ['welcome/index.html', 'welcome/landing.js', 'welcome/landing.css', 'welcome/landing-model.js', 'welcome/thanks/index.html', 'welcome/thanks/thanks.js']) {
+  for (const file of ['welcome/index.html', 'welcome/landing.js', 'welcome/landing.css', 'welcome/landing-model.js', 'welcome/listbox.js', 'welcome/stepper.js', 'welcome/thanks/index.html', 'welcome/thanks/thanks.js']) {
     assert.doesNotMatch(await readFile(join(root, file), 'utf8'), /stripe/i, file);
   }
+});
+
+test('the landing page has no native dropdowns and no currency switch', async () => {
+  const page = await readFile(join(root, 'welcome/index.html'), 'utf8');
+  const script = await readFile(join(root, 'welcome/landing.js'), 'utf8');
+  assert.doesNotMatch(page, /<select\b/i, 'dropdowns are the app’s own (listbox.js)');
+  assert.doesNotMatch(page, /data-cur(?:rency)?[\s>=]/, 'no EUR / USD switch');
+  assert.doesNotMatch(script, /rememberCurrency|storedCurrency|data-cur-switch/);
+  assert.match(script, /rememberReferral\(\)/, 'a partner’s link is remembered on load');
+  assert.match(await readFile(join(root, 'welcome/thanks/thanks.js'), 'utf8'), /rememberReferral\(\)/);
+  assert.match(script, /supportEmail: ''/, 'the support address stays blank in the source');
+});
+
+test('pricing is for one person; the team tiers live in the team section', async () => {
+  const page = await readFile(join(root, 'welcome/index.html'), 'utf8');
+  const section = id => {
+    const start = page.indexOf(`id="${id}"`);
+    return page.slice(start, page.indexOf('</section>\n\n    <section', start));
+  };
+  assert.match(section('teams'), /data-tiers/);
+  assert.doesNotMatch(section('pricing'), /data-tiers/);
+  assert.match(section('pricing'), /href="#teams"/, 'pricing points to the team gift');
+  const order = [...page.matchAll(/<section class="(?:hero|section)[^"]*" id="([a-z]+)"/g)].map(match => match[1]);
+  assert.deepEqual(order, ['top', 'how', 'progress', 'week', 'tools', 'year', 'yours', 'plus', 'teams', 'pricing', 'faq']);
+  const tinted = [...page.matchAll(/<section class="((?:hero|section)[^"]*)" id="([a-z]+)"/g)].map(match => match[1].includes('section--tint'));
+  tinted.forEach((tint, index) => assert.ok(!(tint && tinted[index + 1]), `two tinted sections touch at ${order[index]}`));
+});
+
+test('country unknown: the language guess, unless only the other currency is on sale', () => {
+  assert.equal(pageCurrency({ currency: 'EUR', plus: ['USD'], gift: ['USD'] }, ['en-US']), 'EUR', 'the server’s choice always wins');
+  assert.equal(pageCurrency({ currency: '', plus: ['USD'], gift: ['USD'] }, ['fr-FR']), 'USD');
+  assert.equal(pageCurrency({ currency: '', plus: ['EUR', 'USD'], gift: [] }, ['fr-FR']), 'EUR');
+  assert.equal(pageCurrency({ currency: '', plus: [], gift: [] }, ['fr-FR']), 'EUR', 'nothing on sale: the guess');
 });

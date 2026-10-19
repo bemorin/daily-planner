@@ -35,16 +35,8 @@
 
 .plus-price span { color: var(--muted); font-size: .9rem; font-weight: 620; letter-spacing: -.01em; }
 
-.plus-currency { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-strong); }
-
-.plus-currency button { min-width: 44px; min-height: 30px; padding: 0 9px; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font-size: .68rem; font-weight: 680; letter-spacing: .04em; cursor: pointer; }
-
-.plus-currency button[aria-pressed="true"] { background: var(--soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
-
-.plus-currency button:hover,
-.plus-currency button:focus-visible { outline: 0; color: var(--ink); }
-
-.plus-currency button:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+/* No currency to choose: the buyer's country decides, said once, quietly. */
+.plus-currency-note { margin: 0; color: var(--faint); font-size: .74rem; font-weight: 560; }
 
 .modal__header .plus-lede { max-width: 54ch; margin: 10px 0 0; color: var(--muted); font-size: .8rem; line-height: 1.55; }
 
@@ -263,6 +255,28 @@
 
 .plus-dialog .privacy-footnote { margin-top: 14px; }
 
+/* Personal gifts: two quiet actions under Get Plus, before the team note. */
+
+.plus-gifts { display: grid; gap: 10px; margin: 22px 0 0; }
+
+.plus-cta--done + .plus-gifts { margin-top: 22px; }
+
+.plus-gifts__lead { display: grid; gap: 2px; margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.45; }
+
+.plus-gifts__lead strong { color: var(--ink); font-size: .84rem; font-weight: 680; letter-spacing: -.01em; }
+
+.plus-gifts__row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.plus-gifts .plus-gifts__buy { min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px 0 11px; border-radius: 10px; color: var(--ink); font-size: .76rem; font-weight: 640; }
+
+.plus-gifts__buy svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--accent); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+.plus-gifts .plus-gifts__buy:disabled { cursor: default; color: var(--muted); }
+
+.plus-gifts .plus-gifts__buy:disabled:not([aria-busy="true"]) { opacity: .6; }
+
+.plus-gifts + .plus-teams { margin-top: 14px; }
+
 /* The compact feature list of a gift */
 
 .plus-features { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
@@ -404,6 +418,8 @@
   .plus-cta__row { flex-direction: column; align-items: stretch; gap: 2px; }
   .plus-cta .plus-cta__buy { width: 100%; }
   .plus-upcoming { padding: 12px 13px 10px; }
+  .plus-gifts__row { flex-direction: column; }
+  .plus-gifts .plus-gifts__buy { width: 100%; justify-content: flex-start; }
 }
 
 @media (max-width: 560px) {

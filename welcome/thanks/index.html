@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Your gift page — Daily Planner</title>
-  <meta name="description" content="Your gift page: a private page with your Daily Planner gift link, the seats used and the message your team sees.">
+  <meta name="description" content="Your gift page: a private page with your Daily Planner gift link, how often it has been used and the message people see with it.">
   <meta name="robots" content="noindex, nofollow">
   <!-- The address carries the gift page key: never send it to another site. -->
   <meta name="referrer" content="no-referrer">
@@ -68,8 +68,8 @@
         <div class="manage__head">
           <p class="kicker"><svg class="i"><use href="#i-gift"/></svg>Your gift page</p>
           <h1 tabindex="-1" data-ready-title>Your gift is ready</h1>
-          <p class="lead">Forward the link below to your people. Each person who opens it activates Daily Planner Plus for life on their own planner. No accounts, no names collected.</p>
-          <p class="mg-about">This is your gift page: a private page with your gift link, the seats used and the message your team sees. Its link is also in your email.</p>
+          <p class="lead" data-ready-lead>Forward the link below to your people. Each person who opens it activates Daily Planner Plus for life on their own planner. No accounts, no names collected.</p>
+          <p class="mg-about" data-ready-about>This is your gift page: a private page with your gift link, the seats used and the message your team sees. Its link is also in your email.</p>
         </div>
 
         <div class="manage__grid">
@@ -80,13 +80,13 @@
               <button class="btn btn--primary" type="button" data-copy-link><svg class="i"><use href="#i-copy"/></svg>Copy link</button>
             </div>
             <p class="mg-status" data-link-status role="status"></p>
-            <p class="mg-fine">Share it only with the people it’s for: whoever opens it uses a seat.</p>
-            <p class="mg-prompt" data-link-prompt hidden><svg class="i"><use href="#i-spark"/></svg><span>Before you forward it, <a href="#gift-from">add your company name</a>: it’s shown with the gift.</span></p>
+            <p class="mg-fine" data-link-fine>Share it only with the people it’s for: whoever opens it uses a seat.</p>
+            <p class="mg-prompt" data-link-prompt hidden><svg class="i"><use href="#i-spark"/></svg><span><span data-prompt-before>Before you forward it, </span><a href="#gift-from" data-prompt-link>add your company name</a>: it’s shown with the gift.</span></p>
           </div>
 
           <div class="mg-card mg-seats">
             <div class="mg-card__head">
-              <h2><svg class="i"><use href="#i-user"/></svg>Seats used</h2>
+              <h2><svg class="i"><use href="#i-user"/></svg><span data-seats-title>Seats used</span></h2>
               <button class="btn btn--ghost btn--sm" type="button" data-refresh><svg class="i"><use href="#i-refresh"/></svg>Refresh</button>
             </div>
             <p class="mg-seats__count"><b data-redeemed>0</b><span>of <span data-seats>0</span></span></p>
@@ -96,10 +96,10 @@
           </div>
 
           <form class="mg-card mg-message" data-message-form novalidate>
-            <h2><svg class="i"><use href="#i-spark"/></svg>What people see</h2>
-            <p class="mg-fine">Shown with the gift when someone opens the link.</p>
+            <h2><svg class="i"><use href="#i-spark"/></svg><span data-message-title>What people see</span></h2>
+            <p class="mg-fine" data-message-fine>Shown with the gift when someone opens the link.</p>
             <div class="mg-org-prompt" id="org-prompt" data-org-prompt hidden><svg class="i"><use href="#i-spark"/></svg><p data-org-prompt-text>Add your company name before you forward the link: people see it as “A gift from …” when they open it.</p></div>
-            <label class="mg-field" data-org-field><span>From</span><input type="text" name="org" id="gift-from" maxlength="80" required autocomplete="organization" aria-describedby="org-hint"><small id="org-hint">Shown as “A gift from …”</small></label>
+            <label class="mg-field" data-org-field><span data-org-label>From</span><input type="text" name="org" id="gift-from" maxlength="80" required autocomplete="organization" aria-describedby="org-hint"><small id="org-hint">Shown as “A gift from …”</small></label>
             <label class="mg-field"><span>Message</span><textarea name="message" rows="3" maxlength="280" aria-describedby="message-count"></textarea><small id="message-count" data-message-count>0/280</small></label>
             <div class="mg-actions">
               <button class="btn btn--primary btn--sm" type="submit" data-save>Save</button>
@@ -109,14 +109,14 @@
           </form>
 
           <div class="mg-card mg-forward">
-            <h2><svg class="i"><use href="#i-mail"/></svg>Ready to forward</h2>
+            <h2><svg class="i"><use href="#i-mail"/></svg><span data-forward-title>Ready to forward</span></h2>
             <div class="mg-msgs">
               <div class="mg-msg">
                 <div class="mg-msg__head"><b><svg class="i"><use href="#i-mail"/></svg>Email</b><button class="btn btn--ghost btn--sm" type="button" data-copy="email"><svg class="i"><use href="#i-copy"/></svg>Copy</button></div>
                 <pre data-forward="email"></pre>
               </div>
               <div class="mg-msg">
-                <div class="mg-msg__head"><b><svg class="i"><use href="#i-chat"/></svg>Slack or Teams</b><button class="btn btn--ghost btn--sm" type="button" data-copy="chat"><svg class="i"><use href="#i-copy"/></svg>Copy</button></div>
+                <div class="mg-msg__head"><b><svg class="i"><use href="#i-chat"/></svg><span data-chat-label>Slack or Teams</span></b><button class="btn btn--ghost btn--sm" type="button" data-copy="chat"><svg class="i"><use href="#i-copy"/></svg>Copy</button></div>
                 <pre data-forward="chat"></pre>
               </div>
             </div>
@@ -126,10 +126,10 @@
 
         <div class="mg-own">
           <div>
-            <h2>Your own planner</h2>
-            <p>To get Plus yourself, open the gift link too: it uses one seat, like everyone else’s.</p>
+            <h2 data-own-title>Your own planner</h2>
+            <p data-own-text>To get Plus yourself, open the gift link too: it uses one seat, like everyone else’s.</p>
           </div>
-          <a class="btn btn--ghost" href="../../">Open your own planner<svg class="i"><use href="#i-arrow"/></svg></a>
+          <a class="btn btn--ghost" href="../../" data-own-link><span data-own-label>Open your own planner</span><svg class="i"><use href="#i-arrow"/></svg></a>
         </div>
         <p class="mg-fine mg-keep">Bookmark your gift page to come back to it. Keep its address to yourself: it lets you change the name and the message.</p>
       </section>

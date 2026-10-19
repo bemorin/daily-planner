@@ -65,6 +65,10 @@ test('with Plus configured, the notice says what a gift and a purchase send — 
   assert.match(words, /Activating a gift sends only the gift code/);
   assert.match(words, /a purchase sends only the checkout reference/);
   assert.doesNotMatch(words, /Stripe/);
+  assert.match(words, /partner’s link/);
+  assert.match(words, /reads the country of your connection for that one request/);
+  assert.match(words, /that code is kept in this browser for 60 days and sent with a purchase/);
+  for (const config of [{ plannerApi: true }, { plannerApi: false, plus: true }]) assert.doesNotMatch(text(privacyNoticeSections(config)), /referral/, 'no Plus, no referral code');
   const counts = privacyNoticeSections({ plannerApi: true }).find(section => section.id === 'counts');
   for (const words of ['opened the Plus details', 'went to buy Plus', 'unlocked Plus', 'opened a gift link', 'activated a gift']) assert.ok(counts.list.includes(words), words);
   const landing = new Map(api.LANDING_EVENTS);
@@ -136,4 +140,8 @@ test('every trackEvent() call in the planner is listed in the Privacy notice', a
   assert.ok(used.size >= 10, 'found the planner’s counts');
   for (const name of used) assert.ok(listed.has(name), `${name} is counted but not described in the Privacy notice`);
   for (const name of listed) assert.ok(used.has(name), `${name} is described but never counted`);
+});
+
+test('a partner’s referral code stays out of backups and sync', () => {
+  assert.ok(!api.REFERRAL_KEY.startsWith('daily-planner:'), 'backups and sync carry every daily-planner: key');
 });

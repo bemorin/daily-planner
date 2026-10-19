@@ -21,7 +21,8 @@ Object.defineProperty(globalThis, 'localStorage', {
 });
 
 const plus = await import('../src/lib/plus.js');
-const { plusFeatureId, plusProblem, PLUS_FEATURES } = await import('../src/features/plus-dialog.js');
+const { currencyNote, giftLabel, giverName, plusFeatureId, plusProblem, PLUS_FEATURES } = await import('../src/features/plus-dialog.js');
+const { PERSONAL_GIFTS } = await import('../src/lib/pricing.js');
 
 const b64url = bytes => Buffer.from(bytes).toString('base64url');
 async function mint(payload, key = pair.privateKey) {
@@ -198,4 +199,21 @@ test('Horizon features open the dialog on themselves, and problems are explained
   assert.equal(plusProblem('purchase', { status: 402 }).keep, true, 'an unfinished payment is tried again later');
   assert.equal(plusProblem('purchase', { status: 404 }).keep, undefined, 'an unknown session is forgotten');
   assert.match(plusProblem('purchase', { status: 0 }).text, /payment is safe/);
+});
+
+test('the Plus dialog names the currency once and labels the personal gifts', () => {
+  assert.equal(currencyNote('EUR'), 'Prices in euros, taxes included.');
+  assert.equal(currencyNote('USD'), 'Prices in US dollars, taxes included.');
+  const [one, family] = PERSONAL_GIFTS;
+  assert.match(giftLabel(one, 'EUR'), /^Give Plus — (€\s?29|29\s?€)$/);
+  assert.match(giftLabel(family, 'USD'), /^Plus Family — up to 5 people — \$59$/);
+});
+
+test('a gift from no one in particular reads as a sentence', () => {
+  assert.equal(giverName('A friend'), 'a friend');
+  assert.equal(giverName('Your family'), 'your family');
+  assert.equal(giverName('Claire'), 'Claire');
+  assert.equal(giverName(''), '');
+  assert.match(plusProblem('gift', { status: 409 }, { org: 'A friend' }).text, /Ask the person who sent it/);
+  assert.match(plusProblem('gift', { status: 409 }, { org: 'Claire' }).text, /Ask Claire/);
 });

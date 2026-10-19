@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createMemoryStore, createPlannerApi } from '../server/planner-api.js';
 import { createD1Store } from '../server/d1-store.js';
-import { formatGiftCode, GIFT_CODE_ALPHABET, giftForwardMessage, giftLimit, newGiftCode, normalizeGiftCode, validateGiftFields } from '../server/gifts.js';
+import { formatGiftCode, GIFT_CODE_ALPHABET, giftBuyerEmail, giftForwardMessage, giftLimit, newGiftCode, normalizeGiftCode, validateGiftFields } from '../server/gifts.js';
 import { generatePlusKeyPair, giftManageKey, verifyLicense } from '../server/licenses.js';
 
 const START = Date.parse('2026-10-09T08:00:00Z');
@@ -153,7 +153,7 @@ test('an invoiced gift: anyone with the link sees it and activates Plus until th
     const lower = gift.code.replace(/-/g, '').toLowerCase();
     const info = await asJson(await api(get(`gifts/${lower}`)));
     assert.equal(info.status, 200, label);
-    assert.deepEqual(info.body, { org: 'Acme', message: 'Enjoy planning 2027!', seats: 3, redeemed: 0, available: true, expiresAt: '2027-10-09T08:00:00.000Z', status: 'available' }, label);
+    assert.deepEqual(info.body, { org: 'Acme', message: 'Enjoy planning 2027!', seats: 3, redeemed: 0, available: true, expiresAt: '2027-10-09T08:00:00.000Z', status: 'available', plan: '' }, label);
 
     const ids = new Set();
     for (let index = 0; index < 4; index += 1) {
@@ -389,6 +389,38 @@ test('the forwardable message names the company and the link', () => {
   assert.ok(message.text.includes('Happy 2027!'));
   assert.ok(message.text.includes('until 9 October 2027'));
   assert.ok(message.text.includes('nothing about you is collected'));
+});
+
+test('personal gifts get a message from the giver, to one person or to a family', () => {
+  const url = 'https://planner.bemorin.com/?gift=ABCD-EFGH-JKMN';
+  const one = giftForwardMessage({ org: 'A friend', message: 'Happy birthday!', url, expiresAt: '2027-10-09T08:00:00.000Z', seats: 1, personal: true });
+  assert.equal(one.subject, 'A gift for you: Daily Planner Plus');
+  assert.ok(one.text.startsWith('Hi,\n\nI’m giving you Daily Planner Plus'));
+  for (const part of [url, 'Happy birthday!', 'until 9 October 2027', 'nothing about you is collected']) assert.ok(one.text.includes(part), part);
+  assert.ok(!one.text.includes('A friend'), 'written by the giver, not about them');
+  const family = giftForwardMessage({ org: 'Your family', message: '', url, expiresAt: '2027-10-09T08:00:00.000Z', seats: 5, personal: true });
+  assert.equal(family.subject, 'A gift for the family: Daily Planner Plus');
+  assert.ok(family.text.includes('Each of you opens this link once, on the device where you plan (it works for up to 5 people)'));
+  for (const message of [one, family]) assert.doesNotMatch(`${message.subject}\n${message.text}`, /team|company/i);
+});
+
+test('the buyer email follows what was bought: personal words for a personal gift, the company for a team', () => {
+  const gift = { code: 'ABCDEFGHJKMN', org: 'Camille & co', message: '', seats: 5, expiresAt: '2027-10-09T08:00:00.000Z' };
+  const links = { url: 'https://planner.bemorin.com/?gift=ABCD-EFGH-JKMN', manageUrl: 'https://planner.bemorin.com/welcome/thanks/?gift=ABCD-EFGH-JKMN&key=abc' };
+  const family = giftBuyerEmail({ gift, ...links, plan: 'family-5' });
+  assert.equal(family.subject, 'Your Daily Planner Plus gift is ready');
+  for (const content of [family.text, family.html]) assert.doesNotMatch(content, /team|company/i);
+  for (const part of [links.url, links.manageUrl, 'for up to 5 people', 'Send this link to your family.', 'Each person opens it once']) assert.ok(family.text.includes(part), part);
+  assert.ok(family.html.includes('key=abc') && family.html.includes('&amp;key=abc'), 'links escaped in HTML');
+  const one = giftBuyerEmail({ gift: { ...gift, seats: 1 }, ...links, plan: 'gift-1' });
+  assert.ok(one.text.includes('Your gift link, for one person') && one.text.includes('They open it once'));
+  // A team tier, or a gift made in the dashboard (no plan), keeps the team email.
+  for (const plan of ['up-to-50', '', undefined]) {
+    const team = giftBuyerEmail({ gift, ...links, plan });
+    assert.equal(team.subject, 'Your Daily Planner Plus gift link for Camille & co', String(plan));
+    assert.ok(team.text.includes('A message you can forward to your team:') && team.text.includes('Camille & co is giving you Daily Planner Plus'), String(plan));
+    assert.ok(team.html.includes('Camille &amp; co'), String(plan));
+  }
 });
 
 test('gift routes answer CORS preflights with PATCH for allowed origins', async () => {
