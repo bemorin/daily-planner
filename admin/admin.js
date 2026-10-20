@@ -8,8 +8,10 @@
 // series once per sign-in and again on Refresh. The page carries its own
 // version (APP_VERSION) and compares it with the one the API was deployed
 // with: when they differ, a banner offers a reload past the caches
-// (./version.js).
+// (./version.js). “Needs your attention”, at the top, lists what to act on
+// (./attention.js) and marks the cards and rows it points to.
 
+import { ATTENTION_SECTIONS, attentionBySection, attentionNote, attentionWhen, buildAttention, setupChecks } from './attention.js';
 import { createTrendsView } from './trends-view.js';
 import { dayOf, normalizeSeries, seriesWindow } from './trends.js';
 // The landing page's stepper (− value +): no browser spin arrows on Seats.
@@ -50,9 +52,9 @@ const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', ma
 // This page's own release, kept in step with package.json and src/config.js
 // (tests/admin-version.test.js). Not imported: it must come from this very
 // file, so an old cached admin.js shows its old number.
-const APP_VERSION = '1.25.0';
+const APP_VERSION = '1.26.0';
 // What Reload fetches again past the browser cache before opening the page anew.
-const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js'];
+const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js'];
 const RELOAD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/></svg>';
 
 class ApiError extends Error {
@@ -316,6 +318,7 @@ function clearRendered() {
   showResult('[data-owner-license-result]', '');
   showResult('[data-owner-revoke-result]', '');
   revokedState = { gifts: new Map(), licenses: new Map(), sources: new Set() };
+  clearAttention();
 }
 
 function signOut(message = '') {
@@ -436,7 +439,7 @@ function renderTeams(summary) {
     ? `Latest ${number(rows.length)} of ${number(totals.count)} requests (export CSV for all). Reply by email; delete on request.`
     : 'Teams who asked for the team kit. Reply by email; delete on request.';
   target.innerHTML = rows.length
-    ? `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Date</th><th>Company</th><th class="num">Team size</th><th>Plan</th><th>Currency</th><th>Request</th><th>Timing</th><th>Name</th><th>Email</th><th>Message</th><th>Source</th><th></th></tr></thead><tbody>${rows.map(row => `<tr><td class="owner-nowrap">${esc(when(row.createdAt))}</td><td><b>${esc(row.company)}</b></td><td class="num">${number(row.teamSize)}</td><td class="owner-nowrap">${esc(PLAN_LABELS[row.plan] || row.plan || '—')}</td><td>${esc(row.currency || '—')}</td><td>${esc(KIND_LABELS[row.kind] || row.kind || '—')}</td><td class="owner-nowrap">${esc(TIMING_LABELS[row.timing] || row.timing)}</td><td>${esc(row.name || '—')}</td><td>${mailLink(row.email)}</td><td class="owner-message">${esc(row.message || '')}</td><td>${esc(row.source || '')}</td><td><button class="text-button text-button--danger" type="button" data-owner-delete-team="${Number(row.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
+    ? `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Date</th><th>Company</th><th class="num">Team size</th><th>Plan</th><th>Currency</th><th>Request</th><th>Timing</th><th>Name</th><th>Email</th><th>Message</th><th>Source</th><th></th></tr></thead><tbody>${rows.map(row => `<tr data-owner-attn="team:${Number(row.id)}"><td class="owner-nowrap">${esc(when(row.createdAt))}</td><td><b>${esc(row.company)}</b></td><td class="num">${number(row.teamSize)}</td><td class="owner-nowrap">${esc(PLAN_LABELS[row.plan] || row.plan || '—')}</td><td>${esc(row.currency || '—')}</td><td>${esc(KIND_LABELS[row.kind] || row.kind || '—')}</td><td class="owner-nowrap">${esc(TIMING_LABELS[row.timing] || row.timing)}</td><td>${esc(row.name || '—')}</td><td>${mailLink(row.email)}</td><td class="owner-message">${esc(row.message || '')}</td><td>${esc(row.source || '')}</td><td><button class="text-button text-button--danger" type="button" data-owner-delete-team="${Number(row.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
     : '<p class="owner-empty">No team kit requests yet.</p>';
 }
 
@@ -664,7 +667,7 @@ function giftRowHtml(row) {
   const buyer = row.buyerEmail ? `<small class="owner-small">${mailLink(row.buyerEmail)}${row.emailedAt ? ` · emailed ${esc(day(row.emailedAt))}` : ''}</small>` : '';
   const note = row.note ? `<small class="owner-small">${esc(row.note)}</small>` : '';
   const amount = row.amount != null ? `<small class="owner-small">${esc(money(row.amount, row.currency))}</small>` : '';
-  return `<tr>
+  return `<tr data-owner-attn="gift:${esc(row.code)}">
     <td class="owner-nowrap"><code>${esc(row.code)}</code></td>
     <td class="owner-gift-org"><b>${esc(row.org)}</b>${message}${buyer}${note}</td>
     <td class="num owner-nowrap"><b>${number(row.redeemed)}</b> / ${number(row.seats)}<small class="owner-small">up to ${number(row.limit)}</small>${status}</td>
@@ -999,7 +1002,7 @@ function refundRowHtml(row) {
   const restore = row.revoked && inForce(row)
     ? `<button class="text-button" type="button" data-owner-restore="${esc(row.id)}" data-owner-restore-label="${esc(label)}">Restore</button>`
     : '';
-  return `<tr>
+  return `<tr data-owner-attn="refund:${esc(row.id)}">
     <td class="owner-nowrap">${esc(day(row.createdAt))}</td>
     <td class="owner-nowrap"><b>${esc(kind)}</b>${reason}</td>
     <td class="num owner-nowrap">${esc(money(row.amount, row.currency)) || '—'}</td>
@@ -1108,7 +1111,6 @@ function paymentsItem(payments) {
       ? `<td><span class="owner-check" aria-hidden="true">✓</span><span class="sr-only">Set: </span><code>${esc(id)}</code></td>`
       : `<td class="owner-missing">missing · <code>CREEM_${item.toUpperCase()}_${currency}</code></td>`;
   };
-  const allProducts = PAYMENT_ITEMS.every(([item]) => PAYMENT_CURRENCIES.every(currency => products[item]?.[currency]));
   const table = `<div class="owner-scroll"><table class="owner-table owner-mini"><thead><tr><th>Product</th>${PAYMENT_CURRENCIES.map(currency => `<th>${currency}</th>`).join('')}</tr></thead><tbody>${PAYMENT_ITEMS.map(([item, label]) => `<tr><th scope="row">${label}</th>${PAYMENT_CURRENCIES.map(currency => cell(item, currency)).join('')}</tr>`).join('')}</tbody></table></div>`;
   const mode = payments.mode === 'live' ? 'live mode' : payments.mode === 'test' ? 'test mode: no real payments, and buying is switched off on the public address — test on your project’s .pages.dev address' : '';
   const key = payments.apiKeySet
@@ -1121,8 +1123,7 @@ function paymentsItem(payments) {
     ? `${copyRow('Webhook URL', payments.webhookUrl)}<p>Creem → Developers → Webhooks: add this URL with the events <code>checkout.completed</code>, <code>refund.created</code> and <code>dispute.created</code>, then paste the signing secret into <code>CREEM_WEBHOOK_SECRET</code>. The last two switch Plus off after a refund or a dispute.</p>`
     : '';
   const error = payments.error ? `<p class="owner-setup__error">${esc(payments.error)}</p>` : '';
-  const state = !payments.configured ? 'missing' : (payments.error || !allProducts || !payments.webhookSecretSet || payments.mode === 'test') ? 'warn' : 'ok';
-  return { title: 'Payments (Creem)', state, html: `${key}${error}<p>Product ids (one-time products, one per item and currency):</p>${table}${webhook}${url}` };
+  return { key: 'payments', title: 'Payments (Creem)', html: `${key}${error}<p>Product ids (one-time products, one per item and currency):</p>${table}${webhook}${url}` };
 }
 
 // Legal pages (legal/): their contact and address come from build variables.
@@ -1134,12 +1135,12 @@ function legalItem(base = 'https://planner.bemorin.com') {
   const page = path => new URL(path, `${base.replace(/\/+$/, '')}/`).href;
   const urls = `<p>The addresses Creem asks for:</p>${copyRow('Terms', page('legal/terms/'))}${copyRow('Privacy', page('legal/privacy/'))}${copyRow('Website', page('welcome/'))}`;
   const registration = value('LEGAL_REGISTRATION') ? '' : ' If you have a SIRET or VAT number, add it with <code>DAILY_PLANNER_LEGAL_REGISTRATION</code>.';
-  if (!missing.length) return { title: 'Legal pages', state: 'ok', html: `<p>The legal notice shows your contact (${esc(value('SUPPORT_EMAIL'))}) and postal address.${registration}</p>${urls}` };
+  if (!missing.length) return { key: 'legal', title: 'Legal pages', html: `<p>The legal notice shows your contact (${esc(value('SUPPORT_EMAIL'))}) and postal address.${registration}</p>${urls}` };
   const names = missing.map(([, variable]) => `<code>${variable}</code>`).join(' and ');
   const what = missing.map(([, , label]) => label).join(' or ');
   return {
+    key: 'legal',
     title: 'Legal pages',
-    state: 'warn',
     html: `<p>Set the build variable${missing.length > 1 ? 's' : ''} ${names} (Settings → Variables and Secrets, type Text), then redeploy. Until then the legal pages show no ${what}${value('SUPPORT_EMAIL') ? '' : ' and point to the “Ask a question” form'}.${registration}</p>${urls}`
   };
 }
@@ -1149,45 +1150,47 @@ function versionItem(summary) {
   const server = String(summary.version || '').trim();
   const page = esc(APP_VERSION);
   const order = compareVersions(server, APP_VERSION);
-  if (Number.isNaN(order)) return { title: 'Deployed version', state: 'warn', label: 'Unknown', html: `<p>This API does not report its version yet (it is older than 1.25.0): redeploy it. This page is version ${page}.</p>` };
-  if (order === 0) return { title: `Deployed version ${server}`, state: 'ok', label: 'Up to date', html: '<p>This page is the deployed dashboard.</p>' };
+  if (Number.isNaN(order)) return { key: 'version', title: 'Deployed version', label: 'Unknown', html: `<p>This API does not report its version yet (it is older than 1.25.0): redeploy it. This page is version ${page}.</p>` };
+  if (order === 0) return { key: 'version', title: `Deployed version ${server}`, label: 'Up to date', html: '<p>This page is the deployed dashboard.</p>' };
   return {
+    key: 'version',
     title: `Deployed version ${server}`,
-    state: 'warn',
     label: 'Reload needed',
     html: `<p>This page is version ${page}, from ${order > 0 ? 'an older' : 'a different'} deployment kept in a cache. Use Reload at the top of the page. If it stays, purge Cloudflare’s cache: your domain → Caching → Configuration → Purge Everything.</p>`
   };
 }
 
+// Each item's state comes from setupChecks() (./attention.js), which also
+// feeds “Needs your attention”, so the two always agree.
 function setupItems(summary) {
   const setup = summary.setup;
   const base = setup.publicBaseUrl || 'https://planner.bemorin.com';
+  const states = new Map(setupChecks(summary, { config: APP_CONFIG, pageVersion: APP_VERSION }).map(check => [check.key, check.state]));
   const items = [versionItem(summary)];
   const email = setup.email || {};
   items.push(email.configured
-    ? { title: 'Email (Resend)', state: 'ok', html: `<p>Sending as ${esc(email.from)}, at most ${number(email.dailyLimit)} emails a day (<code>EMAIL_DAILY_LIMIT</code>; Resend’s free plan allows 100 a day, 3,000 a month).</p>` }
+    ? { key: 'email', title: 'Email (Resend)', html: `<p>Sending as ${esc(email.from)}, at most ${number(email.dailyLimit)} emails a day (<code>EMAIL_DAILY_LIMIT</code>; Resend’s free plan allows 100 a day, 3,000 a month).</p>` }
     : {
+      key: 'email',
       title: 'Email (Resend)',
-      state: 'missing',
       html: `<p>Set the secret <code>RESEND_API_KEY</code>${email.apiKeySet ? ' (set)' : ''} and <code>EMAIL_FROM</code>${email.fromSet ? ' (set, but not a valid address)' : ''}, e.g. <code>Ben Morin &lt;hello@bemorin.com&gt;</code>, then redeploy.</p>
         <p>In Resend → Domains, add your domain. Resend lists DNS records (DKIM and SPF, plus MX for bounces): add each one in Cloudflare → your domain → DNS as “DNS only”, then wait until Resend shows “Verified”. Create the API key with “Sending access” only.</p>`
     });
   items.push(email.ownerEmail
-    ? { title: 'Owner email', state: 'ok', html: `<p>Team requests and test sends go to ${esc(email.ownerEmail)}; gift buyers’ replies too.</p>` }
-    : { title: 'Owner email', state: 'missing', html: '<p>Set <code>OWNER_EMAIL</code> to get team request notifications and test sends, and to receive replies from gift buyers.</p>' });
+    ? { key: 'owner-email', title: 'Owner email', html: `<p>Team requests and test sends go to ${esc(email.ownerEmail)}; gift buyers’ replies too.</p>` }
+    : { key: 'owner-email', title: 'Owner email', html: '<p>Set <code>OWNER_EMAIL</code> to get team request notifications and test sends, and to receive replies from gift buyers.</p>' });
 
   const plus = setup.plus || {};
   if (plus.configured) {
     const appKey = String(APP_CONFIG.PLUS_PUBLIC_KEY || '').trim();
-    const matches = appKey === plus.publicKey;
-    const app = matches ? 'The app on this site has the matching public key.'
+    const app = appKey === plus.publicKey ? 'The app on this site has the matching public key.'
       : appKey ? 'The app on this site has a different public key: licences made here won’t unlock Plus in it. Set the build variable to the key above and redeploy.'
         : 'The app on this site has no public key yet, so Plus can’t be activated in it. Set the build variable to the key above and redeploy.';
-    items.push({ title: 'Plus licences', state: matches ? 'ok' : 'warn', html: `<p><code>PLUS_SIGNING_KEY</code> is set. Public key for the app build (<code>DAILY_PLANNER_PLUS_PUBLIC_KEY</code>):</p>${copyRow('Public key', plus.publicKey)}<p>${esc(app)}</p>` });
+    items.push({ key: 'plus', title: 'Plus licences', html: `<p><code>PLUS_SIGNING_KEY</code> is set. Public key for the app build (<code>DAILY_PLANNER_PLUS_PUBLIC_KEY</code>):</p>${copyRow('Public key', plus.publicKey)}<p>${esc(app)}</p>` });
   } else {
     items.push({
+      key: 'plus',
       title: 'Plus licences',
-      state: 'missing',
       html: plus.keySet
         ? '<p><code>PLUS_SIGNING_KEY</code> is set but is not a base64 PKCS#8 P-256 private key. Run <code>npm run plus:keys</code> for a new pair.</p>'
         : '<p>Run <code>npm run plus:keys</code>. Add <code>PLUS_SIGNING_KEY</code> as an encrypted secret and <code>DAILY_PLANNER_PLUS_PUBLIC_KEY</code> as a build variable, then redeploy. Until then, gifts and licences can’t be created.</p>'
@@ -1196,17 +1199,17 @@ function setupItems(summary) {
 
   items.push(paymentsItem(setup.payments || {}));
 
-  items.push({ title: 'Links in emails', state: 'ok', html: `<p>They start with ${esc(base)}${setup.publicBaseUrlSet ? ' (<code>PUBLIC_BASE_URL</code>)' : ', the default. Set <code>PUBLIC_BASE_URL</code> to change it'}.</p>` });
+  items.push({ key: 'links', title: 'Links in emails', html: `<p>They start with ${esc(base)}${setup.publicBaseUrlSet ? ' (<code>PUBLIC_BASE_URL</code>)' : ', the default. Set <code>PUBLIC_BASE_URL</code> to change it'}.</p>` });
   items.push(legalItem(base));
   const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql', summary.reviewsUnavailable && '0004_creem_reviews.sql', summary.refundsUnavailable && '0005_refunds.sql'].filter(Boolean);
   const listed = files => (files.length > 1 ? `${files.slice(0, -1).join(', ')} and ${files.at(-1)}` : files[0]);
   items.push(missingTables.length
-    ? { title: 'Database', state: 'missing', html: `<p>Apply ${listed(missingTables.map(file => `<code>migrations/${file}</code>`))} to the D1 database.${summary.refundsUnavailable ? ' Until <code>0005_refunds.sql</code> is applied, refunds are not recorded and nothing is switched off.' : ''}</p>` }
-    : { title: 'Database', state: 'ok', html: '<p>All tables are in place.</p>' });
+    ? { key: 'database', title: 'Database', html: `<p>Apply ${listed(missingTables.map(file => `<code>migrations/${file}</code>`))} to the D1 database.${summary.refundsUnavailable ? ' Until <code>0005_refunds.sql</code> is applied, refunds are not recorded and nothing is switched off.' : ''}</p>` }
+    : { key: 'database', title: 'Database', html: '<p>All tables are in place.</p>' });
   items.push(setup.twoFactor
-    ? { title: 'Owner sign-in', state: 'ok', html: '<p>Two-factor sign-in is on.</p>' }
-    : { title: 'Owner sign-in', state: 'warn', html: '<p>Only the admin token protects this page. Run <code>npm run admin:secret</code> and set <code>ADMIN_TOTP_SECRET</code> to also require an authenticator code.</p>' });
-  return items;
+    ? { key: 'sign-in', title: 'Owner sign-in', html: '<p>Two-factor sign-in is on.</p>' }
+    : { key: 'sign-in', title: 'Owner sign-in', html: '<p>Only the admin token protects this page. Run <code>npm run admin:secret</code> and set <code>ADMIN_TOTP_SECRET</code> to also require an authenticator code.</p>' });
+  return items.map(item => ({ ...item, state: states.get(item.key) || 'ok' }));
 }
 
 // ---- Reviews -------------------------------------------------------------------
@@ -1215,7 +1218,7 @@ const quoteOf = row => `“${String(row.text || '').trim()}” — ${String(row.
 
 function reviewHtml(row) {
   const name = String(row.name || '').trim();
-  return `<article class="owner-review">
+  return `<article class="owner-review" data-owner-attn="review:${Number(row.id)}">
     <div class="owner-review__meta">${stars(row.rating)}<span>${esc(row.appVersion)}</span><span>${esc(day(row.createdAt))}</span></div>
     <blockquote class="owner-review__text">${esc(row.text)}</blockquote>
     <p class="owner-review__name">${name ? `— ${esc(name)}` : '<span>Anonymous</span>'}</p>
@@ -1237,6 +1240,164 @@ function renderReviews(summary) {
     : 'Reviews people agreed to have quoted.';
   target.innerHTML = rows.length ? `<div class="owner-reviews">${rows.map(reviewHtml).join('')}</div>` : '<p class="owner-empty">No reviews yet.</p>';
 }
+
+// ---- Needs your attention -------------------------------------------------------
+
+// Lines shown before “Show N more”.
+const ATTENTION_SHOWN = 6;
+const ATTENTION_ICONS = {
+  refund: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  dispute: '<path d="M12 3.5 5 6.2v5.1c0 4.3 2.9 7.6 7 9.2 4.1-1.6 7-4.9 7-9.2V6.2z"/><path d="M12 8.5v4"/><path d="M12 15.8v.01"/>',
+  waiting: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  team: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7.5 7.5 5.5 7.5-5.5"/>',
+  setup: '<path d="M4 7h9"/><path d="M17 7h3"/><path d="M4 17h3"/><path d="M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
+  version: '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/>',
+  gift: '<rect x="3.5" y="8.5" width="17" height="4" rx="1"/><path d="M5.5 12.5v7h13v-7"/><path d="M12 8.5v11"/><path d="M12 8.5C10.6 5 7 4.6 7 6.6c0 1.4 2.2 1.9 5 1.9 2.8 0 5-.5 5-1.9 0-2-3.6-1.6-5 1.9"/>',
+  review: '<path d="m12 4.5 2.3 4.7 5.2.8-3.8 3.6.9 5.1-4.6-2.4-4.6 2.4.9-5.1-3.8-3.6 5.2-.8z"/>',
+  clear: '<circle cx="12" cy="12" r="8.5"/><path d="m8.4 12.3 2.5 2.5 4.7-5"/>'
+};
+const ATTENTION_ARROW = '<svg class="owner-attention__arrow" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
+// The mark on a row: “!” to act on, “i” worth a look. A shape and words, not only a colour.
+const ATTENTION_FLAGS = {
+  act: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path d="M12 6.5v7"/><path d="M12 17.5v.01"/></svg>',
+  look: '<svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" focusable="false"><path d="M12 10.5v7"/><path d="M12 6.5v.01"/></svg>'
+};
+const ATTENTION_TONE_WORDS = { urgent: 'Urgent', warn: 'To do', info: 'Worth a look' };
+// The card each section points to, found from the container it renders into.
+const ATTENTION_CARDS = { refunds: '[data-owner-refunds]', teams: '[data-owner-teams]', setup: '[data-owner-setup]', gifts: '[data-owner-gifts]', reviews: '[data-owner-reviews]' };
+const ATTENTION_TONE_CLASSES = ['is-attention', 'is-attn-urgent', 'is-attn-warn', 'is-attn-info'];
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
+let attentionExpanded = false;
+
+const attentionIcon = name => `<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">${ATTENTION_ICONS[name] || ATTENTION_ICONS.setup}</svg>`;
+const exactTime = iso => (iso ? new Date(iso).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+const clockTime = iso => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+function attentionCard(section) {
+  const card = $(ATTENTION_CARDS[section])?.closest('.owner-card');
+  if (card && !card.id) card.id = `owner-${section}-card`;
+  return card;
+}
+
+function attentionFlag(tone) {
+  const act = tone !== 'info';
+  const words = act ? 'Needs your attention' : 'Worth a look';
+  return `<span class="owner-attn-flag" data-owner-attn-flag title="${words}">${ATTENTION_FLAGS[act ? 'act' : 'look']}<span class="sr-only">${words}. </span></span>`;
+}
+
+/** Cards get an alert style and a count; their rows a tint, a left bar and a “!” (or “i”) mark. */
+function markAttention(items) {
+  const { sections, rows } = attentionBySection(items);
+  Object.keys(ATTENTION_CARDS).forEach(section => {
+    const card = attentionCard(section);
+    if (!card) return;
+    card.classList.remove(...ATTENTION_TONE_CLASSES);
+    $('[data-owner-attn-count]', card)?.remove();
+    const found = sections[section];
+    if (!found) return;
+    card.classList.add('is-attention', `is-attn-${found.tone}`);
+    const label = `${found.count} ${found.count === 1 ? 'needs' : 'need'} your attention`;
+    $('h2', card)?.insertAdjacentHTML('beforeend', `<span class="owner-attn-count" data-owner-attn-count title="${label}">${number(found.count)}<span class="sr-only"> ${label}</span></span>`);
+  });
+  document.querySelectorAll('[data-owner-attn]').forEach(element => {
+    element.classList.remove(...ATTENTION_TONE_CLASSES);
+    element.querySelectorAll('[data-owner-attn-flag]').forEach(flag => flag.remove());
+    const tone = rows.get(element.dataset.ownerAttn);
+    if (!tone) return;
+    element.classList.add('is-attention', `is-attn-${tone}`);
+    // Setup items already say “Check” or “Not set” in words.
+    const place = element.matches('tr') ? element.cells[0] : element.matches('.owner-review') ? $('.owner-review__meta', element) : null;
+    place?.insertAdjacentHTML('afterbegin', attentionFlag(tone));
+  });
+  // A table with marks keeps its first column aligned on the rows without one.
+  document.querySelectorAll('.owner-table').forEach(table => table.classList.toggle('has-attention', !!$('tr.is-attention', table)));
+}
+
+function attentionLine(item, index, summary, now) {
+  const setup = item.when === 'setup';
+  const label = attentionWhen(item, now);
+  const title = setup ? `A setting of this deployment: it has no date. Checked ${exactTime(summary.generatedAt)}.`
+    : `${item.when === 'until' ? 'Expires' : item.when === 'created' ? 'Created' : 'Since'} ${exactTime(item.at)}`;
+  const time = setup || !label ? `<span class="owner-attention__when" title="${esc(title)}">${esc(label)}</span>`
+    : `<time class="owner-attention__when" datetime="${esc(item.at)}" title="${esc(title)}">${esc(label)}</time>`;
+  const card = attentionCard(item.section);
+  return `<li class="owner-attention__item is-attn-${item.tone}"${index >= ATTENTION_SHOWN && !attentionExpanded ? ' hidden' : ''}>
+    <a class="owner-attention__link" href="#${esc(card?.id || '')}" data-owner-attn-go="${esc(item.rows[0])}" data-owner-attn-section="${esc(item.section)}">
+      <span class="owner-attention__icon" aria-hidden="true">${attentionIcon(item.icon)}</span>
+      <span class="owner-attention__text"><span class="owner-attention__title"><span class="sr-only">${ATTENTION_TONE_WORDS[item.tone]}: </span>${esc(item.text)}</span>${item.detail ? `<span class="owner-attention__detail">${esc(item.detail)}</span>` : ''}</span>
+      ${time}
+      <span class="owner-attention__go">Go to ${esc(ATTENTION_SECTIONS[item.section])}${ATTENTION_ARROW}</span>
+    </a>
+  </li>`;
+}
+
+function renderAttention(summary) {
+  const items = buildAttention(summary, { config: APP_CONFIG, pageVersion: APP_VERSION, money, number });
+  markAttention(items);
+  const panel = $('[data-owner-attention]');
+  if (!panel) return;
+  const now = Date.parse(summary.generatedAt) || Date.now();
+  const checked = `<p class="owner-attention__checked">Checked <time datetime="${esc(summary.generatedAt)}" title="${esc(exactTime(summary.generatedAt))}">${esc(clockTime(now))}</time></p>`;
+  panel.classList.remove('is-clear', ...ATTENTION_TONE_CLASSES);
+  // Sorted most urgent first: the first line sets the panel's tone.
+  panel.classList.add(items.length ? `is-attn-${items[0].tone}` : 'is-clear');
+  if (!items.length) {
+    panel.innerHTML = `<div class="owner-attention__clear">
+      <span class="owner-attention__icon" aria-hidden="true">${attentionIcon('clear')}</span>
+      <div class="owner-attention__text"><h2 id="owner-attention-title">All clear</h2><p>Nothing needs your attention. Refunds and disputes, team requests, Setup, gifts and reviews were checked.</p></div>
+      ${checked}
+    </div>`;
+    return;
+  }
+  const hidden = Math.max(0, items.length - ATTENTION_SHOWN);
+  const note = attentionNote(items);
+  panel.innerHTML = `<div class="owner-attention__head">
+      <h2 id="owner-attention-title">Needs your attention <span class="owner-attn-count">${number(items.length)}</span></h2>
+      ${checked}
+    </div>
+    <ol class="owner-attention__list" id="owner-attention-list">${items.map((item, index) => attentionLine(item, index, summary, now)).join('')}</ol>
+    ${hidden || note ? `<div class="owner-attention__foot">${hidden ? `<button class="text-button owner-attention__more" type="button" data-owner-attention-more aria-controls="owner-attention-list" aria-expanded="${attentionExpanded}">${attentionExpanded ? 'Show fewer' : `Show ${number(hidden)} more`}</button>` : ''}${note ? `<p class="owner-attention__note">${esc(note)}</p>` : ''}</div>` : ''}`;
+}
+
+function clearAttention() {
+  markAttention([]);
+  const panel = $('[data-owner-attention]');
+  if (!panel) return;
+  panel.innerHTML = '';
+  panel.classList.remove('is-clear', ...ATTENTION_TONE_CLASSES);
+}
+
+/** Scroll to the row (or else the card), focus it and outline it until it loses focus. */
+function locateAttention(rowKey, section) {
+  const card = attentionCard(section);
+  const target = [...document.querySelectorAll('[data-owner-attn]')].find(element => element.dataset.ownerAttn === rowKey && !element.closest('[hidden]')) || (card && $('h2', card));
+  if (!target) return;
+  document.querySelectorAll('.is-located').forEach(element => element.classList.remove('is-located'));
+  if (!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+  target.classList.add('is-located');
+  // A row taller than most of the screen (a narrow phone) shows from its top.
+  const tall = target.getBoundingClientRect().height > innerHeight * 0.6;
+  target.scrollIntoView({ block: tall ? 'start' : 'center', behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+  target.focus({ preventScroll: true });
+  target.addEventListener('blur', () => target.classList.remove('is-located'), { once: true });
+}
+
+$('[data-owner-attention]')?.addEventListener('click', event => {
+  const more = event.target.closest('[data-owner-attention-more]');
+  if (more) {
+    attentionExpanded = !attentionExpanded;
+    const items = [...document.querySelectorAll('.owner-attention__item')];
+    items.forEach((item, index) => { item.hidden = index >= ATTENTION_SHOWN && !attentionExpanded; });
+    more.setAttribute('aria-expanded', String(attentionExpanded));
+    more.textContent = attentionExpanded ? 'Show fewer' : `Show ${number(items.length - ATTENTION_SHOWN)} more`;
+    if (attentionExpanded) $('a', items[ATTENTION_SHOWN])?.focus();
+    return;
+  }
+  const link = event.target.closest('[data-owner-attn-go]');
+  if (!link) return;
+  event.preventDefault();
+  locateAttention(link.dataset.ownerAttnGo, link.dataset.ownerAttnSection);
+});
 
 // ---- Version -------------------------------------------------------------------
 
@@ -1296,7 +1457,7 @@ function renderSetup(summary) {
     target.innerHTML = '<li class="owner-empty">This API does not report its setup yet. Redeploy it.</li>';
     return;
   }
-  target.innerHTML = setupItems(summary).map(item => `<li class="owner-setup__item is-${item.state}"><span class="owner-setup__mark" aria-hidden="true"></span><div class="owner-setup__body"><p class="owner-setup__title"><b>${esc(item.title)}</b><span>${esc(item.label || SETUP_STATES[item.state])}</span></p>${item.html}</div></li>`).join('');
+  target.innerHTML = setupItems(summary).map(item => `<li class="owner-setup__item is-${item.state}" data-owner-attn="setup:${esc(item.key)}"><span class="owner-setup__mark" aria-hidden="true"></span><div class="owner-setup__body"><p class="owner-setup__title"><b>${esc(item.title)}</b><span>${esc(item.label || SETUP_STATES[item.state])}</span></p>${item.html}</div></li>`).join('');
 }
 
 document.addEventListener('click', event => {
@@ -1394,6 +1555,8 @@ async function load({ series: refreshSeries = false } = {}) {
     renderVersions(summary);
     renderSignals(summary);
     renderReviews(summary);
+    // Last: it marks the rows the cards above have just rendered.
+    renderAttention(summary);
     if (pending) await showSeries(pending, forSession);
     await renderFeedback();
   } catch (error) {

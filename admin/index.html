@@ -55,6 +55,8 @@
     </form>
 
     <div class="owner-body" data-owner-body hidden>
+      <section class="owner-attention" data-owner-attention aria-labelledby="owner-attention-title"></section>
+
       <section class="owner-kpis" data-owner-kpis aria-label="Key numbers"></section>
 
       <section class="trends" data-owner-trends aria-labelledby="owner-trends-title">
@@ -150,8 +152,8 @@
         <div data-owner-revocations></div>
       </section>
 
-      <section class="owner-card">
-        <header class="owner-card__head"><div><h2>Team kit requests</h2><p data-owner-teams-caption>Teams who asked for the team kit. Reply by email; delete on request.</p></div>
+      <section class="owner-card" aria-labelledby="owner-teams-title">
+        <header class="owner-card__head"><div><h2 id="owner-teams-title">Team kit requests</h2><p data-owner-teams-caption>Teams who asked for the team kit. Reply by email; delete on request.</p></div>
           <div class="owner-card__tools"><a class="secondary-button" data-owner-teams-csv href="#" download>Export CSV</a></div></header>
         <div data-owner-teams></div>
       </section>

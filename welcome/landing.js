@@ -148,7 +148,9 @@ const saleFor = item => buyState({ apiOn, options: sale.options, item, currency 
 function renderPlusLists() {
   // The lines of the Plus card: everything in Free, then what Plus adds.
   qsa('[data-plus-lines]').forEach(list => {
-    list.replaceChildren(...['Everything in Free', ...PLUS_FEATURES.map(feature => feature.title)].map(text => el('li', {}, okMark(), text)));
+    // “Everything in Free” stands apart: the app's colour, then what Plus adds in ink.
+    const free = el('li', { class: 'is-free' }, el('span', { class: 'ok ok--accent', 'aria-hidden': 'true', html: CHECK_ICON }), 'Everything in Free');
+    list.replaceChildren(free, ...PLUS_FEATURES.map(feature => el('li', {}, okMark(), feature.title)));
   });
   // The promise: what Plus gets next, at no extra cost, with its status. Four
   // columns with headings in the Plus section; titles and chips only in the
