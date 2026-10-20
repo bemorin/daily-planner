@@ -1,7 +1,8 @@
 import { qs, qsa } from '../lib/dom.js';
 import { esc } from '../lib/text.js';
 import { prefersReducedMotion } from '../ui/motion.js';
-import { buildTourSteps, carryStep, placeCard, readTourFlags, scrollDelta, shouldOfferTour, spotlightHoles, stepEyebrow, TOUR_FLAG_KEY, tourEnvironment, unionRect, visibleArea } from './tour-model.js';
+import { guideEyebrow, guideKeyAction } from './first-use-model.js';
+import { buildTourSteps, carryStep, placeCard, plainText, readTourFlags, richText, scrollDelta, shouldOfferTour, spotlightHoles, stepEyebrow, TOUR_FLAG_KEY, tourEnvironment, unionRect, visibleArea } from './tour-model.js';
 
 /**
  * The planner tour: a spotlight on each part of the real interface, with a
@@ -17,12 +18,21 @@ import { buildTourSteps, carryStep, placeCard, readTourFlags, scrollDelta, shoul
  * opens the More menu where a step needs them, and puts them back after.
  * Pinch-zoom and panning stay free, and the card follows the part of the page
  * on screen, so a zoomed-in phone always has Next and Skip in reach.
+ *
+ * The same spotlight and card run the contextual guides inside a dialog
+ * (`guide()`, from src/features/first-use.js): a few steps scoped to that
+ * dialog. Escape or Got it closes only the guide; any key other than the
+ * guide's own (Esc, Enter, the arrows, Tab, Space on its buttons) closes it
+ * and goes on, with focus back where it was inside the dialog: a letter lands
+ * in the field, Ctrl/Cmd+V pastes there, a dead key composes, a shortcut
+ * works. Only one of them is ever on screen.
  */
 
 const NS = 'http://www.w3.org/2000/svg';
 const SIGNPOST = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M9 21h6"/><path d="M12 5.5h6.2l2.3 2.5-2.3 2.5H12M12 12.5H5.8L3.5 15l2.3 2.5H12"/></svg>';
 
 const isVisible = el => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+const isField = el => !!el?.matches?.('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]), textarea, [contenteditable="true"]');
 const rectOf = el => { const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; };
 
 function scrollParent(el) {
@@ -33,6 +43,15 @@ function scrollParent(el) {
   return null;
 }
 
+/** The part of a target on screen: a long list in a dialog is lit only where it shows, not past the dialog's edge. */
+function shownRect(el) {
+  const box = rectOf(el);
+  const port = scrollParent(el);
+  if (!port) return box;
+  const area = rectOf(port);
+  return { left: Math.max(box.left, area.left), top: Math.max(box.top, area.top), right: Math.min(box.right, area.right), bottom: Math.min(box.bottom, area.bottom) };
+}
+
 export function createTour({ getActiveModal = () => null, closeModal = () => {}, closePopovers = () => {}, setPane = () => {}, range = () => 'day', setRange = () => {}, isReady = () => true, storage = globalThis.localStorage } = {}) {
   let root = null;
   let card = null;
@@ -41,6 +60,9 @@ export function createTour({ getActiveModal = () => null, closeModal = () => {},
   let steps = [];
   let index = 0;
   let active = false;
+  // What is running: the tour, or a guide in a dialog ({ kind: 'guide', scope, rebuild, onEnd }).
+  let session = { kind: 'tour' };
+  const guiding = () => session.kind === 'guide';
   let env = null;
   let saved = null;
   let inerted = [];
@@ -78,13 +100,15 @@ export function createTour({ getActiveModal = () => null, closeModal = () => {},
 
   function build() {
     env = environment();
+    if (guiding()) return session.rebuild ? session.rebuild(env) : steps;
     return buildTourSteps({ ...env, visible });
   }
 
   function targets(step) {
+    const within = guiding() ? session.scope : document;
     return step.spot.flatMap(entry => {
       const css = typeof entry === 'string' ? entry : entry.css;
-      const found = qsa(css).filter(isVisible);
+      const found = qsa(css, within).map(el => (entry.closest ? el.closest(entry.closest) : el)).filter(isVisible);
       if (typeof entry === 'string' || entry.pick !== 'first-in-view') return found.slice(0, 1);
       const inView = found.find(el => {
         const box = rectOf(el);
@@ -177,9 +201,10 @@ export function createTour({ getActiveModal = () => null, closeModal = () => {},
    */
   function layout() {
     if (!active || !root) return;
+    if (guiding() && scopeGone()) { end(); return; }
     const step = steps[index];
     const area = visibleArea(globalThis.visualViewport, { width: innerWidth, height: innerHeight });
-    const holes = step ? spotlightHoles(targets(step).map(rectOf), area, { pad: env?.layout === 'phone' ? 5 : 6, join: step.join }) : [];
+    const holes = step ? spotlightHoles(targets(step).map(shownRect), area, { pad: env?.layout === 'phone' ? 5 : 6, join: step.join }) : [];
     syncShapes(qs('[data-tour-mask]', root), holes, 'tour__hole', 12);
     syncShapes(qs('[data-tour-rings]', root), holes, 'tour__ring', 12);
     card.style.maxHeight = `${Math.max(160, Math.floor(area.height * area.scale) - 24)}px`;
@@ -238,21 +263,42 @@ export function createTour({ getActiveModal = () => null, closeModal = () => {},
     button?.setAttribute('aria-expanded', 'false');
   }
 
+  const eyebrow = () => (guiding() ? guideEyebrow(index, steps.length) : stepEyebrow(index, steps.length));
+
+  /** The step's words: plain text with the names of what it shows in <strong> (never HTML from the words). */
+  function fillBody(node, text) {
+    node.replaceChildren(...richText(text).map(part => {
+      if (!part.strong) return document.createTextNode(part.text);
+      const strong = document.createElement('strong');
+      strong.textContent = part.text;
+      return strong;
+    }));
+  }
+
   function render() {
     const step = steps[index];
     const last = index === steps.length - 1;
-    qs('[data-tour-eyebrow]', root).textContent = stepEyebrow(index, steps.length);
+    const guide = guiding();
+    qs('[data-tour-eyebrow]', root).textContent = eyebrow();
     qs('[data-tour-title]', root).textContent = step.title;
     qs('[data-tour-name]', root).textContent = `Highlighted: ${step.name}. `;
-    qs('[data-tour-body]', root).textContent = step.body;
+    fillBody(qs('[data-tour-body]', root), step.body);
     const keys = qs('[data-tour-keys]', root);
     keys.innerHTML = step.keys.map(item => `<li${item.keys.length > 1 || item.label.length > 18 ? ' class="is-wide"' : ''}><span class="tour-card__caps">${item.keys.map(key => `<kbd>${esc(key)}</kbd>`).join('')}</span><span>${esc(item.label)}</span></li>`).join('');
     keys.hidden = !step.keys.length;
-    qs('[data-tour-hint]', root).hidden = !(env?.keys && index === 0);
-    qs('[data-tour-dots]', root).innerHTML = steps.map((_, i) => `<i class="${i === index ? 'is-active' : i < index ? 'is-done' : ''}"></i>`).join('');
+    const hint = qs('[data-tour-hint]', root);
+    hint.hidden = !(env?.keys && index === 0);
+    if (!hint.hidden) hint.innerHTML = guide
+      ? (steps.length > 1 ? '<kbd>←</kbd><kbd>→</kbd> move through the tips · <kbd>Esc</kbd> closes only the tips' : '<kbd>Esc</kbd> closes only the tip, not the dialog')
+      : '<kbd>←</kbd><kbd>→</kbd> move through the tour · <kbd>Esc</kbd> leaves it';
+    const dots = qs('[data-tour-dots]', root);
+    dots.hidden = steps.length < 2;
+    dots.innerHTML = steps.map((_, i) => `<i class="${i === index ? 'is-active' : i < index ? 'is-done' : ''}"></i>`).join('');
     qs('[data-tour-back]', root).hidden = index === 0;
-    qs('[data-tour-skip]', root).hidden = last;
-    qs('[data-tour-next]', root).textContent = last ? 'Done' : 'Next';
+    const skip = qs('[data-tour-skip]', root);
+    skip.hidden = last;
+    skip.textContent = guide ? 'Skip' : 'Skip the tour';
+    qs('[data-tour-next]', root).textContent = last ? (guide ? 'Got it' : 'Done') : 'Next';
     card.dataset.step = step.id;
   }
 
@@ -264,7 +310,7 @@ export function createTour({ getActiveModal = () => null, closeModal = () => {},
     if (step.pane && currentPane() !== step.pane) setPane(step.pane);
     if (step.menu === 'more') openMore(true);
     render();
-    if (announce) qs('[data-tour-live]', root).textContent = `${stepEyebrow(index, steps.length)}. ${step.title}. Highlighted: ${step.name}. ${step.body}`;
+    if (announce) qs('[data-tour-live]', root).textContent = `${eyebrow()}. ${step.title}. Highlighted: ${step.name}. ${plainText(step.body)}`;
     // A button that just disappeared (Back on the first step, Skip on the last) hands focus to Next.
     const focused = document.activeElement;
     if (!card.contains(focused) || focused === card || focused.hidden) qs('[data-tour-next]', root).focus({ preventScroll: true });
@@ -285,9 +331,18 @@ export function createTour({ getActiveModal = () => null, closeModal = () => {},
 
   function onKey(event) {
     if (!active) return;
+    // In a dialog, a key that isn't the guide's own never waits for it: the guide closes, focus goes back where it
+    // was, and the key goes on — nothing is prevented, so it types, pastes, composes or works as a shortcut. Typed
+    // into a field, it stays there, as the planner's shortcuts never act on a key typed in a field.
+    const action = guiding() ? guideKeyAction(event) : 'own';
+    if (action === 'pass') {
+      end({ typing: true });
+      if (isField(document.activeElement)) event.stopPropagation();
+      return;
+    }
     // The planner's own shortcuts wait until the tour is over.
     event.stopPropagation();
-    if (event.isComposing) return;
+    if (event.isComposing || action === 'wait') return;
     const onButton = !!event.target?.closest?.('button') && card.contains(event.target);
     if (event.key === 'Escape') { event.preventDefault(); end(); return; }
     if (event.key === 'Tab') { trapTab(event); return; }
@@ -346,6 +401,12 @@ export function createTour({ getActiveModal = () => null, closeModal = () => {},
     globalThis.visualViewport?.[method]('scroll', onViewport);
   }
 
+  /** The guide's dialog went away (closed by the planner itself): the guide goes with it. */
+  function scopeGone() {
+    const scope = session.scope;
+    return !scope?.isConnected || scope.hidden || !scope.classList.contains('is-open');
+  }
+
   function setInert(on) {
     if (on) {
       inerted = [...document.body.children].filter(el => el !== root && !el.inert && el.tagName !== 'SCRIPT');
@@ -357,50 +418,73 @@ export function createTour({ getActiveModal = () => null, closeModal = () => {},
   }
 
   /**
-   * Where focus goes when the tour or the offer leaves: back where it was,
-   * else to what opened it, else to the heading of the pane on screen — never
-   * into a text field on a phone (that would open the keyboard).
+   * Where focus goes when the tour, a guide or the offer leaves: back where
+   * it was, else to what opened it, else to the heading of the pane on screen
+   * (of the dialog, for a guide) — never into a text field on a phone, which
+   * would open the keyboard, unless a key is being typed into it.
    */
-  function returnFocus(candidates) {
+  function returnFocus(candidates, { within = null, typing = false } = {}) {
     const phone = environment().layout === 'phone';
     const usable = el => !!el && el !== document.body && el.isConnected && !root?.contains(el) && !el.closest?.('.tour-offer') && isVisible(el)
-      && !(phone && el.matches?.('input, textarea, [contenteditable="true"]'));
+      && (!within || within.contains(el)) && !(phone && !typing && isField(el));
     let target = candidates.find(usable);
     if (!target) {
-      target = qsa('[data-workspace] h2').find(isVisible);
+      target = within ? [qs('h2', within), qs('.modal__panel', within)].find(isVisible) : qsa('[data-workspace] h2').find(isVisible);
       if (target && !target.hasAttribute('tabindex')) { target.tabIndex = -1; target.dataset.tourReturn = ''; }
     }
     if (target) target.focus?.({ preventScroll: true });
     else if (root?.contains(document.activeElement)) document.activeElement.blur();
   }
 
-  /** Starts the tour now. Returns false when there is nothing to show (or it is already running). `opener` gets focus back if nothing better is left. */
-  function start({ opener = null } = {}) {
-    if (active) return false;
-    clearTimeout(idleTimer);
-    hideOffer();
-    closePopovers();
-    const startRange = range();
-    // The tour walks through the Day view; Week comes back afterwards.
-    if (startRange === 'week') setRange('day');
-    const built = build();
-    if (!built.length) { if (startRange === 'week') setRange('week'); return false; }
+  function open(built) {
     ensureDom();
     clearTimeout(hideTimer);
     steps = built;
     index = -1;
-    saved = { focus: document.activeElement, opener, pane: currentPane(), range: startRange };
     active = true;
-    writeFlags({ seen: new Date().toISOString() });
+    root.dataset.kind = session.kind;
     root.hidden = false;
     setInert(true);
     listen(true);
     show(0, { announce: false });
     requestAnimationFrame(() => root?.classList.add('is-open'));
+  }
+
+  /** Starts the tour now. Returns false when there is nothing to show (or it, or a guide, is already running). `opener` gets focus back if nothing better is left. */
+  function start({ opener = null } = {}) {
+    if (active) return false;
+    clearTimeout(idleTimer);
+    hideOffer();
+    closePopovers();
+    session = { kind: 'tour' };
+    const startRange = range();
+    // The tour walks through the Day view; Week comes back afterwards.
+    if (startRange === 'week') setRange('day');
+    const built = build();
+    if (!built.length) { if (startRange === 'week') setRange('week'); return false; }
+    saved = { focus: document.activeElement, opener, pane: currentPane(), range: startRange };
+    writeFlags({ seen: new Date().toISOString() });
+    open(built);
     return true;
   }
 
-  function end() {
+  /**
+   * A guide inside a dialog (`scope`, its `.modal`): `steps` from
+   * first-use-model.js, `rebuild(env)` when the layout changes. Returns
+   * false when the tour or another guide is on screen.
+   */
+  function guide({ steps: built = [], scope = null, rebuild = null, onEnd = null } = {}) {
+    if (active || !built.length || !scope) return false;
+    session = { kind: 'guide', scope, rebuild, onEnd };
+    env = environment();
+    // The dialog's own scroll comes back as it was when the guide ends.
+    const scrolls = qsa('.modal__scroll', scope).map(node => [node, node.scrollTop]);
+    saved = { focus: document.activeElement, opener: null, pane: '', range: '', scrolls };
+    open(built);
+    return true;
+  }
+
+  function end({ typing = false } = {}) {
     if (!active) return;
     active = false;
     cancelAnimationFrame(frame);
@@ -411,6 +495,16 @@ export function createTour({ getActiveModal = () => null, closeModal = () => {},
     // Not open any more: clicks go through at once (tour.css), while it fades out.
     root.classList.remove('is-open');
     hideTimer = setTimeout(() => { if (!active) root.hidden = true; }, prefersReducedMotion() ? 0 : 200);
+    const ended = session;
+    session = { kind: 'tour' };
+    if (ended.kind === 'guide') {
+      const { focus, scrolls } = saved;
+      saved = null;
+      scrolls.forEach(([node, top]) => { node.scrollTop = top; });
+      returnFocus([focus], { within: ended.scope, typing });
+      ended.onEnd?.();
+      return;
+    }
     // The pane it started on, even if the window crossed the phone breakpoint since.
     if (saved.pane && currentPane() !== saved.pane) setPane(saved.pane);
     if (saved.range === 'week' && range() !== 'week') setRange('week');
@@ -421,14 +515,16 @@ export function createTour({ getActiveModal = () => null, closeModal = () => {},
 
   /**
    * After first-run setup: starts once the planner is free — no dialog open
-   * (the Install dialog, when it was chosen, closes first).
+   * (the Install dialog, when it was chosen, closes first) and no guide on
+   * screen: a guide counts as busy, so the tour waits for it rather than
+   * being dropped.
    */
   function startWhenIdle({ delay = 650 } = {}) {
     clearTimeout(idleTimer);
     let waited = false;
     const attempt = () => {
-      if (active) return;
-      if (busy()) { waited = true; idleTimer = setTimeout(attempt, 300); return; }
+      if (active && !guiding()) return;
+      if (active || busy()) { waited = true; idleTimer = setTimeout(attempt, 300); return; }
       if (waited) { waited = false; idleTimer = setTimeout(attempt, 380); return; }
       start();
     };
@@ -496,5 +592,17 @@ export function createTour({ getActiveModal = () => null, closeModal = () => {},
     if (modal) { closeModal(modal); setTimeout(() => start({ opener }), 220); } else start({ opener });
   }));
 
-  return { start, end, startWhenIdle, maybeOffer, isActive: () => active, offerVisible: () => !!offer };
+  return {
+    start,
+    end,
+    guide,
+    /** Ends the guide on screen in this dialog, if any (the dialog is closing). */
+    endGuide: scope => { if (active && guiding() && (!scope || session.scope === scope)) end(); },
+    startWhenIdle,
+    maybeOffer,
+    /** The tour or a guide is on screen. */
+    isActive: () => active,
+    isTouring: () => active && !guiding(),
+    offerVisible: () => !!offer
+  };
 }

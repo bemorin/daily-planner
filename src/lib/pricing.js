@@ -2,7 +2,8 @@
  * Prices and the Plus promise — one source for the landing page, the planner
  * and the owner API, which charges these exact amounts at checkout (Creem).
  *
- * OWNER DECISIONS: every price, the badge, PERSONAL_GIFTS, PLUS_UPCOMING (what
+ * OWNER DECISIONS: every price, the badge, PERSONAL_GIFTS, the launch price
+ * (LAUNCH), the member price of gifts (MEMBER_GIFT_DISCOUNT), PLUS_UPCOMING (what
  * Plus promises next) and the currency rule (the euro area pays in EUR, the rest
  * of the world in USD; the server decides from the buyer's country). Change them
  * here only, then redeploy.
@@ -12,8 +13,24 @@
 
 export const CURRENCIES = Object.freeze(['EUR', 'USD']);
 
-/** Daily Planner Plus for one person, paid once, for life. */
+/** Daily Planner Plus for one person, paid once, for life (at the launch price, below). */
 export const PLUS_PRICE = Object.freeze({ EUR: 29, USD: 29 });
+
+/**
+ * The launch price (owner's decision, 1.27): during the launch Plus is paid
+ * once and kept for life; after it, Plus becomes a yearly subscription for new
+ * members, and launch buyers keep Plus for life. No end date and no countdown:
+ * set `active: false` when the launch ends, and every “Launch price” badge and
+ * line disappears (the landing page, the Plus dialog).
+ * `line` is shown next to the price where there is room; where there isn't,
+ * the price reads “once, for life” and `after` follows it.
+ */
+export const LAUNCH = Object.freeze({
+  active: true,
+  label: 'Launch price',
+  line: 'Pay once during the launch and Plus is yours for life. After the launch, Plus becomes a yearly subscription for new members.',
+  after: 'After the launch, Plus becomes a yearly subscription for new members.'
+});
 
 /** Team gift: one price for the company by number of people (seats). */
 export const TEAM_TIERS = Object.freeze([
@@ -35,6 +52,22 @@ export const PERSONAL_GIFTS = Object.freeze([
   // a company never saves by buying family packs; about 30% less than five Plus.
   Object.freeze({ plan: 'family-5', seats: 5, price: Object.freeze({ EUR: 99, USD: 99 }), label: 'Plus Family', note: 'Up to 5 people in one household, for life' })
 ]);
+
+/**
+ * Member price (owner's decision, 1.27): someone who already has Plus pays this
+ * much less for a personal gift, in whole units of each currency — Give Plus
+ * 29 → 24, Plus Family 99 → 79. Team packs have no member price. The server
+ * applies it only for a licence it verified and that isn't revoked; the price
+ * never goes below MEMBER_PRICE_FLOOR of the normal one (memberGiftPrice).
+ * Plus Family at the member price (15.80 per person) stays for one household
+ * (see the terms), so it is no cheaper way for a company to buy seats.
+ */
+export const MEMBER_GIFT_DISCOUNT = Object.freeze({
+  'gift-1': Object.freeze({ EUR: 5, USD: 5 }),
+  'family-5': Object.freeze({ EUR: 20, USD: 20 })
+});
+/** A member price is never less than this share of the normal price, whatever the discount says. */
+export const MEMBER_PRICE_FLOOR = 0.5;
 
 /** Above the last tier: a quote, asked for with the request form. */
 export const TEAM_QUOTE = Object.freeze({ plan: 'over-1000', label: 'More than 1,000 people', note: 'A price for the whole organisation' });
@@ -73,10 +106,50 @@ export function currencyForCountry(country) {
   return EURO_REGIONS.has(code) ? 'EUR' : 'USD';
 }
 
-/** Amount charged in cents, or 0 when the item, plan or currency is unknown. */
-export function priceCents(item, plan, currency) {
+/** True when `plan` has a member price (a personal gift with a discount in MEMBER_GIFT_DISCOUNT). */
+export const hasMemberPrice = (plan, currency) => isPersonalGift(plan) && Number(MEMBER_GIFT_DISCOUNT[plan]?.[currency]) > 0 && !!validCurrency(currency);
+
+/**
+ * What a Plus member pays for a personal gift, in whole units: the normal price
+ * less its discount, never below MEMBER_PRICE_FLOOR of the normal price (and
+ * never above it). null when the plan has no member price in that currency.
+ */
+export function memberGiftPrice(plan, currency) {
+  if (!hasMemberPrice(plan, currency)) return null;
+  const price = giftPlan(plan)?.price?.[currency];
+  if (!Number.isFinite(price) || price <= 0) return null;
+  const discount = Math.max(0, Number(MEMBER_GIFT_DISCOUNT[plan][currency]) || 0);
+  return Math.min(price, Math.max(price - discount, Math.ceil(price * MEMBER_PRICE_FLOOR)));
+}
+
+/** True when a member is shown a member price for this personal gift (lower than the usual one). */
+export function memberPriceShown(plan, currency, member = false) {
+  const reduced = member ? memberGiftPrice(plan, currency) : null;
+  return reduced != null && reduced < giftPlan(plan)?.price?.[currency];
+}
+
+/**
+ * A member price was shown for a personal gift, but the checkout the server
+ * opened doesn't confirm it (no `member: true` in its answer: the licence was
+ * refunded, or couldn't be checked). The buyer is told before paying, calmly,
+ * with the usual price — '' when there is nothing to say.
+ */
+export function memberPriceNotice(plan, currency, { shown = false, confirmed = false } = {}) {
+  if (!shown || confirmed === true) return '';
+  const usual = giftPlan(plan)?.price?.[currency];
+  if (!isPersonalGift(plan) || !Number.isFinite(usual)) return '';
+  return `Your member price couldn’t be confirmed — the usual price applies (${formatMoney(usual, currency)}).`;
+}
+
+/**
+ * Amount charged in cents, or 0 when the item, plan or currency is unknown.
+ * `member`: the buyer has Plus (checked by the server), so a personal gift is
+ * charged its member price; anything else is unchanged.
+ */
+export function priceCents(item, plan, currency, { member = false } = {}) {
   if (!validCurrency(currency)) return 0;
-  const units = item === 'plus' ? PLUS_PRICE[currency] : item === 'gift' ? giftPlan(plan)?.price?.[currency] : 0;
+  const memberUnits = member && item === 'gift' ? memberGiftPrice(plan, currency) : null;
+  const units = memberUnits ?? (item === 'plus' ? PLUS_PRICE[currency] : item === 'gift' ? giftPlan(plan)?.price?.[currency] : 0);
   return Number.isFinite(units) && units > 0 ? Math.round(units * 100) : 0;
 }
 

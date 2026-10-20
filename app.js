@@ -12,6 +12,7 @@ import { createThemeController } from './src/ui/theme.js';
 import { createAppTooltips } from './src/ui/tooltip.js';
 import { createOnboarding } from './src/features/onboarding.js';
 import { createTour } from './src/features/tour.js';
+import { createFirstUse } from './src/features/first-use.js';
 import { createInstallFeature } from './src/features/install.js';
 import { createSyncGuide } from './src/features/sync-guide.js';
 import { createFeedbackFeature } from './src/features/feedback.js';
@@ -3709,6 +3710,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   window.addEventListener('storage', event => { if (event.key === 'daily-planner:settings' && adoptPlus(settings, event.newValue)) refreshPlus(); });
   // The planner tour (src/features/tour.js): once after setup, offered once to earlier users, always in How it works and More.
   const tour = createTour({ getActiveModal: () => activeModal, closeModal, closePopovers: closeAllPopovers, setPane: view => setMobileView(view), range: () => plannerRangeView, setRange: view => { if (view !== plannerRangeView) toggleWeekView(); }, isReady: () => !!settings.onboardingComplete });
+  // The first time each main dialog opens, a short guide inside it (src/features/first-use.js).
+  createFirstUse({ tour, isReady: () => !!settings.onboardingComplete, isFloating: () => !!pipFeature?.isOpen(), getActiveModal: () => activeModal });
   const onboarding = createOnboarding({ settings: () => settings, persistSettings, startHour, endHour, time, chevronSvg, openListPopover, openModal, closeModal, seedFirstBlock: seedFirstBlockAfterOnboarding, afterFinish: () => { render(); requestAnimationFrame(() => qs('[data-focus]')?.focus({ preventScroll: true })); }, openInstall: () => installFeature.open(), keepTheme: () => { if (themeController.get() === 'system') themeController.set(themeController.resolved()); }, startTour: () => tour.startWhenIdle() });
   const fromMenu = action => () => { const menu = qs('[data-mobile-more-menu]'); if (menu) menu.hidden = true; action(); };
   qsa('[data-install-open]').forEach(button => button.addEventListener('click', fromMenu(() => installFeature.open())));

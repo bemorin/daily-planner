@@ -785,3 +785,22 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
   .owner-list li { grid-template-columns: minmax(0, 1fr) auto; }
   .owner-list li span:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
 }
+
+/* Partners: sales through a partner's link, by code, then the latest ones. */
+.owner-partner-stats { margin-bottom: 14px; }
+
+.owner-partner-note { margin: -4px 0 14px; color: var(--muted); font-size: .8rem; line-height: 1.5; }
+
+.owner-partner-stats strong { font-size: 1.25rem; }
+
+.owner-partners code,
+.owner-partner-sales code { font-size: .78rem; font-weight: 650; overflow-wrap: normal; white-space: nowrap; }
+
+.owner-partners .owner-small { white-space: nowrap; }
+
+.owner-partner-sales .owner-pill { margin-top: 0; }
+
+.owner-partner-sales tr.is-off td:not(:last-child) { color: var(--muted); }
+
+[data-owner-partners] .owner-list { margin-top: 18px; }
+

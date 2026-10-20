@@ -50,7 +50,10 @@ const deploymentConfig = {
   // Legal pages: blank details are left out (see legal/legal.js).
   SUPPORT_EMAIL: process.env.DAILY_PLANNER_SUPPORT_EMAIL || '',
   LEGAL_ADDRESS: process.env.DAILY_PLANNER_LEGAL_ADDRESS || '',
-  LEGAL_REGISTRATION: process.env.DAILY_PLANNER_LEGAL_REGISTRATION || ''
+  LEGAL_REGISTRATION: process.env.DAILY_PLANNER_LEGAL_REGISTRATION || '',
+  // Partners page: the Creem affiliate sign-up link and the commission shown (“30%”).
+  AFFILIATE_URL: process.env.DAILY_PLANNER_AFFILIATE_URL || '',
+  AFFILIATE_COMMISSION: process.env.DAILY_PLANNER_AFFILIATE_COMMISSION || ''
 };
 await fs.writeFile(resolve(dist, 'runtime-config.js'), `globalThis.__DAILY_PLANNER_CONFIG__ = Object.freeze(${JSON.stringify(deploymentConfig, null, 2)});\n`);
 await copyTree('src');

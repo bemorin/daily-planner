@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createMemoryStore, createPlannerApi, EMAIL_SENDS_EVENT, GIFT_PLAN_LABELS, PLUS_CLAIMS_MAX, requestCountry, REVIEWS_LATEST, seriesRange } from '../server/planner-api.js';
 import { createD1Store } from '../server/d1-store.js';
 import { generatePlusKeyPair, giftManageKey, verifyLicense } from '../server/licenses.js';
-import { affiliateCode, CHECKOUT_ID_RE, creemApiBase, creemMode, creemProductsFromEnv, parseCreemProducts, readCheckout, verifyWebhookSignature, webhookSignature } from '../server/creem.js';
+import { affiliateCode, CHECKOUT_ID_RE, checkoutSeal, creemApiBase, creemMode, creemProductsFromEnv, parseCreemProducts, readCheckout, verifyWebhookSignature, webhookSignature } from '../server/creem.js';
 import { currencyForCountry, PERSONAL_GIFTS, priceCents, TEAM_TIERS } from '../src/lib/pricing.js';
 
 const START = Date.parse('2026-10-09T08:00:00Z');
@@ -943,23 +943,26 @@ test('a personal gift becomes a gift link, emailed to the giver in personal word
   assert.equal((await asJson(await api(get(`gifts/${code}`)))).body.plan, '', 'unknown once the note is changed');
 });
 
-test('a partner code goes to Creem as affiliate_code only, and a refused code never blocks the sale', async () => {
+test('a partner code goes to Creem as affiliate_code and in the metadata, and a refused code never blocks the sale', async () => {
   const creem = fakeCreem();
   const { api, store, warnings } = setup({ creem });
   const opened = await asJson(await api(post('checkout', { item: 'plus', currency: 'EUR', ref: ' PARTNER_1 ' })));
   assert.equal(opened.status, 201);
   const sent = creem.calls.at(-1).body;
   assert.equal(sent.affiliate_code, 'PARTNER_1');
-  // Nowhere else: not in the metadata, the return address, the answer or the database.
-  const { affiliate_code: code, ...rest } = sent;
-  assert.equal(code, 'PARTNER_1');
-  for (const elsewhere of [rest, opened.body, store.data]) assert.ok(!JSON.stringify(elsewhere).includes('PARTNER_1'));
+  // In the metadata and the seal too, so the paid sale can be listed under it; never in the return address, the answer, or the database before it is paid.
+  assert.equal(sent.metadata.ref, 'PARTNER_1');
+  assert.equal(sent.metadata.seal, await checkoutSeal(KEYS.signingKey, { kind: 'plus', currency: 'EUR', rid: sent.request_id, ref: 'PARTNER_1' }));
+  assert.notEqual(sent.metadata.seal, await checkoutSeal(KEYS.signingKey, { kind: 'plus', currency: 'EUR', rid: sent.request_id }), 'the code is sealed');
+  assert.ok(!sent.success_url.includes('PARTNER_1'));
+  for (const elsewhere of [opened.body, store.data]) assert.ok(!JSON.stringify(elsewhere).includes('PARTNER_1'));
   assert.equal((await api(post('checkout', { item: 'gift', plan: 'family-5', currency: 'USD', ref: 'aff-2026' }))).status, 201);
   assert.equal(creem.calls.at(-1).body.affiliate_code, 'aff-2026');
   // Malformed codes are ignored: the checkout opens without one.
   for (const ref of ['a', 'x'.repeat(65), 'bad code', '<script>', 'AB12?x=1', 'café', 42, ['AB12'], { code: 'AB12' }, null, '']) {
     assert.equal((await api(post('checkout', { item: 'plus', currency: 'EUR', ref }))).status, 201, JSON.stringify(ref));
     assert.equal('affiliate_code' in creem.calls.at(-1).body, false, JSON.stringify(ref));
+    assert.equal('ref' in creem.calls.at(-1).body.metadata, false, JSON.stringify(ref));
   }
   assert.deepEqual([affiliateCode(' ok_1 '), affiliateCode('x'.repeat(64)).length, affiliateCode('x'), affiliateCode(7)], ['ok_1', 64, '', '']);
   assert.equal(warnings.length, 0);
@@ -971,7 +974,11 @@ test('a partner code goes to Creem as affiliate_code only, and a refused code ne
   assert.equal(picky.calls.length, 2);
   const { affiliate_code: refused, ...withoutCode } = picky.calls[0].body;
   assert.equal(refused, 'STALE_1');
-  assert.deepEqual(picky.calls[1].body, withoutCode, 'the same checkout, seal included, without the code');
+  const { ref: refusedRef, seal: sealWithCode, ...metadata } = withoutCode.metadata;
+  assert.equal(refusedRef, 'STALE_1');
+  const seal = await checkoutSeal(KEYS.signingKey, { kind: 'gift', plan: 'gift-1', currency: 'EUR', rid: withoutCode.request_id });
+  assert.equal(sealWithCode, await checkoutSeal(KEYS.signingKey, { kind: 'gift', plan: 'gift-1', currency: 'EUR', rid: withoutCode.request_id, ref: 'STALE_1' }));
+  assert.deepEqual(picky.calls[1].body, { ...withoutCode, metadata: { ...metadata, seal } }, 'the same checkout, sealed again, without the code anywhere: the sale is not listed under a partner Creem refused');
   assert.equal(retry.warnings.length, 1);
   assert.match(retry.warnings[0], /^Creem refused the affiliate code "STALE_1" \(Creem answered HTTP 400: Affiliate code not found\)/);
   // Only once, only after a 400, only when a code was sent.

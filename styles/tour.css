@@ -1,6 +1,8 @@
 /* Planner tour (src/features/tour.js): a spotlight on the real interface and
    a short card beside it; plus the one-time offer for people who set the
-   planner up before the tour existed. Colours come from the theme tokens. */
+   planner up before the tour existed. The same spotlight and card run the
+   first-use guides inside a dialog (src/features/first-use.js,
+   data-kind="guide"). Colours come from the theme tokens. */
 
 :root {
   --tour-scrim: rgba(31, 27, 22, .42);
@@ -110,6 +112,9 @@
 .tour-card__title { margin: 0; font-size: 1rem; font-weight: 680; line-height: 1.25; letter-spacing: -.022em; text-wrap: balance; }
 
 .tour-card__text { margin: 6px 0 0; color: var(--muted); font-size: .76rem; line-height: 1.56; text-wrap: pretty; }
+
+/* The parts of the screen the step names, as they read there. */
+.tour-card__text strong { color: var(--ink); font-weight: 650; }
 
 .tour-card__keys {
   display: grid;

@@ -1,5 +1,5 @@
 import { esc, escAttr } from '../lib/text.js';
-import { trackEvent } from '../lib/planner-api.js';
+import { dismissPartnerHint, partnerHintShown, trackEvent } from '../lib/planner-api.js';
 import { modalEnter, modalExit } from '../ui/motion.js';
 import { SHARE_FORMATS, SHARE_LOOKS, SHARE_SITE, describeShare, drawShareImage, normalizeShareOptions, shareFileName, shareFormat } from './share-image.js';
 
@@ -8,6 +8,8 @@ import { SHARE_FORMATS, SHARE_LOOKS, SHARE_SITE, describeShare, drawShareImage, 
  * private details (off until the person turns them on), and Share… /
  * Copy image / Download image. The image is drawn and encoded on this device;
  * nothing is uploaded. A native <dialog> keeps focus inside and returns it.
+ * Once an image is made, with the owner API on, one quiet line mentions the
+ * partner program, until it is hidden or followed on this device.
  */
 
 const PREFS_KEY = 'daily-planner-ui:share';
@@ -18,7 +20,9 @@ const ICONS = {
   share: '<path d="M12 3.8v10.7"/><path d="m8.2 7.4 3.8-3.6 3.8 3.6"/><path d="M8.6 10.6H7.2a2 2 0 0 0-2 2v5.6a2 2 0 0 0 2 2h9.6a2 2 0 0 0 2-2v-5.6a2 2 0 0 0-2-2h-1.4"/>',
   download: '<path d="M12 4v10.5"/><path d="m7.8 10.6 4.2 4.2 4.2-4.2"/><path d="M5 19.5h14"/>',
   copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/>',
-  lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>'
+  lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>'
 };
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
 
@@ -79,7 +83,10 @@ function toggle(attr, title, note) {
   </label>`;
 }
 
-function sheetMarkup({ eyebrow, title, intro, model, state, shareAvailable, copyAvailable }) {
+/** One line about the partner program, shown once an image is made (hidden until then). */
+const partnerLine = () => `<p class="share-sheet__partner" data-share-partner hidden>${icon('link')}<span>Earn a commission when people buy through your link. <a href="./welcome/partners/" target="_blank" rel="noopener" data-share-partner-go>Partners${icon('arrow')}</a></span><button class="icon-button share-sheet__partner-close" type="button" data-share-partner-dismiss aria-label="Hide the partner program">${icon('close')}</button></p>`;
+
+function sheetMarkup({ eyebrow, title, intro, model, state, shareAvailable, copyAvailable, partner = false }) {
   const lines = model.kind === 'week' ? model.lines : [];
   const lineChoice = lines.length > 1
     ? `<label class="share-sheet__select" data-share-line-pick hidden><span class="sr-only">Line to include</span><select data-share-line-choice>${lines.map((line, index) => `<option value="${index}"${index === state.lineIndex ? ' selected' : ''}>${esc(line.length > 70 ? `${line.slice(0, 68).trimEnd()}…` : line)}</option>`).join('')}</select></label>`
@@ -116,7 +123,10 @@ function sheetMarkup({ eyebrow, title, intro, model, state, shareAvailable, copy
       </div>
     </div>
     <footer class="share-sheet__foot">
-      <p class="share-sheet__status" data-share-status role="status" aria-live="polite"></p>
+      <div class="share-sheet__messages">
+        <p class="share-sheet__status" data-share-status role="status" aria-live="polite"></p>
+        ${partner ? partnerLine() : ''}
+      </div>
       <div class="share-sheet__actions">${secondary}</div>
     </footer>
   </div>`;
@@ -152,7 +162,7 @@ export function openShareDialog({ model, title = 'Share', eyebrow = 'Share', ope
   dialog.className = DIALOG_CLASS;
   dialog.setAttribute('aria-labelledby', 'share-sheet-title');
   dialog.setAttribute('aria-describedby', 'share-sheet-intro');
-  dialog.innerHTML = sheetMarkup({ eyebrow, title, intro, model, state, shareAvailable, copyAvailable });
+  dialog.innerHTML = sheetMarkup({ eyebrow, title, intro, model, state, shareAvailable, copyAvailable, partner: partnerHintShown('share') });
   document.body.append(dialog);
 
   const $ = selector => dialog.querySelector(selector);
@@ -222,6 +232,16 @@ export function openShareDialog({ model, title = 'Share', eyebrow = 'Share', ope
     if (counted) return;
     counted = true;
     trackEvent('share_image_created');
+    const partner = $('[data-share-partner]');
+    if (partner) partner.hidden = false;
+  }
+
+  function hidePartner(event) {
+    dismissPartnerHint('share');
+    if (event?.target?.closest('[data-share-partner-dismiss]')) {
+      $('[data-share-partner]')?.remove();
+      ($('[data-share-native]') || $('[data-share-download]'))?.focus({ preventScroll: true });
+    }
   }
 
   async function download() {
@@ -289,6 +309,7 @@ export function openShareDialog({ model, title = 'Share', eyebrow = 'Share', ope
     if (event.target.closest('[data-share-close]')) { handle.close(); return; }
     if (event.target.closest('[data-share-download]')) { download(); return; }
     if (event.target.closest('[data-share-copy]')) { copy(); return; }
+    if (event.target.closest('[data-share-partner-go], [data-share-partner-dismiss]')) { hidePartner(event); return; }
     if (event.target.closest('[data-share-native]')) shareNative();
   });
 

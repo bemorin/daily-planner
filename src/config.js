@@ -26,8 +26,14 @@ export const PLUS_PUBLIC_KEY = runtimeValue('PLUS_PUBLIC_KEY').replace(/\s+/g, '
 export const SUPPORT_EMAIL = runtimeValue('SUPPORT_EMAIL');
 export const LEGAL_ADDRESS = runtimeValue('LEGAL_ADDRESS');
 export const LEGAL_REGISTRATION = runtimeValue('LEGAL_REGISTRATION');
+// Partners (welcome/partners/): the Creem affiliate sign-up link (Creem → Growth
+// → Affiliate Hub) behind “Become a partner”, and the commission it pays, as
+// shown (“30%”). Blank: the button asks through the question form, and the
+// page speaks of “a commission” without a number.
+export const AFFILIATE_URL = /^https:\/\/[^\s"'<>]+$/.test(runtimeValue('AFFILIATE_URL')) ? runtimeValue('AFFILIATE_URL') : '';
+export const AFFILIATE_COMMISSION = runtimeValue('AFFILIATE_COMMISSION').replace(/[\u0000-\u001f<>]+/g, '').slice(0, 24).trim();
 // Kept in step with package.json by scripts/check.mjs; feedback is grouped by it.
-export const APP_VERSION = '1.26.0';
+export const APP_VERSION = '1.27.0';
 // Public/project links are deployment configuration, not repository defaults.
 
 

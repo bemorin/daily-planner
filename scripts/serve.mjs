@@ -46,6 +46,10 @@
 // webhook for that paid checkout, as Creem does (add &amount=<cents> for a
 // partial refund, &dispute=1 for a dispute.created instead); GET
 // /v1/transactions?transaction_id=… answers from the same pretend data.
+// A product link opened by hand: POST /__fake-creem/link?item=plus|gift
+// [&plan=gift-1][&currency=EUR][&ref=CODE][&member=1] makes a paid checkout
+// whose metadata is only what was given — no seal, no request id — and answers
+// its id, to see that the API never takes its partner code or member flag.
 // Without --fake-creem the CREEM_* variables are used, as in production.
 // Links in emails and checkout returns point at this server unless
 // PUBLIC_BASE_URL is set.
@@ -141,6 +145,8 @@ const FAKE_FIELD_ANSWERS = { company: { label: 'Company name, shown to your team
 const FAKE_REFUSED_AFFILIATE = 'BADCODE';
 // Without CREEM_WEBHOOK_SECRET, pretend refunds are signed with this one.
 const FAKE_WEBHOOK_SECRET = 'whsec_fake_dev_only';
+// Checkouts made by /__fake-creem/link: opened by hand, so never given the seal the shortcuts get.
+const fakeByHand = new Set();
 const fakeCheckouts = new Map([
   ['fake_plus', { product: FAKE_PRODUCTS.plus.EUR, metadata: { kind: 'plus' }, amount: priceCents('plus', '', 'EUR'), currency: 'EUR', successUrl: '/', orderId: 'ord_fake_plus' }],
   ['fake_gift50', { product: FAKE_PRODUCTS.gift.EUR, metadata: { kind: 'gift', plan: 'up-to-50', seats: '50' }, amount: priceCents('gift', 'up-to-50', 'EUR'), currency: 'EUR', successUrl: '/welcome/thanks/', orderId: 'ord_fake_gift50' }]
@@ -192,7 +198,7 @@ async function fakeCreemFetch(url, init = {}) {
   const fake = fakeCheckouts.get(id);
   if (!fake) return fakeJson(404, { message: [`Checkout not found: ${id}`] });
   // The two shortcuts carry the seal the API would have put on a checkout it opened.
-  if (!fake.metadata.seal && plusSigningKey) {
+  if (!fake.metadata.seal && plusSigningKey && !fakeByHand.has(id)) {
     const { kind, plan = '' } = fake.metadata;
     fake.metadata = { ...fake.metadata, currency: fake.currency, rid: id, seal: await checkoutSeal(plusSigningKey, { kind, plan, currency: fake.currency, rid: id }) };
   }
@@ -213,6 +219,25 @@ function fakePayPage(url, response) {
   const href = back.href.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
   console.log(`  [fake creem] paid ${id}`);
   response.writeHead(200, headers).end(`<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta http-equiv="refresh" content="0;url=${href}"><title>Fake Creem checkout</title></head><body><p>Pretend payment accepted. Back to <a href="${href}">Daily Planner</a>…</p></body></html>\n`);
+}
+
+/**
+ * POST /__fake-creem/link?item=plus|gift[&plan=…][&currency=EUR|USD][&ref=CODE][&member=1]: someone opens a
+ * product link by hand and pays it. Its metadata is only what was given (no seal, no request id). Answers { checkout }.
+ */
+function fakeLink(request, url, response) {
+  const headers = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', [MARKER]: '1' };
+  request.resume();
+  const item = url.searchParams.get('item') === 'gift' ? 'gift' : 'plus';
+  const currency = url.searchParams.get('currency') === 'USD' ? 'USD' : 'EUR';
+  const plan = item === 'gift' ? url.searchParams.get('plan') || 'gift-1' : '';
+  const metadata = { kind: item, ...(plan ? { plan } : {}) };
+  for (const key of ['ref', 'member']) if (url.searchParams.has(key)) metadata[key] = url.searchParams.get(key);
+  const id = `ch_fake_hand_${randomBytes(6).toString('hex')}`;
+  fakeCheckouts.set(id, { product: FAKE_PRODUCTS[item][currency], metadata, amount: priceCents(item, plan, currency, { member: metadata.member === '1' }), currency, successUrl: item === 'gift' ? '/welcome/thanks/' : '/', orderId: `ord_fake_${randomBytes(8).toString('hex')}`, fields: item === 'gift' ? ['from'] : [] });
+  fakeByHand.add(id);
+  console.log(`  [fake creem] opened by hand ${id}: ${JSON.stringify(metadata)}`);
+  response.writeHead(201, headers).end(JSON.stringify({ checkout: id }));
 }
 
 /**
@@ -364,6 +389,7 @@ async function handle(request, response) {
     if (devLicenses && url.pathname === '/api/dev/license') { await devLicense(request, response); return; }
     if (plannerApi && fakeCreem && url.pathname === '/__fake-creem/pay') { fakePayPage(url, response); return; }
     if (plannerApi && fakeCreem && url.pathname === '/__fake-creem/refund') { await fakeRefund(request, url, response); return; }
+    if (plannerApi && fakeCreem && url.pathname === '/__fake-creem/link' && request.method === 'POST') { fakeLink(request, url, response); return; }
     if (plannerApi && url.pathname.startsWith('/api/')) { await handleApi(request, response); return; }
     let pathname = decodeURIComponent(url.pathname);
     if (pathname.endsWith('/')) pathname += 'index.html';

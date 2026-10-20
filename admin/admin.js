@@ -52,7 +52,7 @@ const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', ma
 // This page's own release, kept in step with package.json and src/config.js
 // (tests/admin-version.test.js). Not imported: it must come from this very
 // file, so an old cached admin.js shows its old number.
-const APP_VERSION = '1.26.0';
+const APP_VERSION = '1.27.0';
 // What Reload fetches again past the browser cache before opening the page anew.
 const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js'];
 const RELOAD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/></svg>';
@@ -303,7 +303,7 @@ function showUnavailable(error) {
 function clearRendered() {
   ['[data-owner-kpis]', '[data-owner-funnel]', '[data-owner-team-funnel]', '[data-owner-teams]', '[data-owner-waitlist]', '[data-owner-versions]', '[data-owner-feedback]', '[data-owner-signals]',
     '[data-owner-gifts]', '[data-owner-gift-created]', '[data-owner-gift-panel]', '[data-owner-plus-stats]', '[data-owner-plus-funnel]', '[data-owner-license-created]', '[data-owner-license-list]', '[data-owner-setup]',
-    '[data-owner-reviews]', '[data-owner-refunds]', '[data-owner-revocations]']
+    '[data-owner-reviews]', '[data-owner-refunds]', '[data-owner-revocations]', '[data-owner-partners]']
     .forEach(selector => { $(selector).innerHTML = ''; });
   trends.clear();
   seriesSession = null;
@@ -1096,6 +1096,66 @@ $('[data-owner-refunds]').closest('.owner-card').addEventListener('click', async
   await load();
 });
 
+// ---- Partners ------------------------------------------------------------------
+
+const PARTNER_PLAN_LABELS = { 'gift-1': 'Give Plus', 'family-5': 'Plus Family' };
+const partnerWhat = row => (row.kind === 'plus' ? 'Plus' : PARTNER_PLAN_LABELS[row.plan] || (PLAN_LABELS[row.plan] ? `Team gift · ${PLAN_LABELS[row.plan].toLowerCase()}` : 'Gift'));
+const revenueText = revenue => Object.entries(revenue || {}).map(([currency, cents]) => money(cents, currency)).join(' · ') || '—';
+const PARTNER_STATE_PILLS = { refunded: 'Refunded', revoked: 'Switched off' };
+
+/** What the figures leave out or cover: sales made in Creem's test mode, and the cap on how many sales are read. */
+function partnerFootnote(totals) {
+  const test = totals.test || {};
+  const parts = [];
+  if (test.sales) parts.push(`${number(test.sales)} ${plural(test.sales, 'sale')} in test mode${Object.keys(test.revenue || {}).length ? ` (${revenueText(test.revenue)})` : ''} ${Number(test.sales) === 1 ? 'is' : 'are'} not counted.`);
+  if (totals.capped) parts.push(`The figures cover the latest ${number(totals.listed)} sales.`);
+  return parts.length ? `<p class="owner-partner-note">${esc(parts.join(' '))}</p>` : '';
+}
+
+/** Sales through a partner's link (migration 0006): one line per code, then the latest sales. */
+function renderPartners(summary) {
+  const target = $('[data-owner-partners]');
+  if (summary.partnersUnavailable) {
+    target.innerHTML = '<p class="owner-empty">The <code>partner_sales</code> table does not exist yet, so sales through a partner’s link are not recorded. Apply <code>migrations/0006_partners.sql</code> to the D1 database (see <code>docs/FEEDBACK_AND_WAITLIST.md</code>).</p>';
+    return;
+  }
+  const partners = summary.partners || {};
+  const codes = Array.isArray(partners.codes) ? partners.codes : [];
+  const recent = Array.isArray(partners.recent) ? partners.recent : [];
+  if (!codes.length) {
+    target.innerHTML = '<p class="owner-empty">No sales through a partner’s link yet. Partners share <code>https://planner.bemorin.com/welcome/?ref=CODE</code>; a purchase made through it shows here once it is paid.</p>';
+    return;
+  }
+  const totals = partners.totals || {};
+  const latest = totals.capped ? `Latest ${number(totals.listed)} sales · ` : '';
+  const stats = [
+    ['Partner sales', number(totals.sales), `${latest}${number(totals.partners)} ${plural(totals.partners, 'partner')}`],
+    ['Revenue', revenueText(totals.revenue), 'After refunds; currencies never added together'],
+    ['Refunded or switched off', number(totals.refunded), totals.partial ? `Left out of the revenue · ${number(totals.partial)} partly refunded: counted less the refund` : 'Left out of the revenue']
+  ].map(([label, figure, note]) => `<div class="owner-stat"><span>${esc(label)}</span><strong>${esc(figure)}</strong><small>${esc(note)}</small></div>`).join('');
+  const off = row => [row.refunded ? `${number(row.refunded)} refunded` : '', row.partial ? `${number(row.partial)} partly refunded` : '', row.revoked ? `${number(row.revoked)} switched off` : '', row.test ? `${number(row.test)} in test mode` : ''].filter(Boolean).join(' · ');
+  const byCode = codes.map(row => `<tr>
+    <td><code>${esc(row.code)}</code></td>
+    <td class="num"><b>${number(row.sales)}</b>${off(row) ? `<small class="owner-small">${esc(off(row))}</small>` : ''}</td>
+    <td class="num owner-nowrap">${esc(revenueText(row.revenue))}</td>
+    <td class="num">${row.members ? number(row.members) : '—'}</td>
+    <td class="owner-nowrap">${esc(day(row.lastAt))}</td>
+  </tr>`).join('');
+  const refundedPart = row => (row.refundedAmount ? `−${money(row.refundedAmount, row.currency)} refunded` : row.partial ? 'Part refunded, amount unknown' : '');
+  const lines = recent.map(row => `<tr${row.state || row.test ? ' class="is-off"' : ''}>
+    <td class="owner-nowrap">${esc(when(row.createdAt))}</td>
+    <td><code>${esc(row.code)}</code></td>
+    <td>${esc(partnerWhat(row))}${row.member ? ' <span class="owner-pill">Member price</span>' : ''}${row.test ? ' <span class="owner-pill">Test · not counted</span>' : ''}</td>
+    <td class="num owner-nowrap">${esc(money(row.amount, row.currency)) || '—'}${refundedPart(row) ? `<small class="owner-small">${esc(refundedPart(row))}</small>` : ''}</td>
+    <td>${row.state ? `<span class="owner-pill owner-pill--inactive">${esc(PARTNER_STATE_PILLS[row.state] || 'Switched off')}</span>` : row.partial ? '<span class="owner-pill">Partly refunded</span>' : ''}</td>
+  </tr>`).join('');
+  target.innerHTML = `<div class="owner-stats owner-partner-stats">${stats}</div>
+    ${partnerFootnote(totals)}
+    <div class="owner-scroll"><table class="owner-table owner-partners"><thead><tr><th>Partner code</th><th class="num">Sales</th><th class="num">Revenue</th><th class="num">Member price</th><th>Last sale</th></tr></thead><tbody>${byCode}</tbody></table></div>
+    <div class="owner-list"><h3>Latest partner sales</h3></div>
+    <div class="owner-scroll"><table class="owner-table owner-partner-sales"><thead><tr><th>Date</th><th>Code</th><th>What</th><th class="num">Amount</th><th><span class="sr-only">State</span></th></tr></thead><tbody>${lines}</tbody></table></div>`;
+}
+
 // ---- Setup --------------------------------------------------------------------
 
 const SETUP_STATES = { ok: 'Ready', warn: 'Check', missing: 'Not set' };
@@ -1124,6 +1184,21 @@ function paymentsItem(payments) {
     : '';
   const error = payments.error ? `<p class="owner-setup__error">${esc(payments.error)}</p>` : '';
   return { key: 'payments', title: 'Payments (Creem)', html: `${key}${error}<p>Product ids (one-time products, one per item and currency):</p>${table}${webhook}${url}` };
+}
+
+// Partners (welcome/partners/): “Become a partner” opens the Creem affiliate sign-up link, a build variable.
+function partnersItem(base = 'https://planner.bemorin.com') {
+  const value = key => String(APP_CONFIG[key] || '').trim();
+  const page = copyRow('Partners page', new URL('welcome/partners/', `${base.replace(/\/+$/, '')}/`).href);
+  const commission = value('AFFILIATE_COMMISSION') ? `The page shows a commission of ${esc(value('AFFILIATE_COMMISSION'))} (<code>DAILY_PLANNER_AFFILIATE_COMMISSION</code>).` : 'Set <code>DAILY_PLANNER_AFFILIATE_COMMISSION</code> (e.g. <code>30%</code>) to show the commission; until then the page says “a commission”.';
+  if (/^https:\/\/\S+$/.test(value('AFFILIATE_URL'))) {
+    return { key: 'partners', title: 'Partners', html: `<p>“Become a partner” opens your Creem affiliate sign-up link (<code>DAILY_PLANNER_AFFILIATE_URL</code>). ${commission}</p>${page}` };
+  }
+  return {
+    key: 'partners',
+    title: 'Partners',
+    html: `<p>In Creem → Growth → Affiliate Hub, create the program, copy its sign-up link and set it as the build variable <code>DAILY_PLANNER_AFFILIATE_URL</code>, then redeploy. Until then “Become a partner” opens the question form. ${commission}</p>${page}`
+  };
 }
 
 // Legal pages (legal/): their contact and address come from build variables.
@@ -1200,8 +1275,9 @@ function setupItems(summary) {
   items.push(paymentsItem(setup.payments || {}));
 
   items.push({ key: 'links', title: 'Links in emails', html: `<p>They start with ${esc(base)}${setup.publicBaseUrlSet ? ' (<code>PUBLIC_BASE_URL</code>)' : ', the default. Set <code>PUBLIC_BASE_URL</code> to change it'}.</p>` });
+  items.push(partnersItem(base));
   items.push(legalItem(base));
-  const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql', summary.reviewsUnavailable && '0004_creem_reviews.sql', summary.refundsUnavailable && '0005_refunds.sql'].filter(Boolean);
+  const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql', summary.reviewsUnavailable && '0004_creem_reviews.sql', summary.refundsUnavailable && '0005_refunds.sql', summary.partnersUnavailable && '0006_partners.sql'].filter(Boolean);
   const listed = files => (files.length > 1 ? `${files.slice(0, -1).join(', ')} and ${files.at(-1)}` : files[0]);
   items.push(missingTables.length
     ? { key: 'database', title: 'Database', html: `<p>Apply ${listed(missingTables.map(file => `<code>migrations/${file}</code>`))} to the D1 database.${summary.refundsUnavailable ? ' Until <code>0005_refunds.sql</code> is applied, refunds are not recorded and nothing is switched off.' : ''}</p>` }
@@ -1494,7 +1570,9 @@ function renderSignals(summary) {
     plus_viewed: 'Landing → scrolled to Plus',
     teams_viewed: 'Landing → scrolled to the team gift',
     pricing_viewed: 'Landing → scrolled to the prices',
-    review_sent: 'Left a review that may be quoted'
+    review_sent: 'Left a review that may be quoted',
+    partners_viewed: 'Visited the partners page',
+    partner_cta_clicked: 'Partners page → went to become a partner'
   };
   const versions = [...new Set(summary.eventTotals.map(row => row.appVersion))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
   const body = Object.entries(labels).map(([name, label]) => `<tr><td>${esc(label)}</td><td class="num"><b>${number(totalOf(summary.eventTotals, name))}</b></td>${versions.map(version => `<td class="num">${number(summary.eventTotals.filter(row => row.name === name && row.appVersion === version).reduce((sum, row) => sum + row.count, 0))}</td>`).join('')}</tr>`).join('');
@@ -1549,6 +1627,7 @@ async function load({ series: refreshSeries = false } = {}) {
     renderGifts(summary);
     renderPlus(summary, days);
     renderRefunds(summary);
+    renderPartners(summary);
     renderSetup(summary);
     renderWaitlist(summary);
     renderAnnounce(summary);

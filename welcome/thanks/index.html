@@ -28,6 +28,7 @@
     <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5.5 19.5a6.5 6.5 0 0 1 13 0"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></symbol>
     <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5c.5 4.3 2.2 6 6.5 6.5-4.3.5-6 2.2-6.5 6.5-.5-4.3-2.2-6-6.5-6.5 4.3-.5 6-2.2 6.5-6.5Z"/><path d="M18.5 15.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5Z"/></symbol>
   </svg>
 
@@ -132,6 +133,15 @@
           <a class="btn btn--ghost" href="../../" data-own-link><span data-own-label>Open your own planner</span><svg class="i"><use href="#i-arrow"/></svg></a>
         </div>
         <p class="mg-fine mg-keep">Bookmark your gift page to come back to it. Keep its address to yourself: it lets you change the name and the message.</p>
+        <aside class="mg-partner" aria-labelledby="mg-partner-title" data-partner-hint hidden>
+          <span class="mg-partner__icon" aria-hidden="true"><svg class="i"><use href="#i-link"/></svg></span>
+          <div class="mg-partner__copy">
+            <h2 id="mg-partner-title">Know someone who’d love it?</h2>
+            <p data-partner-text>Become a partner: share your own link to Daily Planner, and earn a commission on every purchase made through it.</p>
+          </div>
+          <a class="btn btn--ghost btn--sm" href="../partners/" data-partner-go>Become a partner</a>
+          <button class="mg-partner__close" type="button" data-partner-dismiss aria-label="Hide the partner program"><svg class="i" aria-hidden="true"><use href="#i-close"/></svg></button>
+        </aside>
       </section>
     </div>
   </main>
@@ -145,6 +155,7 @@
       <nav class="foot__links" aria-label="Footer">
         <a href="../../">Open the planner</a>
         <a href="../#teams">Team gift</a>
+        <a href="../partners/">Partners</a>
         <a href="../?ask=question#request">Ask a question</a>
       </nav>
       <nav class="foot__legal" aria-label="Legal">

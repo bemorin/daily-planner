@@ -236,6 +236,24 @@ export function writePlusCheck(changes, storage = globalThis.localStorage) {
 const licenseIdOf = token => decodePlusToken(token)?.payload.id || '';
 const revokedHere = token => { const id = licenseIdOf(token); return !!id && readPlusCheck().revoked.includes(id); };
 
+/** Where the planner keeps its settings, Plus licence included (app.js). */
+export const PLANNER_SETTINGS_KEY = 'daily-planner:settings';
+
+/**
+ * The Plus licence saved in this browser's planner settings, for pages of the
+ * same site that aren't the planner (the landing page shows a member its gift
+ * prices, and sends the licence with a gift checkout so the server can check
+ * it). '' when there is none, it is malformed, or this device found it
+ * revoked. Its signature is not checked here: use verifyPlusToken().
+ */
+export function savedPlusToken(storage = globalThis.localStorage) {
+  let raw = null;
+  try { raw = JSON.parse(storage?.getItem(PLANNER_SETTINGS_KEY) || 'null'); } catch (_) { return ''; }
+  const token = plusSettingsFrom(raw).plus?.token || '';
+  const id = licenseIdOf(token);
+  return id && !readPlusCheck(storage).revoked.includes(id) ? token : '';
+}
+
 // ---------------------------------------------------------------------------
 // Device state
 // ---------------------------------------------------------------------------

@@ -37,8 +37,15 @@
 // - Checkouts: the currency follows the buyer's country as Cloudflare sees it
 //   (request.cf.country; the euro area pays in EUR, the rest in USD), which is
 //   read for that request only and never stored. A partner code from a ?ref=
-//   link is passed to Creem as affiliate_code and not stored (a code Creem
-//   refuses is named in the server log so the owner can see it).
+//   link is passed to Creem as affiliate_code and in the checkout's metadata
+//   (sealed); once the checkout is paid, the code is kept with the sale (table
+//   partner_sales, see server/partners.js: what was bought, the amount, the
+//   date — a partner code names the partner, not the buyer). Only a checkout
+//   our API opened, with a valid seal, is recorded. A code Creem refuses is
+//   named in the server log and not recorded.
+// - Member price: a Plus member buying a personal gift sends their licence
+//   with the checkout; it is verified (signature, not revoked) for that
+//   request only and never stored. Creem only sees `member: '1'`.
 // - Reviews: feedback whose author ticked that it may be quoted, with the
 //   name they chose to give (optional). Deletable.
 //
@@ -53,7 +60,8 @@ import { cleanOrg, DEFAULT_PUBLIC_BASE_URL, formatGiftCode, giftBuyerEmail, gift
 import { GIFT_REF_RE, giftManageKey, giftRef, importSigningKey, importVerifyKey, isoDay, LICENSE_ID_RE, LICENSE_TOKEN_MAX, newLicenseId, publicKeyFromSigningKey, signLicense, verifyLicense } from './licenses.js';
 import { affiliateCode, CHECKOUT_ID_RE, checkoutSeal, checkoutSealValid, createCheckout, CREEM_ITEMS, creemMode, fetchCheckout, fetchTransaction, parseCreemProducts, readCheckout, verifyWebhookSignature } from './creem.js';
 import { CREEM_REASONS, OWNER_SOURCE_PREFIX, readRefundEvent, readTransaction, REFUND_EVENTS, refundNoticeEmail, refundScope, refundWaitingEmail, REVOCATION_NOTE_MAX, revocationTarget, shownScope } from './refunds.js';
-import { currencyForCountry, CURRENCIES, giftPlan, isPersonalGift, PERSONAL_GIFTS, priceCents, TEAM_TIERS, validCurrency } from '../src/lib/pricing.js';
+import { normalizePartnerSale, PARTNER_SALES_LISTED, partnerSaleRow, partnerSummary } from './partners.js';
+import { currencyForCountry, CURRENCIES, giftPlan, hasMemberPrice, isPersonalGift, PERSONAL_GIFTS, priceCents, TEAM_TIERS, validCurrency } from '../src/lib/pricing.js';
 // The release this API was deployed with (kept in step with package.json by scripts/check.mjs).
 // The dashboard compares it with its own to spot a page served from an old cache.
 import { APP_VERSION } from '../src/config.js';
@@ -109,7 +117,10 @@ export const EVENT_NAMES = new Set([
   'gift_link_copied',
   'plus_viewed',
   'teams_viewed',
-  'pricing_viewed'
+  'pricing_viewed',
+  // Partners page (landing)
+  'partners_viewed',
+  'partner_cta_clicked'
 ]);
 
 export const FEEDBACK_KINDS = new Set(['idea', 'problem', 'praise', 'other']);
@@ -492,11 +503,21 @@ export function createPlannerApi({
     } catch { return baseUrl(); }
   };
   const isTestRow = row => String(row?.note || '').startsWith(TEST_NOTE);
+  /**
+   * A checkout as read from Creem (readCheckout), with what our seal vouches
+   * for: `sealed` when our API opened it. Anyone can open a product link by
+   * hand and add metadata, so without the seal its partner code and member
+   * flag count for nothing (no partner sale, never the member price), and the
+   * member flag counts only on a gift.
+   */
+  async function sealedCheckout(paid) {
+    const sealed = await checkoutSealValid(signingSecret, paid);
+    return { ...paid, sealed, ref: sealed ? paid.ref : '', member: sealed && paid.item?.kind === 'gift' && paid.member === true };
+  }
   /** A gift needs our seal (a product link opened by hand can't pick its pack); every item must match its product's currency. */
-  const honoured = async paid => {
+  const honoured = paid => {
     if (paid.currency && paid.productCurrency && paid.currency !== paid.productCurrency) return false;
-    if (paid.item?.kind === 'gift') return checkoutSealValid(signingSecret, paid);
-    return true;
+    return paid.item?.kind !== 'gift' || paid.sealed === true;
   };
   // Checkouts Creem did not know, that sell something else or that expired are
   // remembered for a few minutes with their answer, so repeating them costs no
@@ -537,6 +558,32 @@ export function createPlannerApi({
     if (!orderId) return;
     try { await store.addOrder({ orderId, checkoutId, kind, mode, createdAt: now().toISOString() }); }
     catch (error) { safeWarn(`Order ${orderId} of ${checkoutId} not recorded: ${error?.message || error}`); }
+  }
+  /** A sale through a partner's link (migration 0006). Best effort: never blocks a delivery. */
+  async function recordPartnerSale(checkoutId, paid, createdAt) {
+    const row = partnerSaleRow(checkoutId, paid, createdAt);
+    if (!row) return;
+    try { await store.addPartnerSale(row); }
+    catch (error) { if (!isMissingTable(error)) safeWarn(`Partner sale ${checkoutId} (${row.code}) not recorded: ${error?.message || error}`); }
+  }
+  /**
+   * The member price: true for a Plus licence this server signed that is not
+   * revoked (its id, or the gift it came from). Anything else — no licence, a
+   * forged or revoked one, the check failing — is the normal price.
+   */
+  async function memberLicense(value) {
+    const token = typeof value === 'string' ? value.trim() : '';
+    if (!token || token.length > LICENSE_TOKEN_MAX) return false;
+    try {
+      const key = await verifyKey();
+      const license = key ? await verifyLicense(key, token) : null;
+      if (!license) return false;
+      const gift = GIFT_REF_RE.test(String(license.gift || '')) ? revocationTarget('gift', license.gift) : '';
+      return !await isRevoked([revocationTarget('license', license.id), gift]);
+    } catch (error) {
+      safeWarn(`Member price not checked: ${error?.message || error}`);
+      return false;
+    }
   }
   /** Reads a Creem checkout's order and records it; true when one was recorded. */
   async function fetchOrder(checkoutId, kind) {
@@ -816,7 +863,8 @@ export function createPlannerApi({
    * claim or the webhook comes first. The payment row feeds the sales chart;
    * a claim still answers when it cannot be written (migration 0004 missing),
    * the webhook does not (Creem retries it). The order id is recorded for
-   * refunds, without ever holding up a delivery (migration 0005 missing).
+   * refunds, and the partner code (if any) for the Partners card, without
+   * ever holding up a delivery (migrations 0005 and 0006 missing).
    * A checkout or an order revoked before delivery (refunded before the buyer
    * came back, or switched off by the owner) delivers nothing: { refused }.
    */
@@ -827,6 +875,7 @@ export function createPlannerApi({
     if (strict) await payment;
     else await payment.catch(error => safeWarn(`Payment ${checkoutId} not recorded: ${error?.message || error}`));
     await recordOrder(checkoutId, kind, paid.orderId, paid.mode);
+    await recordPartnerSale(checkoutId, paid, createdAt);
     const blocked = await revocationsOf([revocationTarget('checkout', checkoutId), paid.orderId ? revocationTarget('order', paid.orderId) : '']);
     if (blocked.length) {
       await linkRefused(checkoutId, kind, blocked);
@@ -912,8 +961,8 @@ export function createPlannerApi({
     }
     const refuse = (status, error, flags = {}) => { rememberCheckout(checkoutId, status, error, flags); return json(status, { error, ...flags }, cors); };
     if (!checkout) return refuse(404, PAYMENT_UNKNOWN);
-    const paid = readCheckout(checkout, products.byId);
-    if (!paid.item || !await honoured(paid)) return refuse(404, NOT_PLUS_PAYMENT);
+    const paid = await sealedCheckout(readCheckout(checkout, products.byId));
+    if (!paid.item || !honoured(paid)) return refuse(404, NOT_PLUS_PAYMENT);
     if (checkout.status === 'expired') return refuse(410, CHECKOUT_EXPIRED, { expired: true });
     if (!paid.paid) return json(402, { error: 'This payment is not complete yet.' }, cors);
     if (giftOnly && paid.item.kind === 'plus') return notAGift();
@@ -938,16 +987,20 @@ export function createPlannerApi({
   /**
    * Open the Creem checkout. A partner code Creem refuses (HTTP 400: unknown,
    * paused or mistyped) must never block a sale: the checkout is opened again,
-   * once, without it, and the owner is told in the logs.
+   * once, without it (in the metadata and the seal too, so the sale isn't
+   * listed under a partner Creem doesn't credit), and the owner is told in the
+   * logs. `sealWithout()` is the seal of the same checkout without the code.
    */
-  async function openCheckout(payload) {
+  async function openCheckout(payload, sealWithout) {
     try {
       return await createCheckout({ ...creem, body: payload });
     } catch (error) {
       if (!payload.affiliate_code || error?.status !== 400) throw error;
       const { affiliate_code: refused, ...plain } = payload;
+      const { ref: _dropped, ...metadata } = plain.metadata;
+      metadata.seal = await sealWithout();
       safeWarn(`Creem refused the affiliate code "${refused}" (${error.message}); the checkout is opened without it.`);
-      return createCheckout({ ...creem, body: plain });
+      return createCheckout({ ...creem, body: { ...plain, metadata } });
     }
   }
 
@@ -975,24 +1028,32 @@ export function createPlannerApi({
     const base = returnBase(request);
     const rid = `dp_${newLicenseId()}`;
     const plan = gift?.plan || '';
-    const seal = await checkoutSeal(signingSecret, { kind: item, plan, currency, rid });
+    // Someone who has Plus pays the member price for a personal gift, with a licence this server verifies.
+    const member = item === 'gift' && hasMemberPrice(plan, currency) ? await memberLicense(body?.license) : false;
+    // A partner's code (from a ?ref= link) is sealed with the rest: only a checkout opened here is listed under a partner.
+    const ref = affiliateCode(body?.ref);
+    const sealOf = code => checkoutSeal(signingSecret, { kind: item, plan, currency, rid, member, ref: code });
+    const seal = await sealOf(ref);
     const payload = item === 'plus'
       ? { product_id: productId, request_id: rid, success_url: `${base}/`, metadata: { kind: 'plus', currency, rid, seal } }
       : {
         product_id: productId,
         request_id: rid,
         units: 1,
-        custom_price: priceCents('gift', plan, currency),
+        custom_price: priceCents('gift', plan, currency, { member }),
         custom_fields: [isPersonalGift(plan) ? FROM_FIELD : COMPANY_FIELD],
         success_url: `${base}/welcome/thanks/`,
-        metadata: { kind: 'gift', plan, seats: String(gift.seats), currency, rid, seal }
+        metadata: { kind: 'gift', plan, seats: String(gift.seats), currency, rid, seal, ...(member ? { member: '1' } : {}) }
       };
-    // A partner's code (from a ?ref= link) goes to Creem only: never in the metadata, the return address or our database.
-    const ref = affiliateCode(body?.ref);
-    if (ref) payload.affiliate_code = ref;
+    // The partner's code goes to Creem as affiliate_code, which credits the partner, and in the metadata, so the
+    // paid sale is listed under it (never the return address). The licence is never sent to Creem.
+    if (ref) {
+      payload.affiliate_code = ref;
+      payload.metadata.ref = ref;
+    }
     let checkout;
     try {
-      checkout = await openCheckout(payload);
+      checkout = await openCheckout(payload, () => sealOf(''));
     } catch (error) {
       safeWarn(`Creem checkout not opened: ${error?.message || error}`);
       return json(502, { error: CHECKOUT_FAILED }, cors);
@@ -1002,7 +1063,7 @@ export function createPlannerApi({
       safeWarn('Creem checkout not opened: the answer has no checkout_url.');
       return json(502, { error: CHECKOUT_FAILED }, cors);
     }
-    return json(201, { url }, cors);
+    return json(201, { url, ...(member ? { member: true } : {}) }, cors);
   }
 
   /**
@@ -1032,12 +1093,12 @@ export function createPlannerApi({
       safeWarn('Creem webhook: checkout.completed without a usable checkout id.');
       return received();
     }
-    const paid = readCheckout(checkout, products.byId);
+    const paid = await sealedCheckout(readCheckout(checkout, products.byId));
     if (!paid.item) {
       safeWarn(`Creem webhook: checkout ${checkoutId} is not for a Daily Planner product (${paid.productId || 'no product'}); nothing to do.`);
       return received();
     }
-    if (!await honoured(paid)) {
+    if (!honoured(paid)) {
       safeWarn(`Creem webhook: checkout ${checkoutId} was not opened by this site (no valid seal); nothing delivered. Check it in Creem and refund or create the gift by hand.`);
       return received();
     }
@@ -1438,7 +1499,9 @@ export function createPlannerApi({
       // Reviews come from migration 0004, refunds from 0005; without them the rest still loads.
       const reviewRows = store.listReviews({ limit: REVIEWS_LATEST }).catch(() => null);
       const refundData = Promise.all([store.listRefunds({ limit: REFUNDS_LISTED }), store.listRevocations({ limit: REVOCATIONS_LISTED })]).catch(() => null);
-      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, refundLists, setup] = await Promise.all([
+      // Partner sales come from migration 0006; which were refunded (in full or in part), from 0005 as well (none while it is missing).
+      const partnerData = Promise.all([store.listPartnerSales({ limit: PARTNER_SALES_LISTED }), store.partnerSaleStates().catch(() => []), store.partnerSaleRefunds().catch(() => [])]).catch(() => null);
+      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, refundLists, partnerLists, setup] = await Promise.all([
         store.eventTotals({ sinceDay }).then(publicEvents),
         store.eventDaily({ sinceDay }).then(publicEvents),
         store.listWaitlist(),
@@ -1449,6 +1512,7 @@ export function createPlannerApi({
         plusTables,
         reviewRows,
         refundData,
+        partnerData,
         setupInfo()
       ]);
       const [teamRequests, teamRequestTotals] = teamData || [[], { count: 0, seats: 0 }];
@@ -1460,6 +1524,7 @@ export function createPlannerApi({
         plus: { purchases: purchaseTotals.plus, manualLicenses: purchaseTotals.manual, recentLicenses: manualLicenses.map(row => ({ id: row.licenseId, note: row.note, createdAt: row.createdAt })) },
         reviews: reviews || [], reviewsUnavailable: !reviews,
         refunds: refundLists?.[0] || [], revocations: refundLists?.[1] || [], refundsUnavailable: !refundLists,
+        partners: partnerSummary(partnerLists?.[0] || [], partnerLists?.[1] || [], partnerLists?.[2] || [], { limit: PARTNER_SALES_LISTED }), partnersUnavailable: !partnerLists,
         setup
       }, cors);
     }
@@ -1573,8 +1638,8 @@ export function createPlannerApi({
  * In-memory store with optional persistence hooks; used by the dev server and
  * the unit tests. Mirrors the D1 store's behaviour (unique emails, counts,
  * oldest-first announcement order, internal email-send counts, gift limits,
- * one gift, purchase and payment per checkout, one order and one refund per
- * Creem id, one revocation per target and source).
+ * one gift, purchase, payment and partner sale per checkout, one order and
+ * one refund per Creem id, one revocation per target and source).
  */
 export function createMemoryStore(initial = {}, { onChange = null } = {}) {
   const data = {
@@ -1589,6 +1654,7 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
     orders: Array.isArray(initial.orders) ? initial.orders : [],
     refunds: Array.isArray(initial.refunds) ? initial.refunds : [],
     revocations: Array.isArray(initial.revocations) ? initial.revocations : [],
+    partnerSales: Array.isArray(initial.partnerSales) ? initial.partnerSales : [],
     nextId: Number(initial.nextId) || 1
   };
   // Data files written before 1.21 call the checkout reference stripeSession.
@@ -1808,6 +1874,24 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
       data.revocations = data.revocations.filter(item => item.source !== source);
       changed();
       return before - data.revocations.length;
+    },
+    async addPartnerSale(row) {
+      if (data.partnerSales.some(item => item.checkoutId === row.checkoutId)) return false;
+      data.partnerSales.push(normalizePartnerSale(row));
+      changed();
+      return true;
+    },
+    async listPartnerSales({ limit = 2000 } = {}) {
+      return [...data.partnerSales].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || String(a.checkoutId).localeCompare(String(b.checkoutId))).slice(0, limit).map(normalizePartnerSale);
+    },
+    async partnerSaleStates() {
+      const sold = new Set(data.partnerSales.map(item => `checkout:${item.checkoutId}`));
+      return data.revocations.filter(item => sold.has(item.target)).map(item => ({ checkoutId: item.target.slice('checkout:'.length), reason: item.reason }));
+    },
+    async partnerSaleRefunds() {
+      const sold = new Set(data.partnerSales.map(item => item.checkoutId));
+      return data.refunds.filter(item => item.checkoutId && sold.has(item.checkoutId) && item.status !== 'pending')
+        .map(item => ({ checkoutId: item.checkoutId, amount: item.amount ?? null, currency: item.currency || '', fullRefund: !!item.fullRefund }));
     },
     async addReview(entry) {
       data.reviews.push({ id: data.nextId++, appVersion: entry.appVersion, rating: entry.rating, text: entry.text, name: entry.name || '', createdAt: entry.createdAt });

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { buildTourSteps, carryStep, placeCard, readTourFlags, scrollDelta, SHORTCUTS, shouldOfferTour, spotlightHoles, stepEyebrow, TOUR_FLAG_KEY, TOUR_MEDIA, TOUR_STEPS, tourEnvironment, unionRect, visibleArea } from '../src/features/tour-model.js';
+import { boldTerms, buildTourSteps, carryStep, placeCard, plainText, readTourFlags, richText, scrollDelta, SHORTCUTS, shouldOfferTour, spotlightHoles, stepEyebrow, TOUR_FLAG_KEY, TOUR_MEDIA, TOUR_STEPS, tourEnvironment, unionRect, visibleArea } from '../src/features/tour-model.js';
 
 const app = await readFile(new URL('../app.js', import.meta.url), 'utf8');
 const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
@@ -13,6 +13,14 @@ const onboarding = await readFile(new URL('../src/features/onboarding.js', impor
 const core = await readFile(new URL('../styles/core.css', import.meta.url), 'utf8');
 const tourCss = await readFile(new URL('../styles/tour.css', import.meta.url), 'utf8');
 const tourJs = await readFile(new URL('../src/features/tour.js', import.meta.url), 'utf8');
+const stats = await readFile(new URL('../src/features/stats.js', import.meta.url), 'utf8');
+
+/** Where the planner's own labels live: a bold name in a step must read exactly like one of them. */
+const UI_SOURCES = [html, app, horizonView, stats];
+const SYMBOL = /^[^\p{L}\p{N}]+$/u;
+function labelled(term, sources = UI_SOURCES) {
+  return term.split(' · ').every(part => SYMBOL.test(part) || sources.some(source => source.includes(part)));
+}
 
 // What a wide desktop shows: everything except the phone controls and the closed More menu.
 const PHONE_ONLY = ['[data-mobile-view-switch]', '[data-mobile-view="horizon"]', '[data-week-view]', '[data-mobile-schedule-add]', '[data-mobile-more]', '[data-mobile-more-menu]', '[data-today]'];
@@ -46,18 +54,50 @@ test('a desktop gets ten steps, in the order of the screen, with their shortcuts
   assert.equal(by.outcomes.join, true, 'Keep in mind and the outcomes are one spotlight');
   steps.forEach(step => {
     assert.ok(step.title && step.body && step.name, `${step.id} has a title, words and a name for the highlighted element`);
-    assert.ok(step.body.length <= 260, `${step.id} stays short (${step.body.length} characters)`);
+    assert.ok(plainText(step.body).length <= 260, `${step.id} stays short (${plainText(step.body).length} characters)`);
     assert.doesNotMatch(`${step.title} ${step.body}`, /'|"/, `${step.id} uses curly quotes`);
     assert.equal(step.pane, '', 'desktop steps never switch a phone pane');
   });
 });
 
+test('each step names what it shows in bold, as the planner labels it', () => {
+  const layouts = [
+    buildTourSteps({ layout: 'desktop', keys: true, visible: desktop() }),
+    buildTourSteps({ layout: 'desktop', keys: true, visible: selector => !['[data-print]', '[data-settings-open]', '[data-help-open]', '[data-mobile-view-switch]', '[data-week-view]', '[data-mobile-more-menu]'].includes(selector) }),
+    buildTourSteps({ layout: 'phone', keys: false, touch: true, visible: phone() })
+  ];
+  const expected = { views: 'Day · Week · Horizon', tools: 'Search', reflect: 'Journal', closeDay: 'Close day', settings: 'Settings', schedule: 'Add a block|+', outcomes: 'Most important outcome', tabs: 'Plan' };
+  layouts.flat().forEach(step => {
+    const terms = boldTerms(step.body);
+    assert.ok(terms.length, `${step.id}: names something in bold`);
+    terms.forEach(term => assert.ok(labelled(term), `${step.id}: “${term}” reads like the planner’s own label`));
+    if (expected[step.id]) assert.ok(expected[step.id].split('|').some(term => terms.includes(term)), `${step.id}: ${expected[step.id]} in bold`);
+    assert.doesNotMatch(plainText(step.body), /\*\*/, `${step.id}: no stray marks`);
+  });
+  const desk = layouts[0].find(step => step.id === 'tools');
+  assert.deepEqual(boldTerms(desk.body), ['Search', 'Floating mode', 'Print']);
+});
+
+test('bold marks become text parts, never markup', () => {
+  assert.deepEqual(richText('Open **Print** now'), [{ text: 'Open ', strong: false }, { text: 'Print', strong: true }, { text: ' now', strong: false }]);
+  assert.deepEqual(richText('**A** and **B**'), [{ text: 'A', strong: true }, { text: ' and ', strong: false }, { text: 'B', strong: true }]);
+  assert.deepEqual(richText('a ** lone mark'), [{ text: 'a ** lone mark', strong: false }], 'an unpaired mark stays as typed');
+  assert.deepEqual(richText('<img src=x onerror=alert(1)> **<b>x</b>**').map(part => part.text), ['<img src=x onerror=alert(1)> ', '<b>x</b>'], 'text stays text');
+  assert.equal(plainText('The **Journal** and **Unresolved**'), 'The Journal and Unresolved');
+  assert.deepEqual(richText(''), []);
+  // The card builds <strong> nodes with textContent, and announces the words without their marks.
+  assert.match(tourJs, /strong\.textContent = part\.text;/);
+  assert.match(tourJs, /plainText\(step\.body\)/);
+  assert.doesNotMatch(tourJs, /innerHTML = step\.body/);
+  assert.match(tourCss, /\.tour-card__text strong \{/);
+});
+
 test('pointer and touch wording, and no shortcuts where Help shows none', () => {
   const pointer = buildTourSteps({ layout: 'desktop', keys: true, touch: false, visible: desktop() });
   const touch = buildTourSteps({ layout: 'desktop', keys: false, touch: true, visible: desktop() });
-  assert.match(pointer.find(step => step.id === 'schedule').body, /^Click an empty slot/);
-  assert.match(touch.find(step => step.id === 'schedule').body, /^Tap an empty slot/);
-  assert.match(touch.find(step => step.id === 'dates').body, /Tap the date/);
+  assert.match(plainText(pointer.find(step => step.id === 'schedule').body), /^Click an empty slot/);
+  assert.match(plainText(touch.find(step => step.id === 'schedule').body), /^Tap an empty slot/);
+  assert.match(plainText(touch.find(step => step.id === 'dates').body), /Tap the date/);
   assert.ok(touch.every(step => step.keys.length === 0), 'a touch-only tablet shows no keycaps');
 });
 
@@ -72,7 +112,7 @@ test('floating mode is only taught where the browser has it', () => {
 test('a narrow desktop (secondary buttons under More) ends on the More menu', () => {
   const steps = buildTourSteps({ layout: 'desktop', keys: true, visible: selector => !['[data-print]', '[data-settings-open]', '[data-help-open]', '[data-mobile-view-switch]', '[data-week-view]', '[data-mobile-more-menu]'].includes(selector) });
   const tools = steps.find(step => step.id === 'tools');
-  assert.match(tools.body, /Print, under More/);
+  assert.match(plainText(tools.body), /Print, under More/);
   assert.deepEqual(keysOf(tools), ['F', 'I', 'P'], 'P still prints');
   const last = steps.at(-1);
   assert.equal(last.id, 'settings');
@@ -94,8 +134,8 @@ test('a phone follows the bottom tabs, the header and More, without keycaps', ()
   assert.equal(by.schedule.spot[0], '[data-mobile-schedule-add]');
   assert.deepEqual(by.horizon.spot, ['[data-mobile-view="horizon"]']);
   assert.equal(by.settings.menu, 'more');
-  assert.match(by.settings.body, /take this tour again/);
-  assert.doesNotMatch(steps.map(step => step.body).join(' '), /\bClick\b/, 'phones are tapped');
+  assert.match(plainText(by.settings.body), /take this tour again/);
+  assert.doesNotMatch(steps.map(step => plainText(step.body)).join(' '), /\bClick\b/, 'phones are tapped');
 });
 
 test('a phone answers for the pane each step shows, not the one on screen', () => {

@@ -29,6 +29,8 @@
   Cache-Control: no-cache
 /welcome/thanks/
   Cache-Control: no-cache
+/welcome/partners/
+  Cache-Control: no-cache
 /legal/
   Cache-Control: no-cache
 /legal/privacy/
