@@ -96,8 +96,10 @@ test('config: the partner link must be https; the commission is no longer a buil
   assert.doesNotMatch(check, /AFFILIATE_COMMISSION/);
   for (const file of ['src/config.js', 'admin/admin.js', 'admin/attention.js', 'admin/partners-view.js', 'welcome/partners/partners.js', 'welcome/partners/partners-model.js']) assert.doesNotMatch(await read(file), /AFFILIATE_COMMISSION/, file);
   // The owner is told the variable is gone, nowhere asked to set it.
+  // OWNER_NOTES.md is the owner's private copy (git-ignored): checked only where it exists.
   for (const file of ['docs/FEEDBACK_AND_WAITLIST.md', 'OWNER_NOTES.md']) {
-    const doc = await read(file);
+    const doc = await read(file).catch(error => (file === 'OWNER_NOTES.md' && error?.code === 'ENOENT' ? null : Promise.reject(error)));
+    if (doc === null) continue;
     assert.match(doc, /`DAILY_PLANNER_AFFILIATE_COMMISSION` is gone/, file);
     assert.doesNotMatch(doc, /\| `DAILY_PLANNER_AFFILIATE_COMMISSION` \||into `DAILY_PLANNER_AFFILIATE_COMMISSION`/, file);
   }
