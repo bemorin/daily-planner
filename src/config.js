@@ -27,7 +27,7 @@ export const SUPPORT_EMAIL = runtimeValue('SUPPORT_EMAIL');
 export const LEGAL_ADDRESS = runtimeValue('LEGAL_ADDRESS');
 export const LEGAL_REGISTRATION = runtimeValue('LEGAL_REGISTRATION');
 // Kept in step with package.json by scripts/check.mjs; feedback is grouped by it.
-export const APP_VERSION = '1.25.0';
+export const APP_VERSION = '1.26.0';
 // Public/project links are deployment configuration, not repository defaults.
 
 

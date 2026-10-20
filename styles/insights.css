@@ -65,10 +65,7 @@
   }
 }
 
-/* The Stats dialog grows for Insights; the tabs gain a third place. */
-.stats-tabs--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.stats-tabs--three button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
-.stats-tabs--three .hz-plus-badge { height: 16px; padding: 0 6px; font-size: .52rem; }
+/* The Stats dialog grows for Insights. */
 [data-stats-modal] .modal__panel.is-insights { width: min(100%, 62rem); max-height: min(940px, calc(100dvh - 2rem)); }
 [data-stats-modal] .modal__panel.is-insights .modal__scroll { max-height: calc(min(940px, 100dvh - 2rem) - 50px); padding-inline: 1.15rem 1.1rem; }
 

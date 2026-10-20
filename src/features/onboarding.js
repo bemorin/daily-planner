@@ -5,7 +5,8 @@ import { morph, panelEnter } from '../ui/motion.js';
 /**
  * First-run setup: welcome, planning days and hours, the daily loop, and the
  * year (Horizon, appearance, install). Four short steps; each one has its own
- * illustration on the left that mirrors the planner itself.
+ * illustration on the left that mirrors the planner itself. Finishing hands
+ * over to the planner tour (src/features/tour.js).
  */
 
 const STEP_COUNT = 4;
@@ -50,7 +51,7 @@ export function weekPreviewLayout(startHour, endHour) {
   };
 }
 
-export function createOnboarding({ settings, persistSettings, startHour, endHour, time, chevronSvg, openListPopover, openModal, closeModal, seedFirstBlock, afterFinish, openInstall, keepTheme = () => {} }) {
+export function createOnboarding({ settings, persistSettings, startHour, endHour, time, chevronSvg, openListPopover, openModal, closeModal, seedFirstBlock, afterFinish, openInstall, keepTheme = () => {}, startTour = () => {} }) {
   let step = 1;
   let draftDays = new Set([1, 2, 3, 4, 5]);
   let shownRange = null;
@@ -182,6 +183,8 @@ export function createOnboarding({ settings, persistSettings, startHour, endHour
     trackEvent('onboarding_completed');
     afterFinish();
     if (thenInstall) setTimeout(openInstall, 260);
+    // Then a short tour of the planner itself, once it is on screen (after the Install dialog when chosen).
+    startTour();
   }
 
   function maybeOpen() {

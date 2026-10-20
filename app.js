@@ -11,6 +11,7 @@ import { modalEnter, modalExit, popoverEnter, panelEnter, resetMotion } from './
 import { createThemeController } from './src/ui/theme.js';
 import { createAppTooltips } from './src/ui/tooltip.js';
 import { createOnboarding } from './src/features/onboarding.js';
+import { createTour } from './src/features/tour.js';
 import { createInstallFeature } from './src/features/install.js';
 import { createSyncGuide } from './src/features/sync-guide.js';
 import { createFeedbackFeature } from './src/features/feedback.js';
@@ -3706,7 +3707,9 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   createPlusCheck({ openModal, closeModal, getActiveModal: () => activeModal }).start();
   // Another tab activated Plus (a gift or purchase link opened there): take the licence before this tab saves over it.
   window.addEventListener('storage', event => { if (event.key === 'daily-planner:settings' && adoptPlus(settings, event.newValue)) refreshPlus(); });
-  const onboarding = createOnboarding({ settings: () => settings, persistSettings, startHour, endHour, time, chevronSvg, openListPopover, openModal, closeModal, seedFirstBlock: seedFirstBlockAfterOnboarding, afterFinish: () => { render(); requestAnimationFrame(() => qs('[data-focus]')?.focus({ preventScroll: true })); }, openInstall: () => installFeature.open(), keepTheme: () => { if (themeController.get() === 'system') themeController.set(themeController.resolved()); } });
+  // The planner tour (src/features/tour.js): once after setup, offered once to earlier users, always in How it works and More.
+  const tour = createTour({ getActiveModal: () => activeModal, closeModal, closePopovers: closeAllPopovers, setPane: view => setMobileView(view), range: () => plannerRangeView, setRange: view => { if (view !== plannerRangeView) toggleWeekView(); }, isReady: () => !!settings.onboardingComplete });
+  const onboarding = createOnboarding({ settings: () => settings, persistSettings, startHour, endHour, time, chevronSvg, openListPopover, openModal, closeModal, seedFirstBlock: seedFirstBlockAfterOnboarding, afterFinish: () => { render(); requestAnimationFrame(() => qs('[data-focus]')?.focus({ preventScroll: true })); }, openInstall: () => installFeature.open(), keepTheme: () => { if (themeController.get() === 'system') themeController.set(themeController.resolved()); }, startTour: () => tour.startWhenIdle() });
   const fromMenu = action => () => { const menu = qs('[data-mobile-more-menu]'); if (menu) menu.hidden = true; action(); };
   qsa('[data-install-open]').forEach(button => button.addEventListener('click', fromMenu(() => installFeature.open())));
   qsa('[data-sync-guide-open]').forEach(button => button.addEventListener('click', fromMenu(() => syncGuide.open())));
@@ -3726,5 +3729,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   // Gift, purchase and licence links open above first-run setup and return to it.
   requestAnimationFrame(() => { onboarding.maybeOpen(); plusFeature.handleLaunch(); });
   // Once per feature release, a little after opening, what's new and a request for feedback (never over another dialog).
-  setTimeout(() => feedbackFeature.maybePrompt({ closeDayCount: settings.closeDayCount, busy: !settings.onboardingComplete || !!activeModal }), 2400);
+  setTimeout(() => feedbackFeature.maybePrompt({ closeDayCount: settings.closeDayCount, busy: !settings.onboardingComplete || !!activeModal || tour.isActive() || tour.offerVisible() }), 2400);
+  setTimeout(() => tour.maybeOffer(), 1600);
 })();

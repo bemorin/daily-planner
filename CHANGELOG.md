@@ -2,6 +2,13 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.26.0 — 2026-10-20
+
+- **A guided tour of the planner**: right after setup (once), a spotlight tour shows each part — Day · Week · Horizon, moving through days, outcomes and tasks, the schedule, Close day, the year, the journal and Unresolved, stats and Insights, search, the floating window and print, Settings and Help — with each keyboard shortcut on a computer and a phone version that follows the bottom tabs. Existing users are offered it once; it is always in How it works and, on a phone, in More.
+- Owner dashboard: **Needs your attention** at the top lists everything to act on, most urgent first, with how long ago it started and a link to the exact row; the cards concerned are marked, and the panel says “All clear” when nothing is due.
+- Stats: Day, Week and Insights always sit on one row, with room around the Plus badge.
+- Landing page: the arrows of the gift, Plus Family and team links no longer sit on their icons; “Everything in Free” in the Plus card has the app's colour.
+
 ## 1.25.0 — 2026-10-20
 
 - **Share your week and your year (free)**: closing the last day of the week offers “Share your week”, and Horizon → Progress offers “Share your year” — an image drawn on the device (square, story or landscape; paper or ink) in your palette, shared, copied or downloaded. Private text (a lesson, the Misogi) appears only when you switch it on.

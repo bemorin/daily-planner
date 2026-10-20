@@ -28,7 +28,10 @@
 }
 .stats-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* One equal column per tab (Day, Week, Insights), always on one row; on a
+     narrow phone a tab that needs more room (Insights and its badge) takes it. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(min-content, 1fr);
   gap: 3px;
   margin: -.15rem 0 1rem;
   padding: 3px;
@@ -37,6 +40,13 @@
   background: var(--soft);
 }
 .stats-tabs button {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 8px;
+  white-space: nowrap;
   min-height: 34px;
   border-radius: 7px;
   background: transparent;
@@ -45,7 +55,13 @@
   font-weight: 630;
   cursor: pointer;
 }
+.stats-tabs .hz-plus-badge { height: 16px; padding: 0 6px; font-size: .52rem; }
 .stats-tabs button.is-active { background: var(--surface-strong); color: var(--ink); box-shadow: 0 1px 5px rgba(28,25,21,.07); }
+@media (max-width: 360px) {
+  .stats-tabs { gap: 2px; }
+  .stats-tabs button { gap: 5px; padding: 0 7px; }
+  .stats-tabs .hz-plus-badge { padding: 0 5px; letter-spacing: .05em; }
+}
 .stats-week-nav {
   display: grid;
   grid-template-columns: 34px minmax(0,1fr) 34px auto;
