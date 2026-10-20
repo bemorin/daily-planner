@@ -648,7 +648,9 @@ test('without migration 0007, sales are still recorded and listed (on the amount
   assert.equal(summary.partnersUnavailable, false);
   assert.equal(summary.partnerCommissionsUnavailable, true);
   assert.deepEqual(summary.partners.team.map(sale => [sale.commission, sale.basis]), [[1950, 'paid']]);
-  assert.equal((await api(request('POST', 'admin/partners/payouts', { checkout: team.id }, 'secret'))).status, 409, 'pending');
+  const marked = await asJson(await api(request('POST', 'admin/partners/payouts', { checkout: team.id }, 'secret')));
+  assert.equal(marked.status, 503, 'nowhere to keep it');
+  assert.match(marked.body.error, /Apply every file in migrations\//);
   // A team request with a partner code is stored all the same, without the code.
   assert.equal((await api(post('teams', teamBody({ ref: 'COACH_ANNA' })))).status, 201);
   assert.deepEqual((await asJson(await api(get('admin/teams', 'secret')))).body.rows.map(row => [row.company, row.ref]), [['Acme', '']]);
