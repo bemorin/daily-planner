@@ -9,7 +9,8 @@ const NOW = Date.parse('2026-10-20T12:00:00Z');
 const DAY = 86400000;
 const iso = ms => new Date(ms).toISOString();
 const sale = (checkoutId, daysAgo, fields = {}) => ({ checkoutId, code: 'CAMILLE', kind: 'plus', plan: '', amount: 2900, tax: 483, currency: 'EUR', member: false, mode: 'prod', createdAt: iso(NOW - daysAgo * DAY), ...fields });
-const fmt = { money: (cents, currency) => (cents == null ? '' : `${(cents / 100).toFixed(2)} ${currency}`), number: String, day: value => String(value).slice(0, 10) };
+const money = (cents, currency) => (cents == null ? '' : `${(cents / 100).toFixed(2)} ${currency}`);
+const fmt = { money, exact: money, number: String, day: value => String(value).slice(0, 10) };
 const text = html => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
 test('what a sale bought and where its commission stands, in plain words', () => {
@@ -45,8 +46,8 @@ test('the card: what you owe first (with Mark as paid), Creem’s commissions fo
   const html = partnersCardHtml({ partners, partnerProgram: { rate: 25, teamRate: 10, refundDays: 14 } }, fmt);
   const words = text(html);
   // The figures: what to pay (highlighted), Creem's, the sales.
-  assert.match(html, /<div class="owner-stat owner-stat--due"><span>Team commissions to pay<\/span><strong>16\.25 EUR<\/strong><small>1 earned, not paid yet · bank transfer<\/small><\/div>/);
-  assert.match(words, /Creem commissions \(25%\) 6\.04 EUR earned; Creem pays them, for information/);
+  assert.match(html, /<div class="owner-stat owner-stat--due"><span>Team commissions to pay<\/span><strong>16\.25 EUR<\/strong><small>1 earned, not paid yet · by bank transfer<\/small><\/div>/);
+  assert.match(words, /Creem commissions \(25%\) 6\.04 EUR Earned · Creem pays these, shown for information/);
   assert.match(words, /1 sale in test mode \(29\.00 EUR\) is not counted\./);
   // The team commissions, one row each, the attention panel's target on each.
   const team = /<table class="owner-table owner-partner-team">[\s\S]*?<\/table>/.exec(html)[0];
@@ -83,10 +84,10 @@ test('the card stays clear when there is nothing, and says what is missing', () 
 
 test('the dashboard renders the card from the view and marks commissions as paid through the API', () => {
   const admin = readFileSync(new URL('../admin/admin.js', import.meta.url), 'utf8');
-  assert.match(admin, /\$\('\[data-owner-partners\]'\)\.innerHTML = partnersCardHtml\(summary, \{ money, number, day \}\);/);
+  assert.match(admin, /\$\('\[data-owner-partners\]'\)\.innerHTML = partnersCardHtml\(summary, \{ money, exact: exactMoney, number, day \}\);/);
   assert.match(admin, /sendJson\('admin\/partners\/payouts', 'POST', \{ checkout: button\.dataset\.ownerPayout, note \}\)/);
   assert.match(admin, /call\(`admin\/partners\/payouts\/\$\{encodeURIComponent\(button\.dataset\.ownerPayoutUndo\)\}`, \{ method: 'DELETE' \}\)/);
-  assert.match(admin, /Partner: <code>\$\{esc\(row\.ref\)\}<\/code> — \$\{esc\(TEAM_RATE\)\}% if this becomes an order/, 'the request list shows the partner code');
+  assert.match(admin, /<span class="owner-partner-ref">Partner: <code>\$\{esc\(row\.ref\)\}<\/code> — \$\{esc\(TEAM_RATE\)\}% if this becomes an order<\/span>/, 'the request list shows the partner code');
   assert.doesNotMatch(admin, /AFFILIATE_COMMISSION/);
   // Setup says what to set in Creem, and that the variable is the sign-up link.
   const setup = /function partnersItem\(summary[\s\S]*?\n\}/.exec(admin)[0];

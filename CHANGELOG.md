@@ -2,6 +2,15 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.28.0 — 2026-10-20
+
+- **Teams page** (`/welcome/teams/`, short link `/teams`): the team gift, how seats work, team prices and checkout, the “Invoice, quote or question” form and a Teams FAQ moved off the welcome page, which now ends Pricing with a banner to it. Old links (`/welcome/?ask=…#request`, `#teams`, `#team-prices`, `#seats`) lead to the same place on the Teams page; every “Ask a question” link points there. A request sends the visitor's partner code, if any, and the owner sees it.
+- **Partner program terms**: 25% of the price before tax of Plus, Give Plus and Plus Family, tracked and paid by Creem; 10% of a team gift a partner introduced, paid by the owner by bank transfer (team checkouts are no longer sent to Creem with an affiliate code); a link counts for 30 days (was 60); a sale earns once its 14-day refund period has passed with no refund or dispute; payouts from €50/$50. Anyone can be a partner. The terms have a Partner program section. `DAILY_PLANNER_AFFILIATE_COMMISSION` is removed (the rates live in `PARTNER_PROGRAM`, `src/lib/pricing.js`).
+- **Partners page** rebuilt: key figures, an example month, what each sale earns before tax, the rules, a “Bringing a company?” callout, an FAQ that opens smoothly, and sections that rise in like on the welcome page (shared `welcome/page-motion.js`).
+- Owner dashboard: the Partners card shows what you owe for team gifts (with Mark as paid / Undo) apart from Creem's commissions, each sale as pending, earned, paid, refunded or disputed; earned, unpaid team commissions appear in Needs your attention; team requests show the partner code. Run `migrations/0007_partner_commissions.sql`.
+- In the planner, everyone is invited to become a partner (a quiet line in the Plus window, the share sheet, and Help → Partners), not only Plus members.
+- Insights: chart details stay inside the chart's card and the visible part of the window, flipping above or below and following keyboard focus and zoom on phones.
+
 ## 1.27.0 — 2026-10-20
 
 - **Tips the first time you open a dialog**: Close day, the block editor, the weekly review, Horizon, the journal, Unresolved, Time stats and Insights, search and Settings each show a short spotlight guide once (Esc or Got it closes only the guide; typing is never blocked). How it works → Tips → Show tips again.

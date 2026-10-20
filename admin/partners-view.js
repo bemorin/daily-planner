@@ -21,6 +21,15 @@ function defaultMoney(amount, currency) {
     return `${value} ${currency}`;
   }
 }
+/** A commission, always to the cent, so a column of them lines up (“€5.00”, “€6.04”). */
+function defaultExact(amount, currency) {
+  if (amount == null || amount === '') return '';
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount) / 100);
+  } catch (_) {
+    return `${(Number(amount) / 100).toFixed(2)} ${currency}`;
+  }
+}
 const defaultDay = iso => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
 
 const PERSONAL_LABELS = { 'gift-1': 'Give Plus', 'family-5': 'Plus Family' };
@@ -60,21 +69,23 @@ export function commissionBasis(sale, money = defaultMoney) {
   return `${sale.rate}% of ${money(sale.base, sale.currency)} ${sale.basis === 'before-tax' ? 'before tax' : 'paid (tax unknown)'}`;
 }
 
+// What a sale would have earned, struck through when it earns nothing (refunded, disputed, switched off).
+const struck = (html, off) => (off ? `<s>${html}</s><span class="sr-only"> (not earned)</span>` : html);
 const pill = state => (state.label ? `<span class="owner-pill owner-pill--${esc(state.tone)}">${esc(state.label)}</span>` : '');
 
 /** One team commission: date, partner, the gift, the commission, its state and the action that fits it. */
 function teamRow(sale, fmt) {
   const state = commissionState(sale, fmt);
   const action = sale.status === 'earned'
-    ? `<button class="secondary-button owner-pay" type="button" data-owner-payout="${esc(sale.checkoutId)}" data-owner-payout-code="${esc(sale.code)}" data-owner-payout-amount="${esc(fmt.money(sale.commission, sale.currency))}">Mark as paid</button>`
+    ? `<button class="secondary-button owner-pay" type="button" data-owner-payout="${esc(sale.checkoutId)}" data-owner-payout-code="${esc(sale.code)}" data-owner-payout-amount="${esc(fmt.exact(sale.commission, sale.currency))}">Mark as paid</button>`
     : sale.paidAt ? `<button class="text-button" type="button" data-owner-payout-undo="${esc(sale.checkoutId)}" data-owner-payout-code="${esc(sale.code)}">Undo</button>` : '';
   return `<tr data-owner-attn="partner:${esc(sale.checkoutId)}"${state.tone === 'off' ? ' class="is-off"' : ''}>
     <td class="owner-nowrap">${esc(fmt.day(sale.createdAt))}</td>
     <td><code>${esc(sale.code)}</code></td>
     <td>${esc(partnerWhat(sale))}<small class="owner-small">${esc(fmt.money(sale.amount, sale.currency))} paid${sale.refundedAmount ? ` · −${esc(fmt.money(sale.refundedAmount, sale.currency))} refunded` : ''}</small></td>
-    <td class="num owner-nowrap"><b>${sale.commission == null ? '—' : esc(fmt.money(sale.status === 'paid' && sale.paidAmount != null ? sale.paidAmount : sale.commission, sale.currency))}</b><small class="owner-small">${esc(commissionBasis(sale, fmt.money))}</small></td>
+    <td class="num owner-nowrap"><b>${sale.commission == null ? '—' : struck(esc(fmt.exact(sale.status === 'paid' && sale.paidAmount != null ? sale.paidAmount : sale.commission, sale.currency)), state.tone === 'off')}</b><small class="owner-small">${esc(commissionBasis(sale, fmt.exact))}</small></td>
     <td>${pill(state)}<small class="owner-small">${esc(state.detail)}</small></td>
-    <td class="owner-row-actions">${action}</td>
+    <td>${action ? `<div class="owner-row-actions">${action}</div>` : ''}</td>
   </tr>`;
 }
 
@@ -88,7 +99,7 @@ function saleRow(sale, fmt) {
     <td><code>${esc(sale.code)}</code></td>
     <td>${esc(partnerWhat(sale))}${sale.member ? ' <span class="owner-pill">Member price</span>' : ''}</td>
     <td class="num owner-nowrap">${esc(fmt.money(sale.amount, sale.currency)) || '—'}${refunded ? `<small class="owner-small">${esc(refunded)}</small>` : ''}</td>
-    <td class="num owner-nowrap">${sale.commission == null ? '—' : `${esc(fmt.money(sale.commission, sale.currency))}<small class="owner-small">${esc(sale.rate)}% · ${esc(who)}</small>`}</td>
+    <td class="num owner-nowrap">${sale.commission == null ? '—' : `${struck(esc(fmt.exact(sale.commission, sale.currency)), !sale.test && state.tone === 'off')}<small class="owner-small">${esc(sale.rate)}% · ${esc(who)}</small>`}</td>
     <td>${pill(state)}${state.detail && !sale.test ? `<small class="owner-small">${esc(state.detail)}</small>` : ''}</td>
   </tr>`;
 }
@@ -98,11 +109,11 @@ function codeRow(row, fmt) {
   const off = [row.refunded ? `${fmt.number(row.refunded)} refunded or disputed` : '', row.partial ? `${fmt.number(row.partial)} partly refunded` : '', row.revoked ? `${fmt.number(row.revoked)} switched off` : '', row.test ? `${fmt.number(row.test)} in test mode` : ''].filter(Boolean).join(' · ');
   const creem = row.creem || {};
   const team = row.team || {};
-  const pending = perCurrency(creem.pending, fmt.money, '');
+  const pending = perCurrency(creem.pending, fmt.exact, '');
   const creemNote = [pending && `${pending} pending`, `${fmt.number(creem.sales)} ${plural(creem.sales, 'sale')}`].filter(Boolean).join(' · ');
-  const creemLine = creem.sales ? `${esc(perCurrency(creem.earned, fmt.money))}<small class="owner-small">${esc(creemNote)}</small>` : '—';
-  const teamParts = [perCurrency(team.pending, fmt.money, '') && `${perCurrency(team.pending, fmt.money)} pending`, perCurrency(team.paid, fmt.money, '') && `${perCurrency(team.paid, fmt.money)} paid`].filter(Boolean).join(' · ');
-  const teamLine = team.sales ? `${esc(perCurrency(team.toPay, fmt.money))}<small class="owner-small">${esc(teamParts || `${fmt.number(team.sales)} ${plural(team.sales, 'sale')}`)}</small>` : '—';
+  const creemLine = creem.sales ? `${esc(perCurrency(creem.earned, fmt.exact))}<small class="owner-small">${esc(creemNote)}</small>` : '—';
+  const teamParts = [perCurrency(team.pending, fmt.exact, '') && `${perCurrency(team.pending, fmt.exact)} pending`, perCurrency(team.paid, fmt.exact, '') && `${perCurrency(team.paid, fmt.exact)} paid`].filter(Boolean).join(' · ');
+  const teamLine = team.sales ? `${esc(perCurrency(team.toPay, fmt.exact))}<small class="owner-small">${esc(teamParts || `${fmt.number(team.sales)} ${plural(team.sales, 'sale')}`)}</small>` : '—';
   return `<tr>
     <td><code>${esc(row.code)}</code></td>
     <td class="num"><b>${fmt.number(row.sales)}</b>${off ? `<small class="owner-small">${esc(off)}</small>` : ''}</td>
@@ -131,7 +142,7 @@ export function partnerFootnote(summary, fmt = {}) {
  * defaults format in English.
  */
 export function partnersCardHtml(summary, fmt = {}) {
-  const f = { money: fmt.money || defaultMoney, number: fmt.number || defaultNumber, day: fmt.day || defaultDay };
+  const f = { money: fmt.money || defaultMoney, exact: fmt.exact || defaultExact, number: fmt.number || defaultNumber, day: fmt.day || defaultDay };
   const program = { ...PARTNER_PROGRAM, ...(summary?.partnerProgram || {}) };
   if (summary?.partnersUnavailable) {
     return '<p class="owner-empty">The <code>partner_sales</code> table does not exist yet, so sales through a partner’s link are not recorded. Apply <code>migrations/0006_partners.sql</code> and <code>migrations/0007_partner_commissions.sql</code> to the D1 database (see <code>docs/FEEDBACK_AND_WAITLIST.md</code>).</p>';
@@ -145,19 +156,19 @@ export function partnersCardHtml(summary, fmt = {}) {
   const totals = partners.totals || {};
   const teamTotals = totals.team || {};
   const creemTotals = totals.creem || {};
-  const toPay = perCurrency(teamTotals.toPay, f.money, '');
+  const toPay = perCurrency(teamTotals.toPay, f.exact, '');
   const dueCount = Number(teamTotals.toPayCount) || 0;
   const stats = [
     {
       label: 'Team commissions to pay',
-      figure: toPay || f.money(0, 'EUR'),
-      note: dueCount ? `${f.number(dueCount)} earned, not paid yet · bank transfer` : perCurrency(teamTotals.pending, f.money, '') ? `${perCurrency(teamTotals.pending, f.money)} still in the ${program.refundDays}-day refund period` : `Nothing to pay · ${program.teamRate}% of team gifts`,
+      figure: toPay || f.exact(0, 'EUR'),
+      note: dueCount ? `${f.number(dueCount)} earned, not paid yet · by bank transfer` : perCurrency(teamTotals.pending, f.exact, '') ? `Nothing yet · ${perCurrency(teamTotals.pending, f.exact)} still in the ${program.refundDays}-day refund period` : `Nothing to pay · ${program.teamRate}% of team gifts`,
       due: !!dueCount
     },
     {
       label: `Creem commissions (${program.rate}%)`,
-      figure: perCurrency(creemTotals.earned, f.money, f.money(0, 'EUR')),
-      note: `${perCurrency(creemTotals.pending, f.money, '') ? `${perCurrency(creemTotals.pending, f.money)} pending · ` : ''}earned; Creem pays them, for information`
+      figure: perCurrency(creemTotals.earned, f.exact, f.exact(0, 'EUR')),
+      note: `Earned${perCurrency(creemTotals.pending, f.exact, '') ? ` · ${perCurrency(creemTotals.pending, f.exact)} pending` : ''} · Creem pays these, shown for information`
     },
     {
       label: 'Partner sales',

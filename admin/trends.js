@@ -252,7 +252,8 @@ export function yearsToShow(series, today) {
  */
 export const FUNNELS = Object.freeze([
   { id: 'planner', outcome: 2, steps: [{ events: ['landing_viewed'] }, { events: ['landing_cta_app'] }, { events: ['onboarding_completed'] }, { events: ['day_closed'] }] },
-  { id: 'team-gift', steps: [{ events: ['landing_viewed'] }, { events: ['teams_viewed'] }, { events: ['pricing_viewed'] }, { events: ['pack_checkout_clicked'] }, { sales: { kind: 'gift', source: 'creem' } }] },
+  // Since 1.28 the team gift has its own page (teams_viewed: a visit to it), where its prices are.
+  { id: 'team-gift', steps: [{ events: ['landing_viewed'] }, { events: ['teams_viewed'] }, { events: ['pack_checkout_clicked'] }, { sales: { kind: 'gift', source: 'creem' } }] },
   { id: 'plus', steps: [{ events: ['plus_viewed', 'plus_modal_opened'] }, { events: ['plus_checkout_clicked'] }, { events: ['plus_unlocked'] }] }
 ]);
 

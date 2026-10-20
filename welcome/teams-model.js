@@ -64,7 +64,7 @@ export function requestPayload(values, { currency = '', version = '', locale = '
     website: values.website,
     version,
     locale,
-    source: 'landing',
+    source: 'teams',
     plan: values.plan,
     currency,
     kind: values.kind,

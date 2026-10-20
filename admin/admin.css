@@ -820,11 +820,22 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .owner-pill--off { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
 
-.owner-partner-team .owner-row-actions { text-align: right; white-space: nowrap; }
+.owner-partner-team .owner-row-actions { min-width: 0; justify-content: flex-end; white-space: nowrap; }
 
 .owner-table .owner-pay { min-height: 32px; padding: 4px 12px; font-size: .76rem; white-space: nowrap; }
 
-.owner-partner-ref { color: var(--muted); }
+.owner-partner-ref { display: block; width: max-content; max-width: 100%; margin-bottom: 4px; padding: 2px 8px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--ink); font-size: .74rem; font-weight: 600; line-height: 1.5; }
+
+.owner-partner-ref code { font-size: .72rem; }
+
+/* On a phone these tables scroll sideways rather than squeeze their words one per line. */
+.owner-partner-team { min-width: 760px; }
+
+.owner-partner-team td:nth-child(3),
+.owner-partner-team td:nth-child(5) { min-width: 170px; }
+
+.owner-partners,
+.owner-partner-sales { min-width: 640px; }
 
 [data-owner-partners] .owner-list { margin-top: 18px; }
 

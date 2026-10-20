@@ -206,11 +206,12 @@ test('all years start at the first year with data', () => {
 test('funnels give step and overall rates from independent counts', () => {
   const ranges = comparisonRanges('week', '2026-10-08');
   const teamGift = FUNNELS.find(funnel => funnel.id === 'team-gift');
-  assert.deepEqual(funnelSteps(series, teamGift, ranges.current).map(step => step.value), [40, 16, 8, 3, 1]);
+  // Landing visits → Teams page visits → went to buy → bought (the team prices moved to the Teams page in 1.28).
+  assert.deepEqual(funnelSteps(series, teamGift, ranges.current).map(step => step.value), [40, 16, 3, 1]);
   const steps = funnelSteps(series, teamGift, ranges.current);
   assert.equal(steps[0].fromPrevious, null);
   assert.equal(steps[1].fromPrevious, 0.4);
-  assert.equal(steps[4].fromFirst, 1 / 40);
+  assert.equal(steps[3].fromFirst, 1 / 40);
   const plus = FUNNELS.find(funnel => funnel.id === 'plus');
   const plusSteps = funnelSteps(series, plus, ranges.current);
   assert.deepEqual(plusSteps.map(step => step.value), [10, 2, 5]);

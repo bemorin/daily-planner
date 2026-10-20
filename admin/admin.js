@@ -56,7 +56,7 @@ const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', ma
 // This page's own release, kept in step with package.json and src/config.js
 // (tests/admin-version.test.js). Not imported: it must come from this very
 // file, so an old cached admin.js shows its old number.
-const APP_VERSION = '1.27.0';
+const APP_VERSION = '1.28.0';
 // What Reload fetches again past the browser cache before opening the page anew.
 const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/lib/pricing.js'];
 const RELOAD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/></svg>';
@@ -418,7 +418,7 @@ function renderTeamFunnel(summary, days) {
   const manager = totalOf(rows, 'manager_email_opened');
   const steps = [
     { label: 'Landing page visits', value: visits },
-    { label: 'Clicked toward Teams', value: totalOf(rows, 'landing_cta_teams') },
+    { label: 'Went to the Teams page', value: totalOf(rows, 'landing_cta_teams') },
     { label: 'Opened the team kit form', value: totalOf(rows, 'team_form_opened') },
     { label: 'Sent a request', value: sent },
     { label: '↳ Sent it to a manager', value: manager, branch: true }
@@ -443,7 +443,7 @@ function renderTeams(summary) {
     ? `Latest ${number(rows.length)} of ${number(totals.count)} requests (export CSV for all). Reply by email; delete on request.`
     : 'Teams who asked for the team kit. Reply by email; delete on request.';
   target.innerHTML = rows.length
-    ? `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Date</th><th>Company</th><th class="num">Team size</th><th>Plan</th><th>Currency</th><th>Request</th><th>Timing</th><th>Name</th><th>Email</th><th>Message</th><th>Source</th><th></th></tr></thead><tbody>${rows.map(row => `<tr data-owner-attn="team:${Number(row.id)}"><td class="owner-nowrap">${esc(when(row.createdAt))}</td><td><b>${esc(row.company)}</b>${row.ref ? `<small class="owner-small owner-partner-ref">Partner: <code>${esc(row.ref)}</code> — ${esc(TEAM_RATE)}% if this becomes an order</small>` : ''}</td><td class="num">${number(row.teamSize)}</td><td class="owner-nowrap">${esc(PLAN_LABELS[row.plan] || row.plan || '—')}</td><td>${esc(row.currency || '—')}</td><td>${esc(KIND_LABELS[row.kind] || row.kind || '—')}</td><td class="owner-nowrap">${esc(TIMING_LABELS[row.timing] || row.timing)}</td><td>${esc(row.name || '—')}</td><td>${mailLink(row.email)}</td><td class="owner-message">${esc(row.message || '')}</td><td>${esc(REQUEST_SOURCES[row.source] || row.source || '')}</td><td><button class="text-button text-button--danger" type="button" data-owner-delete-team="${Number(row.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
+    ? `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Date</th><th>Company</th><th class="num">Team size</th><th>Plan</th><th>Currency</th><th>Request</th><th>Timing</th><th>Name</th><th>Email</th><th>Message</th><th>Source</th><th></th></tr></thead><tbody>${rows.map(row => `<tr data-owner-attn="team:${Number(row.id)}"><td class="owner-nowrap">${esc(when(row.createdAt))}</td><td><b>${esc(row.company)}</b></td><td class="num">${number(row.teamSize)}</td><td class="owner-nowrap">${esc(PLAN_LABELS[row.plan] || row.plan || '—')}</td><td>${esc(row.currency || '—')}</td><td>${esc(KIND_LABELS[row.kind] || row.kind || '—')}</td><td class="owner-nowrap">${esc(TIMING_LABELS[row.timing] || row.timing)}</td><td>${esc(row.name || '—')}</td><td>${mailLink(row.email)}</td><td class="owner-message">${row.ref ? `<span class="owner-partner-ref">Partner: <code>${esc(row.ref)}</code> — ${esc(TEAM_RATE)}% if this becomes an order</span>` : ''}${esc(row.message || '')}</td><td>${esc(REQUEST_SOURCES[row.source] || row.source || '')}</td><td><button class="text-button text-button--danger" type="button" data-owner-delete-team="${Number(row.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
     : '<p class="owner-empty">No team kit requests yet.</p>';
 }
 
@@ -637,6 +637,16 @@ const copyRow = (label, value) => `<div class="owner-copy-row"><span>${esc(label
 
 // Mutations from the Plus cards: errors stay in the card instead of replacing
 // the dashboard, except an ended session, which signs out as everywhere else.
+/** A commission, always to the cent, so a column of them lines up. */
+function exactMoney(amount, currency) {
+  if (amount == null || amount === '') return '';
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount) / 100);
+  } catch (_) {
+    return `${(Number(amount) / 100).toFixed(2)} ${currency}`;
+  }
+}
+
 async function sendJson(path, method, body) {
   return jsonOf(await call(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) }));
 }
@@ -1104,7 +1114,7 @@ $('[data-owner-refunds]').closest('.owner-card').addEventListener('click', async
 
 /** Sales through a partner's link (migrations 0006 and 0007): see ./partners-view.js. */
 function renderPartners(summary) {
-  $('[data-owner-partners]').innerHTML = partnersCardHtml(summary, { money, number, day });
+  $('[data-owner-partners]').innerHTML = partnersCardHtml(summary, { money, exact: exactMoney, number, day });
 }
 
 // Mark an earned team commission as paid (after the bank transfer), or undo it.
