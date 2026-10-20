@@ -203,6 +203,6 @@ export function giftPageParams(search) {
  * in percent): what a partner earns on Plus and the personal gifts bought through their link.
  */
 export function partnerInvitation(rate) {
-  const share = Number.isFinite(rate) && rate > 0 && rate < 100 ? `${rate}% of` : 'a commission on';
-  return `Become a partner: share your own link to Daily Planner, and earn ${share} every Plus, Give Plus and Plus Family bought through it.`;
+  const share = Number.isFinite(rate) && rate > 0 && rate < 100 ? `a ${rate}% commission` : 'a commission';
+  return `Become a partner: share your own link to Daily Planner, and earn ${share} on every Plus, Give Plus and Plus Family bought through it.`;
 }

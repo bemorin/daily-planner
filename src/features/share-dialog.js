@@ -87,11 +87,11 @@ function toggle(attr, title, note) {
 
 /**
  * The partner line's words, from the program's terms (PARTNER_PROGRAM.rate):
- * “Earn 25% of every Plus purchase made through your link.”
+ * “Earn a 25% commission on every Plus purchase made through your link.”
  */
 export function sharePartnerText(rate = PARTNER_PROGRAM.rate) {
   const value = Number(rate);
-  return `Earn ${Number.isFinite(value) && value > 0 && value < 100 ? `${value}% of` : 'a commission on'} every Plus purchase made through your link.`;
+  return `Earn ${Number.isFinite(value) && value > 0 && value < 100 ? `a ${value}% commission` : 'a commission'} on every Plus purchase made through your link.`;
 }
 
 /** One line about the partner program, shown once an image is made (hidden until then). */

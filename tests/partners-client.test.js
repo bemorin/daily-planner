@@ -132,10 +132,12 @@ test('the partners page’s figures come from the prices and the program: before
   assert.equal(model.formatCommission(604, 'EUR'), '€6.04');
   const eur = model.pageFigures('EUR');
   assert.deepEqual([eur.rate, eur.teamRate, eur.cookieDays, eur.refundDays, eur.minimum, eur.plusPrice, eur.plusTax, eur.plusEarns, eur.teamEarns, eur.taxed], ['25%', '10%', '30', '14', '€50', '€29', '€4.83', '€6.04', '€49.58', true]);
-  assert.match(eur.taxNote, /^Example in France, where prices include 20% VAT\./);
+  assert.match(eur.taxNote, /^An example in France, where prices include 20% VAT, worked out on the price before tax\./);
+  // An example only: Creem calculates its own commission, under its affiliate terms.
+  assert.match(eur.taxNote, /Creem calculates the 25% under its own affiliate terms, so what you earn may differ a little\.$/);
   const usd = model.pageFigures('USD');
   assert.deepEqual([usd.minimum, usd.plusEarns, usd.taxed, usd.taxWhere], ['$50', '$7.25', false, 'without sales tax']);
-  assert.match(usd.taxNote, /your commission is on the price before it/);
+  assert.match(usd.taxNote, /^An example without sales tax\. Where the buyer pays sales tax or VAT, the price before tax is lower, and Creem calculates the 25% under its own affiliate terms/);
 });
 
 test('the partners page’s own figures, as written for a visitor without JavaScript, match what the model works out (EUR)', async () => {
@@ -149,7 +151,7 @@ test('the partners page’s own figures, as written for a visitor without JavaSc
   assert.ok(page.includes(`data-month-total>${model.formatCommission(month.total, 'EUR')}<`));
   assert.ok(page.includes(`data-month-split>${model.formatCommission(month.byCreem, 'EUR')} paid by Creem · ${model.formatCommission(month.byTransfer, 'EUR')} by bank transfer<`));
   const figures = model.pageFigures('EUR');
-  assert.ok(page.includes(`One Plus bought in France: ${figures.plusPrice}, of which ${figures.plusTax} is VAT. You earn <b>${figures.plusEarns}</b>.`));
+  assert.ok(page.includes(`One Plus bought in France: ${figures.plusPrice}, of which ${figures.plusTax} is VAT. You earn about <b>${figures.plusEarns}</b>.`));
   assert.ok(page.includes(figures.taxNote));
   for (const [hook, value] of [['data-rate', '25%'], ['data-team-rate', '10%'], ['data-cookie-days', '30'], ['data-refund-days', '14'], ['data-minimum', '€50']]) {
     const found = [...page.matchAll(new RegExp(`${hook}>([^<]*)<`, 'g'))].map(match => match[1]);
@@ -233,7 +235,17 @@ test('the partners page: landing style and motion, every section, the rules, the
   assert.match(page, /<aside class="pt-company"[\s\S]*?Bringing a company\?[\s\S]*?href="\.\.\/teams\/"/);
   assert.match(page, /planner\.bemorin\.com\/welcome\/\?ref=<b>CODE<\/b>/);
   assert.match(page, /1st and the 15th/);
-  for (const rule of ['of Plus and personal gifts', 'of a team gift you introduced', 'days per click', 'Earned after', 'Team gifts by bank transfer', 'Open to anyone', 'Fair play']) assert.ok(page.includes(rule), rule);
+  for (const rule of ['of Plus and personal gifts', 'of a team gift you introduced', 'Your link counts for <span data-cookie-days>30</span> days</h3>', 'Refunds earn nothing', 'Team gifts by bank transfer', 'Open to anyone', 'Fair play']) assert.ok(page.includes(rule), rule);
+  // Only what Creem documents is said of Creem: it never sees a click (partners share our own ?ref= link), and its
+  // commission is calculated under its own terms — the 14-day rule and “before tax” are ours, for team gifts.
+  assert.doesNotMatch(page, /click/i);
+  assert.doesNotMatch(page, /of the price before tax of Plus|25%<\/span> of the sale|Earned after/);
+  assert.match(page, /calculated and paid by Creem under its affiliate terms/);
+  assert.match(page, /A team commission is earned once the gift’s <span data-refund-days>14<\/span>-day refund period has passed/);
+  assert.match(page, /You earn about <b>€6\.04<\/b>/, 'the example is labelled as one');
+  // A company's invoice request counts when it carries the code: the page says to send them with the link.
+  assert.match(page, /they ask for it on that page: having come through your link, their request carries your code\./);
+  assert.doesNotMatch(page, /name you in their message/);
   assert.match(page, /no refund and no dispute/);
   assert.match(page, /don’t count/, 'own purchases');
   assert.match(page, /href="\.\.\/\.\.\/legal\/terms\/#partners"/);

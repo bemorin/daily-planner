@@ -112,7 +112,7 @@ test('paying by invoice: the answer follows what is on sale', () => {
 });
 
 test('the gift page’s partner invitation names the program’s rate', async () => {
-  assert.equal(partnerInvitation(PARTNER_PROGRAM.rate), `Become a partner: share your own link to Daily Planner, and earn ${PARTNER_PROGRAM.rate}% of every Plus, Give Plus and Plus Family bought through it.`);
+  assert.equal(partnerInvitation(PARTNER_PROGRAM.rate), `Become a partner: share your own link to Daily Planner, and earn a ${PARTNER_PROGRAM.rate}% commission on every Plus, Give Plus and Plus Family bought through it.`);
   assert.match(partnerInvitation(undefined), /earn a commission on every Plus/);
   const thanks = await read('welcome/thanks/thanks.js');
   assert.match(thanks, /partnerInvitation\(PARTNER_PROGRAM\.rate\)/);

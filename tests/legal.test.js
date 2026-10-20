@@ -240,11 +240,12 @@ test('the terms’ partner program: the rates, the days and the minimum come fro
     assert.ok(found.length && found.every(value_ => value_ === value), `${hook}: ${found}`);
   }
   assert.match(words, /you don’t need Plus/);
-  assert.match(words, /25% of Daily Planner Plus, Give Plus and Plus Family bought through your link, on the price before tax/);
-  assert.match(words, /Creem tracks these sales and pays this commission, under its affiliate terms/);
+  // Creem's 25%: calculated and paid under its own terms, which don't say what it is worked out on — the terms say no more.
+  assert.match(words, /25% of Daily Planner Plus, Give Plus and Plus Family bought through your link\. Creem tracks these sales, and calculates and pays this commission under its affiliate terms\./);
+  assert.doesNotMatch(words, /Plus Family bought through your link, on the price before tax/);
   assert.match(words, /10% of a team gift you introduced, on its price before tax: bought online through your link, or ordered by invoice or quote when the company’s request carries your code\. We pay this commission ourselves\./);
   assert.match(words, /A link counts for 30 days\./);
-  assert.match(words, /A sale earns once its 14-day refund period has passed with no refund and no dispute\. A refunded or disputed sale earns nothing/);
+  assert.match(words, /A refunded or disputed purchase earns nothing\. A team commission is earned once the gift’s 14-day refund period has passed with no refund and no dispute; after a partial refund, it is on what was kept\./);
   assert.match(words, /on the 1st and the 15th of each month, once your balance reaches €50 or \$50/);
   assert.match(words, /We pay team commissions by bank transfer within 30 days of being earned/);
   assert.match(words, /spam/);

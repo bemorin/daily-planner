@@ -73,12 +73,13 @@ export function giftLabel(gift, currency, { member = false } = {}) {
 
 /**
  * What a partner earns, from the program's terms (PARTNER_PROGRAM.rate in
- * pricing.js): “25% of every Plus purchase made through your link”; without a
- * usable rate, “a commission on every Plus purchase …”.
+ * pricing.js): “a 25% commission on every Plus purchase made through your
+ * link” — true whatever Creem works it out on; without a usable rate, “a
+ * commission on every Plus purchase …”.
  */
 export function partnerEarnText(rate = PARTNER_PROGRAM.rate) {
   const value = Number(rate);
-  return Number.isFinite(value) && value > 0 && value < 100 ? `${value}% of every Plus purchase made through your link` : 'a commission on every Plus purchase made through your link';
+  return `${Number.isFinite(value) && value > 0 && value < 100 ? `a ${value}% commission` : 'a commission'} on every Plus purchase made through your link`;
 }
 
 /** Who a gift is from, as a sentence reads it: the server's fallbacks ("A friend", "Your family") in lower case. */
@@ -297,14 +298,15 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
 
   /**
    * The partner program, for everyone, until it is dismissed or followed on
-   * this device: with Plus, a quiet card after the gifts; without, one line at
-   * the very end, after everything Plus offers, so it never competes with Get Plus.
+   * this device: with Plus, a quiet card after the gifts; without, a footnote
+   * at the very end, after the privacy line, in its small muted type — never an
+   * alternative to buying beside Get Plus.
    */
   function partnerCard() {
     if (!partnerHintShown('plus')) return '';
     const close = `<button class="icon-button plus-partner__close" type="button" data-plus-partner-dismiss aria-label="Hide the partner program">${icon('close')}</button>`;
     if (!hasPlus()) {
-      return `<p class="plus-teams plus-teams--partner" data-plus-partner><span class="plus-teams__icon">${icon('share')}</span><span>Not ready for Plus? <a href="./welcome/partners/" target="_blank" rel="noopener" data-plus-partner-go>Become a partner</a> — earn ${esc(partnerEarnText())}.</span>${close}</p>`;
+      return `<p class="plus-footnote" data-plus-partner><span>Know people who’d like it? <a href="./welcome/partners/" target="_blank" rel="noopener" data-plus-partner-go>Become a partner</a> — earn ${esc(partnerEarnText())}.</span>${close}</p>`;
     }
     return `<aside class="plus-partner" aria-labelledby="plus-partner-title" data-plus-partner>
         <span class="plus-partner__icon">${icon('share')}</span>
@@ -417,8 +419,8 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
       ${upcoming(false)}
       ${plusAvailable() ? gifts() : ''}
       ${teams}
-      ${plusAvailable() ? partnerCard() : ''}
       ${privacy}
+      ${plusAvailable() ? partnerCard() : ''}
       ${bar()}`;
   }
 
@@ -728,8 +730,8 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     qs('[data-plus-partner-dismiss]', el)?.addEventListener('click', () => {
       dismissPartnerHint('plus');
       qs('[data-plus-partner]', el)?.remove();
-      // Focus stays close: Done with Plus, the team line just above it without.
-      (qs('[data-plus-close]', el) || qs('.plus-teams a', el))?.focus({ preventScroll: true });
+      // Focus stays close: Done with Plus; without, the privacy line just above it, else the team line.
+      (qs('[data-plus-close]', el) || qs('[data-plus-privacy]', el) || qs('.plus-teams a', el))?.focus({ preventScroll: true });
     });
     qs('[data-plus-overview]', el)?.addEventListener('click', () => show({ stage: 'overview' }));
     qs('[data-plus-redeem-gift]', el)?.addEventListener('click', redeem);

@@ -11,7 +11,7 @@
 // (a Creem checkout id; older rows may hold an earlier reference).
 
 import { normalizeGift } from './gifts.js';
-import { normalizePartnerSale, normalizePayout } from './partners.js';
+import { normalizeCodeRejection, normalizePartnerSale, normalizePayout, storedSaleKind } from './partners.js';
 
 const waitlistColumns = 'id, email, devices, note, locale, app_version AS appVersion, drive_seen AS driveSeen, created_at AS createdAt';
 const feedbackColumns = 'id, app_version AS appVersion, rating, kind, message, email, platform, created_at AS createdAt';
@@ -137,10 +137,11 @@ export function createD1Store(db) {
     listRevocationsBySource: source => all(`SELECT ${revocationColumns} FROM revocations WHERE source = ? ORDER BY target`, source).then(rows => rows.map(revocationRow)),
     deleteRevocations: async source => await run('DELETE FROM revocations WHERE source = ?', source),
     // Partner sales (migration 0006): one row per paid checkout that came through a partner's link.
-    // The tax included in a sale's amount is kept apart (migration 0007), skipped while that table is missing.
+    // Who pays the commission is the kind ('team': the owner, see storedSaleKind), so it is kept even without
+    // migration 0007; the tax included in the amount is kept apart (0007), skipped while that table is missing.
     async addPartnerSale(row) {
       const added = await run('INSERT INTO partner_sales (checkout_id, code, kind, plan, amount, currency, member, mode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING',
-        row.checkoutId, row.code, row.kind, row.plan || '', row.amount ?? null, row.currency || '', row.member ? 1 : 0, row.mode || '', row.createdAt) > 0;
+        row.checkoutId, row.code, storedSaleKind(row), row.plan || '', row.amount ?? null, row.currency || '', row.member ? 1 : 0, row.mode || '', row.createdAt) > 0;
       if (Number.isInteger(row.tax)) await run('INSERT INTO partner_sale_taxes (checkout_id, tax) VALUES (?, ?) ON CONFLICT(checkout_id) DO NOTHING', row.checkoutId, row.tax).catch(skipMissing);
       return added;
     },
@@ -153,6 +154,10 @@ export function createD1Store(db) {
       row.checkoutId, row.code, row.amount ?? null, row.currency || '', row.note || '', row.paidAt) > 0,
     listPartnerPayouts: () => all(`SELECT ${payoutColumns} FROM partner_payouts ORDER BY paid_at DESC, checkout_id`).then(rows => rows.map(normalizePayout)),
     deletePartnerPayout: async checkoutId => await run('DELETE FROM partner_payouts WHERE checkout_id = ?', checkoutId) > 0,
+    // Codes the owner found no partner for (migration 0007): their team commissions earn nothing.
+    addPartnerCodeRejection: async row => await run('INSERT INTO partner_code_rejections (code, created_at) VALUES (?, ?) ON CONFLICT(code) DO NOTHING', row.code, row.createdAt) > 0,
+    listPartnerCodeRejections: () => all('SELECT code, created_at AS createdAt FROM partner_code_rejections ORDER BY code').then(rows => rows.map(normalizeCodeRejection)),
+    deletePartnerCodeRejection: async code => await run('DELETE FROM partner_code_rejections WHERE code = ?', code) > 0,
     /** Revocations of partner sales' checkouts ({ checkoutId, reason }): a refund, a dispute or the owner switched them off. Needs migration 0005 too. */
     partnerSaleStates: () => all("SELECT partner_sales.checkout_id AS checkoutId, revocations.reason AS reason FROM partner_sales JOIN revocations ON revocations.target = 'checkout:' || partner_sales.checkout_id"),
     /** Refunds of partner sales ({ checkoutId, amount, currency, fullRefund }), so partial ones come off the revenue. Needs migration 0005 too. */

@@ -18,33 +18,40 @@ const read = rel => readFile(join(root, rel), 'utf8');
 const code = text => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 test('what a partner earns is said from the program’s terms, with a calm fallback', () => {
-  assert.equal(partnerEarnText(), `${PARTNER_PROGRAM.rate}% of every Plus purchase made through your link`);
-  assert.equal(partnerEarnText(25), '25% of every Plus purchase made through your link');
-  assert.equal(partnerEarnText(12.5), '12.5% of every Plus purchase made through your link');
+  // “A 25% commission on every Plus purchase”: true whatever Creem works it out on (the page and the terms say before tax only for examples).
+  assert.equal(partnerEarnText(), `a ${PARTNER_PROGRAM.rate}% commission on every Plus purchase made through your link`);
+  assert.equal(partnerEarnText(25), 'a 25% commission on every Plus purchase made through your link');
+  assert.equal(partnerEarnText(12.5), 'a 12.5% commission on every Plus purchase made through your link');
   for (const rate of [0, -5, 100, NaN, 'soon', null]) assert.equal(partnerEarnText(rate), 'a commission on every Plus purchase made through your link', String(rate));
-  assert.equal(sharePartnerText(), `Earn ${PARTNER_PROGRAM.rate}% of every Plus purchase made through your link.`);
-  assert.equal(sharePartnerText(30), 'Earn 30% of every Plus purchase made through your link.');
+  assert.equal(sharePartnerText(), `Earn a ${PARTNER_PROGRAM.rate}% commission on every Plus purchase made through your link.`);
+  assert.equal(sharePartnerText(30), 'Earn a 30% commission on every Plus purchase made through your link.');
   assert.equal(sharePartnerText(0), 'Earn a commission on every Plus purchase made through your link.');
 });
 
-test('the Plus window invites everyone: members keep their card, others get one quiet line after everything Plus offers', async () => {
+test('the Plus window invites everyone: members keep their card, others get a footnote after everything Plus offers', async () => {
   const dialog = await read('src/features/plus-dialog.js');
   assert.doesNotMatch(dialog, /AFFILIATE_COMMISSION|from '\.\.\/config\.js'/, 'the rate comes from PARTNER_PROGRAM, not a build variable');
   assert.match(dialog, /import \{[^}]*\bPARTNER_PROGRAM\b[^}]*\} from '\.\.\/lib\/pricing\.js'/);
   const card = /function partnerCard\(\) \{[\s\S]*?\n {2}\}/.exec(dialog)[0];
   assert.match(card, /if \(!partnerHintShown\('plus'\)\) return '';/, 'shown to everyone until hidden here');
   assert.doesNotMatch(card, /hasPlus\(\) \|\|/, 'no longer for members only');
-  assert.match(card, /Not ready for Plus\? <a href="\.\/welcome\/partners\/" target="_blank" rel="noopener" data-plus-partner-go>Become a partner<\/a> — earn \$\{esc\(partnerEarnText\(\)\)\}\./);
+  // Neutral words, as a footnote: never an alternative to buying (“Not ready for Plus?”).
+  assert.match(card, /<p class="plus-footnote" data-plus-partner><span>Know people who’d like it\? <a href="\.\/welcome\/partners\/" target="_blank" rel="noopener" data-plus-partner-go>Become a partner<\/a> — earn \$\{esc\(partnerEarnText\(\)\)\}\.<\/span>\$\{close\}<\/p>/);
+  assert.doesNotMatch(dialog, /Not ready for Plus/);
   assert.match(card, /data-plus-partner-dismiss aria-label="Hide the partner program"/);
   assert.equal((card.match(/data-plus-partner-go/g) || []).length, 2, 'following it counts as hiding it, in both forms');
-  // Without Plus, the line comes after the offer, the gifts and the team line, never beside Get Plus.
+  // Without Plus, the footnote is the last line, after the offer, the gifts, the team line and the privacy line.
   const offer = /const title = focus \?[\s\S]*?\$\{bar\(\)\}`;/.exec(dialog)[0];
-  const order = ['${offer()}', '${plusAvailable() ? gifts() : \'\'}', '${teams}', '${plusAvailable() ? partnerCard() : \'\'}', '${privacy}', '${bar()}'].map(part => offer.indexOf(part));
+  const order = ['${offer()}', '${plusAvailable() ? gifts() : \'\'}', '${teams}', '${privacy}', '${plusAvailable() ? partnerCard() : \'\'}', '${bar()}'].map(part => offer.indexOf(part));
   assert.ok(order.every((at, index) => at > -1 && (!index || at > order[index - 1])), `order ${order}`);
   // With Plus, the card stays where it was: after the gifts, before the team line.
   const member = /if \(active\) \{[\s\S]*?data-plus-close>Done<\/button><\/div>`;/.exec(dialog)[0];
   assert.ok(member.indexOf('${gifts()}') < member.indexOf('${partnerCard()}') && member.indexOf('${partnerCard()}') < member.indexOf('${teams}'));
   assert.match(dialog, /dismissPartnerHint\('plus'\);\s*qs\('\[data-plus-partner\]', el\)\?\.remove\(\);/);
+  // It reads as a footnote: the privacy line's small, faint type, no icon tile.
+  const css = await read('styles/plus.css');
+  assert.match(css, /\.plus-footnote \{[^}]*color: var\(--faint\); font-size: \.74rem;/);
+  assert.doesNotMatch(card.split('if (!hasPlus())')[1].split('return `<aside')[0], /plus-teams__icon|icon\('share'\)/);
   assert.match(dialog, /\.\/welcome\/teams\//, 'the team line goes to the Teams page');
   assert.doesNotMatch(code(dialog), /\d+%/, 'no rate typed in by hand');
 });

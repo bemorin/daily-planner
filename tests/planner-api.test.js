@@ -481,7 +481,7 @@ test('every migration runs when the D1 console joins it into one line', async t 
     sqlite.exec(flat);
   }
   const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(row => row.name);
-  assert.deepEqual(tables, ['events', 'feedback', 'gifts', 'orders', 'partner_payouts', 'partner_sale_taxes', 'partner_sales', 'payments', 'purchases', 'refunds', 'reviews', 'revocations', 'team_request_partners', 'team_requests', 'waitlist']);
+  assert.deepEqual(tables, ['events', 'feedback', 'gifts', 'orders', 'partner_code_rejections', 'partner_payouts', 'partner_sale_taxes', 'partner_sales', 'payments', 'purchases', 'refunds', 'reviews', 'revocations', 'team_request_partners', 'team_requests', 'waitlist']);
   const teamColumns = sqlite.prepare('PRAGMA table_info(team_requests)').all();
   const column = name => teamColumns.find(row => row.name === name);
   assert.deepEqual(['plan', 'currency', 'kind'].map(name => [column(name)?.type, column(name)?.notnull, column(name)?.dflt_value]), [['TEXT', 1, "''"], ['TEXT', 1, "''"], ['TEXT', 1, "'quote'"]]);

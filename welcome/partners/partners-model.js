@@ -30,12 +30,15 @@ export function partnerPage({ url = '' } = {}) {
 
 /**
  * The tax in the page's examples (prices include tax): France's 20% VAT for
- * a euro visitor; none for a US-dollar visitor, said as such. The commission
- * is always on the price before tax, which depends on the buyer's country.
+ * a euro visitor; none for a US-dollar visitor, said as such. The examples are
+ * worked out on the price before tax, which depends on the buyer's country.
+ * They are examples only: Creem calculates its commission (PARTNER_PROGRAM.rate)
+ * under its own affiliate terms, which don't say what it is worked out on, so
+ * the notes never present the example as Creem's figure.
  */
 export const EXAMPLE_TAX = Object.freeze({
-  EUR: Object.freeze({ percent: 20, where: 'in France', note: 'Example in France, where prices include 20% VAT. VAT depends on the buyer’s country, so the price before tax — and your commission — varies a little.' }),
-  USD: Object.freeze({ percent: 0, where: 'without sales tax', note: 'Example without sales tax. Where the buyer pays sales tax or VAT, your commission is on the price before it, so it is a little lower.' })
+  EUR: Object.freeze({ percent: 20, where: 'in France', note: `An example in France, where prices include 20% VAT, worked out on the price before tax. VAT depends on the buyer’s country, and Creem calculates the ${PARTNER_PROGRAM.rate}% under its own affiliate terms, so what you earn may differ a little.` }),
+  USD: Object.freeze({ percent: 0, where: 'without sales tax', note: `An example without sales tax. Where the buyer pays sales tax or VAT, the price before tax is lower, and Creem calculates the ${PARTNER_PROGRAM.rate}% under its own affiliate terms, so what you earn may differ a little.` })
 });
 const taxOf = currency => EXAMPLE_TAX[currency] || EXAMPLE_TAX.USD;
 

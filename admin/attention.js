@@ -7,6 +7,7 @@
 // (tests/admin-attention.test.js).
 
 import { compareVersions } from './version.js';
+import { payoutCheckWords } from './partners-view.js';
 import { PARTNER_PROGRAM, teamTier } from '../src/lib/pricing.js';
 
 /** Nothing records a reply or a decision, so these stay listed for a while after they arrive. */
@@ -165,7 +166,8 @@ export function setupChecks(summary, { config = {}, pageVersion = '' } = {}) {
   add('legal', legalMissing.length ? 'warn' : 'ok', [`Legal pages: ${listed(legalMissing)} missing`]);
 
   const migrations = MIGRATIONS.filter(([flag]) => summary[flag]).map(([, file]) => file);
-  add('database', migrations.length ? 'missing' : 'ok', [migrations.length === 1 ? `Database: migration ${migrations[0]} not applied` : `Database: ${migrations.length} migrations not applied`]);
+  const missingText = file => (file === '0007_partner_commissions.sql' ? `Database: run migrations/${file} to track team commissions` : `Database: migration ${file} not applied`);
+  add('database', migrations.length ? 'missing' : 'ok', [migrations.length === 1 ? missingText(migrations[0]) : `Database: ${migrations.length} migrations not applied`]);
   add('sign-in', setup.twoFactor ? 'ok' : 'warn', ['Two-factor sign-in is off']);
   return checks;
 }
@@ -235,19 +237,22 @@ function refundItems(summary, now, { money }) {
 /**
  * One line per team commission a partner earned (its refund period passed,
  * no refund or dispute) that isn't marked as paid yet, the longest-waiting
- * first. Creem pays the other commissions itself: nothing to do for those.
+ * first, with what to check before paying it (a code nothing confirmed, a
+ * refund or the tax not recorded: then the figure is “at most”). Creem pays
+ * the other commissions itself: nothing to do for those. None while migration
+ * 0007 is missing: nothing could be marked as paid (Setup says to run it).
  */
 function partnerItems(summary, now, { money }) {
-  if (summary.partnersUnavailable) return [];
+  if (summary.partnersUnavailable || summary.partnerCommissionsUnavailable) return [];
   const rows = Array.isArray(summary.partners?.toPay) ? summary.partners.toPay : [];
   const rate = Number(summary.partnerProgram?.teamRate) || PARTNER_PROGRAM.teamRate;
   return rows.filter(row => row?.checkoutId).map(row => {
     const seats = teamTier(row.plan)?.seats;
-    const basis = row.base != null ? `${rate}% of ${money(row.base, row.currency)} ${row.basis === 'paid' ? 'paid' : 'before tax'}` : '';
+    const basis = row.base != null ? `${rate}% of ${money(row.base, row.currency)} ${row.basis === 'paid' ? 'paid, tax included' : 'before tax'}` : '';
     return {
       kind: 'partner-pay', key: `partner-pay:${row.checkoutId}`, section: 'partners', rows: [`partner:${row.checkoutId}`], icon: 'partner', at: row.earnedAt, when: 'earned',
-      text: `Pay ${row.code} ${money(row.commission, row.currency)} (${rate}% of a team gift)`,
-      detail: [seats ? `Team gift for up to ${new Intl.NumberFormat('en-US').format(seats)} people` : 'Team gift', basis, 'by bank transfer, then Mark as paid'].filter(Boolean).join(' · ')
+      text: `Pay ${row.code} ${row.exact === false ? 'at most ' : ''}${money(row.commission, row.currency)} (${rate}% of a team gift)`,
+      detail: [...payoutCheckWords(row, rate), seats ? `Team gift for up to ${new Intl.NumberFormat('en-US').format(seats)} people` : 'Team gift', basis, 'by bank transfer, then Mark as paid'].filter(Boolean).join(' · ')
     };
   });
 }

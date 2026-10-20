@@ -800,11 +800,14 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .owner-partners code,
 .owner-partner-team code,
-.owner-partner-sales code,
-.owner-partner-ref code { font-size: .78rem; font-weight: 650; overflow-wrap: normal; white-space: nowrap; }
+.owner-partner-sales code { font-size: .78rem; font-weight: 650; overflow-wrap: normal; white-space: nowrap; }
+
+/* A partner code nothing confirmed yet (or found to be no partner): said in words, in the attention panel's amber. */
+.owner-small--warn { color: color-mix(in srgb, var(--attn-warn) 62%, var(--ink)); font-weight: 650; }
 
 .owner-partners .owner-small,
-.owner-partner-team .num .owner-small { white-space: nowrap; }
+.owner-partner-team .num .owner-small,
+.owner-partner-team .owner-small--warn { white-space: nowrap; }
 
 .owner-partner-sales .owner-pill,
 .owner-partner-team .owner-pill { margin-top: 0; }
@@ -826,7 +829,14 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .owner-partner-ref { display: block; width: max-content; max-width: 100%; margin-bottom: 4px; padding: 2px 8px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--ink); font-size: .74rem; font-weight: 600; line-height: 1.5; }
 
-.owner-partner-ref code { font-size: .72rem; }
+.owner-partner-ref code { font-size: .72rem; font-weight: 650; overflow-wrap: normal; white-space: nowrap; }
+
+.owner-partner-ref small { display: block; color: color-mix(in srgb, var(--attn-warn) 62%, var(--ink)); font-size: .7rem; font-weight: 600; }
+
+.owner-partner-ref.is-off { background: var(--soft); color: var(--muted); }
+
+/* Migration 0007 missing: one line in place of what can't be done yet. */
+.owner-partner-setup { margin: -4px 0 14px; padding: 10px 12px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--ink); font-size: .8rem; line-height: 1.5; }
 
 /* On a phone these tables scroll sideways rather than squeeze their words one per line. */
 .owner-partner-team { min-width: 760px; }

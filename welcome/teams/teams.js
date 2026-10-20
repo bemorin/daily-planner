@@ -60,7 +60,7 @@ function render() {
 function renderPartnerLine() {
   const rate = PARTNER_PROGRAM.teamRate;
   if (!Number.isFinite(rate) || rate <= 0) return;
-  qsa('[data-partner-earn]').forEach(node => { node.textContent = `${rate}% of the team gifts they buy`; });
+  qsa('[data-partner-earn]').forEach(node => { node.textContent = `a ${rate}% commission on the team gifts they buy`; });
 }
 
 const motionOn = motionWanted();

@@ -67,8 +67,8 @@ function render(currency) {
   const example = qs('[data-plus-example]');
   if (example) {
     example.innerHTML = figures.taxed
-      ? `One Plus bought ${esc(figures.taxWhere)}: ${esc(figures.plusPrice)}, of which ${esc(figures.plusTax)} is VAT. You earn <b>${esc(figures.plusEarns)}</b>.`
-      : `One Plus bought ${esc(figures.taxWhere)}: ${esc(figures.plusPrice)}. You earn <b>${esc(figures.plusEarns)}</b>.`;
+      ? `One Plus bought ${esc(figures.taxWhere)}: ${esc(figures.plusPrice)}, of which ${esc(figures.plusTax)} is VAT. You earn about <b>${esc(figures.plusEarns)}</b>.`
+      : `One Plus bought ${esc(figures.taxWhere)}: ${esc(figures.plusPrice)}. You earn about <b>${esc(figures.plusEarns)}</b>.`;
   }
   renderRates(currency);
   renderMonth(currency);

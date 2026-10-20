@@ -12,7 +12,7 @@
 // (./attention.js) and marks the cards and rows it points to.
 
 import { ATTENTION_SECTIONS, attentionBySection, attentionNote, attentionWhen, buildAttention, setupChecks } from './attention.js';
-import { partnersCardHtml } from './partners-view.js';
+import { partnersCardHtml, payoutCheckWords, requestPartnerHtml } from './partners-view.js';
 import { createTrendsView } from './trends-view.js';
 import { dayOf, normalizeSeries, seriesWindow } from './trends.js';
 // The landing page's stepper (− value +): no browser spin arrows on Seats.
@@ -439,11 +439,13 @@ function renderTeams(summary) {
   }
   const rows = summary.teamRequests || [];
   const totals = teamTotals(summary);
+  // A request's partner code says whether it is confirmed (a sale Creem credited, a commission paid) or found to be no partner.
+  const codeChecks = summary.partners?.codeChecks || {};
   caption.textContent = totals.count > rows.length
     ? `Latest ${number(rows.length)} of ${number(totals.count)} requests (export CSV for all). Reply by email; delete on request.`
     : 'Teams who asked for the team kit. Reply by email; delete on request.';
   target.innerHTML = rows.length
-    ? `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Date</th><th>Company</th><th class="num">Team size</th><th>Plan</th><th>Currency</th><th>Request</th><th>Timing</th><th>Name</th><th>Email</th><th>Message</th><th>Source</th><th></th></tr></thead><tbody>${rows.map(row => `<tr data-owner-attn="team:${Number(row.id)}"><td class="owner-nowrap">${esc(when(row.createdAt))}</td><td><b>${esc(row.company)}</b></td><td class="num">${number(row.teamSize)}</td><td class="owner-nowrap">${esc(PLAN_LABELS[row.plan] || row.plan || '—')}</td><td>${esc(row.currency || '—')}</td><td>${esc(KIND_LABELS[row.kind] || row.kind || '—')}</td><td class="owner-nowrap">${esc(TIMING_LABELS[row.timing] || row.timing)}</td><td>${esc(row.name || '—')}</td><td>${mailLink(row.email)}</td><td class="owner-message">${row.ref ? `<span class="owner-partner-ref">Partner: <code>${esc(row.ref)}</code> — ${esc(TEAM_RATE)}% if this becomes an order</span>` : ''}${esc(row.message || '')}</td><td>${esc(REQUEST_SOURCES[row.source] || row.source || '')}</td><td><button class="text-button text-button--danger" type="button" data-owner-delete-team="${Number(row.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
+    ? `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Date</th><th>Company</th><th class="num">Team size</th><th>Plan</th><th>Currency</th><th>Request</th><th>Timing</th><th>Name</th><th>Email</th><th>Message</th><th>Source</th><th></th></tr></thead><tbody>${rows.map(row => `<tr data-owner-attn="team:${Number(row.id)}"><td class="owner-nowrap">${esc(when(row.createdAt))}</td><td><b>${esc(row.company)}</b></td><td class="num">${number(row.teamSize)}</td><td class="owner-nowrap">${esc(PLAN_LABELS[row.plan] || row.plan || '—')}</td><td>${esc(row.currency || '—')}</td><td>${esc(KIND_LABELS[row.kind] || row.kind || '—')}</td><td class="owner-nowrap">${esc(TIMING_LABELS[row.timing] || row.timing)}</td><td>${esc(row.name || '—')}</td><td>${mailLink(row.email)}</td><td class="owner-message">${requestPartnerHtml(row.ref, codeChecks[row.ref] || '', TEAM_RATE)}${esc(row.message || '')}</td><td>${esc(REQUEST_SOURCES[row.source] || row.source || '')}</td><td><button class="text-button text-button--danger" type="button" data-owner-delete-team="${Number(row.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
     : '<p class="owner-empty">No team kit requests yet.</p>';
 }
 
@@ -1117,31 +1119,83 @@ function renderPartners(summary) {
   $('[data-owner-partners]').innerHTML = partnersCardHtml(summary, { money, exact: exactMoney, number, day });
 }
 
-// Mark an earned team commission as paid (after the bank transfer), or undo it.
+// After the card is drawn again, focus stays on the row that was acted on (its new first button), else on the result line.
+function focusPartnerRow(checkoutId) {
+  const row = checkoutId ? [...document.querySelectorAll('[data-owner-partners] [data-owner-attn]')].find(item => item.dataset.ownerAttn === `partner:${checkoutId}`) : null;
+  (row?.querySelector('button') || $('[data-owner-payout-result]'))?.focus();
+}
+
+/**
+ * Mark as paid asks what the row says to check first (a code nothing confirmed,
+ * a refund or the tax not recorded) and, when the commission is only an upper
+ * bound, the amount actually paid; the API is told the owner checked.
+ */
+function askPayout(dataset) {
+  const code = dataset.ownerPayoutCode || 'this partner';
+  const checks = String(dataset.ownerPayoutChecks || '').split(' ').filter(Boolean);
+  const first = checks.length ? `${payoutCheckWords({ code, checks }, TEAM_RATE).map(line => `• ${line}.`).join('\n')}\n\n` : '';
+  let amount = null;
+  let shown = dataset.ownerPayoutAmount || 'commission';
+  if (dataset.ownerPayoutExact === '0') {
+    const most = Number(dataset.ownerPayoutCents) || 0;
+    const typed = window.prompt(`${first}${shown} is the most ${code} can have earned. Type the commission you paid by bank transfer (at most ${shown}):`, '');
+    if (typed === null) return null;
+    const parsed = parseAmount(typed);
+    if (parsed.error || !parsed.amount || parsed.amount > most) return { error: parsed.error || `Type the commission you paid: more than nothing and at most ${shown}.` };
+    amount = parsed.amount;
+    shown = exactMoney(amount, dataset.ownerPayoutCurrency);
+  }
+  const answer = window.prompt(`${amount == null ? first : ''}Mark ${code}’s ${shown} as paid? Do it once the bank transfer is sent. Add its reference if you like (optional, only you see it).`, '');
+  if (answer === null) return null;
+  return {
+    body: { checkout: dataset.ownerPayout, note: answer.trim().slice(0, 200), ...(checks.length ? { confirmed: true } : {}), ...(amount == null ? {} : { amount }) },
+    done: `Marked as paid: ${code}, ${shown}.`
+  };
+}
+
+// Mark an earned team commission as paid (after the bank transfer) or undo it; mark a code as not a partner or undo it.
 $('[data-owner-partners]').addEventListener('click', async event => {
-  const pay = event.target.closest('[data-owner-payout]');
-  const undo = event.target.closest('[data-owner-payout-undo]');
-  const button = pay || undo;
+  const button = event.target.closest('[data-owner-payout], [data-owner-payout-undo], [data-owner-code-reject], [data-owner-code-undo]');
   if (!button || button.disabled) return;
-  const code = button.dataset.ownerPayoutCode || 'this partner';
-  let note = '';
-  if (pay) {
-    const answer = window.prompt(`Mark ${code}’s ${button.dataset.ownerPayoutAmount || 'commission'} as paid? Do it once the bank transfer is sent. Add its reference if you like (optional, only you see it).`, '');
-    if (answer === null) return;
-    note = answer.trim().slice(0, 200);
-  } else if (!window.confirm(`Mark ${code}’s commission as not paid?`)) return;
+  const { dataset } = button;
+  const row = dataset.ownerPayout || dataset.ownerPayoutUndo || dataset.ownerRow || '';
+  const undoing = dataset.ownerPayoutUndo !== undefined || dataset.ownerCodeUndo !== undefined;
+  let send;
+  let done;
+  if (dataset.ownerPayout !== undefined) {
+    const asked = askPayout(dataset);
+    if (!asked) return;
+    if (asked.error) { showResult('[data-owner-payout-result]', asked.error, true); button.focus(); return; }
+    send = () => sendJson('admin/partners/payouts', 'POST', asked.body);
+    done = asked.done;
+  } else if (dataset.ownerPayoutUndo !== undefined) {
+    const code = dataset.ownerPayoutCode || 'this partner';
+    if (!window.confirm(`Mark ${code}’s commission as not paid?`)) return;
+    send = () => call(`admin/partners/payouts/${encodeURIComponent(dataset.ownerPayoutUndo)}`, { method: 'DELETE' });
+    done = `Marked as not paid: ${code}.`;
+  } else if (dataset.ownerCodeReject !== undefined) {
+    const code = dataset.ownerCodeReject;
+    if (!window.confirm(`Mark ${code} as not a partner? Do it once you have checked Creem → Affiliate Hub and found no partner with this code. Its team commissions will earn nothing (you can undo it).`)) return;
+    send = () => sendJson('admin/partners/rejections', 'POST', { code });
+    done = `${code} is marked as not a partner: its team commissions earn nothing.`;
+  } else {
+    const code = dataset.ownerCodeUndo;
+    if (!window.confirm(`Is ${code} a partner after all? Its team commissions count again.`)) return;
+    send = () => call(`admin/partners/rejections/${encodeURIComponent(code)}`, { method: 'DELETE' });
+    done = `${code} counts as a partner again.`;
+  }
   button.disabled = true;
   try {
-    if (pay) await sendJson('admin/partners/payouts', 'POST', { checkout: button.dataset.ownerPayout, note });
-    else await call(`admin/partners/payouts/${encodeURIComponent(button.dataset.ownerPayoutUndo)}`, { method: 'DELETE' });
+    await send();
   } catch (error) {
     button.disabled = false;
     if (error.kind === 'unauthorized') { handleError(error); return; }
-    // "failed" on Undo is usually a 404: already undone. Just refresh.
-    if (pay || error.kind !== 'failed') { showResult('[data-owner-payout-result]', failureText(error), true); return; }
+    // "failed" on an Undo is usually a 404: already undone. Just refresh.
+    if (!undoing || error.kind !== 'failed') { showResult('[data-owner-payout-result]', failureText(error), true); button.focus(); return; }
   }
   await load();
-  showResult('[data-owner-payout-result]', pay ? `Marked as paid: ${code}, ${button.dataset.ownerPayoutAmount || ''}.`.replace(/, \.$/, '.') : `Marked as not paid: ${code}.`);
+  showResult('[data-owner-payout-result]', done);
+  focusPartnerRow(row);
 });
 
 // ---- Setup --------------------------------------------------------------------
