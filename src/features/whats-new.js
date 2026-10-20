@@ -8,7 +8,7 @@
 export const WHATS_NEW = Object.freeze({
   version: '1.28',
   items: Object.freeze([
-    'Anyone can be a partner, with or without Plus: earn 25% of every Plus purchase made through your link. Help → Partners explains how.',
+    'Anyone can be a partner, with or without Plus: earn a 25% commission on every Plus purchase made through your link. See Partners in How it works.',
     'Insights: the details you see when you point at a chart stay inside its card, on a computer and on a phone.',
     'Team gifts have their own page, with prices, the request form and answers to the questions companies ask.'
   ])
