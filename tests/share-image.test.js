@@ -203,13 +203,15 @@ test('long names and lines are cut to fit instead of running off the image', () 
 test('describeShare and file names', () => {
   const week = buildWeekShareModel({ cells: weekCells(), mainDone: 3, mainTotal: 4, categories: [{ name: 'Deep work', color: '#5f7084', minutes: 90 }], scheduledMinutes: 90, streak: 9, lines: ['Keep it light'] });
   const words = describeShare(week, { locale: 'en-GB' });
-  assert.match(words.replace(/\s/g, ' '), /^Your week of 19–23 October 2026: 4 of 5 days closed, 3 of 4 main outcomes, a 9-day streak, 1h 30m scheduled\.$/);
+  // ICU versions differ on the spaces around a range dash ("19–23" or "19 – 23"): compare without them.
+  const plain = text => text.replace(/\s/g, ' ').replace(/ ?– ?/g, '–');
+  assert.match(plain(words), /^Your week of 19–23 October 2026: 4 of 5 days closed, 3 of 4 main outcomes, a 9-day streak, 1h 30m scheduled\.$/);
   assert.doesNotMatch(words, /Keep it light/);
   assert.match(describeShare(week, { includeLine: true, line: 'Keep it light', locale: 'en-GB' }), /“Keep it light”/);
   assert.equal(shareFileName(week, 'square'), 'daily-planner-week-2026-10-19.png');
   assert.equal(shareFileName(week, 'story'), 'daily-planner-week-2026-10-19-story.png');
   assert.equal(shareFileName({ kind: 'year', year: 2026 }, 'landscape'), 'daily-planner-2026-landscape.png');
-  assert.equal(weekRangeLabel('2026-12-28', '2027-01-01', 'en-GB').replace(/\s/g, ' '), '28 December 2026 – 1 January 2027');
+  assert.equal(plain(weekRangeLabel('2026-12-28', '2027-01-01', 'en-GB')), '28 December 2026–1 January 2027');
   assert.equal(weekRangeLabel('2026-10-23', '2026-10-23', 'en-GB'), '23 October 2026');
 });
 
