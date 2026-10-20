@@ -668,6 +668,8 @@ test('a team request keeps the partner code it came with, and the owner sees it 
     assert.equal('ref' in entry, false, `${String(ref)}: left out`);
   }
   assert.equal(validateTeamRequest(teamBody({ ref: ' CAMILLE ' }), now).entry.ref, 'CAMILLE');
+  // The Teams page says where a request comes from; anything else reads as the welcome page.
+  assert.deepEqual(['teams', 'app', 'landing', 'elsewhere', undefined].map(source => validateTeamRequest(teamBody({ source }), now).entry.source), ['teams', 'app', 'landing', 'landing', 'landing']);
   assert.equal(teamRequestPartnerLine('COACH_ANNA'), 'COACH_ANNA — 10% if this becomes an order');
   assert.equal(teamRequestPartnerLine(''), '');
   const email = teamRequestEmail(validateTeamRequest(teamBody({ ref: 'COACH_ANNA' }), now).entry, 'https://planner.test/admin/');

@@ -131,7 +131,8 @@ export const EVENT_NAMES = new Set([
 export const FEEDBACK_KINDS = new Set(['idea', 'problem', 'praise', 'other']);
 export const DEVICE_KINDS = new Set(['iphone', 'ipad', 'android', 'mac', 'windows', 'linux', 'other']);
 export const TEAM_TIMINGS = new Set(['december-2026', 'january-2027', 'q1-2027', 'later']);
-export const TEAM_SOURCES = new Set(['landing', 'app']);
+// Where a request was sent from: the welcome page (and older Teams pages), the Teams page (1.28) or the planner.
+export const TEAM_SOURCES = new Set(['landing', 'teams', 'app']);
 export const TEAM_PLAN_LABELS = Object.freeze({
   'up-to-10': 'Up to 10 people',
   'up-to-50': 'Up to 50 people',
