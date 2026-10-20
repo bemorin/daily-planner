@@ -35,6 +35,8 @@ await copyTree('welcome');
 await copyTree('legal');
 // Cloudflare Pages reads _redirects from the root of the output (short /privacy, /terms, /cookies links).
 await copyFile('_redirects');
+// …and _headers: pages, scripts and styles revalidate on every visit, so a deploy is never hidden by a cache.
+await copyFile('_headers');
 
 const deploymentConfig = {
   PROJECT_GITHUB_URL: process.env.DAILY_PLANNER_GITHUB_URL || '',

@@ -54,6 +54,9 @@ import { GIFT_REF_RE, giftManageKey, giftRef, importSigningKey, importVerifyKey,
 import { affiliateCode, CHECKOUT_ID_RE, checkoutSeal, checkoutSealValid, createCheckout, CREEM_ITEMS, creemMode, fetchCheckout, fetchTransaction, parseCreemProducts, readCheckout, verifyWebhookSignature } from './creem.js';
 import { CREEM_REASONS, OWNER_SOURCE_PREFIX, readRefundEvent, readTransaction, REFUND_EVENTS, refundNoticeEmail, refundScope, refundWaitingEmail, REVOCATION_NOTE_MAX, revocationTarget, shownScope } from './refunds.js';
 import { currencyForCountry, CURRENCIES, giftPlan, isPersonalGift, PERSONAL_GIFTS, priceCents, TEAM_TIERS, validCurrency } from '../src/lib/pricing.js';
+// The release this API was deployed with (kept in step with package.json by scripts/check.mjs).
+// The dashboard compares it with its own to spot a page served from an old cache.
+import { APP_VERSION } from '../src/config.js';
 
 export const EVENT_NAMES = new Set([
   'onboarding_completed',
@@ -82,8 +85,10 @@ export const EVENT_NAMES = new Set([
   'gift_opened',
   'gift_redeemed',
   'year_plan_completed',
+  'quarter_review_completed',
   'year_review_opened',
   'review_sent',
+  'share_image_created',
   // Usage, counted at most once per day, week or month on a device
   'app_active_day',
   'app_active_week',
@@ -1449,7 +1454,7 @@ export function createPlannerApi({
       const [teamRequests, teamRequestTotals] = teamData || [[], { count: 0, seats: 0 }];
       const [giftRows, giftTotals, purchaseTotals, manualLicenses] = plusData || [[], { count: 0, seats: 0, redeemed: 0, paid: 0 }, { plus: 0, manual: 0 }, []];
       return json(200, {
-        generatedAt: nowIso, sinceDay, eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamRequests, teamRequestTotals, teamRequestsUnavailable: !teamData,
+        version: APP_VERSION, generatedAt: nowIso, sinceDay, eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamRequests, teamRequestTotals, teamRequestsUnavailable: !teamData,
         emailConfigured: mailer.configured, emailTestAvailable: mailer.configured && !!owner, emailDailyLimit: dailyLimit, emailsSentToday, emailsPerSend: EMAILS_PER_SEND,
         gifts: await Promise.all(giftRows.map(gift => adminGift(gift, nowIso))), giftTotals, plusUnavailable: !plusData,
         plus: { purchases: purchaseTotals.plus, manualLicenses: purchaseTotals.manual, recentLicenses: manualLicenses.map(row => ({ id: row.licenseId, note: row.note, createdAt: row.createdAt })) },

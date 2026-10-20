@@ -31,7 +31,7 @@
 
 .plus-mark svg,
 .plus-feature__icon svg,
-.plus-palettes__icon svg,
+.plus-extra__icon svg,
 .plus-step svg,
 .plus-caption__action svg,
 .plus-loop svg,
@@ -74,10 +74,11 @@
 
 .plus-status--header { margin: 12px 0 0; }
 
-/* The yearly ritual: Plan it, Print it, Look back — three tabs over one stage
-   (src/features/plus-cycle.js). Each step owns a colour, like Horizon's kinds. */
+/* The yearly ritual: Plan it, Print it, Check in, Look back — four tabs over
+   one stage (src/features/plus-cycle.js). Each step owns a colour, like
+   Horizon's kinds; the check-in takes the winning habit's. */
 
-.plus-cycle { --step-plan: var(--hz-adventure, #2f6d70); --step-print: var(--accent); --step-review: var(--hz-paint, var(--hz-misogi, #a5522e)); }
+.plus-cycle { --step-plan: var(--hz-adventure, #2f6d70); --step-print: var(--accent); --step-quarter: var(--hz-habit, #4f7350); --step-review: var(--hz-paint, var(--hz-misogi, #a5522e)); }
 
 .plus-step--plan,
 .plus-stage--plan,
@@ -87,17 +88,21 @@
 .plus-stage--print,
 .plus-caption--print { --step-kind: var(--step-print); }
 
+.plus-step--quarter,
+.plus-stage--quarter,
+.plus-caption--quarter { --step-kind: var(--step-quarter); }
+
 .plus-step--review,
 .plus-stage--review,
 .plus-caption--review { --step-kind: var(--step-review); }
 
-.plus-steps { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 15px; background: color-mix(in srgb, var(--soft) 85%, var(--surface)); }
+.plus-steps { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 15px; background: color-mix(in srgb, var(--soft) 85%, var(--surface)); }
 
 .plus-steps__indicator { position: absolute; z-index: 0; border-radius: 11px; background: var(--surface-strong); box-shadow: 0 1px 2px rgba(28, 25, 21, .08), inset 0 0 0 1px var(--line); pointer-events: none; }
 
 .plus-steps__indicator:not([data-ready]) { opacity: 0; }
 
-.plus-step { position: relative; z-index: 1; min-width: 0; min-height: 48px; display: flex; align-items: center; gap: 10px; padding: 6px 12px; border: 0; border-radius: 11px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; text-align: left; transition: color 140ms ease, box-shadow 140ms ease; }
+.plus-step { position: relative; z-index: 1; min-width: 0; min-height: 48px; display: flex; align-items: center; gap: 9px; padding: 6px 11px; border: 0; border-radius: 11px; background: transparent; color: var(--muted); cursor: pointer; font: inherit; text-align: left; transition: color 140ms ease, box-shadow 140ms ease; }
 
 /* Before the indicator has measured itself, the current step still reads as current. */
 .plus-steps:not(:has([data-ready])) .plus-step.is-active { background: var(--surface-strong); box-shadow: inset 0 0 0 1px var(--line); }
@@ -317,7 +322,7 @@
 
 .plus-paper--zoom { cursor: auto; }
 
-/* The sections after the ritual share one rhythm: a title, then one calm surface or list. */
+/* The sections after the ritual share one rhythm: a title, then calm surfaces or a list. */
 .plus-also,
 .plus-upcoming,
 .plus-gifts { margin-top: 34px; }
@@ -325,24 +330,61 @@
 .plus-also__title,
 .plus-upcoming h3 { margin: 0 0 10px; font-size: .9rem; font-weight: 700; letter-spacing: -.015em; }
 
-/* Also with Plus: the palettes, tried on the last weeks of the painted year. */
-.plus-palettes { --plus-kind: var(--hz-keydate, #5d4f8f); display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px 16px; padding: 16px 18px; border-radius: 18px; background: color-mix(in srgb, var(--soft) 60%, var(--surface)); transition: box-shadow 160ms ease; }
+/* Also with Plus: Insights, previewed by its weekday chart, and the palettes,
+   tried on the last weeks of the painted year. One row each, alike. */
+.plus-extras { display: grid; gap: 8px; }
 
-.plus-palettes.is-focus { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--plus-kind) 50%, var(--line)), 0 0 0 4px color-mix(in srgb, var(--plus-kind) 10%, transparent); }
+.plus-extra { --plus-kind: var(--accent); display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 12px 18px; padding: 16px 18px; border-radius: 18px; background: color-mix(in srgb, var(--soft) 60%, var(--surface)); transition: box-shadow 160ms ease; }
 
-.plus-palettes__icon { width: 34px; height: 34px; display: grid; place-items: center; align-self: start; border-radius: 10px; background: color-mix(in srgb, var(--plus-kind) 13%, var(--surface-strong)); color: var(--plus-kind); }
+.plus-extra--insights { --plus-kind: var(--ins-2); }
 
-.plus-palettes__icon svg { width: 18px; height: 18px; }
+.plus-extra--palettes { --plus-kind: var(--hz-keydate, #5d4f8f); }
 
-.plus-palettes__icon .icon-fill { fill: currentColor; stroke: none; }
+.plus-extra.is-focus { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--plus-kind) 50%, var(--line)), 0 0 0 4px color-mix(in srgb, var(--plus-kind) 10%, transparent); }
 
-.plus-palettes__copy { min-width: 0; display: grid; justify-items: start; gap: 3px; }
+.plus-extra__icon { width: 34px; height: 34px; display: grid; place-items: center; align-self: start; border-radius: 10px; background: color-mix(in srgb, var(--plus-kind) 13%, var(--surface-strong)); color: var(--plus-kind); }
 
-.plus-palettes__copy strong { font-size: .84rem; font-weight: 680; letter-spacing: -.01em; }
+.plus-extra__icon svg { width: 18px; height: 18px; }
 
-.plus-palettes__copy small { color: var(--muted); font-size: .74rem; line-height: 1.5; }
+.plus-extra__icon .icon-fill { fill: currentColor; stroke: none; }
 
-.plus-palettes__open { min-height: 30px; margin: 2px 0 0 -10px; color: var(--ink); }
+.plus-extra__copy { min-width: 0; display: grid; justify-items: start; gap: 3px; }
+
+.plus-extra__copy strong { font-size: .84rem; font-weight: 680; letter-spacing: -.01em; }
+
+.plus-extra__copy small { color: var(--muted); font-size: .74rem; line-height: 1.5; }
+
+.plus-extra__open { min-height: 30px; margin: 2px 0 0 -10px; color: var(--ink); }
+
+/* What Insights finds in this planner's last weeks, in its own words. */
+.plus-extra__finding { display: grid; gap: 2px; margin-top: 5px; padding-left: 10px; border-left: 2px solid var(--ins-1); color: var(--ink); font-size: .76rem; font-weight: 620; line-height: 1.45; }
+
+.plus-extra__tag { color: var(--faint); font-size: .6rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+
+/* Days that work, in miniature: per weekday, days closed and main outcome done. */
+.plus-preview--insights { display: grid; justify-items: center; gap: 7px; }
+
+.plus-rhythm { display: grid; grid-template-columns: repeat(7, 15px); gap: 5px; }
+
+.plus-rhythm__day { display: grid; justify-items: center; gap: 4px; }
+
+.plus-rhythm__bars { height: 50px; display: flex; align-items: flex-end; gap: 2px; padding-bottom: 1px; border-bottom: 1px solid var(--ins-grid, var(--line)); }
+
+.plus-rhythm__bars i { width: 6px; height: var(--v); min-height: 0; border-radius: 2px 2px 1px 1px; background: var(--ins-1); }
+
+.plus-rhythm__bars i.is-mit { background: var(--ins-2); }
+
+.plus-rhythm__day.is-rest .plus-rhythm__bars i { opacity: .4; }
+
+.plus-rhythm__day b { color: var(--faint); font-size: .58rem; font-weight: 700; line-height: 1; }
+
+.plus-rhythm__key { display: flex; gap: 10px; color: var(--muted); font-size: .58rem; font-weight: 650; white-space: nowrap; }
+
+.plus-rhythm__key > span { display: inline-flex; align-items: center; gap: 4px; }
+
+.plus-rhythm__key i { width: 7px; height: 7px; border-radius: 2px; background: var(--ins-1); }
+
+.plus-rhythm__key i.is-mit { background: var(--ins-2); }
 
 .plus-preview--palettes { display: flex; align-items: center; gap: 14px; }
 
@@ -438,7 +480,7 @@
 
 .plus-bar__price strong { font-size: 1.2rem; font-weight: 720; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
 
-.plus-bar__price span { color: var(--muted); font-size: .78rem; font-weight: 620; }
+.plus-bar__price span { color: var(--muted); font-size: .78rem; font-weight: 620; white-space: nowrap; }
 
 .plus-bar .plus-cta__buy { min-width: 168px; }
 
@@ -510,7 +552,11 @@
 
 .plus-feature--year-plan { --plus-kind: var(--hz-adventure, #2f6d70); }
 
+.plus-feature--quarter-review { --plus-kind: var(--hz-habit, #4f7350); }
+
 .plus-feature--year-review { --plus-kind: var(--hz-misogi, #a5522e); }
+
+.plus-feature--insights { --plus-kind: var(--ins-2); }
 
 .plus-feature--paint-palettes { --plus-kind: var(--hz-keydate, #5d4f8f); }
 
@@ -524,9 +570,10 @@
 
 .plus-feature small { display: block; margin-top: 3px; color: var(--muted); font-size: .74rem; line-height: 1.5; }
 
-.plus-features--compact { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; text-align: left; }
+/* Three to a row; a shorter last row sits in the middle. */
+.plus-features--compact { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; text-align: left; }
 
-.plus-features--compact .plus-feature { grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; }
+.plus-features--compact .plus-feature { flex: 0 1 calc((100% - 12px) / 3); min-width: 0; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; }
 
 .plus-features--compact .plus-feature__icon { width: 30px; height: 30px; border-radius: 9px; }
 
@@ -623,8 +670,9 @@
 .reset-plus-note { margin: 10px 0 0; color: var(--muted); font-size: .76rem; }
 
 @media (max-width: 680px) {
-  .plus-palettes { grid-template-columns: 34px minmax(0, 1fr); }
+  .plus-extra { grid-template-columns: 34px minmax(0, 1fr); }
   .plus-preview--palettes { grid-column: 1 / -1; justify-content: space-between; padding-top: 2px; }
+  .plus-preview--insights { grid-column: 1 / -1; grid-template-columns: auto auto; justify-content: space-between; align-items: end; padding-top: 2px; }
   .plus-swatches { grid-template-columns: repeat(3, 44px); gap: 6px; }
   .plus-swatch { min-height: 32px; }
   .plus-session__main { grid-template-columns: minmax(0, 1fr); }
@@ -647,7 +695,7 @@
   .plus-also,
   .plus-upcoming,
   .plus-gifts { margin-top: 30px; }
-  .plus-palettes { padding: 14px; }
+  .plus-extra { padding: 14px; }
   .plus-loop { justify-content: flex-start; text-align: left; }
   .plus-gifts__row { flex-direction: column; }
   .plus-gifts .plus-gifts__buy { width: 100%; justify-content: flex-start; }
@@ -655,8 +703,8 @@
 
 @media (max-width: 620px) {
   .plus-steps { gap: 2px; padding: 3px; border-radius: 13px; }
-  .plus-step { min-height: 46px; gap: 7px; padding: 6px 8px; }
-  .plus-step__number { width: 20px; height: 20px; font-size: .64rem; }
+  .plus-step { min-height: 46px; justify-content: center; gap: 7px; padding: 6px 6px; text-align: center; }
+  .plus-step__number { display: none; }
   .plus-step__copy strong { font-size: .8rem; }
   .plus-step__copy small { font-size: .64rem; }
   .plus-caption__title { font-size: .96rem; }
@@ -681,14 +729,15 @@
   .plus-zoom__title h2 { font-size: .88rem; }
 }
 
-/* The smallest phones: the three steps keep one row, without their numbers. */
+/* The smallest phones: the four steps keep one row. */
 @media (max-width: 380px) {
-  .plus-step { justify-content: center; text-align: center; }
-  .plus-step__number { display: none; }
+  .plus-step { padding-inline: 3px; }
+  .plus-step__copy strong { font-size: .76rem; }
+  .plus-step__copy small { font-size: .6rem; }
 }
 
 @media (max-width: 560px) {
-  .plus-features--compact { grid-template-columns: minmax(0, 1fr); }
+  .plus-features--compact .plus-feature { flex-basis: 100%; }
   .plus-redeem__form,
   .plus-link { flex-direction: column; }
   .plus-sheet h2,
@@ -697,7 +746,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .plus-spinner { animation: none; border-color: var(--line-strong); }
-  .plus-palettes,
+  .plus-extra,
   .plus-step,
   .plus-step__number,
   .plus-weeks i { transition: none; }

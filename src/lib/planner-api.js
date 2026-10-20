@@ -40,8 +40,10 @@ export const COUNTED_EVENTS = Object.freeze([
   ['gift_opened', 'opened a gift link'],
   ['gift_redeemed', 'activated a gift'],
   ['year_plan_completed', 'finished planning a year'],
+  ['quarter_review_completed', 'finished a quarter check-in'],
   ['year_review_opened', 'opened a year in review'],
   ['review_sent', 'left a review that may be quoted'],
+  ['share_image_created', 'made an image of their week or year to share'],
   // Usage, counted at most once per day, week or month on a device (see
   // trackOncePer): how many devices use the planner, and which parts of it.
   ['app_active_day', 'opened the planner on a day'],

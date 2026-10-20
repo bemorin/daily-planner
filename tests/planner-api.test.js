@@ -286,7 +286,7 @@ test('the server accepts exactly the events the planner and the landing page may
 test('Daily Planner Plus and team gift events are allow-listed anonymous counts', async () => {
   const store = createMemoryStore();
   const api = createPlannerApi({ store, now: fixedNow });
-  const names = ['plus_modal_opened', 'plus_checkout_clicked', 'plus_unlocked', 'gift_opened', 'gift_redeemed', 'year_plan_completed', 'year_review_opened', 'pack_checkout_clicked', 'gift_link_copied'];
+  const names = ['plus_modal_opened', 'plus_checkout_clicked', 'plus_unlocked', 'gift_opened', 'gift_redeemed', 'year_plan_completed', 'quarter_review_completed', 'year_review_opened', 'pack_checkout_clicked', 'gift_link_copied'];
   for (const name of names) {
     assert.ok(EVENT_NAMES.has(name), name);
     assert.equal((await api(post('events', { name, version: '1.20.0' }))).status, 204, name);

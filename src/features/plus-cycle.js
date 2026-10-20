@@ -4,15 +4,17 @@ import { progressIcon } from './progress-view.js';
 import { defaultPlanYear } from './year-plan.js';
 import { buildYearPrintModel, renderYearPrint } from './year-print.js';
 import { buildYearReview, defaultReviewYear, renderYearReviewPrint } from './year-review.js';
-import { hasOwnReview, hasPrintablePlan, samplePrintModel, sampleReview } from './plus-samples.js';
+import { buildQuarterReview } from './quarter-review.js';
+import { fitQuarterAnswers, renderQuarterPrint } from './quarter-print.js';
+import { hasOwnReview, hasPrintablePlan, ownQuarter, quarterClosed, sampleQuarterReview, samplePrintModel, sampleReview } from './plus-samples.js';
 import { PAGE_SIZE, paperScale, planPreview, renderPaper, renderPlanSession } from './plus-previews.js';
 
 /**
  * The yearly ritual Plus gives, in the Daily Planner Plus dialog: Plan it,
- * Print it, Look back — three tabs over one stage. Plan shows the guided
- * session; Print and Look back show the real printed page on a sheet of paper
- * (the person's own when there is enough of it, otherwise a labelled sample),
- * which can be enlarged inside the dialog.
+ * Print it, Check in, Look back — four tabs over one stage. Plan shows the
+ * guided session; Print, Check in and Look back show the real printed page on
+ * a sheet of paper (the person's own when there is enough of it, otherwise a
+ * labelled sample), which can be enlarged inside the dialog.
  *
  * The step model and the copy are pure (unit-tested); createPlusCycle() renders
  * and binds the section each time the dialog draws its overview.
@@ -21,12 +23,13 @@ import { PAGE_SIZE, paperScale, planPreview, renderPaper, renderPlanSession } fr
 export const CYCLE_STEPS = Object.freeze([
   Object.freeze({ id: 'plan', feature: 'year-plan', number: 1, label: 'Plan it', short: 'December', when: 'Each December — or whenever you start' }),
   Object.freeze({ id: 'print', feature: 'year-print', number: 2, label: 'Print it', short: 'All year', when: 'All year, on your desk' }),
-  Object.freeze({ id: 'review', feature: 'year-review', number: 3, label: 'Look back', short: 'Year end', when: 'When the year ends' })
+  Object.freeze({ id: 'quarter', feature: 'quarter-review', number: 3, label: 'Check in', short: 'Each quarter', when: 'As each quarter ends' }),
+  Object.freeze({ id: 'review', feature: 'year-review', number: 4, label: 'Look back', short: 'Year end', when: 'When the year ends' })
 ]);
 
-/** The step a feature opens on: the review for "Your year in review", otherwise Plan it. */
+/** The step a feature opens on: its own (check-ins, the year in review), otherwise Plan it. */
 export function cycleStepFor(feature = '') {
-  return feature === 'year-review' ? 'review' : 'plan';
+  return CYCLE_STEPS.find(step => step.feature === feature && step.id !== 'print')?.id || 'plan';
 }
 
 /** The step a key moves to from `id` in the tab list (arrows wrap, Home/End), or '' for other keys. */
@@ -51,6 +54,11 @@ export function cycleCopy(id, { year, active = false } = {}) {
       note: active ? '' : 'Printing the year is free in Horizon. Plus plans it with you.',
       action: { id: 'print', label: 'Print the year', icon: 'printer' }
     },
+    quarter: {
+      title: 'Ten guided minutes as each quarter ends.',
+      text: 'See the days you closed and how your winning habit held, answer two honest questions and set the habit for the next three months. Then print the quarter on one page, with room to write by hand.',
+      action: { id: 'quarter', label: 'Open the check-in', icon: 'quarter' }
+    },
     review: {
       title: 'Your year in review, on one page.',
       text: 'Days closed, the painted year, your best streak, trophies, where the time went, how the Misogi, adventures and habits turned out, and a few memories. Print it and keep it with the plan.',
@@ -65,6 +73,8 @@ const ICONS = {
   sparkle: '<path d="M12 3.5c.5 3.9 2.6 6 6.5 6.5-3.9.5-6 2.6-6.5 6.5-.5-3.9-2.6-6-6.5-6.5 3.9-.5 6-2.6 6.5-6.5Z"/><path d="M18.5 15.5c.2 1.5 1 2.3 2.5 2.5-1.5.2-2.3 1-2.5 2.5-.2-1.5-1-2.3-2.5-2.5 1.5-.2 2.3-1 2.5-2.5Z"/>',
   printer: '<path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z"/>',
   review: '<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M8.5 8h7M8.5 11.5h7M8.5 15h4"/>',
+  quarter: '<rect x="4" y="5" width="16" height="15" rx="2.2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="m9.3 14.7 1.9 1.9 3.6-3.8"/>',
+  arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   enlarge: '<path d="M14.5 4.5h5v5M19.5 4.5l-6 6M9.5 19.5h-5v-5M4.5 19.5l6-6"/>',
   loop: '<path d="M19.5 12a7.5 7.5 0 0 1-13 5.1"/><path d="M4.5 12a7.5 7.5 0 0 1 13-5.1"/><path d="M17.8 3.6v3.6h-3.6M6.2 20.4v-3.6h3.6"/>',
   close: '<path d="m7 7 10 10M17 7 7 17"/>',
@@ -73,8 +83,8 @@ const ICONS = {
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
 // Enlarged, a page fitted to the width smaller than this shows at its printed size instead.
 const ZOOM_FIT_FLOOR = 0.8;
-// The review's own icons: progress-view's set, plus the tick of its checkboxes.
-const reviewIcon = name => (name === 'check' ? `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.check}</svg>` : progressIcon(name));
+// The printed pages' own icons: progress-view's set, plus the tick of their checkboxes and an arrow.
+const reviewIcon = name => (name === 'check' || name === 'arrowRight' ? `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>` : progressIcon(name));
 
 // Hand-drawn marks for the printed year, in their own little boxes (see placePen).
 const PEN = {
@@ -133,13 +143,50 @@ export function createPlusCycle({ modal, data, palette = () => 'terracotta', onA
     return cache.review;
   }
 
+  /**
+   * The quarter check-in, printed: the person's own latest quarter with enough
+   * closed days (the one a check-in opens on, or one of the three before it),
+   * the sample quarter otherwise.
+   */
+  function quarterSource() {
+    if (cache.quarter) return cache.quarter;
+    const now = today();
+    const source = read().quarter || null;
+    let review = null;
+    if (source) {
+      const at = attempt(() => ownQuarter({ today: now, minYear: source.minYear?.(), closedIn: ({ year, quarter }) => quarterClosed(source.progress(year), quarter) }));
+      if (at) {
+        review = attempt(() => buildQuarterReview({
+          year: at.year,
+          quarter: at.quarter,
+          progress: source.progress(at.year),
+          yearData: source.yearData(at.year),
+          nextYearData: at.quarter === 3 ? source.yearData(at.year + 1) : null,
+          readDay: source.readDay,
+          categoryFor: source.categoryFor,
+          weekStartsOn: source.weekStartsOn?.() ?? 1,
+          today: now
+        }));
+      }
+    }
+    const own = !!review;
+    const shown = review || sampleQuarterReview(planYear() - 1, { weekStartsOn: source?.weekStartsOn?.() ?? 1 });
+    const html = attempt(() => renderQuarterPrint(shown, { icon: reviewIcon, palette: palette() })) || '';
+    cache.quarter = own
+      ? { kind: 'quarter', own: true, html, tag: `Your ${shown.label}${shown.isCurrent ? ' so far' : ''}`, title: `Your ${shown.label} check-in on one page` }
+      : { kind: 'quarter', own: false, html, tag: 'Sample', title: 'A sample quarter check-in on one page' };
+    return cache.quarter;
+  }
+
+  const SOURCES = { print: printSource, quarter: quarterSource, review: reviewSource };
+
   function stage(id) {
     const year = planYear();
     if (id === 'plan') {
       const plan = planPreview(read().plan || null);
       return `<span class="plus-tag plus-tag--own">Your ${year}${plan.set ? ` · ${plan.set} of ${plan.total} parts set` : ''}</span>${renderPlanSession(plan, { year })}`;
     }
-    const source = id === 'print' ? printSource() : reviewSource();
+    const source = SOURCES[id]();
     return `<span class="plus-tag${source.own ? ' plus-tag--own' : ''}">${esc(source.tag)}</span>
       <div class="plus-stage__paper" data-plus-enlarge-area>${renderPaper(source.html, { kind: source.kind, palette: palette() })}</div>
       <button class="plus-stage__enlarge" type="button" data-plus-enlarge aria-label="${escAttr(`Enlarge: ${source.title}`)}">${icon('enlarge')}<span>Enlarge</span></button>`;
@@ -203,10 +250,17 @@ export function createPlusCycle({ modal, data, palette = () => 'terracotta', onA
     return !!sizePaper(paper, area.clientWidth, area.clientHeight);
   }
 
-  /** A tick on a milestone, a circled date and a line written by hand, over the printed year (decorative). */
+  /**
+   * Pen marks over a printed page (decorative): on the year, a tick on a
+   * milestone, a circled date and a line written by hand; on a quarter, a line
+   * written by hand under each answer.
+   */
   function placePen(paper) {
     const page = paper?.querySelector('.plus-paper__page');
-    if (!page || paper.dataset.plusPaper !== 'year' || page.querySelector('.plus-pen')) return;
+    const kind = paper?.dataset.plusPaper;
+    // A quarter's answers are sized to its page as they are when printed.
+    if (kind === 'quarter') fitQuarterAnswers(page?.querySelector('.print-sheet--quarter'));
+    if (!page || (kind !== 'year' && kind !== 'quarter') || page.querySelector('.plus-pen')) return;
     // Layout offsets, not client rects: they don't depend on the page's scale, or on when it was applied.
     const box = el => {
       let x = 0;
@@ -214,6 +268,25 @@ export function createPlusCycle({ modal, data, palette = () => 'terracotta', onA
       for (let node = el; node && node !== page; node = node.offsetParent) { x += node.offsetLeft; y += node.offsetTop; }
       return { x, y, w: el.offsetWidth, h: el.offsetHeight };
     };
+    // Each mark is scaled evenly from its box to `width` page pixels; the ink stays 1.6 px wide.
+    const mark = (name, x, y, width, delay) => {
+      const k = width / PEN[name].box[0];
+      return `<path class="plus-pen__line" pathLength="1" style="--pen-delay:${delay}ms" stroke-width="${(1.6 / k).toFixed(3)}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k.toFixed(4)})" d="${PEN[name].d}"/>`;
+    };
+    const draw = marks => {
+      if (!marks.length) return;
+      page.insertAdjacentHTML('beforeend', `<svg class="plus-pen${prefersReducedMotion() ? ' is-still' : ''}" viewBox="0 0 ${PAGE_SIZE.width.toFixed(1)} ${(page.offsetHeight || PAGE_SIZE.height).toFixed(1)}" aria-hidden="true">${marks.join('')}</svg>`);
+    };
+    if (kind === 'quarter') {
+      // The first ruled line left whole under each answer (a long answer can leave none).
+      const lines = [...page.querySelectorAll('.qv-answer .qv-lines')].map(rules => [...rules.querySelectorAll('i')].find(rule => rule.offsetTop - rules.offsetTop + rule.offsetHeight <= rules.clientHeight)).filter(Boolean);
+      draw(lines.slice(0, 2).map((line, index) => {
+        const b = box(line);
+        const width = Math.min(b.w * (index ? 0.46 : 0.62), 190);
+        return mark('scribble', b.x + 2, b.y + b.h - width * 0.13, width, 300 + index * 700);
+      }));
+      return;
+    }
     const milestones = [...page.querySelectorAll('.pyr-card--misogi .pyr-list .pyr-row')];
     const tickRow = milestones.find(row => row.querySelector('.pyr-row__text') && !row.classList.contains('is-done'));
     const tickBox = (tickRow || page.querySelector('.pyr-misogi:not(.is-done)'))?.querySelector('.pyr-box');
@@ -222,17 +295,11 @@ export function createPlusCycle({ modal, data, palette = () => 'terracotta', onA
     const day = single || page.querySelector('.pyr-day.is-keydate, .pyr-day.is-milestone') || page.querySelector('.pyr-day:not(.is-outside)');
     const blankRow = [...page.querySelectorAll('.pyr-card--misogi .pyr-row, .pyr-card--adventures .pyr-row')].find(row => row.querySelector('.pyr-blank:not(.pyr-blank--date)'));
     const line = blankRow?.querySelector('.pyr-blank:not(.pyr-blank--date)');
-    // Each mark is scaled evenly from its box to `width` page pixels; the ink stays 1.6 px wide.
-    const mark = (name, x, y, width, delay) => {
-      const k = width / PEN[name].box[0];
-      return `<path class="plus-pen__line" pathLength="1" style="--pen-delay:${delay}ms" stroke-width="${(1.6 / k).toFixed(3)}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${k.toFixed(4)})" d="${PEN[name].d}"/>`;
-    };
     const marks = [];
     if (tickBox) { const b = box(tickBox); const width = b.w * 2.1; marks.push(mark('tick', b.x - b.w * 0.2, b.y + b.h * 0.6 - width * 0.8, width, 250)); }
     if (day) { const b = box(day); const width = Math.max(b.w, b.h * 1.3) * 1.75; marks.push(mark('circle', b.x + b.w / 2 - width / 2, b.y + b.h / 2 - width * 0.38, width, 650)); }
     if (line) { const b = box(line); const width = Math.min(b.w * 0.6, 150); marks.push(mark('scribble', b.x + 1, b.y + b.h - width * 0.12, width, 1000)); }
-    if (!marks.length) return;
-    page.insertAdjacentHTML('beforeend', `<svg class="plus-pen${prefersReducedMotion() ? ' is-still' : ''}" viewBox="0 0 ${PAGE_SIZE.width.toFixed(1)} ${(page.offsetHeight || PAGE_SIZE.height).toFixed(1)}" aria-hidden="true">${marks.join('')}</svg>`);
+    draw(marks);
   }
 
   function settle(root = host) {
@@ -243,7 +310,7 @@ export function createPlusCycle({ modal, data, palette = () => 'terracotta', onA
     if (zoom || current === 'plan') return;
     const dialog = modal();
     if (!dialog) return;
-    const source = current === 'print' ? printSource() : reviewSource();
+    const source = SOURCES[current]();
     const layer = document.createElement('div');
     layer.className = 'plus-zoom';
     layer.setAttribute('role', 'dialog');

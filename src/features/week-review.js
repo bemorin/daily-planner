@@ -1,5 +1,24 @@
 import { esc } from '../lib/text.js';
+import { dateFromKey } from '../lib/dates.js';
 import { durationLabel } from '../domain/schedule-time.js';
+import { activeWeekdays } from '../domain/planning-calendar.js';
+import { buildProgressModel } from './progress-model.js';
+import { buildWeekShareModel, canShare } from './share-image.js';
+import { openShareDialog } from './share-dialog.js';
+
+const SHARE_CELL = { closed: 'is-closed', missed: 'is-missed', joker: 'is-joker', rest: 'is-rest', before: 'is-before', future: 'is-future', today: 'is-today' };
+const SHARE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.8v10.7"/><path d="m8.2 7.4 3.8-3.6 3.8 3.6"/><path d="M8.6 10.6H7.2a2 2 0 0 0-2 2v5.6a2 2 0 0 0 2 2h9.6a2 2 0 0 0 2-2v-5.6a2 2 0 0 0-2-2h-1.4"/></svg>';
+
+/** “Share your week”: the closed week as an image (share-dialog.js). Hidden until a day of the week is closed. */
+export function renderWeekShareCta(share) {
+  if (!canShare(share)) return '';
+  const cells = share.days.map(day => `<i class="hz-paint__cell ${SHARE_CELL[day.state] || ''}${day.state === 'closed' ? ` is-level-${day.level}` : ''}"></i>`).join('');
+  return `<div class="week-share"><button type="button" class="week-share__button" data-week-share aria-label="Share your week" aria-describedby="week-share-note">
+    <span class="week-share__strip" aria-hidden="true">${cells}</span>
+    <span class="week-share__copy"><strong>Share your week</strong><small id="week-share-note">A clean image for a feed or a story, made on this device. Nothing is uploaded.</small></span>
+    <span class="week-share__go" aria-hidden="true">${SHARE_ICON}<span>Share</span></span>
+  </button></div>`;
+}
 
 export function createWeekReviewFeature({
   getDate,
@@ -16,6 +35,40 @@ export function createWeekReviewFeature({
   function isLastPlanningDay(inputDate) {
     const days = planningWeekDates(inputDate);
     return isPlanningDay(inputDate) && !!days.length && ymd(days[days.length - 1]) === ymd(inputDate);
+  }
+
+  let lastShare = null;
+
+  /** The week's planning days as painted cells, with the streak, from the same model as Progress. */
+  function weekShareModel(inputDate, review) {
+    try {
+      const days = planningWeekDates(inputDate);
+      if (!days.length) return null;
+      const settings = getSettings();
+      const currentKey = ymd(getDate());
+      const getRecord = key => (key === currentKey ? getState() : loadStateForDate(dateFromKey(key)));
+      const planningDays = activeWeekdays(settings);
+      const models = new Map();
+      const progress = year => {
+        if (!models.has(year)) models.set(year, buildProgressModel({ year, today: new Date(), planningDays, getRecord, yearData: settings.horizon?.years?.[year] || null }));
+        return models.get(year);
+      };
+      const cells = days.map(day => {
+        const key = ymd(day);
+        return progress(day.getFullYear()).months[day.getMonth()].days.find(cell => cell.key === key) || { key, planning: true };
+      });
+      return buildWeekShareModel({
+        cells,
+        mainDone: review.mainDone,
+        mainTotal: review.mainTotal,
+        categories: review.categories.map(item => ({ name: item.cat.name, color: item.cat.color, minutes: item.minutes })),
+        scheduledMinutes: review.scheduledMinutes,
+        streak: progress(days[days.length - 1].getFullYear()).streak.current,
+        lines: review.lessons
+      });
+    } catch (_) {
+      return null;
+    }
   }
 
   function weekReviewData(inputDate) {
@@ -55,7 +108,7 @@ export function createWeekReviewFeature({
     const allCategories = [...categoryMinutes.values()].sort((a, b) => b.minutes - a.minutes);
     const scheduledMinutes = allCategories.reduce((total, item) => total + item.minutes, 0);
 
-    return {
+    const review = {
       mainDone,
       mainTotal,
       carried,
@@ -66,6 +119,8 @@ export function createWeekReviewFeature({
       scheduledMinutes,
       lessons: lessons.slice(-5)
     };
+    review.share = weekShareModel(inputDate, review);
+    return review;
   }
 
   function renderWeekReviewSummary(review) {
@@ -94,7 +149,17 @@ export function createWeekReviewFeature({
     const unresolved = unresolvedCount ? `<section class="week-review-section week-review-section--unresolved"><div class="week-review-section__head"><span class="week-review-section__title">Still unresolved <em>${unresolvedCount}</em></span><button class="week-review-inline-action" type="button" data-review-open-work><span>Review all</span><span aria-hidden="true">→</span></button></div>${review.postponed.length ? `<div class="week-review-list">${review.postponed.map(item => `<p><span>${esc(item.text)}</span><em>carried ${item.count}×</em></p>`).join('')}</div>` : `<p class="week-review-empty-note">${unresolvedCopy}</p>`}</section>` : '';
     const completed = review.moved.length ? `<section class="week-review-section"><div class="week-review-section__head"><span>Completed outcomes</span></div><div class="week-review-list">${review.moved.map(item => `<p><span>${esc(item)}</span></p>`).join('')}</div></section>` : '';
     const lessons = review.lessons.length ? `<section class="week-review-section"><div class="week-review-section__head"><span>Lessons worth keeping</span></div><div class="week-review-list">${review.lessons.map(item => `<p><span>${esc(item)}</span></p>`).join('')}</div></section>` : '';
-    return `${metrics}${time}${unresolved}${completed}${lessons}`;
+    lastShare = canShare(review.share) ? review.share : null;
+    return `${metrics}${time}${unresolved}${completed}${lessons}${renderWeekShareCta(review.share)}`;
+  }
+
+  // The summary is re-rendered as innerHTML, so its share button is handled by delegation.
+  if (typeof document !== 'undefined') {
+    document.addEventListener('click', event => {
+      const button = event.target.closest?.('[data-week-share]');
+      if (!button || !lastShare) return;
+      openShareDialog({ model: lastShare, title: 'Share your week', eyebrow: 'Weekly review', opener: button });
+    });
   }
 
   return { isLastPlanningDay, weekReviewData, renderWeekReviewSummary };

@@ -5,10 +5,10 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { LANDING_EVENTS } from '../src/lib/planner-api.js';
-import { PERSONAL_GIFTS, PLUS_UPCOMING, TEAM_QUOTE, TEAM_TIERS } from '../src/lib/pricing.js';
+import { PERSONAL_GIFTS, PLUS_FEATURES, PLUS_UPCOMING, TEAM_QUOTE, TEAM_TIERS } from '../src/lib/pricing.js';
 import {
   PERSONAL_SEATS_MAX, TEAM_ROWS, buyState, checkoutUrl, currencyLine, defaultPlan, giftAudience, giftPageParams, isDefaultCompany,
-  lowestPerPerson, pageCurrency, perPerson, personalOffer, planForPeople, planRow, readCheckoutOptions, statusTone, tierLabel, tierPrice
+  lowestPerPerson, pageCurrency, perPerson, personalOffer, planForPeople, planRow, readCheckoutOptions, statusTone, tierLabel, tierPrice, upcomingSentence
 } from '../welcome/landing-model.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -77,11 +77,41 @@ test('only a web address is opened as the checkout', () => {
 });
 
 test('every promised Plus feature has a status the page can style', () => {
-  assert.ok(PLUS_UPCOMING.length > 0);
   for (const next of PLUS_UPCOMING) assert.notEqual(statusTone(next.status), 'other', `${next.id}: ${next.status}`);
   assert.equal(statusTone('Planned'), 'planned');
   assert.equal(statusTone(' exploring '), 'exploring');
   assert.equal(statusTone('Someday'), 'other');
+});
+
+test('nothing is promised for now: the page hides “Coming to Plus” everywhere, and can show it again', async () => {
+  assert.equal(PLUS_UPCOMING.length, 0, 'owner’s decision (1.25): nothing promised');
+  assert.equal(upcomingSentence(PLUS_UPCOMING), '');
+  assert.equal(upcomingSentence(undefined), '');
+  const later = [{ title: 'A', status: 'Planned' }, { title: 'B', status: 'Exploring' }, { title: 'C', status: 'Planned' }, { title: 'D' }];
+  assert.equal(upcomingSentence(later), 'Planned: “A” and “C”. Exploring: “B”. Coming: “D”.');
+  const page = await readFile(join(root, 'welcome/index.html'), 'utf8');
+  // Written hidden, so nothing flashes before landing.js runs; it shows them only when PLUS_UPCOMING has items.
+  assert.equal((page.match(/<section class="(?:soon soon--wide|teaser)"[^>]*data-plus-soon hidden>/g) || []).length, 2);
+  assert.match(page, /<tbody class="cmp__soon" data-compare-upcoming hidden>/);
+  assert.match(page, /<span data-faq-upcoming hidden><\/span>/);
+  assert.doesNotMatch(page, /Sync without Google|Your calendar beside your day|An evening nudge|chip--planned|chip--exploring/, 'no promise is written into the page');
+  assert.doesNotMatch(page, /planned for Plus/);
+  const script = await readFile(join(root, 'welcome/landing.js'), 'utf8');
+  assert.match(script, /\[data-plus-soon\], \[data-compare-upcoming\], \[data-faq-upcoming\]'\)\.forEach\(node => \{ node\.hidden = !promised; \}\)/);
+});
+
+test('the landing page names every Plus feature, and sharing as free', async () => {
+  const page = await readFile(join(root, 'welcome/index.html'), 'utf8');
+  for (const feature of PLUS_FEATURES) assert.ok(page.includes(feature.title), feature.title);
+  const ritual = page.slice(page.indexOf('<ol class="ritual__steps"'), page.indexOf('</ol>', page.indexOf('<ol class="ritual__steps"')));
+  assert.deepEqual([...ritual.matchAll(/<\/span>([^<]+)<\/b>/g)].map(match => match[1]), ['Plan it', 'Print it', 'Check in', 'Look back']);
+  assert.deepEqual([...page.matchAll(/<p class="ritual-tag">([^<]+)<\/p>/g)].map(match => match[1]), ['Step 1 · Plan it', 'Step 2 · Print it', 'Step 3 · Check in', 'Step 4 · Look back', 'Also with Plus']);
+  const free = page.slice(page.indexOf('<tbody>', page.indexOf('Your year</th>') - 200), page.indexOf('</tbody>', page.indexOf('Your year</th>')));
+  assert.match(free, /Share your week and your year as an image/);
+  const plus = page.slice(page.indexOf('<tbody class="cmp__plus">'), page.indexOf('</tbody>', page.indexOf('<tbody class="cmp__plus">')));
+  assert.match(plus, /Quarterly check-ins/);
+  assert.match(plus, /Insights/);
+  assert.match(page, /<summary>Can I share my week or my year\?<\/summary>/);
 });
 
 test('the gift page knows when no name was typed at checkout', () => {

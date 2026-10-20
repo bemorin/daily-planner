@@ -1,4 +1,5 @@
 import { qs, qsa } from '../lib/dom.js';
+import { ymdKey } from '../lib/dates.js';
 import { esc, escAttr, safeUrl } from '../lib/text.js';
 import { activatePlusToken, hasPlus, isCheckoutReference, normalizeGiftCode, onPlusChange, parsePlusInput, plusAvailable, plusLicense, plusSettings, plusStatusLine } from '../lib/plus.js';
 import { CURRENCIES, PERSONAL_GIFTS, PLUS_PRICE, PLUS_UPCOMING, detectCurrency, formatMoney, isPersonalGift, validCurrency } from '../lib/pricing.js';
@@ -7,6 +8,7 @@ import { burst, panelEnter, pulse } from '../ui/motion.js';
 import { readPaint, resolvePaint } from './paint-palettes.js';
 import { paintRows, recentWeeks, renderPaletteTry } from './plus-previews.js';
 import { createPlusCycle, cycleStepFor } from './plus-cycle.js';
+import { renderRhythmTry, rhythmPreview } from './plus-insights.js';
 import { defaultPlanYear } from './year-plan.js';
 
 /**
@@ -14,11 +16,11 @@ import { defaultPlanYear } from './year-plan.js';
  *
  * One dialog shows, in turn: what Plus adds — the offer beside the title (the
  * price, Get Plus: a Creem checkout, and a field for a gift link, code or
- * licence), the yearly ritual it gives (Plan it, Print it, Look back:
- * plus-cycle.js, with the real printed pages), the palettes and what is coming
- * to Plus at no extra cost, with Get Plus in a bar once the offer has scrolled
- * away — or, with Plus, a calm "You have Plus" whose steps open each feature
- * and a bar with Done; a gift ("A gift from Acme Studio"), a purchase being
+ * licence), the yearly ritual it gives (Plan it, Print it, Check in, Look
+ * back: plus-cycle.js, with the real printed pages), Insights and the
+ * palettes, what is coming to Plus at no extra cost (while anything is), with
+ * Get Plus in a bar once the offer has scrolled away — or, with Plus, a calm
+ * "You have Plus" whose steps and rows open each feature and a bar with Done; a gift ("A gift from Acme Studio"), a purchase being
  * confirmed, a calm explanation when something can't be done, and a small
  * celebration once Plus is active.
  *
@@ -41,6 +43,8 @@ const ICONS = {
   spark: '<path d="M12 3.6 13.9 9l5.5 1.9-5.5 1.9L12 18.3l-1.9-5.5-5.5-1.9L10.1 9Z"/><path d="M18.6 3.8v3.4M16.9 5.5h3.4"/>',
   plan: '<path d="M4 6.5 9 4.5l6 2 5-2v13l-5 2-6-2-5 2Z"/><path d="M9 4.5v13M15 6.5v13"/>',
   review: '<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M8.5 8h7M8.5 11.5h7M8.5 15h4"/>',
+  quarter: '<rect x="4" y="5" width="16" height="15" rx="2.2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="m9.3 14.7 1.9 1.9 3.6-3.8"/>',
+  chart: '<path d="M4 20h16"/><path d="M7.5 16.5v-5M12 16.5V6.5M16.5 16.5v-8"/>',
   paint: '<path d="M12 3.8a8.2 8.2 0 1 0 0 16.4c1.3 0 1.9-.9 1.9-1.8 0-1.2-1-1.6-1-2.6 0-1 .8-1.6 1.8-1.6h1.8a3.5 3.5 0 0 0 3.5-3.5c0-3.8-3.6-6.9-8-6.9Z"/><circle cx="7.8" cy="11" r="1" class="icon-fill"/><circle cx="10.3" cy="7.6" r="1" class="icon-fill"/><circle cx="14.6" cy="7.8" r="1" class="icon-fill"/>',
   gift: '<rect x="4" y="9" width="16" height="11" rx="1.6"/><path d="M3 9h18M12 9v11M12 9c-1.4-3.4-5.6-4.3-5.6-1.7C6.4 8.8 9 9 12 9Zm0 0c1.4-3.4 5.6-4.3 5.6-1.7 0 1.5-2.6 1.7-5.6 1.7Z"/>',
   check: '<path d="m6.5 12.5 3.3 3.3 7.7-8"/>',
@@ -65,16 +69,24 @@ export function giverName(org) {
   return name === 'A friend' || name === 'Your family' ? name.toLowerCase() : name;
 }
 
-/** What Plus adds, in the order the dialog lists it. Ids match the Plus feature modules. */
+/**
+ * What Plus adds, in the order the dialog lists it. Ids match the Plus feature
+ * modules; `plural` titles read “… come with Plus.”
+ */
 export const PLUS_FEATURES = Object.freeze([
   { id: 'year-plan', icon: 'plan', title: 'Plan your year', text: 'A guided half hour that fills Horizon — Misogi, milestones, adventures, commitments, habits and key dates — and prints your year on one page.' },
+  { id: 'quarter-review', icon: 'quarter', title: 'Quarterly check-ins', plural: true, text: 'A guided ten minutes as each quarter ends: look back, choose the next habit and print the quarter on one page.' },
   { id: 'year-review', icon: 'review', title: 'Your year in review', text: 'One printable page with the days you closed, your painted year, streaks, trophies, main outcomes and what you lived.' },
-  { id: 'paint-palettes', icon: 'paint', title: 'Colours for your painted year', text: 'Five more palettes for Progress and your review. Terracotta stays free for everyone.' }
+  { id: 'insights', icon: 'chart', title: 'Insights', plural: true, text: 'Which weekdays work best for you, when your focus really happens, where your hours go month by month and how this year compares with the last. Worked out on this device.' },
+  { id: 'paint-palettes', icon: 'paint', title: 'Colours for your painted year', plural: true, text: 'Five more palettes for Progress and your review. Terracotta stays free for everyone.' }
 ]);
 const UPCOMING_STATUS = { Next: 'next', Planned: 'planned', Exploring: 'exploring' };
-/** What Plus gives, in three lines beside the offer. */
-export const PLUS_POINTS = Object.freeze(['A guided half hour to plan your year', 'Your year printed on one page, and your year in review', 'Paid once: everything Plus gets later is included']);
-const FEATURE_ALIASES = { plan: 'year-plan', 'plan-year': 'year-plan', review: 'year-review', 'year-in-review': 'year-review', paint: 'paint-palettes', palettes: 'paint-palettes', palette: 'paint-palettes', colours: 'paint-palettes', colors: 'paint-palettes' };
+/** What Plus gives, in four short lines beside the offer. */
+export const PLUS_POINTS = Object.freeze(['A guided half hour to plan your year, printed on one page', 'A ten-minute check-in each quarter, and your year in review', 'Insights into your weekdays, focus hours and time', 'Paid once: everything Plus gets later is included']);
+
+/** The headline when the dialog opens on one feature: “Plan your year comes with Plus.”, “Insights come with Plus.” */
+export const featureHeadline = feature => `${feature.title} ${feature.plural ? 'come' : 'comes'} with Plus.`;
+const FEATURE_ALIASES = { plan: 'year-plan', 'plan-year': 'year-plan', review: 'year-review', 'year-in-review': 'year-review', quarter: 'quarter-review', quarterly: 'quarter-review', 'check-in': 'quarter-review', 'quarter-check-in': 'quarter-review', insight: 'insights', statistics: 'insights', 'advanced-stats': 'insights', paint: 'paint-palettes', palettes: 'paint-palettes', palette: 'paint-palettes', colours: 'paint-palettes', colors: 'paint-palettes' };
 
 /** The canonical feature id for unlock(feature), or ''. */
 export function plusFeatureId(name) {
@@ -151,7 +163,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     palette: () => resolvePaint(readPaint(), hasPlus()),
     onAction: (action, year) => {
       if (action === 'print') printYear?.(year);
-      else leaveFor(action === 'review' ? 'year-review' : 'year-plan');
+      else leaveFor({ review: 'year-review', quarter: 'quarter-review' }[action] || 'year-plan');
     }
   });
   // What can be bought right now ({ plus: [...], gift: [...] }); null until asked, a list is null when unknown.
@@ -173,25 +185,43 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     return `<ul class="plus-features${compact ? ' plus-features--compact' : ''}">${PLUS_FEATURES.map(feature => `<li class="plus-feature plus-feature--${feature.id}${feature.id === focus ? ' is-focus' : ''}" data-plus-feature="${feature.id}"><span class="plus-feature__icon">${icon(feature.icon)}</span><span><strong>${esc(feature.title)}</strong>${compact ? '' : `<small>${esc(feature.text)}</small>`}</span></li>`).join('')}</ul>`;
   }
 
-  /** Also with Plus: the palettes, tried on the last weeks of this planner's painted year (or a sample). */
-  function palettes(focus, active) {
+  /** One row of Also with Plus: its icon, what it is, Open (with Plus) and a small preview. */
+  function extra(feature, { focus, active, kind, hint = '', note = '', preview: art = '' }) {
+    return `<div class="plus-extra plus-extra--${kind}${focus === feature.id ? ' is-focus' : ''}" data-plus-feature="${feature.id}">
+        <span class="plus-extra__icon">${icon(feature.icon)}</span>
+        <span class="plus-extra__copy"><strong>${esc(feature.title)}</strong><small>${esc(feature.text)}${hint ? ` ${esc(hint)}` : ''}</small>${note}${active && openFeature ? `<button class="text-button plus-extra__open" type="button" data-plus-open-feature="${feature.id}">Open<span class="sr-only"> ${esc(feature.title)}</span></button>` : ''}</span>
+        ${art}
+      </div>`;
+  }
+
+  /**
+   * Also with Plus: Insights, previewed by its weekday chart on this planner's
+   * last twelve weeks (or Insights' sample), and the palettes, tried on the last
+   * weeks of the painted year (or a sample).
+   */
+  function also(focus, active) {
     let data = null;
     try { data = preview() || null; } catch (_) { data = null; }
+    const insights = PLUS_FEATURES.find(item => item.id === 'insights');
+    let rhythm = null;
+    try { rhythm = rhythmPreview(data?.insights || null, { todayKey: ymdKey(new Date()) }); } catch (_) { rhythm = null; }
+    const finding = rhythm && !rhythm.sample && rhythm.finding ? `<span class="plus-extra__finding"><span class="plus-extra__tag">Your last ${rhythm.weeks} weeks</span>${esc(rhythm.finding.text)}</span>` : '';
     const year = data?.progress?.year || new Date().getFullYear();
     const paint = paintRows(data?.progress || null);
-    const feature = PLUS_FEATURES.find(item => item.id === 'paint-palettes');
+    const palette = PLUS_FEATURES.find(item => item.id === 'paint-palettes');
     const hint = active ? 'Choose yours in Horizon, under Progress.' : paint.sample ? 'Tap a colour to try it on these weeks.' : 'Tap a colour to see your last weeks in it.';
     return `<section class="plus-also" aria-labelledby="plus-also-title">
         <h3 class="plus-also__title" id="plus-also-title">Also with Plus</h3>
-        <div class="plus-palettes${focus === feature.id ? ' is-focus' : ''}" data-plus-feature="${feature.id}">
-          <span class="plus-palettes__icon">${icon(feature.icon)}</span>
-          <span class="plus-palettes__copy"><strong>${esc(feature.title)}</strong><small>${esc(feature.text)} ${esc(hint)}</small>${active && openFeature ? `<button class="text-button plus-palettes__open" type="button" data-plus-open-feature="${feature.id}">Open<span class="sr-only"> ${esc(feature.title)}</span></button>` : ''}</span>
-          ${renderPaletteTry(recentWeeks(paint.rows, { year }), { current: resolvePaint(readPaint(), active) })}
+        <div class="plus-extras">
+          ${extra(insights, { focus, active, kind: 'insights', hint: rhythm?.sample ? 'Here on a sample planner.' : '', note: finding, preview: rhythm ? renderRhythmTry(rhythm) : '' })}
+          ${extra(palette, { focus, active, kind: 'palettes', hint, preview: renderPaletteTry(recentWeeks(paint.rows, { year }), { current: resolvePaint(readPaint(), active) }) })}
         </div>
       </section>`;
   }
 
+  /** Coming to Plus, while anything is promised (PLUS_UPCOMING); nothing at all when the list is empty. */
   function upcoming(active) {
+    if (!PLUS_UPCOMING.length) return '';
     const items = PLUS_UPCOMING.map(item => `<li><span class="plus-upcoming__copy"><strong>${esc(item.title)}</strong><small>${esc(item.text)}</small></span><em class="plus-chip plus-chip--${UPCOMING_STATUS[item.status] || 'planned'}">${esc(item.status)}</em></li>`).join('');
     return `<section class="plus-upcoming" aria-labelledby="plus-upcoming-title">
         <h3 id="plus-upcoming-title">Coming to Plus <span>— included, no extra cost</span></h3>
@@ -287,26 +317,26 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
           <p class="plus-lede">Thank you for supporting Daily Planner. Plus is yours for life, on this planner and every device it syncs to.</p>
         </header>
         ${cycle.markup({ step: view.step, active: true })}
-        ${palettes(focus?.id || '', true)}
+        ${also(focus?.id || '', true)}
         ${upcoming(true)}
         ${gifts()}
         ${footer}
         <div class="plus-bar plus-bar--done is-shown"><button class="primary-button plus-cta__buy" type="button" data-plus-close>Done</button></div>`;
     }
-    const title = focus ? `${focus.title} comes with Plus.` : `Make ${defaultPlanYear(new Date())} count.`;
+    const title = focus ? featureHeadline(focus) : `Make ${defaultPlanYear(new Date())} count.`;
     const unavailable = plusAvailable() ? '' : '<p class="plus-note" role="note">Daily Planner Plus isn’t available in this copy of the planner. It’s offered at <a href="https://planner.bemorin.com" target="_blank" rel="noopener">planner.bemorin.com</a> — everything you use here stays free.</p>';
     return `<header class="modal__header plus-header plus-header--offer">
         <div class="plus-header__copy">
           <p class="modal__eyebrow plus-eyebrow"><span class="plus-mark">${icon('spark')}</span>Daily Planner Plus</p>
           <h2 id="plus-title">${esc(title)}</h2>
-          <p class="plus-lede">Plus adds a yearly ritual to your planner. The planner itself stays free.</p>
+          <p class="plus-lede">Plus adds a yearly ritual to your planner: plan the year, print it, check in each quarter and look back. The planner itself stays free.</p>
           <ul class="plus-points">${PLUS_POINTS.map(point => `<li>${icon('check')}<span>${esc(point)}</span></li>`).join('')}</ul>
         </div>
         ${offer()}
         ${unavailable}
       </header>
       ${cycle.markup({ step: view.step, active: false })}
-      ${palettes(focus?.id || '', false)}
+      ${also(focus?.id || '', false)}
       ${upcoming(false)}
       ${plusAvailable() ? gifts() : ''}
       ${footer}
@@ -397,7 +427,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
         <div class="plus-celebrate__badge"><span class="plus-burst" aria-hidden="true">${dots}</span><span class="plus-celebrate__mark">${icon('spark')}</span></div>
         <p class="modal__eyebrow">Daily Planner Plus</p>
         <h2 id="plus-title">${esc(view.already ? 'Plus is already active.' : org ? `Plus is yours — thanks to ${org}.` : 'Plus is yours.')}</h2>
-        <p>Plan your year, your year in review and the new colours for your painted year are ready in Horizon — and everything Plus gets later is included. Plus travels with your planner through sync and backups.</p>
+        <p>Plan your year, quarterly check-ins, your year in review, Insights and five more colours for your painted year are ready. Plus travels with your planner through sync and backups.</p>
         <p class="plus-status" role="status">${icon('check')}<span>${esc(statusLine())}</span></p>
         <div class="plus-sheet__actions"><button class="primary-button" type="button" data-plus-close>Continue</button></div>
       </div>`;
@@ -606,7 +636,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
       event.currentTarget.textContent = 'Copied';
     });
     watchOffer(el);
-    const focused = qs('.plus-palettes.is-focus', el);
+    const focused = qs('.plus-extra.is-focus', el);
     if (focused && !view.scrolled) { view = { ...view, scrolled: true }; requestAnimationFrame(() => focused.scrollIntoView({ block: 'center' })); }
   }
 
@@ -614,13 +644,13 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
   function renderEntryPoints() {
     const active = hasPlus();
     qsa('[data-plus-status]').forEach(node => {
-      node.textContent = active ? statusLine() : plusAvailable() ? `Plan your year, your year in review and more · ${price()} once, for life` : 'Not available in this copy of the planner';
+      node.textContent = active ? statusLine() : plusAvailable() ? `Plan your year, quarterly check-ins, Insights and more · ${price()} once, for life` : 'Not available in this copy of the planner';
     });
     qsa('[data-plus-open]').forEach(button => button.classList.toggle('is-active', active));
     qsa('[data-plus-reset-note]').forEach(node => { node.hidden = !active; });
   }
 
-  /** Opens on what Plus adds; `feature` ('year-plan', 'year-review', 'paint-palettes') puts that one first in mind. */
+  /** Opens on what Plus adds; `feature` ('year-plan', 'quarter-review', 'year-review', 'insights', 'paint-palettes') puts that one first in mind. */
   function open({ feature = '' } = {}) {
     trackEvent('plus_modal_opened');
     const id = plusFeatureId(feature);

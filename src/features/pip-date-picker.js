@@ -15,18 +15,25 @@ function dateFromKey(key) {
   return new Date(year || 1970, Math.max(0, (month || 1) - 1), day || 1, 12, 0, 0, 0);
 }
 
-export function openPipDatePicker({ doc, anchor, selectedKey, weekStartsOn = 1, minKey = '', onSelect }) {
+/**
+ * A small month calendar under the floating window's date. `focusSelected`
+ * (opened from the keyboard) moves focus to the selected day.
+ */
+export function openPipDatePicker({ doc, anchor, selectedKey, weekStartsOn = 1, minKey = '', focusSelected = false, onSelect }) {
   if (!doc || !anchor || typeof onSelect !== 'function') return () => {};
   doc.querySelector('[data-pip-date-picker]')?.remove();
 
   const startDay = normalizedWeekStart(weekStartsOn);
   const minDate = minKey ? dateFromKey(minKey) : null;
+  const todayKey = localDateKey(new Date());
   let view = dateFromKey(selectedKey || localDateKey(new Date()));
   view.setDate(1);
 
   const popover = doc.createElement('div');
   popover.className = 'pip-date-picker';
   popover.dataset.pipDatePicker = 'true';
+  popover.setAttribute('role', 'dialog');
+  popover.setAttribute('aria-label', 'Choose a date');
   anchor.parentElement?.append(popover);
 
   const close = () => {
@@ -67,7 +74,8 @@ export function openPipDatePicker({ doc, anchor, selectedKey, weekStartsOn = 1, 
       const button = doc.createElement('button');
       button.type = 'button';
       button.textContent = String(day.getDate());
-      button.className = `${day.getMonth() === monthStart.getMonth() ? '' : 'is-outside'}${key === selectedKey ? ' is-selected' : ''}`.trim();
+      button.className = `${day.getMonth() === monthStart.getMonth() ? '' : 'is-outside'}${key === selectedKey ? ' is-selected' : ''}${key === todayKey ? ' is-today' : ''}`.trim();
+      if (key === selectedKey) button.setAttribute('aria-current', 'date');
       button.disabled = !!minDate && day < minDate;
       button.setAttribute('aria-label', day.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }));
       button.addEventListener('click', () => { onSelect(key); close(); });
@@ -80,6 +88,7 @@ export function openPipDatePicker({ doc, anchor, selectedKey, weekStartsOn = 1, 
   };
 
   render();
+  if (focusSelected) (popover.querySelector('.is-selected') || popover.querySelector('.pip-date-picker__grid button:not(:disabled)'))?.focus();
   requestAnimationFrame(() => doc.addEventListener('pointerdown', onOutsidePointerDown, true));
   return close;
 }

@@ -30,9 +30,27 @@ export function createStatsFeature(ctx) {
   }
 
   function setView(nextView) {
-    view = nextView === 'week' ? 'week' : 'day';
+    view = nextView === 'week' || (nextView === 'insights' && ctx.insights) ? nextView : 'day';
     if (view === 'week') ensureWeek();
     render();
+  }
+
+  /** Insights (Plus, src/features/insights.js) widens the dialog and brings its own title. */
+  function syncInsightsChrome(wrap) {
+    const insights = view === 'insights' ? ctx.insights : null;
+    if (!insights) ctx.insights?.hideTip?.();
+    wrap.closest('.modal__panel')?.classList.toggle('is-insights', !!insights);
+    const badge = ctx.qs('[data-insights-badge]');
+    if (badge) badge.hidden = !ctx.insights?.locked?.();
+    const help = ctx.qs('[data-stats-help]');
+    if (help) help.hidden = !!insights;
+    [['[data-stats-modal] .modal__eyebrow', 'eyebrow'], ['#stats-title', 'title']].forEach(([selector, part]) => {
+      const node = ctx.qs(selector);
+      if (!node) return;
+      if (!node.dataset.statsText) node.dataset.statsText = node.textContent;
+      const next = insights ? insights.header()[part] : node.dataset.statsText;
+      if (node.textContent !== next) node.textContent = next;
+    });
   }
 
   function render() {
@@ -47,8 +65,10 @@ export function createStatsFeature(ctx) {
     });
     const weekNav = ctx.qs('[data-stats-week-nav]');
     if (weekNav) weekNav.hidden = view !== 'week';
+    syncInsightsChrome(wrap);
 
-    if (view === 'week') renderWeek(wrap);
+    if (view === 'insights') ctx.insights.render(wrap);
+    else if (view === 'week') renderWeek(wrap);
     else renderDay(wrap);
   }
 

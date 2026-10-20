@@ -1,13 +1,5 @@
-/* Pip domain styles. */
-
-@media screen {
-  .pip-plan-polish-placeholder { display:none; }
-}
-.pip-topbar { grid-template-columns:minmax(118px,1fr) auto minmax(78px,1fr); }
-.pip-date-nav { justify-self:center; }
-.pip-topbar > time { justify-self:end; min-width:68px; text-align:right; }
-.pip-unresolved-list { display: grid; gap: 5px; }
-.pip-unresolved-list > div { padding: 8px 9px; border-radius: 9px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
-.pip-unresolved-list strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
-.pip-unresolved-list small { display: block; margin-top: 2px; color: var(--faint); font-size: 8.5px; }
-
+/* Floating window (Document Picture-in-Picture).
+   The floating window is its own document and cannot read the planner's
+   stylesheets: its styles travel with it in src/features/pip-styles.js.
+   The planner side has nothing to style beyond the header icon button, which
+   uses the shared .icon-button rules. */

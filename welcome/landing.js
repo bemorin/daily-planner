@@ -4,7 +4,7 @@ import * as config from '../src/config.js';
 import { LANDING_EVENTS, trackEvent, plannerApiEnabled, checkoutOptions, startCheckout, rememberReferral, setUsageCountsEnabled, usageCountsEnabled } from '../src/lib/planner-api.js';
 import { animate } from '../src/vendor/motion.js';
 import { PERSONAL_GIFTS, PLUS_PRICE, PLUS_FEATURES, PLUS_UPCOMING, TEAM_TIERS, formatMoney, isPersonalGift } from '../src/lib/pricing.js';
-import { TEAM_ROWS, buyState, checkoutUrl, countedMoments, currencyLine, defaultPlan, lowestPerPerson, monthWeeks, pageCurrency, perPerson, personalOffer, planForPeople, planRow, readCheckoutOptions, ritualYear, statusTone, taxLine, tierLabel, tierPrice } from './landing-model.js';
+import { TEAM_ROWS, buyState, checkoutUrl, countedMoments, currencyLine, defaultPlan, lowestPerPerson, monthWeeks, pageCurrency, perPerson, personalOffer, planForPeople, planRow, readCheckoutOptions, ritualYear, statusTone, taxLine, tierLabel, tierPrice, upcomingSentence } from './landing-model.js';
 import { createListbox } from './listbox.js';
 import { createPaletteCard } from './palette-card.js';
 import { createPrivacyDialog } from './privacy-dialog.js';
@@ -146,13 +146,17 @@ const saleFor = item => buyState({ apiOn, options: sale.options, item, currency 
 /* Offer: Plus, personal gifts, team tiers, talk ---------------------------- */
 
 function renderPlusLists() {
-  // The four lines of the Plus card: everything in Free, then what Plus adds.
+  // The lines of the Plus card: everything in Free, then what Plus adds.
   qsa('[data-plus-lines]').forEach(list => {
     list.replaceChildren(...['Everything in Free', ...PLUS_FEATURES.map(feature => feature.title)].map(text => el('li', {}, okMark(), text)));
   });
   // The promise: what Plus gets next, at no extra cost, with its status. Four
   // columns with headings in the Plus section; titles and chips only in the
-  // Plus card of the prices.
+  // Plus card of the prices. While nothing is promised (PLUS_UPCOMING is
+  // empty), every part of it stays hidden, as the page is written.
+  const promised = PLUS_UPCOMING.length > 0;
+  qsa('[data-plus-soon], [data-compare-upcoming], [data-faq-upcoming]').forEach(node => { node.hidden = !promised; });
+  if (!promised) return;
   const chip = next => el('span', { class: `chip chip--${statusTone(next.status)}` }, el('span', { class: 'sr-only' }, 'Status: '), next.status);
   qsa('[data-plus-upcoming]').forEach(list => {
     if (list.hasAttribute('data-compact')) {
@@ -176,19 +180,7 @@ function renderPlusLists() {
       el('td', {}, el('span', { class: 'no', 'aria-hidden': 'true' }), el('span', { class: 'sr-only' }, 'Not included')),
       el('td', {}, el('span', { class: 'soon-ok' }, el('span', { class: 'soon-ok__mark', 'aria-hidden': 'true' }), el('span', { class: 'soon-ok__text' }, 'Included when it ships'))))));
   });
-  qsa('[data-faq-upcoming]').forEach(node => { node.textContent = upcomingSentence(); });
-}
-
-const listText = items => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0] || '');
-
-/** "Planned: “A” and “B”. Exploring: “C”." for the FAQ, from PLUS_UPCOMING. */
-function upcomingSentence() {
-  const groups = new Map();
-  PLUS_UPCOMING.forEach(next => {
-    const status = next.status || 'Coming';
-    groups.set(status, [...(groups.get(status) || []), `“${next.title}”`]);
-  });
-  return [...groups].map(([status, titles]) => `${status}: ${listText(titles)}.`).join(' ');
+  qsa('[data-faq-upcoming]').forEach(node => { node.textContent = ` ${upcomingSentence(PLUS_UPCOMING)}`; });
 }
 
 function plusCta(box) {
@@ -1004,6 +996,91 @@ function buildYear(grid, demo) {
   return { order, closed, mits };
 }
 
+/* The quarter check-in, printed: the third quarter of the year in review ----- */
+
+// Its days are painted as that review paints them; the winning habit ("Write
+// three lines") is kept on most closed days, which shows as the darkest square.
+const QUARTER = { months: [6, 7, 8], kept: (month, day) => (month * 5 + day * 7) % 10 < 8 };
+
+function buildQuarter(year) {
+  const box = qs('[data-quarter-months]');
+  if (!box) return;
+  const totals = { closed: 0, planning: 0, mits: 0, kept: 0, days: 0 };
+  let run = 0;
+  let best = 0;
+  let habitRun = 0;
+  let habitBest = 0;
+  let order = 0;
+  const habitMonths = [];
+  const months = QUARTER.months.map(month => {
+    const length = new Date(year, month + 1, 0).getDate();
+    const lead = (new Date(year, month, 1).getDay() + 6) % 7;
+    let closedInMonth = 0;
+    let keptInMonth = 0;
+    const cells = [];
+    for (let day = 1; day <= length; day += 1) {
+      const weekday = new Date(year, month, day).getDay();
+      const state = paintState(REVIEW, month, day);
+      totals.days += 1;
+      if (weekday > 0 && weekday < 6) totals.planning += 1;
+      if (/^l[123]/.test(state)) {
+        const mit = !state.startsWith('l1');
+        const kept = QUARTER.kept(month, day);
+        totals.closed += 1;
+        closedInMonth += 1;
+        if (mit) totals.mits += 1;
+        if (kept) { totals.kept += 1; keptInMonth += 1; }
+        habitRun = kept ? habitRun + 1 : 0;
+        habitBest = Math.max(habitBest, habitRun);
+        run += 1;
+        best = Math.max(best, run);
+        cells.push(el('i', { class: `is-l${1 + (mit ? 1 : 0) + (kept ? 1 : 0)}`, style: `--d:${order}` }));
+        order += 1;
+      } else if (state === 'miss') {
+        run = 0;
+        habitRun = 0;
+        cells.push(el('i', { class: 'is-miss', style: `--d:${order}` }));
+        order += 1;
+      } else {
+        habitRun = 0;
+        cells.push(el('i', { class: state === 'joker' ? 'is-joker' : 'is-rest', style: state === 'joker' ? `--d:${order}` : null }));
+      }
+    }
+    habitMonths.push(Math.round((keptInMonth / length) * 100));
+    return el('div', { class: 'rp-qp__month' },
+      el('p', {}, MONTHS[month], el('span', {}, String(closedInMonth))),
+      el('div', { class: 'rp-qp__cal' }, ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map(letter => el('b', {}, letter)), Array.from({ length: lead }, () => el('i', { class: 'is-pad' })), cells));
+  });
+  box.replaceChildren(...months);
+  const root = box.closest('.rp--quarter');
+  const values = { closed: totals.closed, rate: Math.round((totals.closed / totals.planning) * 100), streak: best, mits: totals.mits, habit: Math.round((totals.kept / totals.days) * 100) };
+  Object.entries(values).forEach(([name, value]) => qsa(`[data-q="${name}"]`, root).forEach(node => setCount(node, value)));
+  const words = { closed: totals.closed, squares: totals.closed, planning: totals.planning, kept: totals.kept, 'mit-share': Math.round((totals.mits / totals.closed) * 100), 'habit-streak': habitBest };
+  Object.entries(words).forEach(([name, value]) => qsa(`[data-q-text="${name}"]`, root).forEach(node => { node.textContent = String(value); }));
+  qsa('[data-quarter-habit] li', root).forEach((row, index) => {
+    row.style.setProperty('--w', String(habitMonths[index]));
+    const label = qs('b', row);
+    if (label) label.textContent = `${habitMonths[index]}%`;
+  });
+  root?.style.setProperty('--paint-steps', String(order));
+}
+
+/* Insights: when your time is scheduled, Monday to Sunday, 7:00 to 20:00 --- */
+
+const INSIGHTS_HEAT = ['4155231002011', '0155231233123', '3155231002021', '0155231233123', '0111131003021', '0022200000000', '0023300000000'];
+
+function buildHeat() {
+  const box = qs('[data-insights-heat]');
+  if (!box) return;
+  const hours = Array.from({ length: 13 }, (_, index) => 7 + index);
+  const head = [el('span', {}), ...hours.map(hour => el('span', { class: `rp-ins__hour${hour % 2 ? ' is-odd' : ''}` }, String(hour)))];
+  const rows = INSIGHTS_HEAT.flatMap((levels, row) => [
+    el('span', { class: 'rp-ins__day' }, ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][row]),
+    ...[...levels].map((level, column) => el('i', { class: `is-l${level}`, style: `--d:${row + column}` }))
+  ]);
+  box.replaceChildren(...head, ...rows);
+}
+
 function setCount(node, value) {
   if (!node) return;
   node.dataset.count = String(value);
@@ -1034,6 +1111,8 @@ function buildPaint() {
   }
 
   buildPrintMonths(PLAN_YEAR);
+  buildQuarter(REVIEW.year);
+  buildHeat();
 
   // Colours for the painted year: a whole year, every level of the palette,
   // without the jokers' own colour.
@@ -1190,6 +1269,21 @@ const SCRIPTS = {
       t.remove('s-press', span + 1360);
     }
   },
+  // The quarter, printed: its days paint in, the figures count, the bars grow,
+  // then the notes appear and a pen writes on the lines under each answer.
+  quarter: {
+    length: 5200,
+    run(t) {
+      const steps = Number(t.root.style.getPropertyValue('--paint-steps')) || 60;
+      const span = steps * 14;
+      t.add('s-in', 100);
+      qsa('[data-count]', t.root).forEach(node => t.count(node, 150, span));
+      t.add('s-bars', 450);
+      t.add('s-notes', Math.round(span * 0.6) + 350);
+      t.add('s-ink', span + 900);
+    }
+  },
+  insights: { run(t) { t.add('s-in', 120); t.add('s-bars', 420); } },
   gift: {
     length: 9200,
     loop: true,

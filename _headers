@@ -1,0 +1,39 @@
+# Cloudflare Pages response headers (copied to dist/ by scripts/build.mjs).
+#
+# Pages, scripts and styles are checked with the server on every visit
+# (Cache-Control: no-cache): the browser and Cloudflare may keep a copy, but
+# ask first whether it changed, so a new deploy shows up on the next load and
+# an unchanged file costs a quick "304 Not Modified". This is what keeps the
+# owner dashboard (/admin/) and the planner from running last week's code.
+#
+# Not listed: /api/*. Pages Functions set their own headers and _headers never
+# applies to them. Images, fonts and icons keep Cloudflare's defaults. The
+# service worker (sw.js) keeps its own copy of the planner for offline use and
+# goes to the network first, so the installed app still opens offline.
+#
+# One rule per address: when two rules match, Pages joins their values, so
+# the page addresses below are exact and every file is covered by its type.
+# tests/cache-headers.test.js checks that every page and file of the site is matched once.
+
+/*.html
+  Cache-Control: no-cache
+/*.js
+  Cache-Control: no-cache
+/*.css
+  Cache-Control: no-cache
+/
+  Cache-Control: no-cache
+/admin/
+  Cache-Control: no-cache
+/welcome/
+  Cache-Control: no-cache
+/welcome/thanks/
+  Cache-Control: no-cache
+/legal/
+  Cache-Control: no-cache
+/legal/privacy/
+  Cache-Control: no-cache
+/legal/terms/
+  Cache-Control: no-cache
+/legal/cookies/
+  Cache-Control: no-cache

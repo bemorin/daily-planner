@@ -5,7 +5,8 @@ import { buildYearReview, renderYearReviewPrint } from '../src/features/year-rev
 import { renderYearPrint } from '../src/features/year-print.js';
 import { planSummary } from '../src/features/year-plan.js';
 import { defaultCategories } from '../src/config.js';
-import { REVIEW_SAMPLE_BELOW, hasOwnReview, hasPrintablePlan, samplePrintModel, sampleKeyDates, sampleReview, sampleYearData } from '../src/features/plus-samples.js';
+import { renderQuarterPrint } from '../src/features/quarter-print.js';
+import { QUARTER_SAMPLE_BELOW, REVIEW_SAMPLE_BELOW, hasOwnReview, hasPrintablePlan, ownQuarter, quarterClosed, sampleQuarterInput, sampleQuarterReview, samplePrintModel, sampleKeyDates, sampleReview, sampleYearData } from '../src/features/plus-samples.js';
 
 const icon = name => `<svg data-icon="${name}"></svg>`;
 
@@ -117,4 +118,57 @@ test('a finished year’s review never says “so far”', () => {
   const page = renderYearReviewPrint(review, progress, { icon });
   assert.doesNotMatch(page, /so far/);
   assert.match(page, /of \d+ planning days/);
+});
+
+test('the sample quarter: the review’s person in their third quarter, checked in and ready to print', () => {
+  const review = sampleQuarterReview(2026);
+  assert.deepEqual([review.id, review.label, review.status, review.isCurrent], ['Q3', 'Q3 2026', 'past', false]);
+  assert.ok(review.days.closed >= 50 && review.days.closed <= review.days.planningElapsed, `${review.days.closed} closed`);
+  assert.ok(review.days.closeRate >= 80, `${review.days.closeRate}%`);
+  assert.ok(review.days.bestRun >= 10);
+  assert.ok(review.outcomes.done > 0 && review.outcomes.done <= review.days.closed);
+  assert.equal(review.habit.text, 'Write three lines');
+  assert.ok(review.habit.percent >= 50 && review.habit.percent <= 80, `habit kept ${review.habit.percent}%`);
+  assert.equal(review.habit.elapsed, 92, 'every day of July to September');
+  assert.deepEqual(review.horizon.milestones.map(item => [item.text, item.done]), [['30 km in training', true], ['Book the race hotel', false]]);
+  assert.deepEqual(review.horizon.adventures.map(item => [item.text, item.done]), [['Kayak to the island', true]]);
+  assert.equal(review.horizon.misogi, null, 'the marathon is in October');
+  assert.deepEqual(review.journal.memories.map(item => item.text), ['Crossing the finish line with Sam', 'Kayak to the island at dawn']);
+  assert.equal(review.journal.lessons.length, 2);
+  assert.ok(review.time.total > 100 * 60);
+  assert.deepEqual(review.time.rows.map(row => row.id), ['deep-work', 'admin', 'health', 'personal', 'learning']);
+  assert.equal(review.entry.done, true);
+  assert.match(review.entry.wentWell, /three lines/);
+  assert.deepEqual([review.next.id, review.next.habit], ['Q4', 'Stretch before bed']);
+  // The painted days are the sample review's, and a square at level 3 had the habit kept.
+  const input = sampleQuarterInput(2026);
+  const cells = [6, 7, 8].flatMap(month => input.progress.months[month].days);
+  assert.ok(cells.every(cell => !cell.closed || cell.level === 1 + (cell.mitDone ? 1 : 0) + (input.yearData.habitChecks[cell.key] ? 1 : 0)));
+  assert.equal(quarterClosed(input.progress, 2), review.days.closed);
+  assert.deepEqual(sampleQuarterReview(2026), review, 'the same on every render');
+  const page = renderQuarterPrint(review, { icon, palette: 'ocean' });
+  assert.match(page, /^<div class="qv qv--paint-ocean">/);
+  assert.match(page, /Q3 2026<span>, in review<\/span>/);
+  assert.match(page, /Write three lines/);
+  assert.match(page, /Stretch before bed/);
+  assert.doesNotMatch(page, /so far/);
+  assert.equal(sampleQuarterReview(2031).label, 'Q3 2031', 'any year');
+});
+
+test('“Check in” previews the latest quarter with enough closed days, else the sample', () => {
+  assert.equal(QUARTER_SAMPLE_BELOW, 10);
+  const closed = { '2026-Q3': 40, '2026-Q2': 30, '2026-Q4': 3 };
+  const closedIn = ({ year, quarter }) => closed[`${year}-Q${quarter + 1}`] || 0;
+  // 20 October: the check-in season of Q3.
+  assert.deepEqual(ownQuarter({ today: new Date(2026, 9, 20, 12), minYear: 2026, closedIn }), { year: 2026, quarter: 2 });
+  // 10 November: between seasons, the check-in opens on Q4 so far, too thin: Q3 then.
+  assert.deepEqual(ownQuarter({ today: new Date(2026, 10, 10, 12), minYear: 2026, closedIn }), { year: 2026, quarter: 2 });
+  assert.deepEqual(ownQuarter({ today: new Date(2026, 10, 10, 12), minYear: 2026, closedIn: at => (at.quarter === 1 ? 12 : 0) }), { year: 2026, quarter: 1 });
+  assert.equal(ownQuarter({ today: new Date(2026, 10, 10, 12), minYear: 2026, closedIn: () => 9 }), null, 'below ten closed days');
+  assert.deepEqual(ownQuarter({ today: new Date(2026, 1, 10, 12), minYear: 2026, closedIn: () => 40 }), { year: 2026, quarter: 0 }, 'mid-quarter: the quarter so far');
+  assert.equal(ownQuarter({ today: new Date(2026, 1, 10, 12), minYear: 2026, closedIn: at => (at.year === 2025 ? 40 : 2) }), null, 'never before the first Horizon year');
+  assert.deepEqual(ownQuarter({ today: new Date(2027, 0, 12, 12), minYear: 2026, closedIn: at => (at.year === 2026 && at.quarter === 3 ? 25 : 0) }), { year: 2026, quarter: 3 }, 'January: last year’s Q4');
+  assert.equal(ownQuarter({ today: new Date(2026, 9, 20, 12), closedIn: () => { throw new Error('no data'); } }), null);
+  assert.equal(quarterClosed({ months: [{ closed: 4 }, { closed: 5 }, { closed: 6 }, { closed: 9 }] }, 0), 15);
+  assert.equal(quarterClosed(null, 2), 0);
 });

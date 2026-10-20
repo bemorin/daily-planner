@@ -7,7 +7,11 @@ import { itemEnter, itemExit, modalExit, panelEnter, popoverEnter, pulse, slideI
 import { markTrophiesSeen, progressIcon, renderPaintedYear, renderPaintLegend, renderStreakStats, renderTrophyRoom } from './progress-view.js';
 import { PLAN_FEATURE, createYearPlan, defaultPlanYear, isHorizonMostlyEmpty, planYearOptions } from './year-plan.js';
 import { REVIEW_FEATURE, createYearReview, defaultReviewYear, inReviewSeason } from './year-review.js';
+import { QUARTER_FEATURE, defaultCheckInQuarter, parseQuarterKey, quarterSeasonCard, renderQuarterMenuItem } from './quarter-review.js';
+import { createQuarterReview } from './quarter-session.js';
 import { PAINT_FEATURE, choosePaint, isPremiumPaint, readPaint, renderPaintChooser, syncPaint } from './paint-palettes.js';
+import { buildYearShareModel, canShare } from './share-image.js';
+import { openShareDialog } from './share-dialog.js';
 
 /**
  * Horizon view: the strategic layer rendered as six sections behind a section
@@ -56,7 +60,8 @@ const ICONS = {
   printer: '<path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z"/>',
   sparkle: '<path d="M12 3.5c.5 3.9 2.6 6 6.5 6.5-3.9.5-6 2.6-6.5 6.5-.5-3.9-2.6-6-6.5-6.5 3.9-.5 6-2.6 6.5-6.5Z"/><path d="M18.5 15.5c.2 1.5 1 2.3 2.5 2.5-1.5.2-2.3 1-2.5 2.5-.2-1.5-1-2.3-2.5-2.5 1.5-.2 2.3-1 2.5-2.5Z"/>',
   history: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5v4h4"/><path d="M12 7.5V12l3 2"/>',
-  review: '<path d="M5 4.5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1Z"/><path d="M8 9h3M8 12.5h3M8 16h3"/><path d="M14 9h2M14 12.5h2M14 16h2"/>'
+  review: '<path d="M5 4.5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1Z"/><path d="M8 9h3M8 12.5h3M8 16h3"/><path d="M14 9h2M14 12.5h2M14 16h2"/>',
+  share: '<path d="M12 3.8v10.7"/><path d="m8.2 7.4 3.8-3.6 3.8 3.6"/><path d="M8.6 10.6H7.2a2 2 0 0 0-2 2v5.6a2 2 0 0 0 2 2h9.6a2 2 0 0 0 2-2v-5.6a2 2 0 0 0-2-2h-1.4"/>'
 };
 
 const icon = (name, className = '') => `<svg${className ? ` class="${className}"` : ''} viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ''}</svg>`;
@@ -348,7 +353,9 @@ export function createHorizonView(ctx) {
         ${icon('arrowRight', 'hz-tile__arrow')}
       </button>`);
     }
-    return cards.length ? `<div class="hz-season${cards.length > 1 ? ' hz-season--pair' : ''}">${cards.join('')}</div>` : '';
+    // Quarter check-in (quarter-review.js): from two weeks before a quarter ends to four weeks after, on its own row.
+    const quarter = quarterSeasonCard({ today, shownYear: y, yearData: ctx.yearData, progress: ctx.progress, plusActive: plusActive(), icon });
+    return cards.length || quarter ? `<div class="hz-season${cards.length > 1 ? ' hz-season--pair' : ''}">${cards.join('')}${quarter}</div>` : '';
   }
 
   function renderOverview(model) {
@@ -601,13 +608,16 @@ export function createHorizonView(ctx) {
         <span class="hz-review-cta__copy"><strong>Your ${y} in review ${plusActive() ? '' : plusBadge()}</strong><small>One page for the year: days closed, time by category, adventures lived, memories and lessons. Printable.</small></span>
         <span class="hz-review-cta__go">Open${icon('arrowRight')}</span>
       </button>` : '';
-    return `${sectionHead('Progress', 'Your year, painted day by day.', 'Every day you close paints a square. Rest days stay quiet, and two jokers a month protect your streak when life happens. Open any past square to revisit that day.')}
+    // “Share your year” appears once the year has a painted square.
+    const share = reviewable && progress.closed ? `<div class="hz-section-actions"><button type="button" class="secondary-button hz-section-action" data-progress-share="${y}">${icon('share')}<span>Share your year</span></button></div>` : '';
+    return `${sectionHead('Progress', 'Your year, painted day by day.', 'Every day you close paints a square. Rest days stay quiet, and two jokers a month protect your streak when life happens. Open any past square to revisit that day.', share)}
       ${renderStreakStats(progress)}
       <section class="hz-card hz-paint-card">
         <header class="hz-card__head"><div><span class="hz-eyebrow">${y}</span><h4>${progress.closed ? `${progress.closed} day${progress.closed === 1 ? '' : 's'} closed so far` : 'Your first square appears when you close a day.'}</h4></div>${renderPaintLegend()}</header>
         <div class="hz-paint-scroller">${renderPaintedYear(progress, { interactive: true })}</div>
       </section>
       ${review}
+      ${reviewable ? ctx.insightsEntry?.(y) || '' : ''}
       ${renderPaintChooser({ current: readPaint(), plusActive: plusActive() })}
       <section class="hz-trophies">
         <header class="hz-trophies__head"><div><span class="hz-eyebrow">Trophies</span><h3>${progress.unlocked.length} of ${progress.trophies.length} unlocked</h3><p>Earned by what you do in your life, not by time spent in the app.</p></div></header>
@@ -727,7 +737,7 @@ export function createHorizonView(ctx) {
         <span class="hz-add-option__icon">${icon(option.icon)}</span>
         <span class="hz-add-option__copy"><strong>${esc(option.title)}</strong><small>${esc(option.disabled || option.note)}</small></span>
         ${option.meta ? `<em>${esc(option.meta)}</em>` : ''}
-      </button>`).join('')}`;
+      </button>`).join('')}${renderQuarterMenuItem({ at: defaultCheckInQuarter(new Date()), plusActive: plusActive() })}`;
     popover.addEventListener('keydown', event => {
       const items = qsa('.hz-add-option:not(:disabled)', popover);
       const index = items.indexOf(document.activeElement);
@@ -738,6 +748,8 @@ export function createHorizonView(ctx) {
       }
     });
     popover.addEventListener('click', event => {
+      const quarter = event.target.closest('[data-horizon-quarter]');
+      if (quarter) { event.stopPropagation(); ctx.closeAllPopovers(); openQuarter(quarter.dataset.horizonQuarter); return; }
       const option = event.target.closest('[data-horizon-add-kind]');
       if (!option || option.disabled) return;
       event.stopPropagation();
@@ -980,7 +992,7 @@ export function createHorizonView(ctx) {
     shell?.append(el);
     const opener = document.activeElement;
     // The entry point is usually re-rendered while the overlay is open: focus its twin, else the active section.
-    const twin = ['horizonPlan', 'horizonReview'].find(key => opener?.dataset?.[key] !== undefined);
+    const twin = ['horizonPlan', 'horizonReview', 'horizonQuarter'].find(key => opener?.dataset?.[key] !== undefined);
     const handle = {
       el,
       onEscape,
@@ -995,7 +1007,7 @@ export function createHorizonView(ctx) {
         if (restoreFocus) {
           requestAnimationFrame(() => {
             const root = modal();
-            const again = twin ? qs(`[data-${twin === 'horizonPlan' ? 'horizon-plan' : 'horizon-review'}]`, root) : null;
+            const again = twin ? qs(`[data-${twin.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)}]`, root) : null;
             const original = opener && opener !== document.body && opener.isConnected && !opener.closest('.hz-overlay') ? opener : null;
             (original || again || qs('.hz-tab.is-active', root))?.focus?.({ preventScroll: true });
           });
@@ -1026,6 +1038,18 @@ export function createHorizonView(ctx) {
     }
   });
   const yearReview = createYearReview({ ctx, overlay: openOverlay, icon, onLeave: () => render() });
+  const quarterReview = createQuarterReview({
+    ctx,
+    overlay: openOverlay,
+    icon,
+    onLeave: (at, target) => { if (target === 'horizon') backToHorizon(at.quarter === 3 ? at.year + 1 : at.year, { overview: true }); else render(); }
+  });
+
+  /** "2026-Q3" from a card or the Add menu; without Plus, the Plus dialog opens on quarterly check-ins. */
+  function openQuarter(requested) {
+    if (!plusActive()) { ctx.closeAllPopovers(); ctx.plus?.unlock?.(QUARTER_FEATURE); return; }
+    quarterReview.open(parseQuarterKey(requested));
+  }
 
   function openPlan(requested) {
     if (!plusActive()) { ctx.closeAllPopovers(); ctx.plus?.unlock?.(PLAN_FEATURE); return; }
@@ -1038,6 +1062,15 @@ export function createHorizonView(ctx) {
   function openReview(requested) {
     if (!plusActive()) { ctx.closeAllPopovers(); ctx.plus?.unlock?.(REVIEW_FEATURE); return; }
     yearReview.open({ year: Number(requested) || defaultReviewYear(new Date()) });
+  }
+
+  function openYearShare(button) {
+    const targetYear = Number(button.dataset.progressShare) || year();
+    const yearData = ctx.yearData(targetYear) || {};
+    const model = buildYearShareModel(ctx.progress(targetYear), { misogi: yearData.misogi || '', misogiDone: !!yearData.misogiDone });
+    if (!canShare(model)) return;
+    ctx.closeAllPopovers();
+    openShareDialog({ model, title: `Share your ${targetYear}`, eyebrow: 'Progress', opener: button });
   }
 
   function pickPaint(button) {
@@ -1084,8 +1117,14 @@ export function createHorizonView(ctx) {
     if (plan) { event.stopPropagation(); openPlan(plan.dataset.horizonPlan); return; }
     const review = event.target.closest('[data-horizon-review]');
     if (review) { event.stopPropagation(); openReview(review.dataset.horizonReview); return; }
+    const insights = event.target.closest('[data-horizon-insights]');
+    if (insights) { event.stopPropagation(); ctx.closeAllPopovers(); ctx.openInsights?.(Number(insights.dataset.horizonInsights)); return; }
+    const quarter = event.target.closest('[data-horizon-quarter]');
+    if (quarter) { event.stopPropagation(); openQuarter(quarter.dataset.horizonQuarter); return; }
     const paint = event.target.closest('[data-paint-choice]');
     if (paint) { pickPaint(paint); return; }
+    const share = event.target.closest('[data-progress-share]');
+    if (share) { openYearShare(share); return; }
     const tab = event.target.closest('[data-horizon-section]');
     if (tab) { setSection(tab.dataset.horizonSection); return; }
     if (event.target.closest('[data-horizon-prev]')) { ctx.shiftYear(-1); render({ transition: 0 }); return; }
@@ -1127,6 +1166,7 @@ export function createHorizonView(ctx) {
     /** Plus features, for entry points outside Horizon. */
     openPlan,
     openReview,
+    openQuarter,
     /** Call when Plus is activated or removed: re-applies the palette and drops or shows the badges. */
     refreshPlus() {
       syncPaint(plusActive());
@@ -1135,7 +1175,7 @@ export function createHorizonView(ctx) {
     /** Called after the modal becomes visible so geometry-dependent UI can settle. */
     onOpen() {
       // A session left open when Horizon closed does not come back on its own.
-      if (activeOverlay) { yearPlan.close('close', { silent: true }); yearReview.close({ silent: true }); activeOverlay?.close({ restoreFocus: false }); render(); }
+      if (activeOverlay) { yearPlan.close('close', { silent: true }); yearReview.close({ silent: true }); quarterReview.close('close', { silent: true }); activeOverlay?.close({ restoreFocus: false }); render(); }
       positionIndicator(false);
       revealToday();
       // Rendering happens while the dialog is still hidden, so textareas could not be measured yet.

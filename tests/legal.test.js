@@ -220,6 +220,17 @@ test('prices and Plus features in the terms come from src/lib/pricing.js', () =>
   assert.equal(legal.featuresText([{ title: 'A' }]), '“A”');
 });
 
+test('without JavaScript, the terms and the landing’s descriptions still list every Plus feature', async () => {
+  const terms = await read('legal/terms/index.html');
+  assert.equal(/<span data-legal-features>([^<]*)<\/span>/.exec(terms)?.[1], legal.featuresText(), 'the fallback is what the script writes');
+  const landing = await read('welcome/index.html');
+  const meta = /<meta name="description" content="([^"]*)"/.exec(landing)?.[1] || '';
+  const offer = /"name": "Daily Planner Plus", "description": "([^"]*)"/.exec(landing)?.[1] || '';
+  for (const [where, value] of [['meta description', meta], ['structured-data offer', offer]]) {
+    for (const name of ['year plan|Plan your year', 'quarterly check-ins', 'Insights', 'year in review']) assert.match(value, new RegExp(name, 'i'), `${where}: ${name}`);
+  }
+});
+
 test('the cookies page lists every storage key the code uses', async () => {
   const cookies = await read('legal/cookies/index.html');
   const sources = ['src/lib/planner-api.js', 'src/lib/plus.js', 'src/features/plus-check.js', 'src/features/plus-dialog.js', 'src/features/feedback.js', 'src/features/sync-guide.js', 'src/features/progress-view.js', 'src/features/paint-palettes.js', 'src/ui/theme.js', 'src/sync/ledger.js'];

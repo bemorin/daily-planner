@@ -124,7 +124,7 @@ Settings → **Appearance** follows the device (System) or keeps the planner Lig
 
 ## Floating mode
 
-When Document Picture-in-Picture is supported, the planner can stay in a compact floating window with editable **Plan / Schedule** views.
+When Document Picture-in-Picture is supported, the planner can stay in a compact floating window with **Focus** (the current block, time left, the main outcome and the next tasks), an editable **Plan** (ending with what is still unresolved from other days, folded away) and a **Schedule** timeline; its arrows always move one day, in step with the main window. Where it is not supported (Firefox, Safari), the button and its shortcut are hidden.
 
 ## Install as an app
 
