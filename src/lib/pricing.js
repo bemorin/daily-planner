@@ -119,6 +119,27 @@ export const giftPlan = plan => teamTier(plan) || PERSONAL_GIFTS.find(gift => gi
 export const isPersonalGift = plan => PERSONAL_GIFTS.some(gift => gift.plan === plan);
 export const validCurrency = value => (CURRENCIES.includes(value) ? value : '');
 
+/* The partner program's arithmetic (PARTNER_PROGRAM): the partners page, the dashboard. */
+
+/** A team gift (a team tier), as opposed to Plus or a personal gift. */
+export const isTeamGift = (kind, plan = '') => kind === 'gift' && !!teamTier(plan);
+
+/**
+ * The commission rate, in percent, for what was bought through a partner's
+ * link: PARTNER_PROGRAM.rate for Plus and the personal gifts (Creem pays it),
+ * PARTNER_PROGRAM.teamRate for a team gift (the owner pays it); 0 otherwise.
+ */
+export function partnerRate(kind, plan = '') {
+  if (kind === 'plus' || (kind === 'gift' && isPersonalGift(plan))) return PARTNER_PROGRAM.rate;
+  return isTeamGift(kind, plan) ? PARTNER_PROGRAM.teamRate : 0;
+}
+
+/** A tax-inclusive amount in cents, before a tax of `taxPercent` (20 = 20% VAT), to the cent. */
+export const beforeTaxCents = (cents, taxPercent = 0) => Math.round(Number(cents) * 100 / (100 + Math.max(0, Number(taxPercent) || 0)));
+
+/** `rate` percent of an amount in cents, to the cent: a commission. */
+export const commissionCents = (cents, rate) => Math.round(Number(cents) * Number(rate) / 100);
+
 /** The currency a country pays in (ISO 3166 alpha-2), or '' when the country is unknown. */
 export function currencyForCountry(country) {
   const code = String(country || '').trim().toUpperCase();

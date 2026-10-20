@@ -12,12 +12,16 @@
 //         GET /v1/transactions?transaction_id=… (a refund names only its transaction,
 //         whose `order` leads back to the checkout), header x-api-key
 //         https://api.creem.io (live) or https://test-api.creem.io (test)
-//         A partner's code goes in `affiliate_code` (Creem's affiliate program);
-//         Creem refuses an unknown code with HTTP 400. The same code goes in the
-//         metadata (`ref`) and in the seal, so the sale can be listed by partner
-//         once it is paid — only when our API opened the checkout. (Creem's order
-//         has an `affiliate` field, but its docs don't say whether it holds the
-//         code or an id, so the sealed `ref` is what is listed.)
+//         A partner's code goes in `affiliate_code` (Creem's affiliate program,
+//         which pays 25% of Plus and personal gifts); Creem refuses an unknown
+//         code with HTTP 400. A team gift never carries `affiliate_code`: its 10%
+//         is paid by the owner, not by Creem. The code goes in the metadata
+//         (`ref`) and in the seal for every item, so the sale can be listed by
+//         partner once it is paid — only when our API opened the checkout.
+//         (Creem's order has an `affiliate` field, but its docs don't say whether
+//         it holds the code or an id, so the sealed `ref` is what is listed.)
+//         The order's `tax_amount` is read so commissions are worked out on the
+//         price before tax.
 //         A gift at the member price (the buyer has Plus) carries `member: '1'`.
 // Webhook header creem-signature = hex HMAC-SHA256(raw body, CREEM_WEBHOOK_SECRET)
 // Env     CREEM_API_KEY, CREEM_WEBHOOK_SECRET, CREEM_PLUS_EUR, CREEM_PLUS_USD,
@@ -178,7 +182,8 @@ export const creemIdOf = value => {
 
 /**
  * What a checkout bought, read defensively (ids or expanded objects).
- * Returns { completed, paid, productId, item, email, country, org, amount, currency, …, orderId }:
+ * Returns { completed, paid, productId, item, email, country, org, amount, tax, currency, …, orderId }
+ * (`amount` is what was paid in cents, `tax` the tax included in it, null when Creem doesn't say):
  * `item` is { kind: 'plus', plan: '', seats: 1 } or { kind: 'gift', plan, seats } with
  * seats from the plan (a team tier or a personal gift, never from the metadata alone),
  * or null when the product is not one of `products` (Map from parseCreemProducts) or
@@ -220,9 +225,11 @@ export function readCheckout(checkout, products = new Map()) {
   const email = String(customer?.email ?? entity.customer_email ?? '').trim().toLowerCase();
   const country = /^[A-Za-z]{2}$/.test(String(customer?.country ?? '')) ? String(customer.country).toUpperCase() : '';
   const amount = wholeCents(order?.amount_paid) ?? wholeCents(order?.amount);
+  // The tax included in the amount paid (VAT or sales tax, set by Creem from the buyer's country), when Creem gives it.
+  const tax = wholeCents(order?.tax_amount);
   const currency = String(order?.currency ?? objectOrNull(entity.product)?.currency ?? product?.currency ?? '').toUpperCase();
   return {
-    completed, paid, productId, item, email, country, org, amount,
+    completed, paid, productId, item, email, country, org, amount, tax: tax != null && amount != null && tax <= amount ? tax : null,
     currency: CURRENCIES.includes(currency) ? currency : '',
     productCurrency: product?.currency || '',
     requestId: String(entity.request_id ?? ''),

@@ -1,14 +1,17 @@
 // Cloudflare D1 implementation of the planner API store.
 // Schema: migrations/0001_planner_api.sql, migrations/0002_team_requests.sql,
 // migrations/0003_plus.sql, migrations/0004_creem_reviews.sql, migrations/0005_refunds.sql,
-// migrations/0006_partners.sql
+// migrations/0006_partners.sql, migrations/0007_partner_commissions.sql
+// Reads that join a 0007 table fall back to the older query while it is
+// missing, and writes to it are skipped, so a deployment works before the
+// migration is applied (the dashboard says it is missing).
 // Every value goes through bound parameters (D1 allows at most 100 per query,
 // so id lists are deleted in chunks).
 // The stripe_session columns of gifts and purchases hold the checkout reference
 // (a Creem checkout id; older rows may hold an earlier reference).
 
 import { normalizeGift } from './gifts.js';
-import { normalizePartnerSale } from './partners.js';
+import { normalizePartnerSale, normalizePayout } from './partners.js';
 
 const waitlistColumns = 'id, email, devices, note, locale, app_version AS appVersion, drive_seen AS driveSeen, created_at AS createdAt';
 const feedbackColumns = 'id, app_version AS appVersion, rating, kind, message, email, platform, created_at AS createdAt';
@@ -23,6 +26,11 @@ const orderColumns = 'order_id AS orderId, checkout_id AS checkoutId, kind, mode
 const refundColumns = 'id, kind, order_id AS orderId, transaction_id AS transactionId, checkout_id AS checkoutId, item, amount, currency, full_refund AS fullRefund, scope, reason, revoked, status, note, attempts, created_at AS createdAt';
 const revocationColumns = 'target, source, kind, label, reason, note, was_active AS wasActive, created_at AS createdAt';
 const partnerSaleColumns = 'checkout_id AS checkoutId, code, kind, plan, amount, currency, member, mode, created_at AS createdAt';
+const payoutColumns = 'checkout_id AS checkoutId, code, amount, currency, note, paid_at AS paidAt';
+const isMissingTable = error => /no such table/i.test(String(error?.message || ''));
+/** The first query, or the second when the first needs a table that isn't there yet (migration 0007). */
+const withFallback = async (query, fallback) => { try { return await query(); } catch (error) { if (isMissingTable(error)) return fallback(); throw error; } };
+const skipMissing = error => { if (!isMissingTable(error)) throw error; return 0; };
 const refundRow = row => (row ? { ...row, amount: row.amount == null ? null : Number(row.amount), fullRefund: Number(row.fullRefund) === 1, attempts: Number(row.attempts) || 0, ...(row.inForce === undefined ? {} : { inForce: Number(row.inForce) === 1 }) } : null);
 const revocationRow = row => ({ ...row, wasActive: row.wasActive == null ? null : Number(row.wasActive) === 1 });
 const ID_CHUNK = 90;
@@ -129,9 +137,22 @@ export function createD1Store(db) {
     listRevocationsBySource: source => all(`SELECT ${revocationColumns} FROM revocations WHERE source = ? ORDER BY target`, source).then(rows => rows.map(revocationRow)),
     deleteRevocations: async source => await run('DELETE FROM revocations WHERE source = ?', source),
     // Partner sales (migration 0006): one row per paid checkout that came through a partner's link.
-    addPartnerSale: async row => await run('INSERT INTO partner_sales (checkout_id, code, kind, plan, amount, currency, member, mode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING',
-      row.checkoutId, row.code, row.kind, row.plan || '', row.amount ?? null, row.currency || '', row.member ? 1 : 0, row.mode || '', row.createdAt) > 0,
-    listPartnerSales: ({ limit = 2000 } = {}) => all(`SELECT ${partnerSaleColumns} FROM partner_sales ORDER BY created_at DESC, checkout_id LIMIT ?`, limit).then(rows => rows.map(normalizePartnerSale)),
+    // The tax included in a sale's amount is kept apart (migration 0007), skipped while that table is missing.
+    async addPartnerSale(row) {
+      const added = await run('INSERT INTO partner_sales (checkout_id, code, kind, plan, amount, currency, member, mode, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING',
+        row.checkoutId, row.code, row.kind, row.plan || '', row.amount ?? null, row.currency || '', row.member ? 1 : 0, row.mode || '', row.createdAt) > 0;
+      if (Number.isInteger(row.tax)) await run('INSERT INTO partner_sale_taxes (checkout_id, tax) VALUES (?, ?) ON CONFLICT(checkout_id) DO NOTHING', row.checkoutId, row.tax).catch(skipMissing);
+      return added;
+    },
+    listPartnerSales: ({ limit = 2000 } = {}) => withFallback(
+      () => all(`SELECT partner_sales.checkout_id AS checkoutId, code, kind, plan, amount, partner_sale_taxes.tax AS tax, currency, member, mode, created_at AS createdAt FROM partner_sales LEFT JOIN partner_sale_taxes ON partner_sale_taxes.checkout_id = partner_sales.checkout_id ORDER BY created_at DESC, partner_sales.checkout_id LIMIT ?`, limit),
+      () => all(`SELECT ${partnerSaleColumns} FROM partner_sales ORDER BY created_at DESC, checkout_id LIMIT ?`, limit)
+    ).then(rows => rows.map(normalizePartnerSale)),
+    // Team commissions the owner marked as paid (migration 0007): one row per checkout.
+    addPartnerPayout: async row => await run('INSERT INTO partner_payouts (checkout_id, code, amount, currency, note, paid_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING',
+      row.checkoutId, row.code, row.amount ?? null, row.currency || '', row.note || '', row.paidAt) > 0,
+    listPartnerPayouts: () => all(`SELECT ${payoutColumns} FROM partner_payouts ORDER BY paid_at DESC, checkout_id`).then(rows => rows.map(normalizePayout)),
+    deletePartnerPayout: async checkoutId => await run('DELETE FROM partner_payouts WHERE checkout_id = ?', checkoutId) > 0,
     /** Revocations of partner sales' checkouts ({ checkoutId, reason }): a refund, a dispute or the owner switched them off. Needs migration 0005 too. */
     partnerSaleStates: () => all("SELECT partner_sales.checkout_id AS checkoutId, revocations.reason AS reason FROM partner_sales JOIN revocations ON revocations.target = 'checkout:' || partner_sales.checkout_id"),
     /** Refunds of partner sales ({ checkoutId, amount, currency, fullRefund }), so partial ones come off the revenue. Needs migration 0005 too. */
@@ -159,17 +180,26 @@ export function createD1Store(db) {
       await db.prepare('INSERT INTO feedback (app_version, rating, kind, message, email, platform, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .bind(entry.appVersion, entry.rating, entry.kind, entry.message, entry.email, entry.platform, entry.createdAt).run();
     },
+    // A request's partner code is kept apart (migration 0007), skipped while that table is missing.
     async addTeamRequest(entry) {
-      await db.prepare('INSERT INTO team_requests (email, name, company, team_size, timing, plan, currency, kind, message, locale, app_version, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(entry.email, entry.name, entry.company, entry.teamSize, entry.timing, entry.plan, entry.currency, entry.kind, entry.message, entry.locale, entry.appVersion, entry.source, entry.createdAt).run();
+      const sql = 'INSERT INTO team_requests (email, name, company, team_size, timing, plan, currency, kind, message, locale, app_version, source, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+      const values = [entry.email, entry.name, entry.company, entry.teamSize, entry.timing, entry.plan, entry.currency, entry.kind, entry.message, entry.locale, entry.appVersion, entry.source, entry.createdAt];
+      if (!entry.ref) {
+        await db.prepare(sql).bind(...values).run();
+        return;
+      }
+      const [row] = await all(`${sql} RETURNING id`, ...values);
+      if (row?.id != null) await run('INSERT INTO team_request_partners (request_id, code, created_at) VALUES (?, ?, ?) ON CONFLICT(request_id) DO NOTHING', Number(row.id), entry.ref, entry.createdAt).catch(skipMissing);
     },
-    listTeamRequests: ({ limit = 0 } = {}) => limit
-      ? all(`SELECT ${teamColumns} FROM team_requests ORDER BY created_at DESC, id DESC LIMIT ?`, limit)
-      : all(`SELECT ${teamColumns} FROM team_requests ORDER BY created_at DESC, id DESC`),
+    listTeamRequests: ({ limit = 0 } = {}) => withFallback(
+      () => all(`SELECT ${teamColumns.split(', ').map(column => `team_requests.${column}`).join(', ')}, COALESCE(team_request_partners.code, '') AS ref FROM team_requests LEFT JOIN team_request_partners ON team_request_partners.request_id = team_requests.id ORDER BY team_requests.created_at DESC, team_requests.id DESC${limit ? ' LIMIT ?' : ''}`, ...(limit ? [limit] : [])),
+      () => all(`SELECT ${teamColumns}, '' AS ref FROM team_requests ORDER BY created_at DESC, id DESC${limit ? ' LIMIT ?' : ''}`, ...(limit ? [limit] : []))
+    ),
     teamRequestTotals: () => all('SELECT COUNT(*) AS count, COALESCE(SUM(team_size), 0) AS seats FROM team_requests')
       .then(([row]) => ({ count: Number(row?.count) || 0, seats: Number(row?.seats) || 0 })),
     async deleteTeamRequest(id) {
       const result = await db.prepare('DELETE FROM team_requests WHERE id = ?').bind(id).run();
+      await run('DELETE FROM team_request_partners WHERE request_id = ?', id).catch(skipMissing);
       return result.meta?.changes > 0;
     },
     eventTotals: ({ sinceDay }) => all('SELECT name, app_version AS appVersion, SUM(count) AS count FROM events WHERE day >= ? GROUP BY name, app_version ORDER BY name, app_version DESC', sinceDay),

@@ -1,156 +1,40 @@
-// Imported as a namespace so a value missing from an older config.js reads as
-// undefined instead of failing the whole module.
-import * as config from '../src/config.js';
-import { LANDING_EVENTS, trackEvent, plannerApiEnabled, checkoutOptions, startCheckout, rememberReferral, setUsageCountsEnabled, usageCountsEnabled } from '../src/lib/planner-api.js';
-import { animate } from '../src/vendor/motion.js';
-import { LAUNCH, PERSONAL_GIFTS, PLUS_PRICE, PLUS_FEATURES, PLUS_UPCOMING, TEAM_TIERS, formatMoney, isPersonalGift, memberGiftPrice, memberPriceNotice } from '../src/lib/pricing.js';
+import { LANDING_EVENTS, plannerApiEnabled, rememberReferral, setUsageCountsEnabled, trackEvent, usageCountsEnabled } from '../src/lib/planner-api.js';
+import { LAUNCH, PARTNER_PROGRAM, PERSONAL_GIFTS, PLUS_FEATURES, PLUS_PRICE, PLUS_UPCOMING, isPersonalGift, memberGiftPrice, memberPriceNotice } from '../src/lib/pricing.js';
 import { savedPlusToken, verifyPlusToken, writePlusCheck } from '../src/lib/plus.js';
-import { TEAM_ROWS, buyState, checkoutUrl, countedMoments, currencyLine, defaultPlan, lowestPerPerson, monthWeeks, pageCurrency, perPerson, personalOffer, planForPeople, planRow, readCheckoutOptions, ritualYear, statusTone, taxLine, tierLabel, tierPrice, upcomingSentence } from './landing-model.js';
-import { createListbox } from './listbox.js';
+import { animate } from '../src/vendor/motion.js';
+import { countedMoments, monthWeeks, personalOffer, ritualYear, statusTone, upcomingSentence } from './landing-model.js';
+import { LANDING } from './landing-settings.js';
+import { CHECK_ICON, el, qs, qsa, renderFooter, setupTopBar } from './page-kit.js';
+import { EASE_OUT, followMotion, motionWanted, reduceQuery, setupFaq, setupReveal } from './page-motion.js';
 import { createPaletteCard } from './palette-card.js';
 import { createPrivacyDialog } from './privacy-dialog.js';
-import { createStepper } from './stepper.js';
-import { setupFaq, setupReveal } from './page-motion.js';
+import { checkout, createSale, renderPriceLines, setupBuyButtons } from './sale.js';
+import { click, setupScenes } from './scenes.js';
+import { teamsAddress } from './teams-model.js';
 
 /* ============================================================================
-   LANDING — copy the owner may want to change without touching markup.
-   Prices, what Plus adds and what it promises next live in
-   src/lib/pricing.js (shared with the planner and the server, which charges
-   exactly those amounts). Online checkout is Creem, through the owner API:
-   GET /api/checkout says what can be bought, and in which currency this
-   visitor pays (the euro area in EUR, everyone else in USD; no switch).
+   LANDING (/welcome/): the planner, Plus and its prices for one person, and a
+   banner that leads to the Teams page (/welcome/teams/), where the team gift,
+   its prices and the request form live. Copy the owner may change without
+   touching markup is in welcome/landing-settings.js (LANDING); prices, what
+   Plus adds and what it promises next in src/lib/pricing.js (shared with the
+   planner and the server, which charges exactly those amounts).
    The launch price (LAUNCH) shows wherever Plus has a price ([data-launch]).
    A visitor whose planner (same site) has Plus sees the member price of the
    personal gifts; the licence goes with a gift checkout, and the server
    checks it before charging that price.
-
-   PROPOSALS TO CONFIRM BEFORE PUBLISHING (owner decision pending):
-   - `pricingNote` (check the wording with your accountant);
-   - `replyDelay` (left blank on purpose: no response time is promised);
-   - `supportEmail` (left blank on purpose: fill it in yourself, or set
-     DAILY_PLANNER_SUPPORT_EMAIL when building, which the legal pages use too).
    ============================================================================ */
-const LANDING = {
-  // Shown after "Prices in euros, taxes included." under the prices.
-  pricingNote: 'One-time payments. Receipts and invoices come from Creem, our payment partner.',
-  // Optional add-on, shown under the team prices (and as a request type) when
-  // enabled. Off: no workshops, travel or live sessions are sold for now.
-  talk: { enabled: false, label: 'A remote talk by Ben (45 minutes)', price: 'On quote' },
-  // When PLANNER_API_URL is blank, requests become an email to this address.
-  // Left blank too, the form stays visible but cannot be sent.
-  contactEmail: '',
-  // A reachable support address, shown as "Support: …" in the footer when set
-  // (the payment provider's review asks for one that matches this site).
-  // Blank here: the site's SUPPORT_EMAIL (runtime config) is used instead.
-  supportEmail: '',
-  // Optional promise shown after a request, e.g. 'within two working days'.
-  replyDelay: '',
-  landingUrl: 'https://planner.bemorin.com/welcome/#teams',
-  // "Send this to my manager": the same text feeds the mailto link and the
-  // Copy message button. {url} becomes landingUrl; {perPerson} the lowest
-  // price per person in the visitor's currency.
-  managerEmail: {
-    subject: 'An idea for our year-end gift',
-    body: [
-      'Hi,',
-      '',
-      'For our year-end gift, I’d like to suggest Daily Planner Plus for everyone. Instead of another object, each person gets a calm planner for their days and their year, with a guided session to plan the year ahead and a one-page review of the year.',
-      '',
-      'It’s simple to give: we get one link to forward, and each person who opens it activates Plus on their own planner. There’s nothing to install, no accounts to create and no names collected, and each person’s planner stays private: the company never sees it.',
-      '',
-      'It’s a one-time price for the company, from about {perPerson} per person, with an invoice and no subscription.',
-      '',
-      'Details and prices: {url}',
-      '',
-      'Worth a look?'
-    ].join('\n')
-  }
-};
 
-const PLANNER_API_URL = typeof config.PLANNER_API_URL === 'string' ? config.PLANNER_API_URL : '';
-const APP_VERSION = typeof config.APP_VERSION === 'string' ? config.APP_VERSION : '';
-const configText = key => (typeof config[key] === 'string' ? config[key].trim() : '');
-
-const TIMING_LABELS = {
-  'december-2026': 'Before the holidays (December 2026)',
-  'january-2027': 'January 2027',
-  'q1-2027': 'Later in Q1 2027',
-  later: 'Later'
-};
-
-// One-click choices under "Number of people".
-const PEOPLE_CHOICES = [10, 25, 50, 100, 500, 1000];
-const PEOPLE_MIN = 2;
-const PEOPLE_MAX = 100000;
-
-const KINDS = {
-  invoice: { label: 'Invoice', title: 'Get it by invoice', intro: 'Tell us where to send the invoice. You’ll get it by email, then the gift link once it’s paid.', submit: 'Request the invoice', done: 'Thanks, your request is in. The invoice will follow by email' },
-  quote: { label: 'Quote', title: 'Ask for a quote', intro: 'Tell us about your organisation, and you’ll get a quote by email.', submit: 'Ask for a quote', done: 'Thanks, your request is in. The quote will follow by email' },
-  question: { label: 'Question', title: 'Ask a question', intro: 'Ask anything about the planner, Plus or the team gift. You’ll get a reply by email.', submit: 'Send the question', done: 'Thanks, your question is in. You’ll get a reply by email' },
-  talk: { label: 'Remote talk', title: 'Ask about the talk', intro: 'Tell us about your team and when a remote talk would help. You’ll get a reply by email.', submit: 'Send the request', done: 'Thanks, your message is in. You’ll get a reply by email' }
-};
-// A question about the partner program (?ask=question&topic=partners, from the partners page
-// while its Creem sign-up link isn't set): the same form, its own title and a first line.
-const PARTNER_QUESTION = { title: 'Ask about the partner program', intro: 'Tell us who you are and who you’d recommend Daily Planner to. You’ll get a reply by email.', message: 'Partner program: ' };
-
-const qs = (selector, root = document) => root.querySelector(selector);
-const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
 const html = document.documentElement;
 const apiOn = plannerApiEnabled();
 const track = name => { if (apiOn) trackEvent(name); };
-const reduceQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-const smoothBehavior = () => (reduceQuery.matches ? 'auto' : 'smooth');
-const EASE_OUT = [0.22, 1, 0.36, 1];
-const CHECK_ICON = '<svg class="i"><use href="#i-check"/></svg>';
-
-// Same rule as the server: a plain domain (letters, digits, dots, hyphens).
-const EMAIL_RE = /^[^\s@<>()[\]\\,;:"?&=%/#]{1,64}@[a-z0-9](?:[a-z0-9.-]{0,188}[a-z0-9])?\.[a-z]{2,24}$/i;
-const httpsUrl = value => (typeof value === 'string' && /^https:\/\/[^\s"'<>]+$/.test(value.trim()) ? value.trim() : '');
-
-function el(tag, attrs = {}, ...children) {
-  const node = document.createElement(tag);
-  Object.entries(attrs).forEach(([key, value]) => {
-    if (value === false || value == null) return;
-    if (key === 'class') node.className = value;
-    else if (key === 'style') node.style.cssText = value;
-    else if (key === 'html') node.innerHTML = value;
-    else node.setAttribute(key, value === true ? '' : String(value));
-  });
-  children.flat().forEach(child => { if (child != null) node.append(child instanceof Node ? child : String(child)); });
-  return node;
-}
 
 const okMark = () => el('span', { class: 'ok', 'aria-hidden': 'true', html: CHECK_ICON });
 
-/* Currency: the euro area pays in EUR, everyone else in USD --------------- */
+/* Currency and what can be bought online: asked once, on load -------------- */
 
-// A first guess from the browser's languages; the server's answer (from the
-// visitor's country) replaces it as soon as it arrives, before the prices
-// are on screen. There is no switch.
-let currency = pageCurrency(null);
-const money = value => formatMoney(value, currency);
-const currencyName = () => (currency === 'EUR' ? 'euros' : 'US dollars');
-
-/* What can be bought online, and in which currency: asked once, on load ---- */
-
-const sale = { options: readCheckoutOptions(null), pending: null };
-
-function loadSaleOptions() {
-  if (!apiOn) return Promise.resolve(sale.options);
-  if (sale.options.known) return Promise.resolve(sale.options);
-  if (!sale.pending) {
-    sale.pending = checkoutOptions().then(result => {
-      sale.options = readCheckoutOptions(result);
-      sale.pending = null;
-      currency = pageCurrency(sale.options);
-      renderOffers();
-      return sale.options;
-    });
-  }
-  return sale.pending;
-}
-
-const saleFor = item => buyState({ apiOn, options: sale.options, item, currency });
+const sale = createSale({ onLoad: () => renderOffers() });
+const money = value => sale.money(value);
 
 /* Members: Plus in this browser's planner (the same site) -------------------- */
 
@@ -172,13 +56,13 @@ async function checkMember() {
 
 /** A personal gift's price for this visitor: { amount, was } — `was` is the usual price when the member price applies. */
 function giftPriceFor(plan) {
-  const offer = personalOffer(plan, currency);
+  const offer = personalOffer(plan, sale.currency);
   if (!offer || offer.amount == null) return { amount: null, was: null };
-  const reduced = member.active ? memberGiftPrice(plan, currency) : null;
+  const reduced = member.active ? memberGiftPrice(plan, sale.currency) : null;
   return reduced != null && reduced < offer.amount ? { amount: reduced, was: offer.amount } : { amount: offer.amount, was: null };
 }
 
-/* Offer: Plus, personal gifts, team tiers, talk ---------------------------- */
+/* Offer: Plus and personal gifts ------------------------------------------ */
 
 function renderPlusLists() {
   // The lines of the Plus card: everything in Free, then what Plus adds.
@@ -221,8 +105,8 @@ function renderPlusLists() {
 }
 
 function plusCta(box) {
-  const state = saleFor('plus');
-  const price = PLUS_PRICE[currency];
+  const state = sale.state('plus');
+  const price = PLUS_PRICE[sale.currency];
   const children = [];
   if (state.buyable) {
     // The button names the price, so it reads the same wherever it is.
@@ -232,7 +116,7 @@ function plusCta(box) {
     const id = `plus-note-${box.dataset.plusCta || 'x'}`;
     children.push(el('button', { class: 'btn btn--primary btn--buy', type: 'button', disabled: true, 'aria-describedby': id }, 'Coming soon'));
     children.push(state.reason === 'currency'
-      ? el('p', { class: 'buy__note', id }, `Plus isn’t on sale in ${currencyName()} yet. Everything else is free: `, el('a', { href: '../', 'data-cta': 'app' }, 'open the planner'), '.')
+      ? el('p', { class: 'buy__note', id }, `Plus isn’t on sale in ${sale.currencyName()} yet. Everything else is free: `, el('a', { href: '../', 'data-cta': 'app' }, 'open the planner'), '.')
       : el('p', { class: 'buy__note', id }, 'Plus isn’t on sale here yet. Everything else is free: ', el('a', { href: '../', 'data-cta': 'app' }, 'open the planner'), '.'));
   }
   children.push(el('p', { class: 'buy__error', role: 'alert', 'data-buy-error': true, hidden: true }));
@@ -247,7 +131,7 @@ function renderLaunch() {
 }
 
 function renderPlus() {
-  const price = PLUS_PRICE[currency];
+  const price = PLUS_PRICE[sale.currency];
   qsa('[data-plus-price]').forEach(node => { node.textContent = Number.isFinite(price) ? money(price) : ''; });
   qsa('[data-free-price]').forEach(node => { node.textContent = money(0); });
   qsa('[data-plus-cta]').forEach(plusCta);
@@ -261,7 +145,7 @@ function renderPlus() {
 function renderGifts() {
   const list = qs('[data-gift-list]');
   if (list) {
-    const state = saleFor('gift');
+    const state = sale.state('gift');
     list.replaceChildren(...PERSONAL_GIFTS.map(gift => {
       const { amount, was } = giftPriceFor(gift.plan);
       const price = amount == null ? '' : money(amount);
@@ -286,11 +170,11 @@ function renderGifts() {
     ? 'As a Plus member, you pay the member price. After paying, you get a link to send: Plus is theirs for life as soon as they open it.'
     : 'After paying, you get a link to send. Plus is theirs for life as soon as they open it.';
   qsa('[data-gift-price]').forEach(node => {
-    const offer = personalOffer(node.dataset.giftPrice, currency);
+    const offer = personalOffer(node.dataset.giftPrice, sale.currency);
     if (offer?.amount != null) node.textContent = money(offer.amount);
   });
   qsa('[data-member-price]').forEach(node => {
-    const reduced = memberGiftPrice(node.dataset.memberPrice, currency);
+    const reduced = memberGiftPrice(node.dataset.memberPrice, sale.currency);
     if (reduced != null) node.textContent = money(reduced);
   });
   // The ways to give it, under the Plus offer: “Member price €24 · was €29” for a member.
@@ -305,85 +189,22 @@ function renderGifts() {
   });
 }
 
-function renderTalk() {
-  const talk = qs('[data-talk]');
-  if (!talk) return;
-  if (!LANDING.talk?.enabled) {
-    talk.hidden = true;
-    return;
-  }
-  talk.replaceChildren(
-    el('span', { class: 'talk__what' }, el('b', {}, 'Add-on'), LANDING.talk.label),
-    el('span', { class: 'talk__price' }, LANDING.talk.price),
-    el('a', { class: 'tier__link', href: '#request', 'data-request': 'talk' }, 'Ask about the talk'));
-  talk.hidden = false;
-}
-
-function renderTiers() {
-  const box = qs('[data-tiers]');
-  if (!box) return;
-  const state = saleFor('gift');
-  const rows = TEAM_ROWS.map(row => {
-    const price = tierPrice(row, currency);
-    const named = tierLabel(row).toLowerCase();
-    const quote = price == null;
-    const look = `btn btn--tier ${row.highlight ? 'btn--light' : 'btn--outline-light'}`;
-    const actions = [];
-    if (quote) {
-      actions.push(el('a', { class: look, href: '#request', 'data-request': 'quote', 'data-plan': row.plan, 'aria-label': `Ask for a quote for ${named}` }, 'Ask for a quote'));
-    } else if (state.buyable) {
-      actions.push(el('button', { class: look, type: 'button', 'data-buy': 'gift', 'data-plan': row.plan, 'aria-label': `Buy the team gift for ${named}, ${money(price)}` }, 'Buy'));
-      actions.push(el('a', { class: 'tier__link', href: '#request', 'data-request': 'invoice', 'data-plan': row.plan, 'aria-label': `Get the team gift for ${named} by invoice` }, 'Invoice'));
-    } else {
-      actions.push(el('a', { class: look, href: '#request', 'data-request': 'invoice', 'data-plan': row.plan, 'aria-label': `Get the team gift for ${named} by invoice` }, 'Get it by invoice'));
-    }
-    return el('div', { class: `tier${row.highlight ? ' is-highlight' : ''}${quote ? ' tier--quote' : ''}` },
-      el('b', { class: 'tier__who' }, tierLabel(row), row.badge ? el('span', { class: 'tier__badge' }, row.badge) : null),
-      el('small', { class: 'tier__per' }, quote ? (row.note || '') : `${perPerson(row, currency)} per person`),
-      el('div', { class: 'tier__price' }, quote ? 'On quote' : money(price)),
-      el('div', { class: 'tier__act' }, actions),
-      el('p', { class: 'buy__error tier__error', role: 'alert', 'data-buy-error': true, hidden: true }));
-  });
-  box.replaceChildren(...rows);
-  const after = qs('[data-gift-after]');
-  if (after) {
-    after.replaceChildren(...(state.buyable
-      ? [el('b', {}, 'Right after paying, you land on your gift page'), ' with the link to forward, the seats used and the message your team sees. Its link also arrives by email.']
-      : [el('b', {}, 'Once the invoice is paid,'), ' you get your gift page by email: a private page with the gift link to forward, the seats used and the message your team sees.']));
-  }
-}
-
-function renderCurrencyCopy() {
-  qsa('[data-currency-line]').forEach(node => { node.textContent = currencyLine(currency); });
-  qsa('[data-tax-line]').forEach(node => { node.textContent = taxLine(currency); });
-  qsa('[data-min-per-person]').forEach(node => { node.textContent = lowestPerPerson(currency); });
-  const pay = qs('[data-faq-pay]');
-  if (pay) {
-    pay.textContent = saleFor('gift').buyable
-      ? 'Yes, or by card. “Buy” opens a secure checkout run by Creem, our payment partner; you land on your gift page as soon as it’s paid, and its link arrives by email. “Invoice” sends a request instead: you receive an invoice to pay by bank transfer, then the gift link once it’s paid. Either way it’s one payment, with no subscription.'
-      : 'Yes. Choose a team size and send the request: you’ll receive an invoice to pay by bank transfer, then the gift link once it’s paid. It’s one payment, with no subscription.';
-  }
-}
-
 function renderOffers() {
   renderLaunch();
   renderPlus();
   renderGifts();
-  renderTiers();
-  renderCurrencyCopy();
-  renderPlanOptions();
-  updateManagerLink();
+  // The currency lines, and the team banner's lowest price per person.
+  renderPriceLines(sale);
 }
 
 function setupOffers() {
   const note = qs('[data-pricing-note]');
   if (note) note.textContent = LANDING.pricingNote;
-  renderTalk();
   renderPlusLists();
   renderOffers();
   // Asked at once, so the prices are in the visitor's currency before they
   // scroll to them, and never change under their eyes.
-  loadSaleOptions();
+  sale.load();
 }
 
 /* Compare plans: one disclosure with a smooth height change ---------------- */
@@ -426,34 +247,7 @@ function setupCompare() {
   toggle.addEventListener('click', () => show(!open));
 }
 
-/* Buy: Plus, a personal gift or a team gift, through Creem ----------------- */
-
-function buyError(button, text) {
-  const box = button.closest('[data-plus-cta], [data-gifts], .tier');
-  const error = box && qs('[data-buy-error]', box);
-  if (!error) return;
-  error.textContent = text;
-  error.hidden = !text;
-}
-
-const busyLabels = new WeakMap();
-
-function setBusy(button, busy) {
-  if (busy) {
-    busyLabels.set(button, [...button.childNodes]);
-    const label = button.dataset.buy === 'plus' ? 'Opening checkout…' : 'Opening…';
-    if (button.classList.contains('gift-btn')) button.replaceChildren(el('span', { class: 'gift-btn__name' }, label));
-    else button.textContent = label;
-  } else if (busyLabels.has(button)) {
-    button.replaceChildren(...busyLabels.get(button));
-    busyLabels.delete(button);
-  }
-  button.disabled = busy;
-  button.classList.toggle('is-busy', busy);
-  button.setAttribute('aria-busy', String(busy));
-}
-
-let openRequest = () => {};
+/* Buy: Plus or a personal gift, through Creem ------------------------------ */
 
 /*
  * The member price was shown, but the checkout the server opened charges the
@@ -491,486 +285,41 @@ function showMemberCheck(plan, text, url) {
   return true;
 }
 
-async function buy(clicked) {
-  const item = clicked.dataset.buy;
+function buy(clicked) {
   const plan = clicked.dataset.plan || '';
-  const personal = item === 'gift' && isPersonalGift(plan);
+  const personal = clicked.dataset.buy === 'gift' && isPersonalGift(plan);
   hideMemberCheck();
-  // Loading the sale options can re-render the offers: always act on the button now on the page.
-  const selector = `[data-buy="${CSS.escape(item)}"]${plan ? `[data-plan="${CSS.escape(plan)}"]` : ':not([data-plan])'}`;
-  const current = () => (clicked.isConnected ? clicked : qs(selector) || clicked);
-  // A personal gift is Plus bought for someone else; teams have their own count.
-  if (item === 'plus' || personal) track('plus_checkout_clicked');
-  else track('pack_checkout_clicked');
-  buyError(current(), '');
-  setBusy(current(), true);
-  await loadSaleOptions();
-  const button = current();
-  setBusy(button, true);
-  const state = saleFor(item);
-  if (!state.buyable) {
-    // Not on sale online after all: show the honest state, and for a team
-    // gift go on with the invoice request.
-    setBusy(button, false);
-    renderOffers();
-    if (item === 'gift' && !personal) openRequest({ kind: 'invoice', plan });
-    return;
-  }
-  // A member's personal gift: the licence goes along, for the member price (checked by the server).
-  const shown = personal && giftPriceFor(plan).was != null;
-  const result = await startCheckout({ item, plan, currency, license: personal && member.active ? member.token : '' });
-  const url = result.ok ? checkoutUrl(result.url) : '';
-  const notice = url && personal ? memberPriceNotice(plan, currency, { shown, confirmed: result.member === true }) : '';
-  if (notice) {
-    // The usual prices from now on, and the planner checks its licence when it next opens.
-    member.active = false;
-    writePlusCheck({ at: 0 });
-    renderGifts();
-    if (showMemberCheck(plan, notice, url)) return;
-  }
-  if (url) {
-    // The button stays busy while the browser leaves for the checkout.
-    location.assign(url);
-    return;
-  }
-  setBusy(current(), false);
-  buyError(current(), result.error || 'The checkout could not be opened. Please try again in a minute.');
-}
-
-function setupBuy() {
-  document.addEventListener('click', event => {
-    const button = event.target.closest('[data-buy]');
-    if (!button || button.disabled) return;
-    event.preventDefault();
-    buy(button);
-  });
-  // Back from the checkout page (back/forward cache): buttons work again.
-  window.addEventListener('pageshow', event => {
-    if (!event.persisted) return;
-    qsa('[data-buy].is-busy').forEach(button => setBusy(button, false));
-    hideMemberCheck();
-  });
-}
-
-/* Footer: support address and configured links ---------------------------- */
-
-function renderFooter() {
-  const support = qs('[data-support]');
-  // config.SUPPORT_EMAIL may not exist in an older config.js: undefined is fine.
-  const email = String(LANDING.supportEmail || configText('SUPPORT_EMAIL') || '').trim();
-  if (support && EMAIL_RE.test(email)) {
-    support.replaceChildren('Support: ', el('a', { href: `mailto:${email}` }, email));
-    support.hidden = false;
-  }
-  const social = qs('[data-social]');
-  const links = [['PROJECT_GITHUB_URL', 'GitHub'], ['SOCIAL_X_URL', 'X'], ['SOCIAL_LINKEDIN_URL', 'LinkedIn']]
-    .map(([key, label]) => [httpsUrl(configText(key)), label])
-    .filter(([url]) => url)
-    .map(([url, label]) => el('a', { href: url, rel: 'noopener' }, label));
-  if (social && links.length) {
-    social.replaceChildren(...links);
-    social.hidden = false;
-  }
-}
-
-/* Send this to my manager ------------------------------------------------- */
-
-const managerBody = () => LANDING.managerEmail.body.replaceAll('{url}', LANDING.landingUrl).replaceAll('{perPerson}', lowestPerPerson(currency));
-
-function updateManagerLink() {
-  const link = qs('[data-manager-mail]');
-  if (!link) return;
-  const body = managerBody().replace(/\n/g, '\r\n');
-  link.href = `mailto:?subject=${encodeURIComponent(LANDING.managerEmail.subject)}&body=${encodeURIComponent(body)}`;
-}
-
-function setupManagerEmail() {
-  const link = qs('[data-manager-mail]');
-  const copy = qs('[data-manager-copy]');
-  const status = qs('[data-copy-status]');
-  updateManagerLink();
-  link?.addEventListener('click', () => track('manager_email_opened'));
-  copy?.addEventListener('click', async () => {
-    const ok = await copyText(`Subject: ${LANDING.managerEmail.subject}\n\n${managerBody()}`);
-    if (status) status.textContent = ok ? 'Message copied. Paste it into an email or a chat with your manager.' : 'Copy didn’t work here. Use “Send this to my manager” instead.';
-    if (ok) track('manager_email_opened');
-  });
-}
-
-async function copyText(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch (_) {
-    const area = el('textarea', { readonly: true, style: 'position:fixed;top:0;left:0;opacity:0' });
-    area.value = text;
-    document.body.append(area);
-    area.select();
-    let ok = false;
-    try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
-    area.remove();
-    return ok;
-  }
-}
-
-/* Requests: invoice, quote or question ------------------------------------ */
-
-const requestMode = apiOn ? 'api' : (EMAIL_RE.test(LANDING.contactEmail || '') ? 'mailto' : 'off');
-const request = { kind: 'invoice', topic: '', peopleTouched: false, opened: false, quoted: false, plan: null, timing: null, people: null };
-
-const planOptions = () => TEAM_ROWS.map(row => {
-  const price = tierPrice(row, currency);
-  return { value: row.plan, label: tierLabel(row), hint: price == null ? 'On quote' : money(price) };
-});
-
-function renderPlanOptions() {
-  request.plan?.setOptions(planOptions(), defaultPlan());
-}
-
-function setupRequest() {
-  const panel = qs('[data-form-panel]');
-  const form = qs('[data-team-form]');
-  if (!panel || !form) return;
-
-  const field = name => qs(`[name="${name}"]`, form);
-  const title = qs('[data-form-title]', form);
-  const intro = qs('[data-form-intro]', form);
-  const submit = qs('[data-form-submit]', form);
-  const errorBox = qs('[data-form-error]', form);
-  const counter = qs('[data-message-count]', form);
-  const messageLabel = qs('[data-message-label]', form);
-  const kindGroup = qs('[data-kind-group]', form);
-  const kindNote = qs('[data-kind-note]', form);
-  const done = qs('[data-form-done]', panel);
-  const doneText = qs('[data-form-done-text]', panel);
-  const size = field('teamSize');
-
-  if (LANDING.talk?.enabled && kindGroup && !qs('input[value="talk"]', kindGroup)) {
-    kindGroup.append(el('label', {}, el('input', { type: 'radio', name: 'kind', value: 'talk' }), el('span', {}, KINDS.talk.label)));
-  }
-
-  // The app's own dropdowns and number stepper, instead of the browser's.
-  const plan = createListbox(qs('[data-listbox="plan"]', form), { options: planOptions(), value: defaultPlan(), onChange: chosen => planChosen(chosen) });
-  request.plan = plan;
-  request.timing = createListbox(qs('[data-listbox="timing"]', form), { options: Object.entries(TIMING_LABELS).map(([value, label]) => ({ value, label })), value: 'december-2026' });
-  const people = createStepper(size, { min: PEOPLE_MIN, max: PEOPLE_MAX, quick: PEOPLE_CHOICES, noun: 'people', onChange: count => peopleChanged(count) });
-  request.people = people;
-
-  if (requestMode === 'api') {
-    qs('[data-privacy-line]', form).hidden = false;
-  } else {
-    qs('[data-consent-row]', form).hidden = true;
-    field('consent').required = false;
-  }
-  if (requestMode === 'off') {
-    submit.disabled = true;
-    submit.setAttribute('aria-describedby', 'form-off');
-    const off = qs('[data-form-off]', form);
-    off.id = 'form-off';
-    off.hidden = false;
-  } else {
-    submit.disabled = false;
-  }
-
-  // The plan and the number of people stay in step: the plan is always the
-  // smallest one that fits the number (planForPeople), and choosing a plan
-  // fills in its number unless the number typed already fits it.
-  function fillPeople(row) {
-    people.set(row?.seats || '');
-    size.placeholder = row?.seats ? 'e.g. 40' : `More than ${new Intl.NumberFormat('en-US').format(Math.max(...TEAM_TIERS.map(tier => tier.seats)))}`;
-    request.peopleTouched = false;
-    setError(size, '');
-  }
-
-  function setPlan(value, prefill) {
-    const row = planRow(value);
-    if (!row) return;
-    plan.setValue(value);
-    if (prefill) fillPeople(row);
-  }
-
-  function planChosen(value) {
-    const count = people.value;
-    if (count == null || planForPeople(count) !== value) fillPeople(planRow(value));
-    applyKind();
-  }
-
-  function peopleChanged(count) {
-    if (count == null || count < PEOPLE_MIN) return;
-    const next = planForPeople(count);
-    if (next && next !== plan.value) plan.setValue(next);
-    applyKind();
-  }
-
-  // An invoice needs a price; a tier without one is quoted.
-  function matchKindToPlan() {
-    const priced = tierPrice(planRow(plan.value), currency) != null;
-    request.quoted = request.kind === 'invoice' && !priced;
-    if (request.quoted) setKind('quote', false);
-  }
-
-  // "Pay by invoice" chosen while the plan is on quote: move to the priced
-  // tier that fits the number of people, if there is one.
-  function pricePlanForInvoice() {
-    if (tierPrice(planRow(plan.value), currency) != null) return;
-    const count = people.value;
-    const fit = TEAM_TIERS.find(tier => !count || count <= tier.seats);
-    if (fit) plan.setValue(fit.plan);
-  }
-
-  function setKind(kind, apply = true) {
-    request.kind = KINDS[kind] && (kind !== 'talk' || LANDING.talk?.enabled) ? kind : 'invoice';
-    qsa('input[name="kind"]', form).forEach(input => { input.checked = input.value === request.kind; });
-    if (apply) applyKind();
-  }
-
-  function applyKind() {
-    matchKindToPlan();
-    const copy = request.kind === 'question' && request.topic === 'partners' ? { ...KINDS.question, ...PARTNER_QUESTION } : KINDS[request.kind];
-    title.textContent = copy.title;
-    intro.textContent = requestMode === 'mailto' ? 'Fill this in and your email app will open with the request, ready to send.' : copy.intro;
-    // Below the choice, so the buttons never move under the pointer.
-    kindNote.textContent = request.quoted ? `${tierLabel(planRow(plan.value))}: it starts with a quote, and the invoice follows.` : '';
-    kindNote.hidden = !request.quoted;
-    submit.textContent = requestMode === 'mailto' ? 'Write the request email' : copy.submit;
-    const asking = request.kind === 'question' || request.kind === 'talk';
-    messageLabel.replaceChildren(asking ? 'Your question' : 'Anything else? ', asking ? '' : el('em', {}, 'Optional'));
-    field('message').required = asking;
-  }
-
-  function showForm() {
-    form.hidden = false;
-    done.hidden = true;
-    errorBox.hidden = true;
-  }
-
-  function noteOpened() {
-    if (request.opened) return;
-    request.opened = true;
-    track('team_form_opened');
-  }
-
-  function open({ kind, plan: chosen }) {
-    // Any other request from the page's own links is no longer about the partner program.
-    request.topic = '';
-    showForm();
-    setKind(kind || request.kind, false);
-    if (chosen) setPlan(chosen, true);
-    else if (!size.value) setPlan(plan.value || defaultPlan(), true);
-    applyKind();
-    noteOpened();
-    panel.scrollIntoView({ block: 'start', behavior: smoothBehavior() });
-    title.focus({ preventScroll: true });
-    if (!reduceQuery.matches) {
-      try { animate(title, { opacity: [0.35, 1] }, { duration: 0.5, ease: EASE_OUT }).finished.then(() => title.style.removeProperty('opacity'), () => {}); } catch (_) { /* static is fine */ }
-    }
-  }
-  openRequest = open;
-
-  document.addEventListener('click', event => {
-    const trigger = event.target.closest('[data-request]');
-    if (!trigger) return;
-    event.preventDefault();
-    open({ kind: trigger.dataset.request, plan: trigger.dataset.plan });
-  });
-
-  form.addEventListener('focusin', noteOpened);
-  form.addEventListener('change', event => {
-    if (event.target.name !== 'kind') return;
-    if (event.target.value === 'invoice') pricePlanForInvoice();
-    setKind(event.target.value);
-  });
-
-  // Typing: the plan follows as soon as the number makes sense.
-  size.addEventListener('input', () => {
-    request.peopleTouched = true;
-    const typed = size.value.trim();
-    if (/^\d+$/.test(typed) && Number(typed) >= PEOPLE_MIN) peopleChanged(Math.min(Number(typed), PEOPLE_MAX));
-  });
-
-  const updateCount = () => { counter.textContent = `${field('message').value.length}/1000`; };
-  field('message').addEventListener('input', updateCount);
-
-  form.addEventListener('input', event => {
-    if (event.target.getAttribute('aria-invalid') === 'true') setError(event.target, '');
-  });
-
-  qs('[data-form-again]', panel)?.addEventListener('click', () => {
-    field('message').value = '';
-    updateCount();
-    showForm();
-    title.focus({ preventScroll: true });
-  });
-
-  setPlan(defaultPlan(), true);
-  // Arriving from a link such as ../?ask=question#request.
-  const ask = new URLSearchParams(location.search).get('ask');
-  setKind(KINDS[ask] ? ask : 'invoice');
-  // “Become a partner” on the partners page, before the Creem sign-up link is set: a question about the program.
-  if (ask === 'question' && new URLSearchParams(location.search).get('topic') === 'partners') {
-    request.topic = 'partners';
-    if (!field('message').value) field('message').value = PARTNER_QUESTION.message;
-    updateCount();
-    applyKind();
-  }
-
-  form.addEventListener('submit', async event => {
-    event.preventDefault();
-    if (requestMode === 'off') return;
-    errorBox.hidden = true;
-    peopleChanged(people.value);
-    applyKind();
-    const values = readForm(form, request.kind);
-    const invalid = validate(form, values);
-    if (invalid) { invalid.focus(); return; }
-
-    if (requestMode === 'mailto') {
-      const tier = planRow(values.plan);
-      const price = tierPrice(tier, currency);
-      const lines = [
-        `Request: ${KINDS[values.kind].label}`,
-        `Plan: Team gift, ${tierLabel(tier).toLowerCase()} (${price == null ? 'on quote' : money(price)})`,
-        `Number of people: ${values.teamSize}`,
-        `Timing: ${TIMING_LABELS[values.timing]}`,
-        `Company: ${values.company}`,
-        `Name: ${values.name}`,
-        `Email: ${values.email}`
-      ];
-      if (values.message) lines.push('', values.message);
-      const subject = `Daily Planner team gift — ${KINDS[values.kind].label}: ${values.company}`;
-      location.href = `mailto:${LANDING.contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\r\n'))}`;
-      showDone(`Your email app should open with the request, ready to send. If it doesn’t, write to ${LANDING.contactEmail}.`);
-      return;
-    }
-
-    submit.disabled = true;
-    const label = submit.textContent;
-    submit.textContent = 'Sending…';
-    const result = await sendRequest(values);
-    submit.disabled = false;
-    submit.textContent = label;
-    if (result.ok) {
-      track('team_request_sent');
-      const delay = LANDING.replyDelay ? ` ${LANDING.replyDelay}` : '';
-      showDone(`${KINDS[values.kind].done}${delay}.`);
-    } else {
-      errorBox.textContent = result.error;
-      errorBox.hidden = false;
+  // A personal gift is Plus bought for someone else; team gifts are on the Teams page.
+  track(clicked.dataset.buy === 'plus' || personal ? 'plus_checkout_clicked' : 'pack_checkout_clicked');
+  return checkout(clicked, {
+    sale,
+    // A member's personal gift: the licence goes along, for the member price (checked by the server).
+    license: personal && member.active ? member.token : '',
+    // Not on sale online after all: the honest state.
+    unavailable: () => renderOffers(),
+    confirm: ({ result, url }) => {
+      if (!personal) return false;
+      const currency = sale.currency;
+      const shown = giftPriceFor(plan).was != null;
+      const notice = memberPriceNotice(plan, currency, { shown, confirmed: result.member === true });
+      if (!notice) return false;
+      // The usual prices from now on, and the planner checks its licence when it next opens.
+      member.active = false;
+      writePlusCheck({ at: 0 });
+      renderGifts();
+      return showMemberCheck(plan, notice, url);
     }
   });
-
-  function showDone(text) {
-    doneText.textContent = text;
-    form.hidden = true;
-    done.hidden = false;
-    done.focus();
-  }
-}
-
-function readForm(form, kind) {
-  const data = new FormData(form);
-  const text = name => String(data.get(name) || '').trim();
-  return {
-    email: text('email'),
-    name: text('name'),
-    company: text('company'),
-    plan: text('plan'),
-    teamSize: text('teamSize'),
-    timing: text('timing'),
-    message: text('message'),
-    consent: data.get('consent') === 'on',
-    website: String(data.get('website') || ''),
-    kind
-  };
-}
-
-// A dropdown's value sits in a hidden input; errors and focus go to its button.
-function fieldNode(form, name) {
-  const node = qs(`[name="${name}"]`, form);
-  return node?.type === 'hidden' ? qs('.lb__trigger', node.closest('.lb')) || node : node;
-}
-
-function setError(field, message) {
-  const ids = (field.getAttribute('aria-describedby') || '').split(/\s+/);
-  const box = ids.map(id => document.getElementById(id)).find(node => node?.classList.contains('field__err'));
-  field.setAttribute('aria-invalid', message ? 'true' : 'false');
-  if (box) box.textContent = message;
-}
-
-function validate(form, values) {
-  const count = Number(values.teamSize);
-  const asking = values.kind === 'question' || values.kind === 'talk';
-  const checks = [
-    ['email', !values.email ? 'Enter your work email.' : (!EMAIL_RE.test(values.email) || values.email.length > 254 ? 'Enter an email address like name@company.com.' : '')],
-    ['name', !values.name ? 'Enter your name.' : (values.name.length > 80 ? 'Keep your name under 80 characters.' : '')],
-    ['company', !values.company ? 'Enter your company.' : (values.company.length > 120 ? 'Keep the company name under 120 characters.' : '')],
-    ['plan', planRow(values.plan) ? '' : 'Choose a plan.'],
-    ['teamSize', /^\d+$/.test(values.teamSize) && count >= PEOPLE_MIN && count <= PEOPLE_MAX ? '' : 'Enter the number of people, from 2 to 100,000.'],
-    ['message', values.message.length > 1000 ? 'Keep the message under 1,000 characters.' : (asking && !values.message ? 'Write your question.' : '')],
-    ['consent', requestMode !== 'api' || values.consent ? '' : 'Tick this box so we can reply to you.']
-  ];
-  let first = null;
-  checks.forEach(([name, message]) => {
-    const field = fieldNode(form, name);
-    if (!field) return;
-    setError(field, message);
-    if (message && !first) first = field;
-  });
-  if (!TIMING_LABELS[values.timing]) values.timing = 'december-2026';
-  return first;
-}
-
-async function sendRequest(values) {
-  const payload = {
-    email: values.email,
-    name: values.name,
-    company: values.company,
-    teamSize: Number.parseInt(values.teamSize, 10),
-    timing: values.timing,
-    message: values.message,
-    consent: true,
-    website: values.website,
-    version: APP_VERSION,
-    locale: navigator.language || '',
-    source: 'landing',
-    plan: values.plan,
-    currency,
-    kind: values.kind
-  };
-  try {
-    const response = await fetch(`${PLANNER_API_URL}/teams`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await response.json().catch(() => ({}));
-    if (response.ok && data.ok !== false) return { ok: true };
-    return { ok: false, error: data.error || 'The request could not be sent. Check the form and try again.' };
-  } catch (_) {
-    return { ok: false, error: navigator.onLine === false ? 'You’re offline. Send the request again once you’re connected.' : 'The server couldn’t be reached. Try again in a moment.' };
-  }
 }
 
 /* Header, dock and click counts ------------------------------------------- */
 
 function setupChrome() {
-  const top = qs('[data-top]');
-  let ticking = false;
-  const onScroll = () => {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(() => {
-      top?.classList.toggle('is-scrolled', window.scrollY > 4);
-      ticking = false;
-    });
-  };
-  window.addEventListener('scroll', onScroll, { passive: true });
-  onScroll();
-
+  setupTopBar();
   const dock = qs('[data-dock]');
   const heroCtas = qs('[data-hero-ctas]');
-  // The dock steps aside where it would compete: the Plus offer, the team gift, the request form and the final call to action.
-  const quiet = [qs('.plus-buy'), qs('#teams .band'), qs('[data-form-panel]'), qs('[data-final-cta]')].filter(Boolean);
+  // The dock steps aside where it would compete: the Plus offer, the team banner and the final call to action.
+  const quiet = [qs('.plus-buy'), qs('[data-teams-banner]'), qs('[data-final-cta]')].filter(Boolean);
   if (dock && heroCtas && 'IntersectionObserver' in window) {
     let pastHero = false;
     const quietVisible = new Set();
@@ -990,7 +339,7 @@ function setupChrome() {
     const target = event.target.closest('a, button');
     if (!target) return;
     if (target.matches('[data-cta="app"]')) track('landing_cta_app');
-    else if (target.getAttribute('href') === '#teams') track('landing_cta_teams');
+    else if (target.matches('a[href^="teams/"]')) track('landing_cta_teams');
   });
 }
 
@@ -998,7 +347,7 @@ function setupChrome() {
 
 function setupViewCounts() {
   if (!apiOn || !('IntersectionObserver' in window)) return;
-  const sections = new Map([['plus', 'plus_viewed'], ['teams', 'teams_viewed'], ['pricing', 'pricing_viewed']]);
+  const sections = new Map([['plus', 'plus_viewed'], ['pricing', 'pricing_viewed']]);
   const observer = new IntersectionObserver(entries => {
     entries.forEach(entry => {
       if (!entry.isIntersecting) return;
@@ -1249,15 +598,6 @@ function buildPaint() {
 
 /* Scenes: replicas that play near the viewport and pause when they leave --- */
 
-// A click in a replica: the pointer dips, a ripple spreads, the target presses.
-function click(t, ms, press = '') {
-  t.add('d-click', ms);
-  t.remove('d-click', ms + 640);
-  if (!press) return;
-  t.add(press, ms);
-  t.remove(press, ms + 240);
-}
-
 const SCRIPTS = {
   // The hero: plan, then a pointer closes the day. The Close day sheet opens,
   // two open items are decided, a memory is written, and only then is the
@@ -1410,238 +750,52 @@ const SCRIPTS = {
       t.add('s-ink', span + 900);
     }
   },
-  insights: { run(t) { t.add('s-in', 120); t.add('s-bars', 420); } },
-  gift: {
-    length: 9200,
-    loop: true,
-    run(t) {
-      t.add('s-tap', 700);
-      t.add('s-open', 1300);
-      t.add('s-press', 3100);
-      t.remove('s-press', 3360);
-      t.add('s-on', 3360);
-      t.add('s-seat', 4400);
-      t.count(qs('[data-count]', t.root), 4500, 200);
-    }
-  }
+  insights: { run(t) { t.add('s-in', 120); t.add('s-bars', 420); } }
 };
-
-// Classes a scene passes through on its way to the final frame.
-const TRANSIENT = ['s-press', 's-sync', 's-finger', 's-press-plan', 's-press-save', 's-save', 's-later', 's-tap',
-  'd-cursor', 'd-hover', 'd-press', 'd-click', 'd-modal', 'd-save', 'd-forget', 'd-submit'];
-
-// Moves a replica's pointer onto `target` (a selector inside the scene), in
-// em so it stays in place if the replica is resized while it glides.
-function aim(root, target, { duration = 700, x = 0.5, y = 0.5, jump = false } = {}) {
-  const pointer = qs('.rp-cursor', root);
-  const node = qs(target, root);
-  if (!pointer || !node) return;
-  const box = root.getBoundingClientRect();
-  const rect = node.getBoundingClientRect();
-  const em = Number.parseFloat(getComputedStyle(root).fontSize) || 12;
-  const left = (rect.left - box.left + rect.width * x) / em;
-  const top = (rect.top - box.top + rect.height * y) / em;
-  pointer.style.setProperty('--move', `${jump ? 0 : duration}ms`);
-  pointer.style.setProperty('--cx', `${left.toFixed(2)}em`);
-  pointer.style.setProperty('--cy', `${top.toFixed(2)}em`);
-}
-
-function createScene(root) {
-  const script = SCRIPTS[root.dataset.scene];
-  if (!script) return null;
-  const finals = (root.dataset.final || '').split(/\s+/).filter(Boolean);
-  const typed = qsa('[data-type]', root);
-  typed.forEach(node => { node.dataset.text = node.textContent; });
-  const counters = qsa('[data-count]', root);
-  let timers = [];
-  let state = 'final';
-  let playing = false;
-
-  const later = (ms, fn) => { timers.push(window.setTimeout(fn, ms)); };
-  const clear = () => { timers.forEach(id => window.clearTimeout(id)); timers = []; };
-
-  const api = {
-    root,
-    add: (cls, ms) => later(ms, () => root.classList.add(cls)),
-    remove: (cls, ms) => later(ms, () => root.classList.remove(cls)),
-    point: (target, ms, options) => later(ms, () => aim(root, target, options)),
-    type(node, ms) {
-      if (!node) return;
-      const text = node.dataset.text || '';
-      const speed = Number(node.dataset.speed) || 42;
-      later(ms, () => node.classList.add('is-typing'));
-      for (let index = 1; index <= text.length; index += 1) later(ms + index * speed, () => { node.textContent = text.slice(0, index); });
-      later(ms + text.length * speed + 700, () => node.classList.remove('is-typing'));
-    },
-    count(node, ms, duration) {
-      if (!node) return;
-      const to = Number(node.dataset.count) || 0;
-      const from = Number(node.dataset.from) || 0;
-      const steps = Math.max(1, Math.min(Math.abs(to - from), Math.round(duration / 40)));
-      for (let step = 1; step <= steps; step += 1) later(ms + (duration * step) / steps, () => { node.textContent = String(Math.round(from + ((to - from) * step) / steps)); });
-    }
-  };
-
-  const pointers = qsa('.rp-cursor', root);
-
-  function reset() {
-    root.classList.remove(...finals, ...TRANSIENT);
-    pointers.forEach(node => node.removeAttribute('style'));
-    typed.forEach(node => { node.textContent = ''; node.classList.remove('is-typing'); });
-    counters.forEach(node => { node.textContent = node.dataset.from || '0'; });
-    state = 'reset';
-  }
-
-  function finish() {
-    clear();
-    root.classList.remove(...TRANSIENT, 'is-playing');
-    pointers.forEach(node => node.removeAttribute('style'));
-    root.classList.add(...finals, 'is-armed');
-    typed.forEach(node => { node.textContent = node.dataset.text; node.classList.remove('is-typing'); });
-    counters.forEach(node => { node.textContent = node.dataset.count; });
-    state = 'final';
-    playing = false;
-  }
-
-  function run() {
-    clear();
-    state = 'running';
-    script.run(api);
-    if (script.loop) {
-      later(script.length, () => {
-        reset();
-        later(900, run);
-      });
-    } else {
-      later(script.length || 6000, () => { state = 'final'; });
-    }
-  }
-
-  return {
-    root,
-    loop: !!script.loop,
-    arm() {
-      clear();
-      playing = false;
-      root.classList.remove('is-playing');
-      reset();
-      root.classList.add('is-armed');
-    },
-    finish,
-    play() {
-      if (playing || (!script.loop && state === 'final')) return;
-      playing = true;
-      root.classList.add('is-playing');
-      if (state === 'reset') run();
-      else {
-        // Coming back after a pause: hold the current frame briefly, then replay.
-        later(1400, () => {
-          reset();
-          later(900, run);
-        });
-      }
-    },
-    stop() {
-      if (!playing) return;
-      playing = false;
-      clear();
-      root.classList.remove('is-playing');
-    }
-  };
-}
-
-let motionOn = false;
-const motionHooks = [];
-
-function setupScenes() {
-  const scenes = qsa('[data-scene]').map(createScene).filter(Boolean);
-  if (!scenes.length) return;
-  const visible = new Set();
-  let observer = null;
-
-  const enable = () => {
-    scenes.forEach(scene => scene.arm());
-    // Let the armed (pre-animation) state settle without transitions first.
-    void document.body.offsetHeight;
-    html.classList.add('motion-ok');
-    observer = new IntersectionObserver(entries => {
-      entries.forEach(entry => {
-        const scene = scenes.find(item => item.root === entry.target);
-        if (!scene) return;
-        if (entry.isIntersecting) {
-          visible.add(scene);
-          if (!document.hidden) scene.play();
-          if (!scene.loop) observer.unobserve(scene.root);
-        } else {
-          visible.delete(scene);
-          if (scene.loop) scene.stop();
-        }
-      });
-    }, { threshold: 0.3 });
-    scenes.forEach(scene => observer.observe(scene.root));
-  };
-
-  const disable = () => {
-    observer?.disconnect();
-    observer = null;
-    visible.clear();
-    html.classList.remove('motion-ok');
-    scenes.forEach(scene => scene.finish());
-  };
-
-  if (motionOn) enable();
-  else disable();
-
-  motionHooks.push(on => { if (on) enable(); else disable(); });
-
-  document.addEventListener('visibilitychange', () => {
-    if (!observer) return;
-    visible.forEach(scene => { if (document.hidden) scene.stop(); else scene.play(); });
-  });
-}
 
 /* Start -------------------------------------------------------------------- */
 
+let motionOn = motionWanted();
+const motionHooks = [];
+
+function start() {
+  // A partner's link (?ref=CODE) is remembered for a later purchase.
+  if (apiOn) rememberReferral();
+
+  renderYears();
+  buildPaint();
+  setupOffers();
+  checkMember();
+  setupCompare();
+  setupBuyButtons(buy, { onReturn: hideMemberCheck });
+  renderFooter({ supportEmail: LANDING.supportEmail });
+  createPrivacyDialog({
+    dialog: qs('[data-privacy-dialog]'),
+    enabled: apiOn,
+    moments: countedMoments(LANDING_EVENTS),
+    partnerDays: PARTNER_PROGRAM.cookieDays,
+    countsEnabled: () => usageCountsEnabled(),
+    setCountsEnabled: on => setUsageCountsEnabled(on),
+    reduceMotion: () => reduceQuery.matches
+  });
+  setupChrome();
+  setupViewCounts();
+  setupScenes({ scripts: SCRIPTS, motionOn, motionHooks });
+  createPaletteCard(qs('[data-palette-card]'), { motion: () => motionOn });
+  setupReveal({ motionOn, motionHooks });
+  setupFaq();
+  followMotion(motionHooks, on => { motionOn = on; });
+
+  html.classList.add('js-ready');
+  track('landing_viewed');
+}
+
 // A payment confirmation sent here instead of to the gift page.
 const params = new URLSearchParams(location.search);
+// The team gift moved to the Teams page: its old addresses (?ask=…, #request,
+// #teams, #team-prices, #seats) lead there. The inline script in <head>
+// already did this before first paint; this is the fallback.
+const movedTo = teamsAddress({ path: location.pathname, search: location.search, hash: location.hash });
 if (params.get('checkout_id') || params.get('session')) location.replace(`./thanks/${location.search}`);
-
-// The inline script in <head> set `js-anim` before first paint when motion is
-// welcome. If it gave up waiting for this module, stay static.
-motionOn = html.classList.contains('js-anim') && !reduceQuery.matches;
-
-// A partner's link (?ref=CODE) is remembered for a later purchase.
-if (apiOn) rememberReferral();
-
-renderYears();
-buildPaint();
-setupOffers();
-checkMember();
-setupCompare();
-setupBuy();
-renderFooter();
-createPrivacyDialog({
-  dialog: qs('[data-privacy-dialog]'),
-  enabled: apiOn,
-  moments: countedMoments(LANDING_EVENTS),
-  countsEnabled: () => usageCountsEnabled(),
-  setCountsEnabled: on => setUsageCountsEnabled(on),
-  reduceMotion: () => reduceQuery.matches
-});
-setupManagerEmail();
-setupRequest();
-setupChrome();
-setupViewCounts();
-setupScenes();
-createPaletteCard(qs('[data-palette-card]'), { motion: () => motionOn });
-setupReveal({ motionOn, motionHooks });
-setupFaq();
-
-reduceQuery.addEventListener?.('change', () => {
-  motionOn = !reduceQuery.matches;
-  if (!motionOn) html.classList.remove('js-anim');
-  motionHooks.forEach(hook => hook(motionOn));
-});
-
-html.classList.add('js-ready');
-track('landing_viewed');
+else if (movedTo) location.replace(movedTo);
+else start();

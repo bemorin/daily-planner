@@ -1,9 +1,11 @@
 /**
  * The landing page's privacy notice, in a dialog that looks like the
  * planner's own: what this page counts (with the switch to stop it), prices
- * and your country, purchases and requests. Its facts are written in
- * welcome/index.html; the counted moments come from LANDING_EVENTS (passed in
- * as plain words), so the list cannot drift from what the page sends.
+ * and your country, purchases and requests. Its facts are written in each
+ * page that has it (welcome/index.html, welcome/teams/index.html: the same
+ * dialog); the counted moments come from LANDING_EVENTS (passed in as plain
+ * words), so the list cannot drift from what the page sends, and how long a
+ * partner code is kept from PARTNER_PROGRAM.cookieDays.
  *
  * A native modal <dialog>: the page behind is inert and Escape closes it. It
  * opens and closes with a short animation when motion is welcome, gives focus
@@ -20,11 +22,12 @@ const HASH = '#privacy';
  * @param {HTMLDialogElement} options.dialog
  * @param {boolean} options.enabled       False when the page counts and stores nothing (no owner API).
  * @param {string[]} options.moments      The counted moments, in plain words.
+ * @param {number} [options.partnerDays]  How many days a partner's code is kept ([data-partner-days]).
  * @param {() => boolean} options.countsEnabled
  * @param {(on: boolean) => void} options.setCountsEnabled
  * @param {() => boolean} options.reduceMotion
  */
-export function createPrivacyDialog({ dialog, enabled, moments = [], countsEnabled = () => true, setCountsEnabled = () => {}, reduceMotion = () => false }) {
+export function createPrivacyDialog({ dialog, enabled, moments = [], partnerDays = 0, countsEnabled = () => true, setCountsEnabled = () => {}, reduceMotion = () => false }) {
   if (!dialog || typeof dialog.showModal !== 'function') return { open() {}, close() {} };
   const root = document.documentElement;
   const find = selector => dialog.querySelector(selector);
@@ -40,6 +43,7 @@ export function createPrivacyDialog({ dialog, enabled, moments = [], countsEnabl
   let flashTimer = 0;
 
   if (list) list.replaceChildren(...moments.map(text => Object.assign(document.createElement('li'), { textContent: text })));
+  if (Number.isInteger(partnerDays) && partnerDays > 0) dialog.querySelectorAll('[data-partner-days]').forEach(node => { node.textContent = String(partnerDays); });
 
   const syncSwitch = () => {
     const on = countsEnabled();

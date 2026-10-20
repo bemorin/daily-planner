@@ -2,7 +2,8 @@
 // undefined instead of failing the whole module.
 import * as config from '../../src/config.js';
 import { trackEvent, plannerApiEnabled, claimPurchase, dismissPartnerHint, partnerHintShown, rememberReferral } from '../../src/lib/planner-api.js';
-import { giftAudience, giftPageParams, isDefaultCompany } from '../landing-model.js';
+import { PARTNER_PROGRAM } from '../../src/lib/pricing.js';
+import { giftAudience, giftPageParams, isDefaultCompany, partnerInvitation } from '../landing-model.js';
 
 /* ============================================================================
    Your gift page (/welcome/thanks/): a private page with the gift link, the
@@ -379,8 +380,8 @@ function readyTitle(gift) {
 function renderPartnerHint() {
   const hint = qs('[data-partner-hint]');
   if (!hint) return;
-  const commission = typeof config.AFFILIATE_COMMISSION === 'string' ? config.AFFILIATE_COMMISSION.trim() : '';
-  qs('[data-partner-text]', hint).textContent = `Become a partner: share your own link to Daily Planner, and earn ${commission ? `${commission} of` : 'a commission on'} every purchase made through it.`;
+  // The partner program's terms (PARTNER_PROGRAM in src/lib/pricing.js).
+  qs('[data-partner-text]', hint).textContent = partnerInvitation(PARTNER_PROGRAM.rate);
   hint.hidden = !partnerHintShown('gift');
 }
 

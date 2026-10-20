@@ -863,7 +863,8 @@
 
 .device-actions--single { grid-template-columns: minmax(0, 1fr); }
 
-.help-feedback + .help-privacy { margin-top: -8px; }
+.help-feedback + .help-privacy,
+.help-teams + .help-partners { margin-top: -8px; }
 
 /* Close day: the day you just closed gets painted ------------------------------ */
 

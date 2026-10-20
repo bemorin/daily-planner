@@ -1,12 +1,13 @@
 // What needs the owner's attention, read from the admin summary the dashboard
 // already loads: refunds and disputes to follow up, team requests to answer,
-// Setup items that are missing or need a check, gifts about to expire or full,
-// and new reviews to read. Most urgent first, each with when it started and
+// team commissions earned by partners and not paid yet, Setup items that are
+// missing or need a check, gifts about to expire or full, and new reviews to read. Most urgent first, each with when it started and
 // the card (and row) it points to. The Setup card takes its states from
 // setupChecks() too, so the two always agree. Pure helpers, unit-tested
 // (tests/admin-attention.test.js).
 
 import { compareVersions } from './version.js';
+import { PARTNER_PROGRAM, teamTier } from '../src/lib/pricing.js';
 
 /** Nothing records a reply or a decision, so these stay listed for a while after they arrive. */
 export const TEAM_REPLY_DAYS = 14;
@@ -22,6 +23,7 @@ const DAY = 24 * HOUR;
 export const ATTENTION_SECTIONS = Object.freeze({
   refunds: 'Refunds',
   teams: 'Team kit requests',
+  partners: 'Partners',
   setup: 'Setup',
   gifts: 'Team gifts',
   reviews: 'Reviews'
@@ -38,10 +40,11 @@ const KINDS = {
   dispute: { order: 3, tone: 'warn' },
   'refund-partial': { order: 4, tone: 'warn' },
   team: { order: 5, tone: 'warn' },
-  'setup-warn': { order: 6, tone: 'warn' },
-  'gift-expiring': { order: 7, tone: 'info' },
-  'gift-claimed': { order: 8, tone: 'info' },
-  reviews: { order: 9, tone: 'info' }
+  'partner-pay': { order: 6, tone: 'warn' },
+  'setup-warn': { order: 7, tone: 'warn' },
+  'gift-expiring': { order: 8, tone: 'info' },
+  'gift-claimed': { order: 9, tone: 'info' },
+  reviews: { order: 10, tone: 'info' }
 };
 
 const TEAM_NOUNS = { invoice: 'Invoice request', quote: 'Quote request', question: 'Question', talk: 'Talk request' };
@@ -95,9 +98,9 @@ export function timeUntil(iso, now) {
 export function attentionWhen(item, now) {
   if (item.when === 'setup') return 'this deployment';
   if (item.when === 'until') return timeUntil(item.at, now);
-  if (item.when === 'created') {
+  if (item.when === 'created' || item.when === 'earned') {
     const ago = timeAgo(item.at, now);
-    return ago ? `created ${ago}` : '';
+    return ago ? `${item.when} ${ago}` : '';
   }
   return timeAgo(item.at, now);
 }
@@ -112,7 +115,7 @@ const within = (iso, now, days) => {
 const PAYMENT_ITEMS = ['plus', 'gift'];
 const PAYMENT_CURRENCIES = ['EUR', 'USD'];
 const LEGAL_FIELDS = [['SUPPORT_EMAIL', 'contact address'], ['LEGAL_ADDRESS', 'postal address']];
-const MIGRATIONS = [['teamRequestsUnavailable', '0002_team_requests.sql'], ['plusUnavailable', '0003_plus.sql'], ['reviewsUnavailable', '0004_creem_reviews.sql'], ['refundsUnavailable', '0005_refunds.sql'], ['partnersUnavailable', '0006_partners.sql']];
+const MIGRATIONS = [['teamRequestsUnavailable', '0002_team_requests.sql'], ['plusUnavailable', '0003_plus.sql'], ['reviewsUnavailable', '0004_creem_reviews.sql'], ['refundsUnavailable', '0005_refunds.sql'], ['partnersUnavailable', '0006_partners.sql'], ['partnerCommissionsUnavailable', '0007_partner_commissions.sql']];
 const listed = words => (words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}` : words[0] || '');
 
 /**
@@ -227,6 +230,28 @@ function refundItems(summary, now, { money }) {
   return items;
 }
 
+// ---- Partner commissions ------------------------------------------------------------
+
+/**
+ * One line per team commission a partner earned (its refund period passed,
+ * no refund or dispute) that isn't marked as paid yet, the longest-waiting
+ * first. Creem pays the other commissions itself: nothing to do for those.
+ */
+function partnerItems(summary, now, { money }) {
+  if (summary.partnersUnavailable) return [];
+  const rows = Array.isArray(summary.partners?.toPay) ? summary.partners.toPay : [];
+  const rate = Number(summary.partnerProgram?.teamRate) || PARTNER_PROGRAM.teamRate;
+  return rows.filter(row => row?.checkoutId).map(row => {
+    const seats = teamTier(row.plan)?.seats;
+    const basis = row.base != null ? `${rate}% of ${money(row.base, row.currency)} ${row.basis === 'paid' ? 'paid' : 'before tax'}` : '';
+    return {
+      kind: 'partner-pay', key: `partner-pay:${row.checkoutId}`, section: 'partners', rows: [`partner:${row.checkoutId}`], icon: 'partner', at: row.earnedAt, when: 'earned',
+      text: `Pay ${row.code} ${money(row.commission, row.currency)} (${rate}% of a team gift)`,
+      detail: [seats ? `Team gift for up to ${new Intl.NumberFormat('en-US').format(seats)} people` : 'Team gift', basis, 'by bank transfer, then Mark as paid'].filter(Boolean).join(' · ')
+    };
+  });
+}
+
 // ---- Team requests, gifts, reviews ---------------------------------------------
 
 function teamItems(summary, now, { number }) {
@@ -281,7 +306,7 @@ function reviewItems(summary, now) {
  * Everything that needs the owner's attention, most urgent first. Each item:
  * { key, kind, tone, section, rows (the elements to highlight, the first one
  * focused), icon, text, detail, at (ISO), when ('since' | 'until' | 'created'
- * | 'setup') }. `now` defaults to the summary's own time.
+ * | 'earned' | 'setup') }. `now` defaults to the summary's own time.
  */
 export function buildAttention(summary, { now, config = {}, pageVersion = '', money = defaultMoney, number = defaultNumber } = {}) {
   if (!summary) return [];
@@ -292,7 +317,7 @@ export function buildAttention(summary, { now, config = {}, pageVersion = '', mo
     key: `setup:${check.key}:${part}`, section: 'setup', rows: [`setup:${check.key}`], icon: check.key === 'version' ? 'version' : 'setup',
     text, detail: '', at: '', when: 'setup', position: index * 10 + part
   })));
-  const items = [...refundItems(summary, at, format), ...teamItems(summary, at, format), ...setup, ...giftItems(summary, at, format), ...reviewItems(summary, at)];
+  const items = [...refundItems(summary, at, format), ...teamItems(summary, at, format), ...partnerItems(summary, at, format), ...setup, ...giftItems(summary, at, format), ...reviewItems(summary, at)];
   const sortKey = item => (item.when === 'setup' ? item.position : timeOf(item.at) || 0);
   return items
     .map(item => ({ ...item, tone: KINDS[item.kind].tone }))

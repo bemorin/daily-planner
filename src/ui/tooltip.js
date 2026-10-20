@@ -8,6 +8,10 @@
  * otherwise above, never closer than 8px to the viewport edge. Inside a
  * scrolling area or a dialog it also stays within that visible area, so it
  * cannot spill over a dialog's edge or cover its action bar.
+ *
+ * placeTooltipWithin() is the stricter placement of chart readings (Insights):
+ * inside nested areas — a chart's card, then the dialog's visible scroll area —
+ * and never outside the last one.
  */
 
 export const TOOLTIP_MARGIN = 8;
@@ -18,6 +22,71 @@ const clampTo = (value, min, max) => Math.min(Math.max(value, min), Math.max(min
 function intersect(a, b) {
   const box = { left: Math.max(a.left, b.left), top: Math.max(a.top, b.top), right: Math.min(a.right, b.right), bottom: Math.min(a.bottom, b.bottom) };
   return box.right > box.left && box.bottom > box.top ? box : null;
+}
+
+/** The overlap of rects ({ left, top, right, bottom }; nulls are skipped), or null when they don't overlap. */
+export function intersectRects(...rects) {
+  const list = rects.filter(Boolean);
+  if (!list.length) return null;
+  return list.slice(1).reduce((box, rect) => (box ? intersect(box, rect) : null), { left: list[0].left, top: list[0].top, right: list[0].right, bottom: list[0].bottom });
+}
+
+/** A rect moved in by `by` on every side; null when nothing is left. */
+export function insetRect(rect, by = 0) {
+  if (!rect) return null;
+  const box = { left: rect.left + by, top: rect.top + by, right: rect.right - by, bottom: rect.bottom - by };
+  return box.right > box.left && box.bottom > box.top ? box : null;
+}
+
+/**
+ * What shows of the page, in the coordinates of getBoundingClientRect() and
+ * `position: fixed`: the visual viewport on a phone (pinch-zoomed, or with the
+ * keyboard up), else the window.
+ */
+export function visibleViewportRect(win = globalThis) {
+  const view = win.visualViewport;
+  if (view && view.width > 0 && view.height > 0) return { left: view.offsetLeft || 0, top: view.offsetTop || 0, right: (view.offsetLeft || 0) + view.width, bottom: (view.offsetTop || 0) + view.height };
+  return { left: 0, top: 0, right: win.innerWidth || 0, bottom: win.innerHeight || 0 };
+}
+
+/** A scrolling element's visible area: its box without borders and scrollbar. */
+export function scrollPortRect(el) {
+  const box = el.getBoundingClientRect();
+  const left = box.left + el.clientLeft;
+  const top = box.top + el.clientTop;
+  return { left, top, right: left + el.clientWidth, bottom: top + el.clientHeight };
+}
+
+/**
+ * Pure placement that never leaves its areas. `areas` go from the preferred
+ * bounds (a chart's card, as much of it as shows) to the hard limit (the
+ * dialog's visible scroll area), each inside the next; nulls are skipped.
+ * Up and down, the first area with room on one side of `anchor` decides —
+ * the `prefer` side when both have room — and the tooltip sits `gap` away
+ * from the anchor; when no area has room, it takes the roomier side of the
+ * last area, clamped inside it. Left and right, it is centred on the anchor
+ * and clamped inside the first area wide enough for it (else the last one).
+ */
+export function placeTooltipWithin(anchor, size, areas, { gap = TOOLTIP_GAP, prefer = 'above' } = {}) {
+  const list = (areas || []).filter(Boolean);
+  const centered = anchor.left + (anchor.right - anchor.left) / 2 - size.width / 2;
+  const at = { above: anchor.top - gap - size.height, below: anchor.bottom + gap };
+  const sides = prefer === 'below' ? ['below', 'above'] : ['above', 'below'];
+  if (!list.length) return { left: Math.round(centered), top: Math.round(at[sides[0]]), placement: sides[0] };
+  const limit = list[list.length - 1];
+  const fits = (side, area) => at[side] >= area.top && at[side] + size.height <= area.bottom;
+  let placement = '';
+  for (const area of list) {
+    placement = sides.find(side => fits(side, area)) || '';
+    if (placement) break;
+  }
+  if (!placement) placement = anchor.top - limit.top > limit.bottom - anchor.bottom ? 'above' : 'below';
+  const across = list.find(area => size.width <= area.right - area.left) || limit;
+  return {
+    left: Math.round(clampTo(centered, across.left, across.right - size.width)),
+    top: Math.round(clampTo(at[placement], limit.top, limit.bottom - size.height)),
+    placement
+  };
 }
 
 /**

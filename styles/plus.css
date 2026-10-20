@@ -533,6 +533,13 @@
 
 .plus-teams a { color: var(--ink); font-weight: 650; text-decoration-color: color-mix(in srgb, var(--accent) 65%, transparent); text-underline-offset: 3px; }
 
+/* Without Plus: the partner program as a second footer line, under the team one, with a way to hide it. */
+.plus-teams + .plus-teams--partner { margin-top: 10px; padding-top: 0; border-top: 0; }
+
+.plus-teams--partner > span:not(.plus-teams__icon) { flex: 1 1 auto; min-width: 0; text-wrap: pretty; }
+
+.plus-teams--partner .plus-partner__close { flex: 0 0 auto; width: 30px; height: 30px; margin: -2px -4px -2px 0; }
+
 .plus-dialog .privacy-footnote { margin-top: 12px; padding-top: 0; border-top: 0; color: var(--faint); font-size: .74rem; text-align: left; }
 
 .plus-dialog .privacy-footnote .privacy-link { color: var(--muted); }

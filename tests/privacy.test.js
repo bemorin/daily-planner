@@ -72,7 +72,8 @@ test('with Plus configured, the notice says what a gift, a purchase and the week
   assert.doesNotMatch(words, /Stripe/);
   assert.match(words, /partner’s link/);
   assert.match(words, /reads the country of your connection for that one request/);
-  assert.match(words, /that code is kept in this browser for 60 days and sent with a purchase/);
+  assert.match(words, /that code is kept in this browser for 30 days and sent with a purchase/);
+  assert.equal(api.REFERRAL_DAYS, 30, 'a partner’s link counts 30 days, as in Creem');
   for (const config of [{ plannerApi: true }, { plannerApi: false, plus: true }]) assert.doesNotMatch(text(privacyNoticeSections(config)), /referral/, 'no Plus, no referral code');
   const counts = privacyNoticeSections({ plannerApi: true }).find(section => section.id === 'counts');
   for (const words of ['opened the Plus details', 'went to buy Plus', 'unlocked Plus', 'opened a gift link', 'activated a gift']) assert.ok(counts.list.includes(words), words);
@@ -147,6 +148,15 @@ test('every trackEvent() call in the planner is listed in the Privacy notice', a
   for (const name of listed) assert.ok(used.has(name), `${name} is described but never counted`);
 });
 
-test('a partner’s referral code stays out of backups and sync', () => {
+test('a partner’s referral code stays out of backups and sync, and counts for 30 days', () => {
   assert.ok(!api.REFERRAL_KEY.startsWith('daily-planner:'), 'backups and sync carry every daily-planner: key');
+  const kept = new Map();
+  const storage = { getItem: key => (kept.has(key) ? kept.get(key) : null), setItem: (key, value) => kept.set(key, String(value)) };
+  const day = 86400000;
+  const start = Date.parse('2026-10-01T09:00:00Z');
+  assert.equal(api.rememberReferral('?ref=CAMILLE', { storage, now: start }), 'CAMILLE');
+  assert.equal(api.referralCode({ storage, now: start + 29 * day }), 'CAMILLE', 'day 29: still counts');
+  assert.equal(api.referralCode({ storage, now: start + 30 * day - 1 }), 'CAMILLE');
+  assert.equal(api.referralCode({ storage, now: start + 30 * day }), '', 'after 30 days: ignored');
+  assert.equal(api.referralCode({ storage, now: start + 45 * day }), '', 'no longer 60 days');
 });

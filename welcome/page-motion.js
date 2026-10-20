@@ -7,9 +7,10 @@ import { animate } from '../src/vendor/motion.js';
 
    Each page needs, in <head>, the inline script that adds `js-anim` before
    first paint (see welcome/index.html) and landing.css; its own script then
-   calls setupReveal({ motionOn, motionHooks }) and setupFaq(), and adds
-   `js-ready` to <html> once it has run (without it, `js-anim` is removed
-   after 4 s and the page simply shows everything).
+   calls setupReveal({ motionOn, motionHooks }), setupFaq() and
+   followMotion(motionHooks), and adds `js-ready` to <html> once it has run
+   (without it, `js-anim` is removed after 4 s and the page simply shows
+   everything).
 
    Markup: `data-reveal` (the element rises in) or `data-reveal-each` (its
    children rise in one after another); FAQ answers are `details.qa` with a
@@ -23,6 +24,19 @@ export const EASE_OUT = [0.22, 1, 0.36, 1];
 
 /** True when the inline <head> script armed the entrances and motion is welcome. */
 export const motionWanted = () => document.documentElement.classList.contains('js-anim') && !reduceQuery.matches;
+
+/**
+ * When the visitor turns reduced motion on (or off) while the page is open:
+ * each hook hears false (or true), and the entrances stop waiting.
+ */
+export function followMotion(motionHooks = [], onChange = () => {}) {
+  reduceQuery.addEventListener?.('change', () => {
+    const on = !reduceQuery.matches;
+    if (!on) document.documentElement.classList.remove('js-anim');
+    onChange(on);
+    motionHooks.forEach(hook => hook(on));
+  });
+}
 
 /* Entrances: headings, cards and replicas rise in as they reach the viewport */
 
