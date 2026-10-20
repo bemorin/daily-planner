@@ -10,6 +10,7 @@ import { createListbox } from './listbox.js';
 import { createPaletteCard } from './palette-card.js';
 import { createPrivacyDialog } from './privacy-dialog.js';
 import { createStepper } from './stepper.js';
+import { setupFaq, setupReveal } from './page-motion.js';
 
 /* ============================================================================
    LANDING — copy the owner may want to change without touching markup.
@@ -1599,122 +1600,6 @@ function setupScenes() {
   });
 }
 
-/* Entrances: headings, cards and replicas rise in as they reach the viewport */
-
-function rise(target, delay) {
-  const settle = () => {
-    target.style.removeProperty('opacity');
-    target.style.removeProperty('transform');
-  };
-  try {
-    animate(target, { opacity: [0, 1], transform: ['translateY(18px)', 'none'] }, { duration: 0.7, delay, ease: EASE_OUT }).finished.then(settle, settle);
-  } catch (_) {
-    settle();
-  }
-}
-
-function setupReveal() {
-  const nodes = qsa('[data-reveal], [data-reveal-each]');
-  const showAll = () => nodes.forEach(node => node.classList.add('is-in'));
-  if (!motionOn) {
-    showAll();
-    return;
-  }
-  const observer = new IntersectionObserver(entries => {
-    const entering = entries.filter(entry => entry.isIntersecting).map(entry => entry.target)
-      .sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
-    entering.forEach((node, index) => {
-      observer.unobserve(node);
-      const start = Math.min(index, 4) * 0.08;
-      const targets = node.hasAttribute('data-reveal-each') ? [...node.children] : [node];
-      node.classList.add('is-in');
-      targets.forEach((target, step) => rise(target, start + Math.min(step, 8) * 0.07));
-    });
-  }, { rootMargin: '0px 0px -8% 0px' });
-  nodes.forEach(node => observer.observe(node));
-  motionHooks.push(on => {
-    if (on) return;
-    observer.disconnect();
-    showAll();
-  });
-}
-
-/* FAQ: one answer open at a time, with a smooth height change ------------- */
-
-function setupFaq() {
-  const items = qsa('[data-faq] details');
-  if (!items.length) return;
-  // Native exclusivity would close the previous answer instantly; we animate it.
-  items.forEach(item => item.removeAttribute('name'));
-  const running = new Map();
-  const panelOf = item => qs('.qa__a', item);
-  const settle = panel => {
-    panel.style.removeProperty('height');
-    panel.style.removeProperty('opacity');
-  };
-  const stop = item => {
-    const controls = running.get(item);
-    running.delete(item);
-    try { controls?.stop(); } catch (_) { /* already settled */ }
-  };
-  const canAnimate = () => !reduceQuery.matches && typeof Element.prototype.animate === 'function';
-
-  function close(item) {
-    const panel = panelOf(item);
-    const from = panel.getBoundingClientRect().height;
-    stop(item);
-    if (!canAnimate()) {
-      item.classList.remove('is-closing');
-      item.open = false;
-      settle(panel);
-      return;
-    }
-    item.classList.add('is-closing');
-    const controls = animate(panel, { height: [`${from}px`, '0px'], opacity: [1, 0] }, { duration: 0.26, ease: [0.4, 0, 0.2, 1] });
-    running.set(item, controls);
-    controls.finished.then(() => {
-      if (running.get(item) !== controls) return;
-      running.delete(item);
-      item.classList.remove('is-closing');
-      item.open = false;
-      settle(panel);
-    }, () => {});
-  }
-
-  function open(item) {
-    items.forEach(other => { if (other !== item && other.open && !other.classList.contains('is-closing')) close(other); });
-    const panel = panelOf(item);
-    const from = item.open ? panel.getBoundingClientRect().height : 0;
-    stop(item);
-    item.classList.remove('is-closing');
-    item.open = true;
-    if (!canAnimate()) {
-      settle(panel);
-      return;
-    }
-    const to = panel.scrollHeight;
-    const controls = animate(panel, { height: [`${from}px`, `${to}px`], opacity: [from ? 1 : 0, 1] }, { duration: 0.36, ease: EASE_OUT });
-    running.set(item, controls);
-    controls.finished.then(() => {
-      if (running.get(item) !== controls) return;
-      running.delete(item);
-      settle(panel);
-    }, () => {});
-  }
-
-  items.forEach(item => {
-    qs('summary', item).addEventListener('click', event => {
-      event.preventDefault();
-      if (item.open && !item.classList.contains('is-closing')) close(item);
-      else open(item);
-    });
-    item.addEventListener('toggle', () => {
-      // Opened by the browser itself (find in page): still one answer at a time.
-      if (item.open && !running.has(item)) items.forEach(other => { if (other !== item && other.open && !other.classList.contains('is-closing')) close(other); });
-    });
-  });
-}
-
 /* Start -------------------------------------------------------------------- */
 
 // A payment confirmation sent here instead of to the gift page.
@@ -1749,7 +1634,7 @@ setupChrome();
 setupViewCounts();
 setupScenes();
 createPaletteCard(qs('[data-palette-card]'), { motion: () => motionOn });
-setupReveal();
+setupReveal({ motionOn, motionHooks });
 setupFaq();
 
 reduceQuery.addEventListener?.('change', () => {

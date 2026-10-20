@@ -32,6 +32,26 @@ export const LAUNCH = Object.freeze({
   after: 'After the launch, Plus becomes a yearly subscription for new members.'
 });
 
+/**
+ * The partner program (welcome/partners/, the terms, the planner's invitations, the
+ * dashboard). `rate`: percent of the price before tax of Plus, Give Plus and Plus
+ * Family bought through a partner's link, credited and paid by Creem (set the same
+ * rate in Creem → Affiliate Hub; Creem has one rate per program). `teamRate`: percent
+ * of a team gift a partner introduced, paid by the owner by bank transfer (team
+ * checkouts are not credited in Creem). `cookieDays`: how long a partner's link
+ * counts (the browser keeps the code that long; set the same in Creem).
+ * `minimumPayout`: the balance a partner needs before a payout (Creem's minimum).
+ * `refundDays`: a sale earns once its refund period has passed without a refund
+ * or a dispute.
+ */
+export const PARTNER_PROGRAM = Object.freeze({
+  rate: 25,
+  teamRate: 10,
+  cookieDays: 30,
+  minimumPayout: Object.freeze({ EUR: 50, USD: 50 }),
+  refundDays: 14
+});
+
 /** Team gift: one price for the company by number of people (seats). */
 export const TEAM_TIERS = Object.freeze([
   Object.freeze({ plan: 'up-to-10', seats: 10, price: Object.freeze({ EUR: 195, USD: 195 }) }),

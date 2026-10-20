@@ -1,0 +1,116 @@
+/* Partners page (partners/): who the program is for, how it works, what it pays -- */
+
+body.partners-page { padding-bottom: 0; }
+
+.pt-top__about { padding: 8px 11px; border-radius: 9px; color: var(--muted); font-size: .92rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
+
+.pt-top__about:hover { background: var(--soft); color: var(--ink); }
+
+@media (max-width: 479.98px) {
+  .pt-top__about { display: none; }
+}
+
+.pt-hero { padding: clamp(40px, 7vw, 96px) 0 clamp(48px, 6vw, 80px); }
+
+/* Right after the hero, which already leaves room above it. */
+.section.pt-who { padding-top: clamp(24px, 3vw, 40px); }
+
+.pt-hero__grid { display: grid; gap: clamp(36px, 5vw, 64px); align-items: center; }
+
+.pt-hero__copy { display: grid; justify-items: start; gap: 20px; }
+
+.pt-hero__copy h1 { max-width: 13em; }
+
+.pt-hero__fine { color: var(--muted); font-size: .92rem; }
+
+@media (min-width: 960px) {
+  .pt-hero__grid { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+}
+
+/* The link, the sale, the commission: one card, three rows. */
+.pt-flow { display: grid; overflow: hidden; border: 1px solid color-mix(in srgb, var(--paint) 30%, var(--line)); border-radius: 22px; background: var(--surface-strong); box-shadow: 0 0 0 1px color-mix(in srgb, var(--paint) 8%, transparent), 0 30px 64px -40px color-mix(in srgb, var(--paint) 70%, transparent); }
+
+.pt-flow__row { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 4px 14px; padding: 18px 22px; }
+
+.pt-flow__row + .pt-flow__row { border-top: 1px solid var(--line); }
+
+.pt-flow__icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--paint) 11%, var(--surface-strong)); color: var(--paint); }
+
+.pt-flow__icon svg.i { width: 21px; height: 21px; }
+
+.pt-flow__text { display: grid; gap: 2px; min-width: 0; }
+
+.pt-flow__text small { color: var(--muted); font-size: .84rem; font-weight: 600; }
+
+.pt-flow__text > b { font-size: 1.04rem; font-weight: 690; letter-spacing: -.012em; }
+
+.pt-flow code,
+.pt-link code { font: 600 .9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+
+.pt-flow code b,
+.pt-link code b { color: var(--paint); font-weight: 700; }
+
+.pt-flow__row--earn { background: color-mix(in srgb, var(--paint) 5%, var(--surface-strong)); }
+
+.pt-flow__row--earn .pt-flow__text > b { font-size: 1.5rem; font-weight: 760; letter-spacing: -.03em; }
+
+.pt-flow__note { grid-column: 2; color: var(--muted); font-size: .86rem; }
+
+/* Who it's for */
+.pt-cards { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+
+@media (min-width: 640px) {
+  .pt-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1000px) {
+  .pt-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+}
+
+.pt-card { display: grid; align-content: start; gap: 8px; min-width: 0; padding: clamp(20px, 2.4vw, 26px); border: 1px solid var(--line); border-radius: 20px; background: var(--surface-strong); }
+
+.pt-card__icon { width: 40px; height: 40px; display: grid; place-items: center; margin-bottom: 6px; border-radius: 12px; background: var(--soft); color: var(--paint); }
+
+.pt-card__icon svg.i { width: 21px; height: 21px; }
+
+.pt-card p { color: var(--muted); }
+
+/* How it works */
+.pt-steps { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; counter-reset: none; }
+
+@media (min-width: 900px) {
+  .pt-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+}
+
+.pt-step { display: grid; align-content: start; gap: 10px; min-width: 0; padding: clamp(22px, 2.6vw, 30px); border: 1px solid var(--line); border-radius: 20px; background: var(--surface-strong); }
+
+.pt-step p { color: var(--muted); }
+
+.pt-step__n { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 999px; background: var(--paint); color: var(--on-paint); font-size: .92rem; font-weight: 740; }
+
+.pt-step .pt-link { margin-top: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
+
+/* What it pays */
+.pt-earn__grid { display: grid; gap: clamp(28px, 4vw, 56px); align-items: center; }
+
+@media (min-width: 900px) {
+  .pt-earn__grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+}
+
+.pt-earn__figure { display: grid; justify-items: center; align-content: center; gap: 6px; min-height: 240px; padding: clamp(28px, 4vw, 44px); border: 1px solid color-mix(in srgb, var(--paint) 26%, var(--line)); border-radius: 28px; background: radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--paint) 12%, transparent), transparent 65%), var(--surface-strong); text-align: center; }
+
+.pt-earn__big { color: var(--paint); font-size: clamp(4rem, 3rem + 4vw, 6.4rem); font-weight: 780; letter-spacing: -.06em; line-height: 1; font-variant-numeric: tabular-nums; }
+
+.pt-earn__big.is-words { font-size: clamp(2.2rem, 1.7rem + 2vw, 3.2rem); letter-spacing: -.04em; }
+
+.pt-earn__of { max-width: 16em; color: var(--muted); font-size: 1.02rem; font-weight: 560; }
+
+.pt-earn__copy { display: grid; align-content: start; gap: 16px; }
+
+.pt-earn__list { margin-top: 4px; }
+
+.pt-earn__list b { font-weight: 680; }
+
+.pt-earn__fine { display: flex; align-items: flex-start; gap: 10px; margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: .94rem; }
+
+.pt-earn__fine svg.i { width: 20px; height: 20px; margin-top: 2px; color: var(--paint); }
