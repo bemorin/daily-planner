@@ -42,7 +42,7 @@ test('the privacy dialog lists every moment the landing page counts, once each',
 });
 
 test('legal pages are linked on this site, in order, in the same tab', async () => {
-  const pages = [['welcome/index.html', '../legal/'], ['welcome/thanks/index.html', '../../legal/']];
+  const pages = [['welcome/index.html', '../legal/'], ['welcome/teams/index.html', '../../legal/'], ['welcome/thanks/index.html', '../../legal/']];
   for (const [file, base] of pages) {
     const page = await read(file);
     assert.doesNotMatch(page, /bemorin\.com\/(?:privacy|terms|cookies)/, `${file}: no legal link to the old site`);
@@ -59,7 +59,8 @@ test('the landing page: privacy in a dialog, devices up front, the year computed
   assert.match(page, /<dialog class="pv"[^>]*id="privacy"[^>]*aria-labelledby="privacy-title"/);
   assert.match(page, /href="\.\.\/legal\/privacy\/"[^>]*>Read the full privacy policy</);
   assert.match(page, /data-privacy-open[^>]*hidden/, 'the footer entry waits for the owner API');
-  assert.match(page, /data-privacy-open="requests"/, 'the request form opens the Requests part');
+  assert.match(page, /data-privacy-section="requests"/, 'the dialog has its Requests part');
+  assert.match(await read('welcome/teams/index.html'), /data-privacy-open="requests"/, 'the request form (Teams page) opens the Requests part');
   assert.match(page, /On your computer, tablet and phone/);
   assert.match(page, /Installs as an app on computer, tablet and phone/);
   assert.match(page, /Make <span data-plan-year>2027<\/span> count\./);

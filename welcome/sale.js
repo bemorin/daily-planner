@@ -56,7 +56,7 @@ export function renderPriceLines(sale) {
 
 /* Buy buttons: busy while the checkout opens, an error underneath if it can't */
 
-export function buyError(button, text) {
+function buyError(button, text) {
   const box = button.closest('[data-plus-cta], [data-gifts], .tier');
   const error = box && qs('[data-buy-error]', box);
   if (!error) return;
@@ -66,7 +66,7 @@ export function buyError(button, text) {
 
 const busyLabels = new WeakMap();
 
-export function setBusy(button, busy) {
+function setBusy(button, busy) {
   if (busy) {
     busyLabels.set(button, [...button.childNodes]);
     const label = button.dataset.buy === 'plus' ? 'Opening checkout…' : 'Opening…';

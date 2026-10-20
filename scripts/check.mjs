@@ -89,7 +89,7 @@ if (!license.includes('PolyForm Perimeter License 1.0.1')) failures.push('LICENS
 if (!license.includes('Required Notice: Copyright 2026 Ben Morin.')) failures.push('LICENSE: missing required copyright notice');
 
 const runtimeConfig = await fs.readFile(resolve(root, 'runtime-config.js'), 'utf8');
-for (const key of ['PROJECT_GITHUB_URL', 'GITHUB_SPONSOR_URL', 'SOCIAL_X_URL', 'SOCIAL_LINKEDIN_URL', 'GOOGLE_CLIENT_ID', 'PLANNER_API_URL', 'PLUS_PUBLIC_KEY', 'SUPPORT_EMAIL', 'LEGAL_ADDRESS', 'LEGAL_REGISTRATION', 'AFFILIATE_URL', 'AFFILIATE_COMMISSION']) {
+for (const key of ['PROJECT_GITHUB_URL', 'GITHUB_SPONSOR_URL', 'SOCIAL_X_URL', 'SOCIAL_LINKEDIN_URL', 'GOOGLE_CLIENT_ID', 'PLANNER_API_URL', 'PLUS_PUBLIC_KEY', 'SUPPORT_EMAIL', 'LEGAL_ADDRESS', 'LEGAL_REGISTRATION', 'AFFILIATE_URL']) {
   if (!runtimeConfig.includes(`${key}: ''`)) failures.push(`runtime-config.js: ${key} must remain blank in the public source`);
 }
 

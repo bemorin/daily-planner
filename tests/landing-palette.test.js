@@ -76,7 +76,7 @@ test('the Plus offer keeps its hooks: price, currency line, buy button, gift pri
   const page = await read('welcome/index.html');
   const start = page.indexOf('<div class="plus-buy"');
   const block = page.slice(start, page.indexOf('</section>', start));
-  for (const hook of ['data-plus-price', 'data-tax-line', 'data-plus-cta="plus"', 'data-gift-price="gift-1"', 'data-gift-price="family-5"', 'data-min-per-person', 'href="#gifts"', 'href="#teams"']) {
+  for (const hook of ['data-plus-price', 'data-tax-line', 'data-plus-cta="plus"', 'data-gift-price="gift-1"', 'data-gift-price="family-5"', 'data-min-per-person', 'href="#gifts"', 'href="teams/"']) {
     assert.ok(block.includes(hook), hook);
   }
   assert.equal((block.match(/class="ok"/g) || []).length, 6, 'six ticks: what you get');

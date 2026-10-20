@@ -36,6 +36,13 @@ body.partners-page { padding-bottom: 0; }
 
 .pt-hero__copy .cta-row { margin-top: 4px; }
 
+@media (max-width: 519.98px) {
+  .pt-hero__copy .cta-row,
+  .pt-final .cta-row { width: 100%; }
+  .pt-hero__copy .cta-row .btn,
+  .pt-final .cta-row .btn { flex: 1 1 100%; }
+}
+
 /* Three figures under a hairline: the rate, how long a click counts, the team rate. */
 .pt-figures { width: 100%; max-width: 560px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 14px 0 0; padding: 22px 0 0; border-top: 1px solid var(--line); list-style: none; }
 
@@ -183,7 +190,7 @@ body.partners-page { padding-bottom: 0; }
 
 .pt-pays { display: grid; gap: clamp(32px, 4vw, 56px); align-items: start; }
 
-@media (min-width: 1040px) {
+@media (min-width: 960px) {
   .pt-pays { grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); }
   .pt-pays__intro { position: sticky; top: calc(var(--top-h) + 32px); }
 }
@@ -224,18 +231,12 @@ body.partners-page { padding-bottom: 0; }
 
 .pt-rates td:last-child b { color: var(--ink); font-size: 1.04rem; font-weight: 740; }
 
-.pt-rates__share { color: var(--muted); }
-
-.pt-rates__rate { display: none; }
-
 @media (max-width: 639.98px) {
   .pt-rates { font-size: .92rem; }
   .pt-rates thead th,
   .pt-rates th[scope="row"],
   .pt-rates td,
   .pt-rates__group th { padding-inline: 12px; }
-  .pt-rates .pt-rates__share { display: none; }
-  .pt-rates .pt-rates__rate { display: block; }
   .pt-rates__group span { display: block; font-size: .86rem; }
 }
 

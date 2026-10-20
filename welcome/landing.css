@@ -599,7 +599,7 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 .why b { display: block; margin-bottom: 2px; color: var(--band-ink); font-weight: 680; }
 
 @media (min-width: 640px) and (max-width: 959.98px) {
-  .why { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
+  .why { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 28px; }
 }
 
 @media (min-width: 960px) {
@@ -645,7 +645,7 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 }
 
 @media (max-width: 559.98px) {
-  .tbanner__ctas .btn--light { width: 100%; }
+  .tbanner__ctas .btn { width: 100%; }
 }
 
 /* For coaches and consultants: the partner program, one quiet line under the team gift. */
@@ -4186,7 +4186,7 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 /* Team gift: one link, one activation, one seat -------------------------------- */
 
-.rp--gift { font-size: clamp(9.5px, 1.75cqi, 13px); }
+.rp--gift { font-size: clamp(9.5px, 1.6cqi, 14.5px); }
 
 .rp-gf { display: grid; grid-template-columns: minmax(0, 1.3fr) 2.2em minmax(0, 1.1fr) 2.2em minmax(0, .85fr); align-items: center; }
 
@@ -4330,9 +4330,18 @@ body.teams-page { padding-bottom: 0; }
 
 .tm-offer__currency { margin-top: 14px; color: var(--band-muted); font-size: .86rem; }
 
+/* One column of reasons; on a tablet, the price on the left and the reasons beside it. */
+.tm-offer .why { grid-template-columns: minmax(0, 1fr); }
+
+@media (min-width: 640px) and (max-width: 959.98px) {
+  .tm-offer { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); grid-template-rows: auto auto auto 1fr; column-gap: 40px; }
+  .tm-offer > :not(.why) { grid-column: 1; }
+  .tm-offer .why { grid-column: 2; grid-row: 1 / span 4; margin-top: 0; }
+  .tm-offer__currency { align-self: end; }
+}
+
 @media (min-width: 960px) {
   .tm-hero__grid { grid-template-columns: minmax(0, 13fr) minmax(0, 10fr); gap: clamp(48px, 6vw, 88px); }
-  .tm-offer .why { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 559.98px) {
@@ -4353,8 +4362,6 @@ body.teams-page { padding-bottom: 0; }
 
 /* How seats work: the replica on its own stage, then the four steps. */
 .seats__visual { max-width: 1040px; margin-inline: auto; }
-
-.tm-seats .rp--gift { font-size: clamp(9.5px, 1.5cqi, 14px); }
 
 .seats__steps { display: grid; gap: 14px; margin: clamp(40px, 5vw, 56px) 0 0; padding: 0; list-style: none; }
 

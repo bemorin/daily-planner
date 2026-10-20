@@ -86,6 +86,9 @@ export function exampleMonth(currency) {
 }
 
 const money = (cents, currency) => formatMoney(cents / 100, currency);
+const LOCALES = { EUR: 'en-IE', USD: 'en-US' };
+/** A commission, always to the cent (“€6.04”, “$58.00”), so a column of them lines up. */
+export const formatCommission = (cents, currency) => new Intl.NumberFormat(LOCALES[currency] || 'en-US', { style: 'currency', currency: LOCALES[currency] ? currency : 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.round(Number(cents)) / 100);
 
 /**
  * Everything the page fills in for a currency, as text: the rates, the
@@ -103,9 +106,9 @@ export function pageFigures(currency) {
     plusPrice: money(plus.price, currency),
     plusTax: money(plus.tax, currency),
     plusBeforeTax: money(plus.beforeTax, currency),
-    plusEarns: money(plus.commission, currency),
+    plusEarns: formatCommission(plus.commission, currency),
     teamPrice: money(team.price, currency),
-    teamEarns: money(team.commission, currency),
+    teamEarns: formatCommission(team.commission, currency),
     taxWhere: taxOf(currency).where,
     taxNote: taxOf(currency).note,
     taxed: taxOf(currency).percent > 0

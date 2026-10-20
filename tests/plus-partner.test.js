@@ -14,6 +14,8 @@ const { sharePartnerText } = await import('../src/features/share-dialog.js');
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = rel => readFile(join(root, rel), 'utf8');
+// The code without its comments (which may quote the words as they read today).
+const code = text => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 test('what a partner earns is said from the program’s terms, with a calm fallback', () => {
   assert.equal(partnerEarnText(), `${PARTNER_PROGRAM.rate}% of every Plus purchase made through your link`);
@@ -44,7 +46,7 @@ test('the Plus window invites everyone: members keep their card, others get one 
   assert.ok(member.indexOf('${gifts()}') < member.indexOf('${partnerCard()}') && member.indexOf('${partnerCard()}') < member.indexOf('${teams}'));
   assert.match(dialog, /dismissPartnerHint\('plus'\);\s*qs\('\[data-plus-partner\]', el\)\?\.remove\(\);/);
   assert.match(dialog, /\.\/welcome\/teams\//, 'the team line goes to the Teams page');
-  assert.doesNotMatch(dialog, /\d+%/, 'no rate typed in by hand');
+  assert.doesNotMatch(code(dialog), /\d+%/, 'no rate typed in by hand');
 });
 
 test('the share sheet’s line is for everyone and says the rate', async () => {
@@ -53,7 +55,7 @@ test('the share sheet’s line is for everyone and says the rate', async () => {
   assert.match(share, /partner: partnerHintShown\('share'\)/);
   assert.match(share, /dismissPartnerHint\('share'\)/);
   assert.match(share, /\$\{esc\(sharePartnerText\(\)\)\} <a href="\.\/welcome\/partners\/" target="_blank" rel="noopener" data-share-partner-go>Partner program/);
-  assert.doesNotMatch(share, /\d+%/, 'no rate typed in by hand');
+  assert.doesNotMatch(code(share), /\d+%/, 'no rate typed in by hand');
 });
 
 test('How it works keeps a permanent Partners row beside For teams, filled from the program’s terms', async () => {

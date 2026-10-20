@@ -4,7 +4,7 @@ import * as config from '../../src/config.js';
 import { checkoutOptions, plannerApiEnabled, rememberReferral, trackEvent } from '../../src/lib/planner-api.js';
 import { pageCurrency, readCheckoutOptions } from '../landing-model.js';
 import { motionWanted, reduceQuery, setupFaq, setupReveal } from '../page-motion.js';
-import { exampleMonth, formatCents, pageFigures, partnerPage, rateRows } from './partners-model.js';
+import { exampleMonth, formatCents, formatCommission, pageFigures, partnerPage, rateRows } from './partners-model.js';
 
 /* ============================================================================
    Partners (/welcome/partners/): what the partner program pays, how it works,
@@ -33,8 +33,8 @@ const setText = (selector, text) => qsa(selector).forEach(node => { if (node.tex
 function renderRates(currency) {
   const money = cents => formatCents(cents, currency);
   const rows = rateRows(currency);
-  const row = item => `<tr><th scope="row">${esc(item.label)}<small>${esc(item.note)}</small></th><td class="num">${esc(money(item.price))}${item.tax ? `<small>${esc(money(item.beforeTax))} before tax</small>` : '<small>No tax in this example</small>'}</td><td class="num pt-rates__share">${item.rate}%</td><td class="num"><b>${esc(money(item.commission))}</b><small class="pt-rates__rate">${item.rate}%</small></td></tr>`;
-  const group = (label, by) => `<tr class="pt-rates__group"><th scope="colgroup" colspan="3">${esc(label)} <span>· ${esc(by)}</span></th><td></td></tr>`;
+  const row = item => `<tr><th scope="row">${esc(item.label)}<small>${esc(item.note)}</small></th><td class="num">${esc(money(item.price))}${item.tax ? `<small>${esc(money(item.beforeTax))} before tax</small>` : ''}</td><td class="num"><b>${esc(formatCommission(item.commission, currency))}</b><small>${item.rate}%</small></td></tr>`;
+  const group = (label, by) => `<tr class="pt-rates__group"><th scope="colgroup" colspan="2">${esc(label)} <span>· ${esc(by)}</span></th><td></td></tr>`;
   const personal = qs('[data-rates-personal]');
   const team = qs('[data-rates-team]');
   if (personal) personal.innerHTML = group('Plus and personal gifts', 'Creem pays you') + rows.filter(item => !item.team).map(row).join('');
@@ -42,7 +42,7 @@ function renderRates(currency) {
 }
 
 function renderMonth(currency) {
-  const money = cents => formatCents(cents, currency);
+  const money = cents => formatCommission(cents, currency);
   const month = exampleMonth(currency);
   const lines = qs('[data-month-lines]');
   if (lines) lines.innerHTML = month.lines.map(line => `<li><span class="pt-earn__dot" aria-hidden="true"></span><span>${line.count} × ${esc(line.label)}</span><small>${line.rate}%</small><b>${esc(money(line.amount))}</b></li>`).join('');

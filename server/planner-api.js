@@ -367,9 +367,9 @@ export function validateTeamRequest(body, now = new Date()) {
       locale: clip(body?.locale, 35),
       appVersion: version,
       source: TEAM_SOURCES.has(body?.source) ? body.source : 'landing',
-      // The partner code remembered on this browser (?ref= link): a malformed one is left out, never refused.
-      ref: affiliateCode(body?.ref),
-      createdAt: now.toISOString()
+      createdAt: now.toISOString(),
+      // The partner code remembered on this browser (?ref= link), when there is one: a malformed one is left out, never refused.
+      ...(affiliateCode(body?.ref) ? { ref: affiliateCode(body.ref) } : {})
     }
   };
 }

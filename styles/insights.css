@@ -349,8 +349,9 @@
   z-index: calc(var(--z-popover) + 10);
   display: grid;
   gap: 4px;
-  min-width: 140px;
-  max-width: min(250px, calc(100vw - 16px));
+  /* --ins-tip-room: the width of the visible area it must stay in (set by insights.js). */
+  min-width: min(140px, var(--ins-tip-room, 140px));
+  max-width: min(250px, calc(100vw - 16px), var(--ins-tip-room, 100vw));
   padding: 8px 10px 9px;
   border: 1px solid var(--line);
   border-radius: 9px;

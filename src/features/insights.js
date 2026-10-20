@@ -124,11 +124,15 @@ export function createInsightsFeature(ctx) {
       el.append(row);
     });
     el.hidden = false;
-    // Measured at the left edge, so its width isn't squeezed by where the last reading stood.
+    // Measured at the left edge, so its width isn't squeezed by where the last reading stood,
+    // and never wider than what shows (a phone zoomed in).
+    const areas = tipAreas(target);
+    const limit = areas[areas.length - 1];
     el.style.left = '0px';
     el.style.top = '0px';
+    el.style.setProperty('--ins-tip-room', limit ? `${Math.floor(limit.right - limit.left)}px` : '100vw');
     const size = el.getBoundingClientRect();
-    const place = placeTooltipWithin(target.getBoundingClientRect(), { width: size.width, height: size.height }, tipAreas(target));
+    const place = placeTooltipWithin(target.getBoundingClientRect(), { width: size.width, height: size.height }, areas);
     el.style.left = `${place.left}px`;
     el.style.top = `${place.top}px`;
     el.dataset.placement = place.placement;

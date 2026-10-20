@@ -241,6 +241,7 @@ test('gifts: about to expire (soonest first) and fully claimed are worth a look,
   assert.equal(attentionWhen(items[3], NOW), 'created 3 weeks ago');
   assert.deepEqual(texts(build(calm({ plusUnavailable: true, gifts: [{ code: 'X', org: 'X', status: 'claimed', createdAt: ago(DAY) }] }))), ['Database: migration 0003_plus.sql not applied']);
   assert.deepEqual(texts(build(calm({ partnersUnavailable: true }))), ['Database: migration 0006_partners.sql not applied']);
+  assert.deepEqual(texts(build(calm({ partnerCommissionsUnavailable: true }))), ['Database: migration 0007_partner_commissions.sql not applied']);
 });
 
 test('new reviews are one line, from the oldest, pointing at every new review', () => {
@@ -279,7 +280,7 @@ test('cards count their rows and take their most urgent tone', () => {
   assert.equal(rows.get('refund:r2'), 'warn');
   assert.equal(rows.get('setup:payments'), 'warn', 'two problems, one Setup row');
   assert.equal(rows.get('review:2'), 'info');
-  assert.deepEqual(Object.keys(ATTENTION_SECTIONS), ['refunds', 'teams', 'setup', 'gifts', 'reviews']);
+  assert.deepEqual(Object.keys(ATTENTION_SECTIONS), ['refunds', 'teams', 'partners', 'setup', 'gifts', 'reviews']);
 });
 
 test('the summary’s own time is “now” when none is given', () => {
@@ -308,10 +309,38 @@ test('the admin summary carries the dates the list reads', async () => {
   ]);
 });
 
+test('team commissions earned and not paid: one line each, the longest-waiting first, after team requests', () => {
+  const owed = (id, code, commission, earnedDaysAgo, extra = {}) => ({ checkoutId: id, code, plan: 'up-to-50', rate: 10, base: commission * 10, basis: 'before-tax', commission, currency: 'EUR', earnedAt: ago(earnedDaysAgo * DAY), createdAt: ago((earnedDaysAgo + 14) * DAY), ...extra });
+  const summary = calm({
+    partners: { toPay: [owed('ch_new', 'ANNA', 4958, 1), owed('ch_old', 'COACH', 1625, 9, { plan: 'up-to-10', basis: 'paid', base: 16250 })] },
+    teamRequests: [{ id: 3, company: 'Acme', kind: 'invoice', createdAt: ago(HOUR) }]
+  });
+  const items = build(summary);
+  assert.deepEqual(items.map(item => [item.kind, item.tone, item.section, item.rows[0], item.when]), [
+    ['team', 'warn', 'teams', 'team:3', 'since'],
+    ['partner-pay', 'warn', 'partners', 'partner:ch_old', 'earned'],
+    ['partner-pay', 'warn', 'partners', 'partner:ch_new', 'earned']
+  ]);
+  const [, old, recent] = items;
+  assert.equal(old.text, 'Pay COACH 16.25 EUR (10% of a team gift)');
+  assert.equal(old.detail, 'Team gift for up to 10 people · 10% of 162.5 EUR paid · by bank transfer, then Mark as paid');
+  assert.equal(recent.text, 'Pay ANNA 49.58 EUR (10% of a team gift)');
+  assert.match(recent.detail, /^Team gift for up to 50 people · 10% of 495\.8 EUR before tax · /);
+  assert.equal(attentionWhen(old, NOW), 'earned 9 days ago');
+  assert.equal(attentionBySection(items).sections.partners.count, 2);
+  // The rate the API reports wins; nothing listed while 0006 is missing; nothing when all is paid.
+  assert.match(build(calm({ partnerProgram: { teamRate: 12 }, partners: { toPay: [owed('ch_x', 'X', 100, 2)] } }))[0].text, /\(12% of a team gift\)$/);
+  assert.deepEqual(build(calm({ partnersUnavailable: true, partners: { toPay: [owed('ch_x', 'X', 100, 2)] } })).filter(item => item.kind === 'partner-pay'), []);
+  assert.deepEqual(build(calm({ partners: { toPay: [] } })), []);
+});
+
 test('the dashboard loads the helpers and reloads them with its other files', () => {
   const source = readFileSync(new URL('../admin/admin.js', import.meta.url), 'utf8');
   assert.match(source, /from '\.\/attention\.js'/);
   assert.match(source, /DASHBOARD_FILES = \[[^\]]*'\.\/attention\.js'/);
+  assert.match(source, /from '\.\/partners-view\.js'/);
+  assert.match(source, /DASHBOARD_FILES = \[[^\]]*'\.\/partners-view\.js'[^\]]*'\.\.\/src\/lib\/pricing\.js'/, 'and the prices they import');
+  assert.match(source, /partners: '\[data-owner-partners\]'/, 'a partner line points at the Partners card');
   const page = readFileSync(new URL('../admin/index.html', import.meta.url), 'utf8');
   assert.ok(page.indexOf('data-owner-attention') < page.indexOf('data-owner-kpis'), 'the panel comes first in the dashboard');
 });

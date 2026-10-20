@@ -4,9 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// The owner API on, a commission and a Creem sign-up link configured, and the
-// browser pieces the client modules touch.
-globalThis.__DAILY_PLANNER_CONFIG__ = { PLANNER_API_URL: '/api/', AFFILIATE_URL: ' https://affiliates.example.com/daily-planner ', AFFILIATE_COMMISSION: ' 30%<b> ' };
+// The owner API on, a Creem sign-up link configured (and an old commission
+// variable that is no longer read), and the browser pieces the client modules touch.
+globalThis.__DAILY_PLANNER_CONFIG__ = { PLANNER_API_URL: '/api/', AFFILIATE_URL: ' https://affiliates.example.com/daily-planner ', AFFILIATE_COMMISSION: ' 30% ' };
 const stored = new Map();
 const storage = { getItem: key => (stored.has(key) ? stored.get(key) : null), setItem: (key, value) => stored.set(key, String(value)), removeItem: key => stored.delete(key) };
 Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true, writable: true });
@@ -19,9 +19,9 @@ globalThis.fetch = async (url, options = {}) => {
 const api = await import('../src/lib/planner-api.js');
 const config = await import('../src/config.js');
 const plus = await import('../src/lib/plus.js');
-const { giftLabel, partnerEarnText } = await import('../src/features/plus-dialog.js');
+const { giftLabel } = await import('../src/features/plus-dialog.js');
 const model = await import('../welcome/partners/partners-model.js');
-const { memberPriceNotice, memberPriceShown, PERSONAL_GIFTS } = await import('../src/lib/pricing.js');
+const { formatMoney, memberPriceNotice, memberPriceShown, PARTNER_PROGRAM, PERSONAL_GIFTS, TEAM_TIERS } = await import('../src/lib/pricing.js');
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = rel => readFile(join(root, rel), 'utf8');
@@ -82,38 +82,81 @@ test('the landing page finds the planner’s licence on this site, unless this d
   assert.equal(plus.savedPlusToken(), '');
 });
 
-test('config: the partner link must be https and the commission one short plain line; the runtime defaults stay blank', async () => {
+test('config: the partner link must be https; the commission is no longer a build variable; the runtime defaults stay blank', async () => {
   assert.equal(config.AFFILIATE_URL, 'https://affiliates.example.com/daily-planner');
-  assert.equal(config.AFFILIATE_COMMISSION, '30%b');
+  assert.equal('AFFILIATE_COMMISSION' in config, false, 'the rates are PARTNER_PROGRAM, not a variable');
   const runtime = await read('runtime-config.js');
-  for (const key of ['AFFILIATE_URL', 'AFFILIATE_COMMISSION']) assert.match(runtime, new RegExp(`\\n  ${key}: ''[,\\n]`), key);
+  assert.match(runtime, /\n {2}AFFILIATE_URL: ''\n/);
+  assert.doesNotMatch(runtime, /AFFILIATE_COMMISSION/);
   const build = await read('scripts/build.mjs');
   assert.match(build, /AFFILIATE_URL: process\.env\.DAILY_PLANNER_AFFILIATE_URL \|\| ''/);
-  assert.match(build, /AFFILIATE_COMMISSION: process\.env\.DAILY_PLANNER_AFFILIATE_COMMISSION \|\| ''/);
-  assert.match(await read('scripts/check.mjs'), /'AFFILIATE_URL', 'AFFILIATE_COMMISSION'\]/);
+  assert.doesNotMatch(build, /AFFILIATE_COMMISSION/);
+  const check = await read('scripts/check.mjs');
+  assert.match(check, /'LEGAL_REGISTRATION', 'AFFILIATE_URL'\]/);
+  assert.doesNotMatch(check, /AFFILIATE_COMMISSION/);
+  for (const file of ['src/config.js', 'admin/admin.js', 'admin/attention.js', 'welcome/partners/partners.js', 'welcome/partners/partners-model.js', 'docs/FEEDBACK_AND_WAITLIST.md', 'OWNER_NOTES.md']) assert.doesNotMatch(await read(file), /AFFILIATE_COMMISSION/, file);
 });
 
-test('the partners page: Become a partner goes to Creem, or to the question form while no link is set', () => {
-  const set = model.partnerPage({ url: 'https://affiliates.example.com/x', commission: ' 30% ' });
-  assert.deepEqual(set, { href: 'https://affiliates.example.com/x', external: true, commission: '30%', earn: '30% of what they pay', short: '30%', figure: '30%', big: '30%', of: 'on every purchase made through your link' });
+test('the partners page: Become a partner goes to Creem, or to the question form on the Teams page while no link is set', () => {
+  assert.deepEqual(model.partnerPage({ url: 'https://affiliates.example.com/x' }), { href: 'https://affiliates.example.com/x', external: true });
   const blank = model.partnerPage({});
   assert.equal(blank.href, model.PARTNER_QUESTION_HREF);
-  assert.equal(blank.href, '../?ask=question&topic=partners#request');
+  assert.equal(blank.href, '../teams/?ask=question&topic=partners#request');
   assert.equal(blank.external, false);
-  assert.equal(blank.earn, 'a commission');
-  assert.equal(blank.figure, 'A commission');
+  assert.equal(model.TEAMS_HREF, '../teams/');
   for (const url of ['http://affiliates.example.com', 'javascript:alert(1)', 'https://a b', ' ', null]) assert.equal(model.partnerPage({ url }).external, false, String(url));
-  assert.equal(model.cleanCommission('  25%\n for a year <script> '), '25% for a year script');
-  assert.equal(model.cleanCommission('x'.repeat(40)).length, 24);
 });
 
-test('the Plus dialog: member prices in the gift buttons, and the partner card’s words follow the commission', () => {
+test('the partners page’s figures come from the prices and the program: before tax, to the cent', () => {
+  assert.deepEqual({ ...PARTNER_PROGRAM, minimumPayout: { ...PARTNER_PROGRAM.minimumPayout } }, { rate: 25, teamRate: 10, cookieDays: 30, minimumPayout: { EUR: 50, USD: 50 }, refundDays: 14 });
+  // In France (20% VAT): a €29 Plus is €24.17 before tax, and earns €6.04 — about €6, as on Hero's page.
+  assert.deepEqual(model.saleExample('plus', '', 'EUR'), { price: 2900, beforeTax: 2417, tax: 483, rate: 25, commission: 604 });
+  assert.deepEqual(model.saleExample('gift', 'family-5', 'EUR'), { price: 9900, beforeTax: 8250, tax: 1650, rate: 25, commission: 2063 });
+  assert.deepEqual(model.saleExample('gift', 'up-to-50', 'EUR'), { price: 59500, beforeTax: 49583, tax: 9917, rate: 10, commission: 4958 });
+  // In US dollars the example has no sales tax, and says so.
+  assert.deepEqual(model.saleExample('plus', '', 'USD'), { price: 2900, beforeTax: 2900, tax: 0, rate: 25, commission: 725 });
+  const rows = model.rateRows('EUR');
+  assert.deepEqual(rows.map(row => row.id), ['plus', 'gift-1', 'family-5', ...TEAM_TIERS.map(tier => tier.plan)]);
+  assert.ok(rows.filter(row => row.team).every(row => row.rate === 10) && rows.filter(row => !row.team).every(row => row.rate === 25));
+  const month = model.exampleMonth('EUR');
+  assert.deepEqual(month.lines.map(line => [line.count, line.label, line.rate, line.amount]), [[8, 'Plus', 25, 4832], [1, 'Plus Family', 25, 2063], [1, 'Team gift, up to 50 people', 10, 4958]]);
+  assert.deepEqual([month.total, month.byCreem, month.byTransfer], [11853, 6895, 4958]);
+  assert.equal(model.exampleMonth('USD').total, 8 * 725 + 2475 + 5950);
+  assert.equal(model.formatCommission(5800, 'USD'), '$58.00', 'commissions always to the cent');
+  assert.equal(model.formatCommission(604, 'EUR'), '€6.04');
+  const eur = model.pageFigures('EUR');
+  assert.deepEqual([eur.rate, eur.teamRate, eur.cookieDays, eur.refundDays, eur.minimum, eur.plusPrice, eur.plusTax, eur.plusEarns, eur.teamEarns, eur.taxed], ['25%', '10%', '30', '14', '€50', '€29', '€4.83', '€6.04', '€49.58', true]);
+  assert.match(eur.taxNote, /^Example in France, where prices include 20% VAT\./);
+  const usd = model.pageFigures('USD');
+  assert.deepEqual([usd.minimum, usd.plusEarns, usd.taxed, usd.taxWhere], ['$50', '$7.25', false, 'without sales tax']);
+  assert.match(usd.taxNote, /your commission is on the price before it/);
+});
+
+test('the partners page’s own figures, as written for a visitor without JavaScript, match what the model works out (EUR)', async () => {
+  const page = await read('welcome/partners/index.html');
+  const money = cents => formatMoney(cents / 100, 'EUR');
+  for (const row of model.rateRows('EUR')) {
+    assert.ok(page.includes(`<td class="num">${money(row.price)}<small>${money(row.beforeTax)} before tax</small></td><td class="num"><b>${model.formatCommission(row.commission, 'EUR')}</b><small>${row.rate}%</small></td>`), row.id);
+  }
+  const month = model.exampleMonth('EUR');
+  for (const line of month.lines) assert.ok(page.includes(`<span>${line.count} × ${line.label}</span><small>${line.rate}%</small><b>${model.formatCommission(line.amount, 'EUR')}</b>`), line.id);
+  assert.ok(page.includes(`data-month-total>${model.formatCommission(month.total, 'EUR')}<`));
+  assert.ok(page.includes(`data-month-split>${model.formatCommission(month.byCreem, 'EUR')} paid by Creem · ${model.formatCommission(month.byTransfer, 'EUR')} by bank transfer<`));
+  const figures = model.pageFigures('EUR');
+  assert.ok(page.includes(`One Plus bought in France: ${figures.plusPrice}, of which ${figures.plusTax} is VAT. You earn <b>${figures.plusEarns}</b>.`));
+  assert.ok(page.includes(figures.taxNote));
+  for (const [hook, value] of [['data-rate', '25%'], ['data-team-rate', '10%'], ['data-cookie-days', '30'], ['data-refund-days', '14'], ['data-minimum', '€50']]) {
+    const found = [...page.matchAll(new RegExp(`${hook}>([^<]*)<`, 'g'))].map(match => match[1]);
+    assert.ok(found.length > 0, hook);
+    assert.ok(found.every(text => text === value), `${hook}: ${found}`);
+  }
+});
+
+test('the Plus dialog: member prices in the gift buttons', () => {
   const [one, family] = PERSONAL_GIFTS;
   assert.match(giftLabel(one, 'EUR', { member: true }), /^Give Plus — member price (€\s?24|24\s?€), was (€\s?29|29\s?€)$/);
   assert.equal(giftLabel(family, 'USD', { member: true }), 'Plus Family — up to 5 people — member price $79, was $99');
   assert.equal(giftLabel(family, 'USD'), 'Plus Family — up to 5 people — $99');
-  assert.equal(partnerEarnText('30%'), '30% of every purchase made through your link');
-  assert.equal(partnerEarnText(''), 'a commission on every purchase made through your link');
 });
 
 test('a member price the checkout doesn’t confirm is said before paying, with the usual price; the page and the planner follow', async () => {
@@ -152,33 +195,61 @@ test('the landing page: Partners in the menu and the footer, the launch price wh
   assert.match(page, /<summary>Is Plus a subscription\?<\/summary>\s*<div class="qa__a"><p>Not if you get it now\./);
   assert.match(page, /<summary>What does “for life” mean\?<\/summary>/);
   for (const hook of ['data-gift-offer="gift-1"', 'data-gift-offer="family-5"', 'data-member-price="gift-1"', 'data-member-price="family-5"', 'data-member-badge', 'data-gifts-note']) assert.ok(page.includes(hook), hook);
-  assert.match(page, /data-teams-partner>[\s\S]*?Coach or consultant\?[\s\S]*?href="\.\/partners\/"/);
+  // The line for coaches moved to the Teams page with the team gift (1.28).
+  assert.match(await read('welcome/teams/index.html'), /data-teams-partner>[\s\S]*?Coach or consultant\?[\s\S]*?href="\.\.\/partners\/"/);
   const script = await read('welcome/landing.js');
   assert.match(script, /savedPlusToken\(\)/, 'the licence is read from the planner’s settings');
   assert.match(script, /license: personal && member\.active \? member\.token : ''/, 'and sent with a personal gift only');
-  assert.match(script, /topic'\) === 'partners'/, 'the question form knows the partner program');
+  assert.match(await read('welcome/teams-model.js'), /query\.get\('topic'\) === 'partners'/, 'the question form knows the partner program');
 });
 
-test('the partners page: landing style, header and footer like the gift page, every section, and the counts it may send', async () => {
+test('the partners page: landing style and motion, every section, the rules, the FAQ, and the counts it may send', async () => {
   const page = await read('welcome/partners/index.html');
-  assert.match(page, /<link rel="stylesheet" href="\.\.\/landing\.css">/);
+  assert.match(page, /<link rel="stylesheet" href="\.\.\/landing\.css">\n {2}<link rel="stylesheet" href="\.\/partners\.css">/, 'its own styles, after the landing page’s');
   assert.ok(page.indexOf('../../runtime-config.js') < page.indexOf('./partners.js'), 'the runtime config first');
   assert.match(page, /<title>Partners — Daily Planner<\/title>/);
-  for (const id of ['who', 'how', 'commission', 'faq']) assert.match(page, new RegExp(`id="${id}"`), id);
-  for (const who of ['Coaches', 'Creators', 'Newsletters', 'Consultants', 'Teams', 'Plus members']) assert.match(page, new RegExp(`<h3>${who}</h3>`), who);
-  assert.match(page, /https:\/\/planner\.bemorin\.com\/welcome\/\?ref=<b>CODE<\/b>/);
+  // Motion like /welcome/: js-anim before first paint, entrances, the FAQ one answer at a time.
+  assert.match(page, /root\.classList\.add\('js-anim'\);[\s\S]*?root\.classList\.contains\('js-ready'\)/);
+  assert.ok(page.indexOf("classList.add('js-anim')") < page.indexOf('../landing.css'), 'before the styles');
+  assert.ok((page.match(/data-reveal-each/g) || []).length >= 6 && /data-reveal(?!-)/.test(page));
+  assert.match(page, /class="faq__groups" data-faq>/);
+  assert.equal((page.match(/<details class="qa"/g) || []).length, 8);
+  for (const question of ['How much is a sale worth?', 'Who can be a partner?', 'How are sales tracked?', 'When and how am I paid?', 'What if someone asks for a refund?', 'What is not allowed?', 'And companies?']) assert.ok(page.includes(`<summary>${question}</summary>`), question);
+  const script = await read('welcome/partners/partners.js');
+  assert.match(script, /import \{ motionWanted, reduceQuery, setupFaq, setupReveal \} from '\.\.\/page-motion\.js';/);
+  assert.match(script, /setupReveal\(\{ motionOn: motionWanted\(\), motionHooks \}\);\nsetupFaq\(\);/);
+  assert.match(script, /html\.classList\.add\('js-ready'\);/);
+  for (const id of ['how', 'earn', 'rules', 'who', 'faq']) assert.match(page, new RegExp(`id="${id}"`), id);
+  for (const who of ['Coaches', 'Creators', 'Newsletters', 'Consultants', 'Teams', 'People who use it']) assert.match(page, new RegExp(`<h3>${who}</h3>`), who);
+  // The hero's three figures, the steps, a company, the rules.
+  assert.match(page, /<ul class="pt-figures"[\s\S]*?data-rate>25%[\s\S]*?data-cookie-days>30<\/span> days[\s\S]*?data-team-rate>10%/);
+  assert.match(page, /Three steps, no paperwork\./);
+  assert.match(page, /<aside class="pt-company"[\s\S]*?Bringing a company\?[\s\S]*?href="\.\.\/teams\/"/);
+  assert.match(page, /planner\.bemorin\.com\/welcome\/\?ref=<b>CODE<\/b>/);
   assert.match(page, /1st and the 15th/);
-  assert.equal((page.match(/data-partner-cta/g) || []).length, 2);
-  assert.match(page, /href="\.\.\/\?ask=question&amp;topic=partners#request" data-partner-cta>Become a partner</, 'works without JavaScript too');
+  for (const rule of ['of Plus and personal gifts', 'of a team gift you introduced', 'days per click', 'Earned after', 'Team gifts by bank transfer', 'Open to anyone', 'Fair play']) assert.ok(page.includes(rule), rule);
+  assert.match(page, /no refund and no dispute/);
+  assert.match(page, /don’t count/, 'own purchases');
+  assert.match(page, /href="\.\.\/\.\.\/legal\/terms\/#partners"/);
+  assert.doesNotMatch(page, /60 days/);
+  // Every way in to a question goes to the Teams page's form, about the program.
+  assert.equal((page.match(/data-partner-cta/g) || []).length, 3);
+  assert.equal((page.match(/href="\.\.\/teams\/\?ask=question&amp;topic=partners#request" data-partner-cta>Become a partner</g) || []).length, 3, 'works without JavaScript too');
+  assert.doesNotMatch(page, /href="\.\.\/\?ask=|href="\.\.\/#request/, 'nothing left pointing at the landing page’s old form');
   const legal = /<nav class="foot__legal"[\s\S]*?<\/nav>/.exec(page)[0];
   assert.deepEqual([...legal.matchAll(/href="([^"]+)"/g)].map(match => match[1]), ['../../legal/privacy/', '../../legal/terms/', '../../legal/cookies/', '../../legal/']);
-  const script = await read('welcome/partners/partners.js');
   assert.match(script, /track\('partners_viewed'\)/);
   assert.match(script, /track\('partner_cta_clicked'\)/);
   const landing = new Map(api.LANDING_EVENTS);
   assert.equal(landing.get('partners_viewed'), 'visited the partners page');
   assert.equal(landing.get('partner_cta_clicked'), 'went to become a partner');
+  assert.equal(landing.get('teams_viewed'), 'visited the Teams page');
+  assert.equal(landing.get('landing_cta_teams'), 'went to the Teams page');
   assert.match(await read('_headers'), /\n\/welcome\/partners\/\n {2}Cache-Control: no-cache\n/);
+  // The styles moved out of landing.css, and the quality gate reads them.
+  assert.doesNotMatch(await read('welcome/landing.css'), /\.pt-[a-z]/);
+  assert.match(await read('scripts/quality.mjs'), /'\.\.\/welcome\/partners\/partners\.css'/);
+  assert.doesNotMatch(await read('welcome/partners/partners.css'), /!important/);
 });
 
 test('the planner mentions the program in three quiet places, each dismissible', async () => {
@@ -189,7 +260,7 @@ test('the planner mentions the program in three quiet places, each dismissible',
   const share = await read('src/features/share-dialog.js');
   assert.match(share, /partnerHintShown\('share'\)/);
   assert.match(share, /dismissPartnerHint\('share'\)/);
-  assert.match(share, /Earn a commission when people buy through your link\./);
+  assert.match(share, /data-share-partner-go/);
   const thanks = await read('welcome/thanks/thanks.js');
   assert.match(thanks, /partnerHintShown\('gift'\)/);
   assert.match(thanks, /dismissPartnerHint\('gift'\)/);

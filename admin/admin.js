@@ -1528,7 +1528,7 @@ function renderSignals(summary) {
     trophy_unlocked: 'Days with a trophy unlocked',
     landing_viewed: 'Landing page visits',
     landing_cta_app: 'Landing → opened the planner',
-    landing_cta_teams: 'Landing → clicked toward Teams',
+    landing_cta_teams: 'Landing → went to the Teams page',
     team_form_opened: 'Opened the request form',
     team_request_sent: 'Sent a request (invoice, quote or question)',
     manager_email_opened: 'Opened the email to a manager',

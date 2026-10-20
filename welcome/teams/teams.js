@@ -99,7 +99,12 @@ followMotion(motionHooks);
 // above it were just drawn, so bring it back into view.
 let arrived = null;
 try { arrived = location.hash.length > 1 ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null; } catch (_) { arrived = null; }
-if (arrived?.closest('main')) arrived.scrollIntoView({ block: 'start' });
+if (arrived?.closest('main')) {
+  // At once, as the browser does on arrival (the page scrolls smoothly otherwise).
+  html.style.scrollBehavior = 'auto';
+  arrived.scrollIntoView({ block: 'start' });
+  html.style.removeProperty('scroll-behavior');
+}
 
 html.classList.add('js-ready');
 track('teams_viewed');

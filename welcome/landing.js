@@ -289,8 +289,9 @@ function buy(clicked) {
   const plan = clicked.dataset.plan || '';
   const personal = clicked.dataset.buy === 'gift' && isPersonalGift(plan);
   hideMemberCheck();
-  // A personal gift is Plus bought for someone else; team gifts are on the Teams page.
-  track(clicked.dataset.buy === 'plus' || personal ? 'plus_checkout_clicked' : 'pack_checkout_clicked');
+  // A personal gift is Plus bought for someone else; team gifts have their own count.
+  if (clicked.dataset.buy === 'plus' || personal) track('plus_checkout_clicked');
+  else track('pack_checkout_clicked');
   return checkout(clicked, {
     sale,
     // A member's personal gift: the licence goes along, for the member price (checked by the server).

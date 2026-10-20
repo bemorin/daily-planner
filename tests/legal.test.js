@@ -81,10 +81,11 @@ test('blank details are left out and contact falls back to the “Ask a question
   assert.deepEqual(blank, { email: '', address: '', registration: '' });
   assert.deepEqual(legal.detailRows(blank).map(([label]) => label), ['Publisher', 'Contact']);
   const html = legal.detailsHtml(legal.detailRows(blank, '../../'));
-  assert.match(html, /href="\.\.\/\.\.\/welcome\/\?ask=question#request"/);
+  assert.match(html, /href="\.\.\/\.\.\/welcome\/teams\/\?ask=question#request"/);
+  assert.doesNotMatch(html, /on the welcome page/, 'the form lives on the Teams page now');
   assert.doesNotMatch(html, /Address|Registration|mailto:/);
-  assert.equal(legal.contactPhrase(blank, '../'), 'use the <a href="../welcome/?ask=question#request">“Ask a question” form</a>');
-  assert.equal(legal.askHref('../'), '../welcome/?ask=question#request');
+  assert.equal(legal.contactPhrase(blank, '../'), 'use the <a href="../welcome/teams/?ask=question#request">“Ask a question” form</a>');
+  assert.equal(legal.askHref('../'), '../welcome/teams/?ask=question#request');
   for (const bad of ['not-an-email', 'a@b', 'me@example.com?bcc=x@evil.com', 'a b@example.com']) {
     assert.equal(legal.legalDetails({ SUPPORT_EMAIL: bad }).email, '', `${bad} is not used in a mailto: link`);
   }
@@ -108,7 +109,7 @@ test('applyLegal fills every placeholder from the configuration', () => {
   selectors.forEach(selector => { nodes[selector] = [node()]; });
   const doc = { body: { dataset: { root: '../../' } }, querySelectorAll: selector => nodes[selector] || [], querySelector: () => null };
   legal.applyLegal(doc, { config: {} });
-  assert.match(nodes['[data-legal-details]'][0].innerHTML, /welcome\/\?ask=question#request/);
+  assert.match(nodes['[data-legal-details]'][0].innerHTML, /welcome\/teams\/\?ask=question#request/);
   assert.doesNotMatch(nodes['[data-legal-details]'][0].innerHTML, /Address/);
   assert.match(nodes['[data-legal-contact]'][0].innerHTML, /^use the /);
   assert.equal(nodes['[data-legal-events="planner"]'][0].innerHTML, legal.eventsHtml(api.COUNTED_EVENTS));
@@ -152,7 +153,10 @@ test('the build copies legal/ and _redirects, and reads the three legal build va
 test('_redirects sends the short links to the legal pages', async () => {
   const lines = (await read('_redirects')).split('\n').map(line => line.trim());
   for (const line of ['/privacy /legal/privacy/ 301', '/terms /legal/terms/ 301', '/cookies /legal/cookies/ 301']) assert.ok(lines.includes(line), line);
-  for (const line of lines.filter(entry => entry && !entry.startsWith('#'))) {
+  // Only the legal short links are checked here (the file also sends /teams and /partners to their pages).
+  const legalLines = lines.filter(entry => /^\/(?:privacy|terms|cookies)\/?\s/.test(entry));
+  assert.equal(legalLines.length, 6);
+  for (const line of legalLines) {
     const [, to] = line.split(/\s+/);
     assert.ok(Object.keys(PAGES).includes(to.replace(/^\//, '')), `${line} points at a legal page`);
   }
@@ -213,22 +217,73 @@ test('a partner code is said to be kept with the sale’s record; partners’ ow
   const privacy = text(await read('legal/privacy/index.html'));
   assert.doesNotMatch(privacy, /nothing else about you is kept with/);
   assert.match(privacy, /kept with the sale’s record/);
+  assert.match(privacy, /the partner’s code goes with your request, so a team order by invoice can earn that partner their commission/);
   const notice = await read('src/features/privacy.js');
   assert.doesNotMatch(notice, /Nothing else goes with it/);
   assert.match(notice, /the code is kept with the sale’s record/);
-  const own = /Purchases a partner makes themselves through their own link, for themselves or as a gift, don’t earn a commission\./;
-  assert.match(text(await read('legal/terms/index.html')), own);
-  assert.match(await read('welcome/partners/index.html'), /<summary>Do my own purchases count\?<\/summary>\s*<div class="qa__a"><p>No\. Purchases you make yourself through your own link, for yourself or as a gift, don’t earn a commission\./);
+  assert.match(text(await read('legal/terms/index.html')), /Your own purchases don’t count: what you buy through your own link, for yourself or as a gift\./);
+  assert.match(await read('welcome/partners/index.html'), /Purchases you make yourself, for you or as a gift, don’t count\./);
 });
 
-test('the 60 days in the privacy and cookies pages match how long a partner code is used', async () => {
-  for (const file of ['legal/privacy/index.html', 'legal/cookies/index.html']) assert.match(text(await read(file)), /60 days/, file);
+test('the terms’ partner program: the rates, the days and the minimum come from PARTNER_PROGRAM, and say every rule', async () => {
+  const program = pricing.PARTNER_PROGRAM;
+  const html = await read('legal/terms/index.html');
+  assert.match(html, /<li><a href="#partners">Partner program<\/a><\/li>/);
+  const section = /<section id="partners"[\s\S]*?<\/section>/.exec(html)[0];
+  // Tags out without a space: “<b>…introduced</b>, on” reads as one sentence.
+  const words = section.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ');
+  const terms = legal.partnerTerms();
+  assert.deepEqual(terms, { rate: `${program.rate}%`, teamRate: `${program.teamRate}%`, days: String(program.cookieDays), refundDays: String(program.refundDays), minimum: '€50 or $50' });
+  // Without JavaScript the page already says what the script writes.
+  for (const [hook, value] of [['rate', terms.rate], ['team-rate', terms.teamRate], ['days', terms.days], ['refund-days', terms.refundDays], ['minimum', terms.minimum]]) {
+    const found = [...section.matchAll(new RegExp(`data-partner-${hook}>([^<]*)<`, 'g'))].map(match => match[1]);
+    assert.ok(found.length && found.every(value_ => value_ === value), `${hook}: ${found}`);
+  }
+  assert.match(words, /you don’t need Plus/);
+  assert.match(words, /25% of Daily Planner Plus, Give Plus and Plus Family bought through your link, on the price before tax/);
+  assert.match(words, /Creem tracks these sales and pays this commission, under its affiliate terms/);
+  assert.match(words, /10% of a team gift you introduced, on its price before tax: bought online through your link, or ordered by invoice or quote when the company’s request carries your code\. We pay this commission ourselves\./);
+  assert.match(words, /A link counts for 30 days\./);
+  assert.match(words, /A sale earns once its 14-day refund period has passed with no refund and no dispute\. A refunded or disputed sale earns nothing/);
+  assert.match(words, /on the 1st and the 15th of each month, once your balance reaches €50 or \$50/);
+  assert.match(words, /We pay team commissions by bank transfer within 30 days of being earned/);
+  assert.match(words, /spam/);
+  assert.match(words, /bid on “Daily Planner” or similar names in search ads/);
+  assert.match(words, /promise discounts, features or results we don’t offer/);
+  assert.match(words, /We may refuse an application or end a partnership/);
+  assert.match(words, /end the program with 30 days’ notice/);
+  // The page fills the same figures.
+  const nodes = new Map();
+  const doc = { body: { dataset: { root: '../../' } }, querySelectorAll: selector => { if (!nodes.has(selector)) nodes.set(selector, [{ innerHTML: '', textContent: '', dataset: {} }]); return nodes.get(selector); }, querySelector: () => null };
+  legal.applyLegal(doc, { config: {} });
+  assert.equal(nodes.get('[data-partner-rate]')[0].textContent, '25%');
+  assert.equal(nodes.get('[data-partner-days]')[0].textContent, '30');
+  assert.equal(nodes.get('[data-partner-minimum]')[0].textContent, '€50 or $50');
+});
+
+test('the 30 days in the privacy and cookies pages match how long a partner code is used', async () => {
+  for (const file of ['legal/privacy/index.html', 'legal/cookies/index.html']) {
+    const page = await read(file);
+    assert.match(page, /<span data-partner-days>30<\/span> days/, file);
+    assert.doesNotMatch(text(page), /60 days/, file);
+  }
+  assert.equal(pricing.PARTNER_PROGRAM.cookieDays, 30);
   const stored = new Map();
   const storage = { getItem: key => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, String(value)) };
   const now = Date.UTC(2026, 9, 19);
   api.rememberReferral('?ref=PARTNER', { storage, now });
-  assert.equal(api.referralCode({ storage, now: now + 59 * 86400000 }), 'PARTNER');
-  assert.equal(api.referralCode({ storage, now: now + 61 * 86400000 }), '');
+  assert.equal(api.referralCode({ storage, now: now + 29 * 86400000 }), 'PARTNER');
+  assert.equal(api.referralCode({ storage, now: now + 31 * 86400000 }), '');
+});
+
+test('every “Ask a question” link in legal/ goes to the Teams page’s form', async () => {
+  for (const [folder, file] of Object.entries(PAGES)) {
+    const html = await read(file);
+    const asks = hrefs(html).filter(href => href.includes('ask='));
+    if (file !== 'legal/cookies/index.html') assert.ok(asks.length > 0, file);
+    for (const href of asks) assert.equal(resolveHref(folder, href) + href.slice(href.indexOf('?')), 'welcome/teams/?ask=question#request', `${file}: ${href}`);
+  }
+  assert.doesNotMatch(await read('legal/legal.js'), /'welcome\/\?ask=/);
 });
 
 test('prices and Plus features in the terms come from src/lib/pricing.js', () => {
