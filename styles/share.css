@@ -297,6 +297,8 @@
 
 .share-sheet__partner > svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--faint); stroke-width: 1.7; }
 
+.share-sheet__partner > span { min-width: 0; text-wrap: pretty; }
+
 .share-sheet__partner a { display: inline-flex; align-items: center; gap: 3px; color: var(--ink); font-weight: 650; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 60%, transparent); text-underline-offset: 3px; white-space: nowrap; }
 
 .share-sheet__partner a svg { width: 13px; height: 13px; stroke-width: 1.8; }

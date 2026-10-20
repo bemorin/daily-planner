@@ -12,6 +12,7 @@
 // (./attention.js) and marks the cards and rows it points to.
 
 import { ATTENTION_SECTIONS, attentionBySection, attentionNote, attentionWhen, buildAttention, setupChecks } from './attention.js';
+import { partnersCardHtml, payoutCheckWords, requestPartnerHtml } from './partners-view.js';
 import { createTrendsView } from './trends-view.js';
 import { dayOf, normalizeSeries, seriesWindow } from './trends.js';
 // The landing page's stepper (− value +): no browser spin arrows on Seats.
@@ -38,7 +39,10 @@ const stars = rating => (rating ? `<span class="owner-stars" aria-label="${ratin
 const TIMING_LABELS = { 'december-2026': 'December 2026', 'january-2027': 'January 2027', 'q1-2027': 'Q1 2027', later: 'Later' };
 const PLAN_LABELS = { 'up-to-10': 'Up to 10 people', 'up-to-50': 'Up to 50 people', 'up-to-100': 'Up to 100 people', 'up-to-500': 'Up to 500 people', 'up-to-1000': 'Up to 1,000 people', 'over-1000': 'Over 1,000 people' };
 const KIND_LABELS = { invoice: 'Invoice', quote: 'Quote', talk: 'Talk', question: 'Question' };
+const REQUEST_SOURCES = { landing: 'Welcome page', teams: 'Teams page', app: 'Planner' };
 const APP_CONFIG = globalThis.__DAILY_PLANNER_CONFIG__ || {};
+// A team order a partner introduced earns them this share (PARTNER_PROGRAM.teamRate, from the API's summary).
+let TEAM_RATE = 10;
 const CURRENCIES = [{ value: 'EUR', label: 'EUR (€)' }, { value: 'USD', label: 'USD ($)' }, { value: '', label: 'No currency' }];
 const GIFT_STATUS_LABELS = { available: 'Open', claimed: 'Fully claimed', expired: 'Expired', inactive: 'Switched off' };
 const day = iso => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
@@ -52,9 +56,9 @@ const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', ma
 // This page's own release, kept in step with package.json and src/config.js
 // (tests/admin-version.test.js). Not imported: it must come from this very
 // file, so an old cached admin.js shows its old number.
-const APP_VERSION = '1.27.0';
+const APP_VERSION = '1.28.0';
 // What Reload fetches again past the browser cache before opening the page anew.
-const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js'];
+const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/lib/pricing.js'];
 const RELOAD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/></svg>';
 
 class ApiError extends Error {
@@ -414,7 +418,7 @@ function renderTeamFunnel(summary, days) {
   const manager = totalOf(rows, 'manager_email_opened');
   const steps = [
     { label: 'Landing page visits', value: visits },
-    { label: 'Clicked toward Teams', value: totalOf(rows, 'landing_cta_teams') },
+    { label: 'Went to the Teams page', value: totalOf(rows, 'landing_cta_teams') },
     { label: 'Opened the team kit form', value: totalOf(rows, 'team_form_opened') },
     { label: 'Sent a request', value: sent },
     { label: '↳ Sent it to a manager', value: manager, branch: true }
@@ -435,11 +439,13 @@ function renderTeams(summary) {
   }
   const rows = summary.teamRequests || [];
   const totals = teamTotals(summary);
+  // A request's partner code says whether it is confirmed (a sale Creem credited, a commission paid) or found to be no partner.
+  const codeChecks = summary.partners?.codeChecks || {};
   caption.textContent = totals.count > rows.length
     ? `Latest ${number(rows.length)} of ${number(totals.count)} requests (export CSV for all). Reply by email; delete on request.`
     : 'Teams who asked for the team kit. Reply by email; delete on request.';
   target.innerHTML = rows.length
-    ? `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Date</th><th>Company</th><th class="num">Team size</th><th>Plan</th><th>Currency</th><th>Request</th><th>Timing</th><th>Name</th><th>Email</th><th>Message</th><th>Source</th><th></th></tr></thead><tbody>${rows.map(row => `<tr data-owner-attn="team:${Number(row.id)}"><td class="owner-nowrap">${esc(when(row.createdAt))}</td><td><b>${esc(row.company)}</b></td><td class="num">${number(row.teamSize)}</td><td class="owner-nowrap">${esc(PLAN_LABELS[row.plan] || row.plan || '—')}</td><td>${esc(row.currency || '—')}</td><td>${esc(KIND_LABELS[row.kind] || row.kind || '—')}</td><td class="owner-nowrap">${esc(TIMING_LABELS[row.timing] || row.timing)}</td><td>${esc(row.name || '—')}</td><td>${mailLink(row.email)}</td><td class="owner-message">${esc(row.message || '')}</td><td>${esc(row.source || '')}</td><td><button class="text-button text-button--danger" type="button" data-owner-delete-team="${Number(row.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
+    ? `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Date</th><th>Company</th><th class="num">Team size</th><th>Plan</th><th>Currency</th><th>Request</th><th>Timing</th><th>Name</th><th>Email</th><th>Message</th><th>Source</th><th></th></tr></thead><tbody>${rows.map(row => `<tr data-owner-attn="team:${Number(row.id)}"><td class="owner-nowrap">${esc(when(row.createdAt))}</td><td><b>${esc(row.company)}</b></td><td class="num">${number(row.teamSize)}</td><td class="owner-nowrap">${esc(PLAN_LABELS[row.plan] || row.plan || '—')}</td><td>${esc(row.currency || '—')}</td><td>${esc(KIND_LABELS[row.kind] || row.kind || '—')}</td><td class="owner-nowrap">${esc(TIMING_LABELS[row.timing] || row.timing)}</td><td>${esc(row.name || '—')}</td><td>${mailLink(row.email)}</td><td class="owner-message">${requestPartnerHtml(row.ref, codeChecks[row.ref] || '', TEAM_RATE)}${esc(row.message || '')}</td><td>${esc(REQUEST_SOURCES[row.source] || row.source || '')}</td><td><button class="text-button text-button--danger" type="button" data-owner-delete-team="${Number(row.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
     : '<p class="owner-empty">No team kit requests yet.</p>';
 }
 
@@ -633,6 +639,16 @@ const copyRow = (label, value) => `<div class="owner-copy-row"><span>${esc(label
 
 // Mutations from the Plus cards: errors stay in the card instead of replacing
 // the dashboard, except an ended session, which signs out as everywhere else.
+/** A commission, always to the cent, so a column of them lines up. */
+function exactMoney(amount, currency) {
+  if (amount == null || amount === '') return '';
+  try {
+    return new Intl.NumberFormat(undefined, { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(amount) / 100);
+  } catch (_) {
+    return `${(Number(amount) / 100).toFixed(2)} ${currency}`;
+  }
+}
+
 async function sendJson(path, method, body) {
   return jsonOf(await call(path, { method, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) }));
 }
@@ -1098,63 +1114,89 @@ $('[data-owner-refunds]').closest('.owner-card').addEventListener('click', async
 
 // ---- Partners ------------------------------------------------------------------
 
-const PARTNER_PLAN_LABELS = { 'gift-1': 'Give Plus', 'family-5': 'Plus Family' };
-const partnerWhat = row => (row.kind === 'plus' ? 'Plus' : PARTNER_PLAN_LABELS[row.plan] || (PLAN_LABELS[row.plan] ? `Team gift · ${PLAN_LABELS[row.plan].toLowerCase()}` : 'Gift'));
-const revenueText = revenue => Object.entries(revenue || {}).map(([currency, cents]) => money(cents, currency)).join(' · ') || '—';
-const PARTNER_STATE_PILLS = { refunded: 'Refunded', revoked: 'Switched off' };
-
-/** What the figures leave out or cover: sales made in Creem's test mode, and the cap on how many sales are read. */
-function partnerFootnote(totals) {
-  const test = totals.test || {};
-  const parts = [];
-  if (test.sales) parts.push(`${number(test.sales)} ${plural(test.sales, 'sale')} in test mode${Object.keys(test.revenue || {}).length ? ` (${revenueText(test.revenue)})` : ''} ${Number(test.sales) === 1 ? 'is' : 'are'} not counted.`);
-  if (totals.capped) parts.push(`The figures cover the latest ${number(totals.listed)} sales.`);
-  return parts.length ? `<p class="owner-partner-note">${esc(parts.join(' '))}</p>` : '';
-}
-
-/** Sales through a partner's link (migration 0006): one line per code, then the latest sales. */
+/** Sales through a partner's link (migrations 0006 and 0007): see ./partners-view.js. */
 function renderPartners(summary) {
-  const target = $('[data-owner-partners]');
-  if (summary.partnersUnavailable) {
-    target.innerHTML = '<p class="owner-empty">The <code>partner_sales</code> table does not exist yet, so sales through a partner’s link are not recorded. Apply <code>migrations/0006_partners.sql</code> to the D1 database (see <code>docs/FEEDBACK_AND_WAITLIST.md</code>).</p>';
-    return;
-  }
-  const partners = summary.partners || {};
-  const codes = Array.isArray(partners.codes) ? partners.codes : [];
-  const recent = Array.isArray(partners.recent) ? partners.recent : [];
-  if (!codes.length) {
-    target.innerHTML = '<p class="owner-empty">No sales through a partner’s link yet. Partners share <code>https://planner.bemorin.com/welcome/?ref=CODE</code>; a purchase made through it shows here once it is paid.</p>';
-    return;
-  }
-  const totals = partners.totals || {};
-  const latest = totals.capped ? `Latest ${number(totals.listed)} sales · ` : '';
-  const stats = [
-    ['Partner sales', number(totals.sales), `${latest}${number(totals.partners)} ${plural(totals.partners, 'partner')}`],
-    ['Revenue', revenueText(totals.revenue), 'After refunds; currencies never added together'],
-    ['Refunded or switched off', number(totals.refunded), totals.partial ? `Left out of the revenue · ${number(totals.partial)} partly refunded: counted less the refund` : 'Left out of the revenue']
-  ].map(([label, figure, note]) => `<div class="owner-stat"><span>${esc(label)}</span><strong>${esc(figure)}</strong><small>${esc(note)}</small></div>`).join('');
-  const off = row => [row.refunded ? `${number(row.refunded)} refunded` : '', row.partial ? `${number(row.partial)} partly refunded` : '', row.revoked ? `${number(row.revoked)} switched off` : '', row.test ? `${number(row.test)} in test mode` : ''].filter(Boolean).join(' · ');
-  const byCode = codes.map(row => `<tr>
-    <td><code>${esc(row.code)}</code></td>
-    <td class="num"><b>${number(row.sales)}</b>${off(row) ? `<small class="owner-small">${esc(off(row))}</small>` : ''}</td>
-    <td class="num owner-nowrap">${esc(revenueText(row.revenue))}</td>
-    <td class="num">${row.members ? number(row.members) : '—'}</td>
-    <td class="owner-nowrap">${esc(day(row.lastAt))}</td>
-  </tr>`).join('');
-  const refundedPart = row => (row.refundedAmount ? `−${money(row.refundedAmount, row.currency)} refunded` : row.partial ? 'Part refunded, amount unknown' : '');
-  const lines = recent.map(row => `<tr${row.state || row.test ? ' class="is-off"' : ''}>
-    <td class="owner-nowrap">${esc(when(row.createdAt))}</td>
-    <td><code>${esc(row.code)}</code></td>
-    <td>${esc(partnerWhat(row))}${row.member ? ' <span class="owner-pill">Member price</span>' : ''}${row.test ? ' <span class="owner-pill">Test · not counted</span>' : ''}</td>
-    <td class="num owner-nowrap">${esc(money(row.amount, row.currency)) || '—'}${refundedPart(row) ? `<small class="owner-small">${esc(refundedPart(row))}</small>` : ''}</td>
-    <td>${row.state ? `<span class="owner-pill owner-pill--inactive">${esc(PARTNER_STATE_PILLS[row.state] || 'Switched off')}</span>` : row.partial ? '<span class="owner-pill">Partly refunded</span>' : ''}</td>
-  </tr>`).join('');
-  target.innerHTML = `<div class="owner-stats owner-partner-stats">${stats}</div>
-    ${partnerFootnote(totals)}
-    <div class="owner-scroll"><table class="owner-table owner-partners"><thead><tr><th>Partner code</th><th class="num">Sales</th><th class="num">Revenue</th><th class="num">Member price</th><th>Last sale</th></tr></thead><tbody>${byCode}</tbody></table></div>
-    <div class="owner-list"><h3>Latest partner sales</h3></div>
-    <div class="owner-scroll"><table class="owner-table owner-partner-sales"><thead><tr><th>Date</th><th>Code</th><th>What</th><th class="num">Amount</th><th><span class="sr-only">State</span></th></tr></thead><tbody>${lines}</tbody></table></div>`;
+  $('[data-owner-partners]').innerHTML = partnersCardHtml(summary, { money, exact: exactMoney, number, day });
 }
+
+// After the card is drawn again, focus stays on the row that was acted on (its new first button), else on the result line.
+function focusPartnerRow(checkoutId) {
+  const row = checkoutId ? [...document.querySelectorAll('[data-owner-partners] [data-owner-attn]')].find(item => item.dataset.ownerAttn === `partner:${checkoutId}`) : null;
+  (row?.querySelector('button') || $('[data-owner-payout-result]'))?.focus();
+}
+
+/**
+ * Mark as paid asks what the row says to check first (a code nothing confirmed,
+ * a refund or the tax not recorded) and, when the commission is only an upper
+ * bound, the amount actually paid; the API is told the owner checked.
+ */
+function askPayout(dataset) {
+  const code = dataset.ownerPayoutCode || 'this partner';
+  const checks = String(dataset.ownerPayoutChecks || '').split(' ').filter(Boolean);
+  const first = checks.length ? `${payoutCheckWords({ code, checks }, TEAM_RATE).map(line => `• ${line}.`).join('\n')}\n\n` : '';
+  let amount = null;
+  let shown = dataset.ownerPayoutAmount || 'commission';
+  if (dataset.ownerPayoutExact === '0') {
+    const most = Number(dataset.ownerPayoutCents) || 0;
+    const typed = window.prompt(`${first}${shown} is the most ${code} can have earned. Type the commission you paid by bank transfer (at most ${shown}):`, '');
+    if (typed === null) return null;
+    const parsed = parseAmount(typed);
+    if (parsed.error || !parsed.amount || parsed.amount > most) return { error: parsed.error || `Type the commission you paid: more than nothing and at most ${shown}.` };
+    amount = parsed.amount;
+    shown = exactMoney(amount, dataset.ownerPayoutCurrency);
+  }
+  const answer = window.prompt(`${amount == null ? first : ''}Mark ${code}’s ${shown} as paid? Do it once the bank transfer is sent. Add its reference if you like (optional, only you see it).`, '');
+  if (answer === null) return null;
+  return {
+    body: { checkout: dataset.ownerPayout, note: answer.trim().slice(0, 200), ...(checks.length ? { confirmed: true } : {}), ...(amount == null ? {} : { amount }) },
+    done: `Marked as paid: ${code}, ${shown}.`
+  };
+}
+
+// Mark an earned team commission as paid (after the bank transfer) or undo it; mark a code as not a partner or undo it.
+$('[data-owner-partners]').addEventListener('click', async event => {
+  const button = event.target.closest('[data-owner-payout], [data-owner-payout-undo], [data-owner-code-reject], [data-owner-code-undo]');
+  if (!button || button.disabled) return;
+  const { dataset } = button;
+  const row = dataset.ownerPayout || dataset.ownerPayoutUndo || dataset.ownerRow || '';
+  const undoing = dataset.ownerPayoutUndo !== undefined || dataset.ownerCodeUndo !== undefined;
+  let send;
+  let done;
+  if (dataset.ownerPayout !== undefined) {
+    const asked = askPayout(dataset);
+    if (!asked) return;
+    if (asked.error) { showResult('[data-owner-payout-result]', asked.error, true); button.focus(); return; }
+    send = () => sendJson('admin/partners/payouts', 'POST', asked.body);
+    done = asked.done;
+  } else if (dataset.ownerPayoutUndo !== undefined) {
+    const code = dataset.ownerPayoutCode || 'this partner';
+    if (!window.confirm(`Mark ${code}’s commission as not paid?`)) return;
+    send = () => call(`admin/partners/payouts/${encodeURIComponent(dataset.ownerPayoutUndo)}`, { method: 'DELETE' });
+    done = `Marked as not paid: ${code}.`;
+  } else if (dataset.ownerCodeReject !== undefined) {
+    const code = dataset.ownerCodeReject;
+    if (!window.confirm(`Mark ${code} as not a partner? Do it once you have checked Creem → Affiliate Hub and found no partner with this code. Its team commissions will earn nothing (you can undo it).`)) return;
+    send = () => sendJson('admin/partners/rejections', 'POST', { code });
+    done = `${code} is marked as not a partner: its team commissions earn nothing.`;
+  } else {
+    const code = dataset.ownerCodeUndo;
+    if (!window.confirm(`Is ${code} a partner after all? Its team commissions count again.`)) return;
+    send = () => call(`admin/partners/rejections/${encodeURIComponent(code)}`, { method: 'DELETE' });
+    done = `${code} counts as a partner again.`;
+  }
+  button.disabled = true;
+  try {
+    await send();
+  } catch (error) {
+    button.disabled = false;
+    if (error.kind === 'unauthorized') { handleError(error); return; }
+    // "failed" on an Undo is usually a 404: already undone. Just refresh.
+    if (!undoing || error.kind !== 'failed') { showResult('[data-owner-payout-result]', failureText(error), true); button.focus(); return; }
+  }
+  await load();
+  showResult('[data-owner-payout-result]', done);
+  focusPartnerRow(row);
+});
 
 // ---- Setup --------------------------------------------------------------------
 
@@ -1186,19 +1228,17 @@ function paymentsItem(payments) {
   return { key: 'payments', title: 'Payments (Creem)', html: `${key}${error}<p>Product ids (one-time products, one per item and currency):</p>${table}${webhook}${url}` };
 }
 
-// Partners (welcome/partners/): “Become a partner” opens the Creem affiliate sign-up link, a build variable.
-function partnersItem(base = 'https://planner.bemorin.com') {
-  const value = key => String(APP_CONFIG[key] || '').trim();
+// Partners (welcome/partners/): “Become a partner” opens the Creem affiliate sign-up link, a build variable,
+// and the program's terms are set in Creem to match PARTNER_PROGRAM (src/lib/pricing.js).
+function partnersItem(summary, base = 'https://planner.bemorin.com') {
+  const program = { rate: 25, teamRate: 10, cookieDays: 30, refundDays: 14, minimumPayout: { EUR: 50, USD: 50 }, ...(summary.partnerProgram || {}) };
+  const url = String(APP_CONFIG.AFFILIATE_URL || '').trim();
   const page = copyRow('Partners page', new URL('welcome/partners/', `${base.replace(/\/+$/, '')}/`).href);
-  const commission = value('AFFILIATE_COMMISSION') ? `The page shows a commission of ${esc(value('AFFILIATE_COMMISSION'))} (<code>DAILY_PLANNER_AFFILIATE_COMMISSION</code>).` : 'Set <code>DAILY_PLANNER_AFFILIATE_COMMISSION</code> (e.g. <code>30%</code>) to show the commission; until then the page says “a commission”.';
-  if (/^https:\/\/\S+$/.test(value('AFFILIATE_URL'))) {
-    return { key: 'partners', title: 'Partners', html: `<p>“Become a partner” opens your Creem affiliate sign-up link (<code>DAILY_PLANNER_AFFILIATE_URL</code>). ${commission}</p>${page}` };
-  }
-  return {
-    key: 'partners',
-    title: 'Partners',
-    html: `<p>In Creem → Growth → Affiliate Hub, create the program, copy its sign-up link and set it as the build variable <code>DAILY_PLANNER_AFFILIATE_URL</code>, then redeploy. Until then “Become a partner” opens the question form. ${commission}</p>${page}`
-  };
+  const creem = `<p>In Creem → Growth → Affiliate Hub, set the program to match the partners page and the terms: commission <b>${esc(program.rate)}%</b>, attribution window <b>${esc(program.cookieDays)} days</b>, and a <b>public</b> program (anyone can join, no Plus needed). Creem pays partners on the 1st and the 15th once they have ${esc(money(program.minimumPayout.EUR * 100, 'EUR'))} / ${esc(money(program.minimumPayout.USD * 100, 'USD'))}. Check that a refunded or disputed sale earns nothing there. Team gifts aren’t sent to Creem with the partner’s code: you pay their ${esc(program.teamRate)}% yourself (Partners card).</p>`;
+  const link = /^https:\/\/\S+$/.test(url)
+    ? `<p>“Become a partner” opens your Creem sign-up link (<code>DAILY_PLANNER_AFFILIATE_URL</code>).</p>`
+    : '<p>Copy the program’s sign-up link into the build variable <code>DAILY_PLANNER_AFFILIATE_URL</code>, then redeploy: it is the link behind “Become a partner”. Until then the button opens the question form on the Teams page.</p>';
+  return { key: 'partners', title: 'Partners', html: `${link}${creem}${page}` };
 }
 
 // Legal pages (legal/): their contact and address come from build variables.
@@ -1275,9 +1315,9 @@ function setupItems(summary) {
   items.push(paymentsItem(setup.payments || {}));
 
   items.push({ key: 'links', title: 'Links in emails', html: `<p>They start with ${esc(base)}${setup.publicBaseUrlSet ? ' (<code>PUBLIC_BASE_URL</code>)' : ', the default. Set <code>PUBLIC_BASE_URL</code> to change it'}.</p>` });
-  items.push(partnersItem(base));
+  items.push(partnersItem(summary, base));
   items.push(legalItem(base));
-  const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql', summary.reviewsUnavailable && '0004_creem_reviews.sql', summary.refundsUnavailable && '0005_refunds.sql', summary.partnersUnavailable && '0006_partners.sql'].filter(Boolean);
+  const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql', summary.reviewsUnavailable && '0004_creem_reviews.sql', summary.refundsUnavailable && '0005_refunds.sql', summary.partnersUnavailable && '0006_partners.sql', summary.partnerCommissionsUnavailable && '0007_partner_commissions.sql'].filter(Boolean);
   const listed = files => (files.length > 1 ? `${files.slice(0, -1).join(', ')} and ${files.at(-1)}` : files[0]);
   items.push(missingTables.length
     ? { key: 'database', title: 'Database', html: `<p>Apply ${listed(missingTables.map(file => `<code>migrations/${file}</code>`))} to the D1 database.${summary.refundsUnavailable ? ' Until <code>0005_refunds.sql</code> is applied, refunds are not recorded and nothing is switched off.' : ''}</p>` }
@@ -1330,7 +1370,8 @@ const ATTENTION_ICONS = {
   version: '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/>',
   gift: '<rect x="3.5" y="8.5" width="17" height="4" rx="1"/><path d="M5.5 12.5v7h13v-7"/><path d="M12 8.5v11"/><path d="M12 8.5C10.6 5 7 4.6 7 6.6c0 1.4 2.2 1.9 5 1.9 2.8 0 5-.5 5-1.9 0-2-3.6-1.6-5 1.9"/>',
   review: '<path d="m12 4.5 2.3 4.7 5.2.8-3.8 3.6.9 5.1-4.6-2.4-4.6 2.4.9-5.1-3.8-3.6 5.2-.8z"/>',
-  clear: '<circle cx="12" cy="12" r="8.5"/><path d="m8.4 12.3 2.5 2.5 4.7-5"/>'
+  clear: '<circle cx="12" cy="12" r="8.5"/><path d="m8.4 12.3 2.5 2.5 4.7-5"/>',
+  partner: '<circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.2c-.5-.9-1.5-1.4-2.6-1.4-1.6 0-2.7.8-2.7 2 0 2.8 5.5 1.5 5.5 4.3 0 1.2-1.2 2.1-2.8 2.1-1.2 0-2.3-.6-2.8-1.5M12 6v1.8M12 16.2V18"/>'
 };
 const ATTENTION_ARROW = '<svg class="owner-attention__arrow" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
 // The mark on a row: “!” to act on, “i” worth a look. A shape and words, not only a colour.
@@ -1340,7 +1381,7 @@ const ATTENTION_FLAGS = {
 };
 const ATTENTION_TONE_WORDS = { urgent: 'Urgent', warn: 'To do', info: 'Worth a look' };
 // The card each section points to, found from the container it renders into.
-const ATTENTION_CARDS = { refunds: '[data-owner-refunds]', teams: '[data-owner-teams]', setup: '[data-owner-setup]', gifts: '[data-owner-gifts]', reviews: '[data-owner-reviews]' };
+const ATTENTION_CARDS = { refunds: '[data-owner-refunds]', teams: '[data-owner-teams]', partners: '[data-owner-partners]', setup: '[data-owner-setup]', gifts: '[data-owner-gifts]', reviews: '[data-owner-reviews]' };
 const ATTENTION_TONE_CLASSES = ['is-attention', 'is-attn-urgent', 'is-attn-warn', 'is-attn-info'];
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let attentionExpanded = false;
@@ -1393,7 +1434,7 @@ function attentionLine(item, index, summary, now) {
   const setup = item.when === 'setup';
   const label = attentionWhen(item, now);
   const title = setup ? `A setting of this deployment: it has no date. Checked ${exactTime(summary.generatedAt)}.`
-    : `${item.when === 'until' ? 'Expires' : item.when === 'created' ? 'Created' : 'Since'} ${exactTime(item.at)}`;
+    : `${item.when === 'until' ? 'Expires' : item.when === 'created' ? 'Created' : item.when === 'earned' ? 'Earned' : 'Since'} ${exactTime(item.at)}`;
   const time = setup || !label ? `<span class="owner-attention__when" title="${esc(title)}">${esc(label)}</span>`
     : `<time class="owner-attention__when" datetime="${esc(item.at)}" title="${esc(title)}">${esc(label)}</time>`;
   const card = attentionCard(item.section);
@@ -1420,7 +1461,7 @@ function renderAttention(summary) {
   if (!items.length) {
     panel.innerHTML = `<div class="owner-attention__clear">
       <span class="owner-attention__icon" aria-hidden="true">${attentionIcon('clear')}</span>
-      <div class="owner-attention__text"><h2 id="owner-attention-title">All clear</h2><p>Nothing needs your attention. Refunds and disputes, team requests, Setup, gifts and reviews were checked.</p></div>
+      <div class="owner-attention__text"><h2 id="owner-attention-title">All clear</h2><p>Nothing needs your attention. Refunds and disputes, team requests, partner commissions, Setup, gifts and reviews were checked.</p></div>
       ${checked}
     </div>`;
     return;
@@ -1552,7 +1593,7 @@ function renderSignals(summary) {
     trophy_unlocked: 'Days with a trophy unlocked',
     landing_viewed: 'Landing page visits',
     landing_cta_app: 'Landing → opened the planner',
-    landing_cta_teams: 'Landing → clicked toward Teams',
+    landing_cta_teams: 'Landing → went to the Teams page',
     team_form_opened: 'Opened the request form',
     team_request_sent: 'Sent a request (invoice, quote or question)',
     manager_email_opened: 'Opened the email to a manager',
@@ -1568,7 +1609,7 @@ function renderSignals(summary) {
     pack_checkout_clicked: 'Landing → went to buy a team gift',
     gift_link_copied: 'Copied a team gift link',
     plus_viewed: 'Landing → scrolled to Plus',
-    teams_viewed: 'Landing → scrolled to the team gift',
+    teams_viewed: 'Visited the Teams page',
     pricing_viewed: 'Landing → scrolled to the prices',
     review_sent: 'Left a review that may be quoted',
     partners_viewed: 'Visited the partners page',
@@ -1619,6 +1660,7 @@ async function load({ series: refreshSeries = false } = {}) {
     $('[data-owner-session]').textContent = `Signed in until ${untilLabel(session.expiresAt)}`;
     $('[data-owner-sub]').textContent = `Private. Updated ${when(summary.generatedAt)} · counts since ${summary.sinceDay}.`;
     renderVersion(summary);
+    if (Number(summary.partnerProgram?.teamRate) > 0) TEAM_RATE = Number(summary.partnerProgram.teamRate);
     renderKpis(summary, days);
     renderFunnel(summary, days);
     renderTeamFunnel(summary, days);

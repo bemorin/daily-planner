@@ -786,21 +786,67 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
   .owner-list li span:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
 }
 
-/* Partners: sales through a partner's link, by code, then the latest ones. */
+/* Partners: what you owe for team gifts, Creem's commissions, each partner, the latest sales. */
 .owner-partner-stats { margin-bottom: 14px; }
 
 .owner-partner-note { margin: -4px 0 14px; color: var(--muted); font-size: .8rem; line-height: 1.5; }
 
 .owner-partner-stats strong { font-size: 1.25rem; }
 
+/* Money owed: the one figure to act on, set apart with a border, not only a colour. */
+.owner-stat--due { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 10%, var(--soft)); }
+
+.owner-stat--due strong { color: var(--ink); }
+
 .owner-partners code,
+.owner-partner-team code,
 .owner-partner-sales code { font-size: .78rem; font-weight: 650; overflow-wrap: normal; white-space: nowrap; }
 
-.owner-partners .owner-small { white-space: nowrap; }
+/* A partner code nothing confirmed yet (or found to be no partner): said in words, in the attention panel's amber. */
+.owner-small--warn { color: color-mix(in srgb, var(--attn-warn) 62%, var(--ink)); font-weight: 650; }
 
-.owner-partner-sales .owner-pill { margin-top: 0; }
+.owner-partners .owner-small,
+.owner-partner-team .num .owner-small,
+.owner-partner-team .owner-small--warn { white-space: nowrap; }
 
-.owner-partner-sales tr.is-off td:not(:last-child) { color: var(--muted); }
+.owner-partner-sales .owner-pill,
+.owner-partner-team .owner-pill { margin-top: 0; }
+
+.owner-partner-sales tr.is-off td:not(:last-child),
+.owner-partner-team tr.is-off td:not(:last-child) { color: var(--muted); }
+
+.owner-pill--wait { background: var(--soft); color: var(--muted); }
+
+.owner-pill--due { background: color-mix(in srgb, var(--accent) 20%, var(--surface)); color: var(--ink); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+
+.owner-pill--ok { background: color-mix(in srgb, var(--hz-habit) 16%, var(--surface)); color: color-mix(in srgb, var(--hz-habit) 72%, var(--ink)); }
+
+.owner-pill--off { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
+
+.owner-partner-team .owner-row-actions { min-width: 0; justify-content: flex-end; white-space: nowrap; }
+
+.owner-table .owner-pay { min-height: 32px; padding: 4px 12px; font-size: .76rem; white-space: nowrap; }
+
+.owner-partner-ref { display: block; width: max-content; max-width: 100%; margin-bottom: 4px; padding: 2px 8px; border-radius: 8px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); color: var(--ink); font-size: .74rem; font-weight: 600; line-height: 1.5; }
+
+.owner-partner-ref code { font-size: .72rem; font-weight: 650; overflow-wrap: normal; white-space: nowrap; }
+
+.owner-partner-ref small { display: block; color: color-mix(in srgb, var(--attn-warn) 62%, var(--ink)); font-size: .7rem; font-weight: 600; }
+
+.owner-partner-ref.is-off { background: var(--soft); color: var(--muted); }
+
+/* Migration 0007 missing: one line in place of what can't be done yet. */
+.owner-partner-setup { margin: -4px 0 14px; padding: 10px 12px; border: 1px dashed var(--line-strong); border-radius: 10px; color: var(--ink); font-size: .8rem; line-height: 1.5; }
+
+/* On a phone these tables scroll sideways rather than squeeze their words one per line. */
+.owner-partner-team { min-width: 760px; }
+
+.owner-partner-team td:nth-child(3),
+.owner-partner-team td:nth-child(5) { min-width: 170px; }
+
+.owner-partners,
+.owner-partner-sales { min-width: 640px; }
 
 [data-owner-partners] .owner-list { margin-top: 18px; }
 
+[data-owner-partners] > .owner-result { margin: 0 0 10px; }

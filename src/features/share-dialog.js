@@ -1,5 +1,6 @@
 import { esc, escAttr } from '../lib/text.js';
 import { dismissPartnerHint, partnerHintShown, trackEvent } from '../lib/planner-api.js';
+import { PARTNER_PROGRAM } from '../lib/pricing.js';
 import { modalEnter, modalExit } from '../ui/motion.js';
 import { SHARE_FORMATS, SHARE_LOOKS, SHARE_SITE, describeShare, drawShareImage, normalizeShareOptions, shareFileName, shareFormat } from './share-image.js';
 
@@ -9,7 +10,8 @@ import { SHARE_FORMATS, SHARE_LOOKS, SHARE_SITE, describeShare, drawShareImage, 
  * Copy image / Download image. The image is drawn and encoded on this device;
  * nothing is uploaded. A native <dialog> keeps focus inside and returns it.
  * Once an image is made, with the owner API on, one quiet line mentions the
- * partner program, until it is hidden or followed on this device.
+ * partner program — to everyone, Plus or not — until it is hidden or followed
+ * on this device.
  */
 
 const PREFS_KEY = 'daily-planner-ui:share';
@@ -83,8 +85,17 @@ function toggle(attr, title, note) {
   </label>`;
 }
 
+/**
+ * The partner line's words, from the program's terms (PARTNER_PROGRAM.rate):
+ * “Earn a 25% commission on every Plus purchase made through your link.”
+ */
+export function sharePartnerText(rate = PARTNER_PROGRAM.rate) {
+  const value = Number(rate);
+  return `Earn ${Number.isFinite(value) && value > 0 && value < 100 ? `a ${value}% commission` : 'a commission'} on every Plus purchase made through your link.`;
+}
+
 /** One line about the partner program, shown once an image is made (hidden until then). */
-const partnerLine = () => `<p class="share-sheet__partner" data-share-partner hidden>${icon('link')}<span>Earn a commission when people buy through your link. <a href="./welcome/partners/" target="_blank" rel="noopener" data-share-partner-go>Partners${icon('arrow')}</a></span><button class="icon-button share-sheet__partner-close" type="button" data-share-partner-dismiss aria-label="Hide the partner program">${icon('close')}</button></p>`;
+const partnerLine = () => `<p class="share-sheet__partner" data-share-partner hidden>${icon('link')}<span>${esc(sharePartnerText())} <a href="./welcome/partners/" target="_blank" rel="noopener" data-share-partner-go>Partner program${icon('arrow')}</a></span><button class="icon-button share-sheet__partner-close" type="button" data-share-partner-dismiss aria-label="Hide the partner program">${icon('close')}</button></p>`;
 
 function sheetMarkup({ eyebrow, title, intro, model, state, shareAvailable, copyAvailable, partner = false }) {
   const lines = model.kind === 'week' ? model.lines : [];

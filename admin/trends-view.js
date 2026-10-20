@@ -66,7 +66,7 @@ const METRIC_COPY = {
 
 const FUNNEL_COPY = {
   planner: { title: 'Landing → planner', steps: ['Landing visits', 'Clicked “Open the planner”', 'Finished onboarding', 'Closed a day (all planners)'], outcome: 'finished onboarding per landing visit' },
-  'team-gift': { title: 'Team gift', steps: ['Landing visits', 'Scrolled to the team gift', 'Scrolled to the prices', 'Went to buy a team gift', 'Bought a team gift online'], outcome: 'gifts bought per landing visit' },
+  'team-gift': { title: 'Team gift', steps: ['Landing visits', 'Visited the Teams page', 'Went to buy a team gift', 'Bought a team gift online'], outcome: 'gifts bought per landing visit' },
   plus: { title: 'Plus', steps: ['Saw Plus (landing or app)', 'Went to buy Plus', 'Unlocked Plus (any way)'], outcome: 'unlocks per Plus view' }
 };
 

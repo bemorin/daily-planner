@@ -32,6 +32,26 @@ export const LAUNCH = Object.freeze({
   after: 'After the launch, Plus becomes a yearly subscription for new members.'
 });
 
+/**
+ * The partner program (welcome/partners/, the terms, the planner's invitations, the
+ * dashboard). `rate`: percent of the price before tax of Plus, Give Plus and Plus
+ * Family bought through a partner's link, credited and paid by Creem (set the same
+ * rate in Creem → Affiliate Hub; Creem has one rate per program). `teamRate`: percent
+ * of a team gift a partner introduced, paid by the owner by bank transfer (team
+ * checkouts are not credited in Creem). `cookieDays`: how long a partner's link
+ * counts (the browser keeps the code that long; set the same in Creem).
+ * `minimumPayout`: the balance a partner needs before a payout (Creem's minimum).
+ * `refundDays`: a sale earns once its refund period has passed without a refund
+ * or a dispute.
+ */
+export const PARTNER_PROGRAM = Object.freeze({
+  rate: 25,
+  teamRate: 10,
+  cookieDays: 30,
+  minimumPayout: Object.freeze({ EUR: 50, USD: 50 }),
+  refundDays: 14
+});
+
 /** Team gift: one price for the company by number of people (seats). */
 export const TEAM_TIERS = Object.freeze([
   Object.freeze({ plan: 'up-to-10', seats: 10, price: Object.freeze({ EUR: 195, USD: 195 }) }),
@@ -98,6 +118,27 @@ export const teamTier = plan => TEAM_TIERS.find(tier => tier.plan === plan) || n
 export const giftPlan = plan => teamTier(plan) || PERSONAL_GIFTS.find(gift => gift.plan === plan) || null;
 export const isPersonalGift = plan => PERSONAL_GIFTS.some(gift => gift.plan === plan);
 export const validCurrency = value => (CURRENCIES.includes(value) ? value : '');
+
+/* The partner program's arithmetic (PARTNER_PROGRAM): the partners page, the dashboard. */
+
+/** A team gift (a team tier), as opposed to Plus or a personal gift. */
+export const isTeamGift = (kind, plan = '') => kind === 'gift' && !!teamTier(plan);
+
+/**
+ * The commission rate, in percent, for what was bought through a partner's
+ * link: PARTNER_PROGRAM.rate for Plus and the personal gifts (Creem pays it),
+ * PARTNER_PROGRAM.teamRate for a team gift (the owner pays it); 0 otherwise.
+ */
+export function partnerRate(kind, plan = '') {
+  if (kind === 'plus' || (kind === 'gift' && isPersonalGift(plan))) return PARTNER_PROGRAM.rate;
+  return isTeamGift(kind, plan) ? PARTNER_PROGRAM.teamRate : 0;
+}
+
+/** A tax-inclusive amount in cents, before a tax of `taxPercent` (20 = 20% VAT), to the cent. */
+export const beforeTaxCents = (cents, taxPercent = 0) => Math.round(Number(cents) * 100 / (100 + Math.max(0, Number(taxPercent) || 0)));
+
+/** `rate` percent of an amount in cents, to the cent: a commission. */
+export const commissionCents = (cents, rate) => Math.round(Number(cents) * Number(rate) / 100);
 
 /** The currency a country pays in (ISO 3166 alpha-2), or '' when the country is unknown. */
 export function currencyForCountry(country) {

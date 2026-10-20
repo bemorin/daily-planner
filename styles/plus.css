@@ -533,6 +533,17 @@
 
 .plus-teams a { color: var(--ink); font-weight: 650; text-decoration-color: color-mix(in srgb, var(--accent) 65%, transparent); text-underline-offset: 3px; }
 
+/* Without Plus: the partner program as a footnote, the dialog's last line, in the privacy line's small muted type, with a way to hide it. */
+.plus-footnote { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; color: var(--faint); font-size: .74rem; line-height: 1.5; }
+
+.plus-teams + .plus-footnote { margin-top: 14px; }
+
+.plus-footnote > span { flex: 1 1 auto; min-width: 0; text-wrap: pretty; }
+
+.plus-footnote a { color: var(--muted); font-weight: 620; text-decoration-color: color-mix(in srgb, var(--accent) 65%, transparent); text-underline-offset: 3px; }
+
+.plus-footnote .plus-partner__close { flex: 0 0 auto; width: 28px; height: 28px; margin: -5px -6px -5px 0; }
+
 .plus-dialog .privacy-footnote { margin-top: 12px; padding-top: 0; border-top: 0; color: var(--faint); font-size: .74rem; text-align: left; }
 
 .plus-dialog .privacy-footnote .privacy-link { color: var(--muted); }

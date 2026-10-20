@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const app = await fs.readFile(resolve(root, 'app.js'), 'utf8');
-const cssFiles = ['core.css','schedule.css','week.css','stats.css','pip.css','settings.css','horizon.css','year.css','workspace.css','guides.css','plus.css','theme.css','print.css','share.css','insights.css','quarter.css','tour.css'];
+const cssFiles = ['core.css','schedule.css','week.css','stats.css','pip.css','settings.css','horizon.css','year.css','workspace.css','guides.css','plus.css','theme.css','print.css','share.css','insights.css','quarter.css','tour.css','../welcome/partners/partners.css'];
 const css = (await Promise.all(cssFiles.map(name => fs.readFile(resolve(root, 'styles', name), 'utf8')))).join('\n');
 
 const appLines = app.split('\n').length;

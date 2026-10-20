@@ -1,7 +1,7 @@
 import { qs, qsa } from '../lib/dom.js';
 import { esc } from '../lib/text.js';
 import { GOOGLE_CLIENT_ID, PLUS_PUBLIC_KEY } from '../config.js';
-import { COUNTED_EVENTS, plannerApiEnabled, setUsageCountsEnabled, usageCountsEnabled } from '../lib/planner-api.js';
+import { COUNTED_EVENTS, plannerApiEnabled, REFERRAL_DAYS, setUsageCountsEnabled, usageCountsEnabled } from '../lib/planner-api.js';
 
 /**
  * Privacy notice. It is written from how this copy of the planner is
@@ -53,7 +53,7 @@ export function privacyNoticeSections({ plannerApi = false, googleDrive = false,
           'About once a week, when you are online, the planner asks our server whether its licence is still valid, so Plus can be switched off after a refunded purchase, or back on if that is undone. It sends only the licence (with its random id), nothing else from your planner, and nothing about the request is kept.',
           'Activating a gift sends only the gift code, and a purchase sends only the checkout reference, so the payment can be confirmed. Payments themselves are handled by Creem, our payment provider, on its own page.',
           'With Plus, buying Give Plus or Plus Family also sends your licence, so the server can check it and charge the member price. It is checked for that request only, not stored, and never sent to Creem.',
-          'If you came through a partner’s link (one with a referral code, such as ?ref=), that code is kept in this browser for 60 days and sent with a purchase, so the partner is credited. Once the purchase is paid, the code is kept with the sale’s record, so we can see which partners bring sales. It names the partner, not you.',
+          `If you came through a partner’s link (one with a referral code, such as ?ref=), that code is kept in this browser for ${REFERRAL_DAYS} days and sent with a purchase, so the partner is credited. Once the purchase is paid, the code is kept with the sale’s record, so we can see which partners bring sales and pay what they earn. It names the partner, not you.`,
           'Prices are shown in euros in the euro area and in US dollars elsewhere: the server reads the country of your connection for that one request (from Cloudflare) and never stores it.'
         ]
       });

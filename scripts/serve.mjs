@@ -36,9 +36,11 @@
 // ?checkout_id=<id>&order_id=ord_fake&signature=fake, as Creem does after a
 // payment; reading that checkout answers "completed" with what it was opened
 // for (company "Acme Studio" for team gifts, from "Camille" for personal
-// gifts). A partner code (affiliate_code) is printed; the code BADCODE is
-// refused with HTTP 400, as Creem refuses an unknown code, so the API's retry
-// without it can be tried. Two shortcuts need no checkout:
+// gifts), with the tax included in a euro order (20% VAT, as in France; none
+// in US dollars) so commissions show before tax. A partner code (affiliate_code,
+// never sent for a team gift) or the checkout's own `ref` is printed; the code
+// BADCODE is refused with HTTP 400, as Creem refuses an unknown code, so the
+// API's retry without it can be tried. Two shortcuts need no checkout:
 // /?checkout_id=fake_plus unlocks Plus and /welcome/thanks/?checkout_id=fake_gift50
 // makes a 50-seat gift for "Acme Studio". Set CREEM_WEBHOOK_SECRET to try
 // POST /api/creem/webhook too (with --fake-creem it defaults to a fake secret).
@@ -74,7 +76,7 @@ import { randomBytes } from 'node:crypto';
 import { createMemoryStore, createPlannerApi } from '../server/planner-api.js';
 import { generatePlusKeyPair, importSigningKey, publicKeyFromSigningKey, signLicense } from '../server/licenses.js';
 import { checkoutSeal, creemMode, creemProductsFromEnv, webhookSignature } from '../server/creem.js';
-import { priceCents } from '../src/lib/pricing.js';
+import { beforeTaxCents, priceCents } from '../src/lib/pricing.js';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -155,13 +157,19 @@ const fakeCheckouts = new Map([
 const fakeTransactions = new Map();
 const fakeJson = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
+// The tax Creem reports in an order (prices include it): 20% VAT for a euro buyer (France), none in US dollars.
+function fakeTax(fake) {
+  const sub = fake.currency === 'EUR' ? beforeTaxCents(fake.amount, 20) : fake.amount;
+  return { sub_total: sub, tax_amount: fake.amount - sub };
+}
+
 function fakeCheckoutEntity(id, fake, status = 'completed') {
   const gift = fake.metadata?.kind === 'gift';
   const fields = gift ? fake.fields || ['company'] : [];
   const buyer = !gift ? { email: 'buyer@example.com', name: 'Sam Buyer' } : fields.includes('from') ? { email: 'camille@example.com', name: 'Camille Martin' } : { email: 'buyer@acme.example', name: 'Ada Lovelace' };
   return {
     id, object: 'checkout', mode: 'test', status, request_id: fake.requestId || null, units: 1, product: fake.product,
-    ...(status === 'completed' ? { order: { id: fake.orderId, object: 'order', status: 'paid', type: 'onetime', amount: fake.amount, amount_paid: fake.amount, currency: fake.currency } } : {}),
+    ...(status === 'completed' ? { order: { id: fake.orderId, object: 'order', status: 'paid', type: 'onetime', amount: fake.amount, amount_paid: fake.amount, ...fakeTax(fake), currency: fake.currency } } : {}),
     customer: { id: 'cust_fake', object: 'customer', ...buyer, country: 'FR' },
     custom_fields: fields.filter(key => FAKE_FIELD_ANSWERS[key]).map(key => ({ type: 'text', key, label: FAKE_FIELD_ANSWERS[key].label, optional: true, text: { max_length: 80, ...(status === 'completed' ? { value: FAKE_FIELD_ANSWERS[key].value } : {}) } })),
     metadata: fake.metadata || {},
@@ -190,7 +198,7 @@ async function fakeCreemFetch(url, init = {}) {
     const id = `ch_fake_${randomBytes(8).toString('hex')}`;
     const fake = { product: body.product_id, metadata: body.metadata || {}, amount: body.custom_price ?? priceCents(kind, body.metadata?.plan, currency), currency, successUrl: body.success_url || '/', requestId: body.request_id, fields: (body.custom_fields || []).map(field => field?.key), orderId: `ord_fake_${randomBytes(8).toString('hex')}` };
     fakeCheckouts.set(id, fake);
-    const affiliate = body.affiliate_code ? `, affiliate ${body.affiliate_code}` : '';
+    const affiliate = body.affiliate_code ? `, affiliate ${body.affiliate_code}` : body.metadata?.ref ? `, partner ${body.metadata.ref} (no affiliate_code: paid by the owner)` : '';
     console.log(`  [fake creem] opened ${id}: ${kind}${fake.metadata.plan ? ` ${fake.metadata.plan}` : ''}, ${(fake.amount / 100).toFixed(2)} ${currency}${affiliate}`);
     return fakeJson(200, fakeCheckoutEntity(id, fake, 'pending'));
   }

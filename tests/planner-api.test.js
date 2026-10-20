@@ -147,9 +147,9 @@ test('the D1 store SQL works against SQLite with the shipped migrations', async 
   assert.deepEqual(teams.teamRequestTotals, { count: 2, seats: 65 });
   assert.equal(teams.teamRequests.length, 2);
   const [newest] = teams.teamRequests;
-  assert.deepEqual({ ...newest, id: 0 }, { id: 0, email: 'lead@acme.example', name: 'Ada', company: '=cmd|calc', teamSize: 40, timing: 'q1-2027', plan: '', currency: '', kind: 'quote', message: 'Rolling out in January', locale: 'fr-FR', appVersion: '', source: 'app', createdAt: '2026-10-09T08:00:00.000Z' });
+  assert.deepEqual({ ...newest, id: 0 }, { id: 0, email: 'lead@acme.example', name: 'Ada', company: '=cmd|calc', teamSize: 40, timing: 'q1-2027', plan: '', currency: '', kind: 'quote', message: 'Rolling out in January', locale: 'fr-FR', appVersion: '', source: 'app', createdAt: '2026-10-09T08:00:00.000Z', ref: '' });
   const csv = await (await api(get('admin/teams?format=csv', 'secret'))).text();
-  assert.match(csv, /^id,createdAt,company,teamSize,plan,currency,kind,timing,name,email,message,locale,appVersion,source\n/);
+  assert.match(csv, /^id,createdAt,company,teamSize,plan,currency,kind,timing,name,email,message,locale,appVersion,source,ref\n/);
   assert.ok(csv.includes(",'=cmd|calc,40,"), 'formula neutralised in CSV');
   assert.equal((await api(del(`admin/teams/${newest.id}`, 'secret'))).status, 200);
   assert.equal((await api(del(`admin/teams/${newest.id}`, 'secret'))).status, 404);
@@ -459,6 +459,7 @@ test('every migration runs when the D1 console joins it into one line', async t 
   assert.ok(files.includes('0004_creem_reviews.sql'));
   assert.ok(files.includes('0005_refunds.sql'));
   assert.ok(files.includes('0006_partners.sql'));
+  assert.ok(files.includes('0007_partner_commissions.sql'));
   const sqlite = new DatabaseSync(':memory:');
   for (const file of files) {
     const source = readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8');
@@ -480,7 +481,7 @@ test('every migration runs when the D1 console joins it into one line', async t 
     sqlite.exec(flat);
   }
   const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(row => row.name);
-  assert.deepEqual(tables, ['events', 'feedback', 'gifts', 'orders', 'partner_sales', 'payments', 'purchases', 'refunds', 'reviews', 'revocations', 'team_requests', 'waitlist']);
+  assert.deepEqual(tables, ['events', 'feedback', 'gifts', 'orders', 'partner_code_rejections', 'partner_payouts', 'partner_sale_taxes', 'partner_sales', 'payments', 'purchases', 'refunds', 'reviews', 'revocations', 'team_request_partners', 'team_requests', 'waitlist']);
   const teamColumns = sqlite.prepare('PRAGMA table_info(team_requests)').all();
   const column = name => teamColumns.find(row => row.name === name);
   assert.deepEqual(['plan', 'currency', 'kind'].map(name => [column(name)?.type, column(name)?.notnull, column(name)?.dflt_value]), [['TEXT', 1, "''"], ['TEXT', 1, "''"], ['TEXT', 1, "'quote'"]]);

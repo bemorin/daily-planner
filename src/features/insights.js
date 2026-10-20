@@ -1,5 +1,5 @@
 import { atNoon, ymdKey } from '../lib/dates.js';
-import { placeTooltip } from '../ui/tooltip.js';
+import { TOOLTIP_MARGIN, insetRect, intersectRects, placeTooltipWithin, scrollPortRect, visibleViewportRect } from '../ui/tooltip.js';
 import { INSIGHTS_FEATURE, RANGE_KINDS, buildInsights, insightsRange } from './insights-model.js';
 import { renderInsights } from './insights-view.js';
 import { SAMPLE_PLANNING_DAYS, sampleCategoryFor, sampleDay } from './insights-sample.js';
@@ -27,6 +27,9 @@ import { SAMPLE_PLANNING_DAYS, sampleCategoryFor, sampleDay } from './insights-s
  * @param {() => HTMLElement|null} ctx.modal the Stats dialog
  * @param {{active: () => boolean, unlock: (feature: string) => void}} ctx.plus
  */
+// A reading keeps this far inside its card's edge and the scroll area's.
+const TIP_INSET = 4;
+
 export function createInsightsFeature(ctx) {
   let kind = 'year';
   let anchor = '';
@@ -121,12 +124,32 @@ export function createInsightsFeature(ctx) {
       el.append(row);
     });
     el.hidden = false;
-    const rect = target.getBoundingClientRect();
-    const panel = ctx.modal?.()?.querySelector('.modal__panel')?.getBoundingClientRect();
-    const place = placeTooltip(rect, { width: el.offsetWidth, height: el.offsetHeight }, { width: innerWidth, height: innerHeight }, { bounds: panel || null, inDialog: true });
+    // Measured at the left edge, so its width isn't squeezed by where the last reading stood,
+    // and never wider than what shows (a phone zoomed in).
+    const areas = tipAreas(target);
+    const limit = areas[areas.length - 1];
+    el.style.left = '0px';
+    el.style.top = '0px';
+    el.style.setProperty('--ins-tip-room', limit ? `${Math.floor(limit.right - limit.left)}px` : '100vw');
+    const size = el.getBoundingClientRect();
+    const place = placeTooltipWithin(target.getBoundingClientRect(), { width: size.width, height: size.height }, areas);
     el.style.left = `${place.left}px`;
     el.style.top = `${place.top}px`;
     el.dataset.placement = place.placement;
+  }
+
+  /**
+   * Where a mark's reading may go: inside its chart's card, as much of it as
+   * shows in the dialog's scroll area and on screen (the visual viewport on a
+   * phone); failing that, anywhere in that visible scroll area — never over
+   * the dialog's edges.
+   */
+  function tipAreas(target) {
+    const screen = insetRect(visibleViewportRect(), TOOLTIP_MARGIN);
+    const scroller = target.closest('.modal__scroll');
+    const port = scroller ? intersectRects(insetRect(scrollPortRect(scroller), TIP_INSET), screen) : screen;
+    const card = target.closest('.ins-card');
+    return [card && port ? intersectRects(insetRect(card.getBoundingClientRect(), TIP_INSET), port) : null, port || screen];
   }
 
   function hideTip() {
@@ -234,10 +257,11 @@ export function createInsightsFeature(ctx) {
     wrap.addEventListener('focusout', event => {
       if (event.target.closest?.('[data-tip]')) hideTip();
     });
-    // Scrolling moves a focused mark's reading with it; a pointer reading simply goes.
-    wrap.closest('.modal__scroll')?.addEventListener('scroll', () => {
-      if (hot && hot === document.activeElement && hot.isConnected) showTip(hot); else hideTip();
-    }, { passive: true });
+    // Scrolling (the dialog, or a phone's zoomed view) moves a focused mark's reading with it; a pointer reading simply goes.
+    const follow = () => { if (hot && hot === document.activeElement && hot.isConnected) showTip(hot); else hideTip(); };
+    wrap.closest('.modal__scroll')?.addEventListener('scroll', follow, { passive: true });
+    globalThis.visualViewport?.addEventListener('scroll', () => { if (hot) follow(); }, { passive: true });
+    globalThis.visualViewport?.addEventListener('resize', () => { if (hot) follow(); }, { passive: true });
   }
 
   /** Render into the Stats dialog's content area. */

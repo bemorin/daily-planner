@@ -2,9 +2,8 @@ import { qs, qsa } from '../lib/dom.js';
 import { ymdKey } from '../lib/dates.js';
 import { esc, escAttr, safeUrl } from '../lib/text.js';
 import { activatePlusToken, hasPlus, isCheckoutReference, normalizeGiftCode, onPlusChange, parsePlusInput, plusAvailable, plusLicense, plusSettings, plusStatusLine } from '../lib/plus.js';
-import { CURRENCIES, LAUNCH, PERSONAL_GIFTS, PLUS_PRICE, PLUS_UPCOMING, detectCurrency, formatMoney, isPersonalGift, memberGiftPrice, memberPriceNotice, memberPriceShown, validCurrency } from '../lib/pricing.js';
+import { CURRENCIES, LAUNCH, PARTNER_PROGRAM, PERSONAL_GIFTS, PLUS_PRICE, PLUS_UPCOMING, detectCurrency, formatMoney, isPersonalGift, memberGiftPrice, memberPriceNotice, memberPriceShown, validCurrency } from '../lib/pricing.js';
 import { checkoutOptions, claimPurchase, dismissPartnerHint, fetchGift, partnerHintShown, plannerApiEnabled, redeemGift, rememberReferral, startCheckout, trackEvent } from '../lib/planner-api.js';
-import { AFFILIATE_COMMISSION } from '../config.js';
 import { requestPlusCheck } from './plus-check.js';
 import { burst, panelEnter, pulse } from '../ui/motion.js';
 import { readPaint, resolvePaint } from './paint-palettes.js';
@@ -72,8 +71,16 @@ export function giftLabel(gift, currency, { member = false } = {}) {
   return gift.seats > 1 ? `${gift.label} — up to ${gift.seats} people — ${amount}` : `${gift.label} — ${amount}`;
 }
 
-/** What a partner earns: “30% of every purchase …” with a commission configured, “a commission on every purchase …” without. */
-export const partnerEarnText = (commission = AFFILIATE_COMMISSION) => (commission ? `${commission} of every purchase made through your link` : 'a commission on every purchase made through your link');
+/**
+ * What a partner earns, from the program's terms (PARTNER_PROGRAM.rate in
+ * pricing.js): “a 25% commission on every Plus purchase made through your
+ * link” — true whatever Creem works it out on; without a usable rate, “a
+ * commission on every Plus purchase …”.
+ */
+export function partnerEarnText(rate = PARTNER_PROGRAM.rate) {
+  const value = Number(rate);
+  return `${Number.isFinite(value) && value > 0 && value < 100 ? `a ${value}% commission` : 'a commission'} on every Plus purchase made through your link`;
+}
 
 /** Who a gift is from, as a sentence reads it: the server's fallbacks ("A friend", "Your family") in lower case. */
 export function giverName(org) {
@@ -289,14 +296,23 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
       </div>`;
   }
 
-  /** With Plus: a quiet card about the partner program, until it is dismissed or followed on this device. */
+  /**
+   * The partner program, for everyone, until it is dismissed or followed on
+   * this device: with Plus, a quiet card after the gifts; without, a footnote
+   * at the very end, after the privacy line, in its small muted type — never an
+   * alternative to buying beside Get Plus.
+   */
   function partnerCard() {
-    if (!hasPlus() || !partnerHintShown('plus')) return '';
+    if (!partnerHintShown('plus')) return '';
+    const close = `<button class="icon-button plus-partner__close" type="button" data-plus-partner-dismiss aria-label="Hide the partner program">${icon('close')}</button>`;
+    if (!hasPlus()) {
+      return `<p class="plus-footnote" data-plus-partner><span>Know people who’d like it? <a href="./welcome/partners/" target="_blank" rel="noopener" data-plus-partner-go>Become a partner</a> — earn ${esc(partnerEarnText())}.</span>${close}</p>`;
+    }
     return `<aside class="plus-partner" aria-labelledby="plus-partner-title" data-plus-partner>
         <span class="plus-partner__icon">${icon('share')}</span>
-        <p class="plus-partner__copy"><strong id="plus-partner-title">Recommend Daily Planner</strong><span>Know people who would like it? As a partner, you share your own link and earn ${esc(partnerEarnText())}.</span></p>
+        <p class="plus-partner__copy"><strong id="plus-partner-title">Recommend Daily Planner</strong><span>Know people who would like it? As a partner, you earn ${esc(partnerEarnText())}.</span></p>
         <a class="secondary-button plus-partner__go" href="./welcome/partners/" target="_blank" rel="noopener" data-plus-partner-go>Partner program</a>
-        <button class="icon-button plus-partner__close" type="button" data-plus-partner-dismiss aria-label="Hide the partner program">${icon('close')}</button>
+        ${close}
       </aside>`;
   }
 
@@ -368,8 +384,8 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
   function overview() {
     const focus = PLUS_FEATURES.find(feature => feature.id === view.feature);
     const active = hasPlus();
-    const footer = `<p class="plus-teams"><span class="plus-teams__icon">${icon('team')}</span><span>Buying for a team? <a href="./welcome/#teams" target="_blank" rel="noopener">Give Plus to your people</a> — one link for everyone, as a year‑end gift.</span></p>
-      ${openPrivacy && plannerApiEnabled() && plusAvailable() ? '<p class="privacy-footnote">Plus is checked on this device — no account. <button class="privacy-link" type="button" data-plus-privacy>How this is handled</button></p>' : ''}`;
+    const teams = `<p class="plus-teams"><span class="plus-teams__icon">${icon('team')}</span><span>Buying for a team? <a href="./welcome/teams/" target="_blank" rel="noopener">Give Plus to your people</a> — one link for everyone, as a year‑end gift.</span></p>`;
+    const privacy = openPrivacy && plannerApiEnabled() && plusAvailable() ? '<p class="privacy-footnote">Plus is checked on this device — no account. <button class="privacy-link" type="button" data-plus-privacy>How this is handled</button></p>' : '';
     if (active) {
       return `<header class="modal__header plus-header">
           <p class="modal__eyebrow plus-eyebrow"><span class="plus-mark">${icon('spark')}</span>Daily Planner Plus</p>
@@ -382,7 +398,8 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
         ${upcoming(true)}
         ${gifts()}
         ${partnerCard()}
-        ${footer}
+        ${teams}
+        ${privacy}
         <div class="plus-bar plus-bar--done is-shown"><button class="primary-button plus-cta__buy" type="button" data-plus-close>Done</button></div>`;
     }
     const title = focus ? featureHeadline(focus) : `Make ${defaultPlanYear(new Date())} count.`;
@@ -401,7 +418,9 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
       ${also(focus?.id || '', false)}
       ${upcoming(false)}
       ${plusAvailable() ? gifts() : ''}
-      ${footer}
+      ${teams}
+      ${privacy}
+      ${plusAvailable() ? partnerCard() : ''}
       ${bar()}`;
   }
 
@@ -711,7 +730,8 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     qs('[data-plus-partner-dismiss]', el)?.addEventListener('click', () => {
       dismissPartnerHint('plus');
       qs('[data-plus-partner]', el)?.remove();
-      qs('[data-plus-close]', el)?.focus({ preventScroll: true });
+      // Focus stays close: Done with Plus; without, the privacy line just above it, else the team line.
+      (qs('[data-plus-close]', el) || qs('[data-plus-privacy]', el) || qs('.plus-teams a', el))?.focus({ preventScroll: true });
     });
     qs('[data-plus-overview]', el)?.addEventListener('click', () => show({ stage: 'overview' }));
     qs('[data-plus-redeem-gift]', el)?.addEventListener('click', redeem);
@@ -744,6 +764,9 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     });
     qsa('[data-plus-open]').forEach(button => button.classList.toggle('is-active', active));
     qsa('[data-plus-reset-note]').forEach(node => { node.hidden = !active; });
+    // How it works → Partners: always there for anyone (with the owner API), in the program's own words.
+    qsa('[data-partner-entry]').forEach(node => { node.hidden = !plannerApiEnabled(); });
+    qsa('[data-partner-earn]').forEach(node => { node.textContent = partnerEarnText(); });
   }
 
   /** Opens on what Plus adds; `feature` ('year-plan', 'quarter-review', 'year-review', 'insights', 'paint-palettes') puts that one first in mind. */

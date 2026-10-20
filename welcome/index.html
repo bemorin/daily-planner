@@ -27,11 +27,22 @@
   <link rel="icon" href="../favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <script>
-    /* Before first paint: when motion is welcome, replicas start on the first
-       frame of their animation and sections below the fold wait to rise in.
-       landing.js adds `js-ready`; if it never runs, the page falls back to its
-       final, fully visible state. */
+    /* Before first paint. The team gift lives on the Teams page: its old
+       addresses here (?ask=…, #request, #teams, #team-prices, #seats) go
+       there, query and hash kept (teamsAddress in teams-model.js, which
+       landing.js checks again).
+       Then, when motion is welcome, replicas start on the first frame of their
+       animation and sections below the fold wait to rise in. landing.js adds
+       `js-ready`; if it never runs, the page falls back to its final, fully
+       visible state. */
     (function () {
+      var here = window.location;
+      var ask = false;
+      try { ask = new URLSearchParams(here.search).has('ask'); } catch (error) { ask = false; }
+      if (ask || /^#(?:request|teams|team-prices|seats)$/.test(here.hash)) {
+        here.replace(here.pathname.replace(/\/(?:index\.html)?$/, '') + '/teams/' + here.search + here.hash);
+        return;
+      }
       var root = document.documentElement;
       if (!window.matchMedia || !('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       root.classList.add('js-anim');
@@ -85,7 +96,6 @@
     <symbol id="i-install" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="12.5" rx="2"/><path d="M12 8.5v5.5M9.5 11.5 12 14l2.5-2.5M8.5 20h7"/></symbol>
     <symbol id="i-devices" viewBox="0 0 24 24"><rect x="2.5" y="5" width="13" height="9.5" rx="1.6"/><path d="M1.5 17.5h15"/><rect x="16.5" y="8.5" width="5.5" height="11" rx="1.4"/></symbol>
     <symbol id="i-export" viewBox="0 0 24 24"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></symbol>
-    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></symbol>
     <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4.5 7 7.5 6 7.5-6"/></symbol>
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6v5.5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9V6l7-2.5Z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
     <symbol id="i-gift" viewBox="0 0 24 24"><path d="M4.5 11.5h15v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-8ZM3.5 7.5h17v4h-17zM12 7.5v13"/><path d="M12 7.5c-1.3-2.7-4.6-3.5-5.1-1.6-.4 1.5 2.4 1.6 5.1 1.6Zm0 0c1.3-2.7 4.6-3.5 5.1-1.6.4 1.5-2.4 1.6-5.1 1.6Z"/></symbol>
@@ -98,10 +108,8 @@
     <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
     <symbol id="i-family" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="10" r="2.4"/><path d="M15.6 14.5a4.3 4.3 0 0 1 5.4 4.2"/></symbol>
     <symbol id="i-team" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3"/><path d="M6.8 19.5a5.2 5.2 0 0 1 10.4 0"/><circle cx="5.2" cy="10.2" r="2.1"/><path d="M1.8 17.6a3.6 3.6 0 0 1 4.4-3.3"/><circle cx="18.8" cy="10.2" r="2.1"/><path d="M22.2 17.6a3.6 3.6 0 0 0-4.4-3.3"/></symbol>
-    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5.5 19.5a6.5 6.5 0 0 1 13 0"/></symbol>
     <symbol id="i-palette" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.2 0 1.8-.8 1.8-1.7 0-1.2-1-1.6-1-2.6 0-1 .8-1.7 1.8-1.7h2.2a3.7 3.7 0 0 0 3.7-3.7c0-4.3-3.8-7.3-8.5-7.3Z"/><circle cx="7.8" cy="11.2" r="1"/><circle cx="10.6" cy="7.6" r="1"/><circle cx="15" cy="7.9" r="1"/></symbol>
     <symbol id="i-pip" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="14" rx="2"/><rect x="11.5" y="10.5" width="7" height="5.5" rx="1"/></symbol>
-    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7L6 20v-3.6a2 2 0 0 1-1.5-1.9Z"/></symbol>
     <symbol id="i-laptop" viewBox="0 0 24 24"><path d="M4.8 15.5V7a1.6 1.6 0 0 1 1.6-1.6h11.2A1.6 1.6 0 0 1 19.2 7v8.5"/><path d="M2.6 15.5h18.8l-.9 2.4a1.2 1.2 0 0 1-1.1.8H4.6a1.2 1.2 0 0 1-1.1-.8Z"/></symbol>
     <symbol id="i-tablet" viewBox="0 0 24 24"><rect x="4.5" y="3" width="15" height="18" rx="2.2"/><path d="M10.8 18h2.4"/></symbol>
     <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2.2"/><path d="M11 18h2"/></symbol>
@@ -124,13 +132,13 @@
         <a href="#how">How it works</a>
         <a href="#year">Your year</a>
         <a href="#plus">Plus</a>
-        <a href="#teams">Teams</a>
+        <a href="teams/">Teams</a>
         <a href="#pricing">Pricing</a>
         <a href="#faq">FAQ</a>
         <a href="./partners/">Partners</a>
       </nav>
       <div class="top__actions">
-        <a class="top__teams" href="#teams">Teams</a>
+        <a class="top__teams" href="teams/">Teams</a>
         <a class="btn btn--primary btn--sm" href="../" data-cta="app">Open the planner</a>
       </div>
     </div>
@@ -145,7 +153,7 @@
           <p class="lead">Daily Planner is a calm planner for your day, your week and your year. It’s free, needs no account and works offline. Your plans stay in your browser, not on our servers.</p>
           <div class="cta-row" data-hero-ctas>
             <a class="btn btn--primary" href="../" data-cta="app">Open the planner — it’s free</a>
-            <a class="btn btn--ghost" href="#teams">Give it to your team</a>
+            <a class="btn btn--ghost" href="teams/">Give it to your team</a>
           </div>
           <div class="devices">
             <span class="devices__icons" aria-hidden="true"><svg class="i devices__laptop"><use href="#i-laptop"/></svg><svg class="i devices__tablet"><use href="#i-tablet"/></svg><svg class="i devices__phone"><use href="#i-phone"/></svg></span>
@@ -1134,164 +1142,7 @@
           <div class="plus-buy__alts">
             <a class="plus-buy__alt" href="#gifts"><svg class="i" aria-hidden="true"><use href="#i-gift"/></svg><span class="plus-buy__alt-name">Give it as a gift</span><span class="plus-buy__alt-price" data-gift-offer="gift-1"><span data-gift-price="gift-1">€29</span>, for one person</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
             <a class="plus-buy__alt" href="#gifts"><svg class="i" aria-hidden="true"><use href="#i-family"/></svg><span class="plus-buy__alt-name">Plus Family</span><span class="plus-buy__alt-price" data-gift-offer="family-5"><span data-gift-price="family-5">€99</span>, up to 5 people at home</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-            <a class="plus-buy__alt" href="#teams"><svg class="i" aria-hidden="true"><use href="#i-team"/></svg><span class="plus-buy__alt-name">Giving it to a team?</span><span class="plus-buy__alt-price">From <span data-min-per-person>€5</span> per person</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section teams" id="teams" aria-labelledby="teams-title">
-      <div class="wrap">
-        <div class="band" data-reveal>
-          <div class="band__grid">
-            <div class="band__copy">
-              <p class="band__kicker"><svg class="i"><use href="#i-gift"/></svg>Team gift</p>
-              <h2 id="teams-title">The year-end gift your team will use all year.</h2>
-              <p class="lead">Give everyone Daily Planner Plus. You forward one link; each person who opens it gets Plus for life on their own planner. No accounts to create, no names collected.</p>
-              <div class="promise">
-                <svg class="i"><use href="#i-shield"/></svg>
-                <p><b>Every planner stays private.</b> Each person plans in their own planner, in their own browser. The company never sees it: there’s no team account, no manager dashboard and no list of who activated the gift.</p>
-              </div>
-            </div>
-            <ul class="why" data-reveal-each>
-              <li><svg class="i"><use href="#i-gift"/></svg><span><b>Useful all year.</b> A gift people open every morning, instead of another object for the drawer.</span></li>
-              <li><svg class="i"><use href="#i-link"/></svg><span><b>One link to forward.</b> By email, Slack or Teams, with a message ready to send. Nothing to install.</span></li>
-              <li><svg class="i"><use href="#i-globe"/></svg><span><b>Made for remote and international teams.</b> Everyone activates it wherever they are, on their own device.</span></li>
-              <li><svg class="i"><use href="#i-tag"/></svg><span><b>From about <span data-min-per-person>€5</span> per person.</b> One price for the company, paid once, with an invoice.</span></li>
-            </ul>
-          </div>
-
-          <div class="seats" id="seats">
-            <div class="seats__head">
-              <h3>How seats work</h3>
-              <p>A seat is one activation of Plus. You never assign seats to names.</p>
-            </div>
-            <div class="seats__grid">
-              <div class="rp-scale seats__visual">
-                <div class="rp rp--gift s-open s-on s-seat" data-scene="gift" data-final="s-open s-on s-seat" aria-hidden="true">
-                  <div class="rp-gf">
-                    <div class="rp-gf__card rp-gf__msg">
-                      <span class="rp-gf__label"><svg class="i"><use href="#i-chat"/></svg>Team chat</span>
-                      <span class="rp-gf__who"><i>PT</i><b>People team</b><small>09:12</small></span>
-                      <p>Our year-end gift to all of you: Daily Planner Plus. Open the link to activate it.</p>
-                      <span class="rp-gf__link"><svg class="i"><use href="#i-link"/></svg>planner.bemorin.com/?gift=K7QM-4T9X-PZ2R</span>
-                    </div>
-                    <span class="rp-gf__arrow"><svg class="i"><use href="#i-arrow"/></svg></span>
-                    <div class="rp-gf__card rp-gf__dialog">
-                      <span class="rp-gf__label"><svg class="i"><use href="#i-user"/></svg>Each person’s planner</span>
-                      <span class="rp-gf__badge"><svg class="i"><use href="#i-gift"/></svg></span>
-                      <small class="rp-gf__from">A gift from</small>
-                      <b class="rp-gf__org">Acme Studio</b>
-                      <p class="rp-gf__note">“Thank you for this year. Plan the next one well.”</p>
-                      <span class="rp-gf__btn"><span class="t1">Activate Plus</span><span class="t2"><svg class="i"><use href="#i-check"/></svg>Plus is active</span></span>
-                      <em class="rp-gf__fine">No account needed</em>
-                    </div>
-                    <span class="rp-gf__arrow"><svg class="i"><use href="#i-arrow"/></svg></span>
-                    <div class="rp-gf__card rp-gf__seats">
-                      <span class="rp-gf__label"><svg class="i"><use href="#i-gift"/></svg>Your gift page</span>
-                      <small class="rp-gf__from">Seats used</small>
-                      <b class="rp-gf__count"><span data-count="32" data-from="31">32</span><i>/ 50</i></b>
-                      <span class="rp-gf__meter"><i></i></span>
-                      <em class="rp-gf__fine">No names, no accounts</em>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <ol class="seats__steps" data-reveal-each>
-                <li><span class="seats__n">1</span><span><b>One gift link.</b> Right after paying you land on your gift page: a private page with your gift link, the seats used and the message your team sees. Its link also arrives by email, with a message ready to forward.</span></li>
-                <li><span class="seats__n">2</span><span><b>One person, one seat.</b> Each person who opens the gift link activates Plus for life on their own planner. Each activation uses one seat.</span></li>
-                <li><span class="seats__n">3</span><span><b>You see the count.</b> Your gift page shows how many seats are used, and lets you edit the company name and the message people see with the gift.</span></li>
-                <li><span class="seats__n">4</span><span><b>No names, no accounts.</b> Nobody signs up and nobody is listed, so there’s nothing to assign or take back.</span></li>
-              </ol>
-            </div>
-            <p class="seats__fine">The link can be activated for 12 months. A small margin covers people who set the planner up again on a new device.</p>
-          </div>
-
-          <section class="prices" id="team-prices" aria-labelledby="team-prices-title">
-            <div class="prices__head">
-              <h3 id="team-prices-title">Team gift prices</h3>
-              <p>One price for the company, by number of people, paid once.</p>
-            </div>
-            <div class="tiers" data-tiers>
-              <noscript><p class="tiers__fallback">From €195 for up to 10 people to €4,995 for up to 1,000 people, paid once. Larger organisations are quoted.</p></noscript>
-            </div>
-            <div class="talk" data-talk hidden></div>
-            <div class="prices__foot">
-              <p class="prices__fine"><svg class="i"><use href="#i-link"/></svg><span data-gift-after><b>Right after paying, you land on your gift page</b> with the link to forward, the seats used and the message your team sees. Its link also arrives by email.</span></p>
-              <p class="prices__currency" data-currency-line>Prices in euros, taxes included.</p>
-            </div>
-          </section>
-
-          <div class="band__actions">
-            <a class="btn btn--outline-light" href="#teams" data-manager-mail><svg class="i"><use href="#i-mail"/></svg>Send this to my manager</a>
-            <button class="btn btn--text-light" type="button" data-manager-copy><svg class="i"><use href="#i-copy"/></svg>Copy message</button>
-            <a class="btn btn--text-light" href="#request" data-request="question">Ask a question</a>
-            <p class="band__status" data-copy-status role="status" aria-live="polite"></p>
-          </div>
-          <p class="band__partner" data-teams-partner><svg class="i" aria-hidden="true"><use href="#i-link"/></svg><span><b>Coach or consultant?</b> Recommend Daily Planner to the teams you work with, and earn a commission on what they buy. <a href="./partners/">See the partner program</a></span></p>
-        </div>
-
-        <div class="band request" id="request" data-form-panel data-reveal>
-          <form class="team-form" data-team-form novalidate aria-labelledby="request-title">
-            <div class="team-form__head">
-              <p class="band__kicker"><svg class="i"><use href="#i-mail"/></svg>Invoice, quote or question</p>
-              <h3 id="request-title" tabindex="-1" data-form-title>Get it by invoice</h3>
-              <p data-form-intro>Tell us where to send the invoice. You’ll get it by email, then the gift link once it’s paid.</p>
-            </div>
-            <fieldset class="kind-seg" data-kind-group>
-              <legend class="sr-only">What do you need?</legend>
-              <label><input type="radio" name="kind" value="invoice" checked><span>Invoice</span></label>
-              <label><input type="radio" name="kind" value="quote"><span>Quote</span></label>
-              <label><input type="radio" name="kind" value="question"><span>Question</span></label>
-            </fieldset>
-            <p class="kind-note" data-kind-note role="status" hidden></p>
-            <div class="fields">
-              <label class="field"><span>Work email</span><input type="email" name="email" autocomplete="email" required maxlength="254" placeholder="you@company.com" aria-describedby="err-email"><small class="field__err" id="err-email"></small></label>
-              <label class="field"><span>Your name</span><input type="text" name="name" autocomplete="name" required maxlength="80" aria-describedby="err-name"><small class="field__err" id="err-name"></small></label>
-              <label class="field"><span>Company</span><input type="text" name="company" autocomplete="organization" required maxlength="120" aria-describedby="err-company"><small class="field__err" id="err-company"></small></label>
-              <div class="field">
-                <span id="plan-label">Plan</span>
-                <div class="lb" data-listbox="plan">
-                  <input type="hidden" name="plan" value="up-to-50">
-                  <button class="lb__trigger" type="button" id="plan-trigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="plan-label plan-trigger" aria-describedby="err-plan"><span class="lb__value">Up to 50 people</span><svg class="i lb__chev"><use href="#i-down"/></svg></button>
-                </div>
-                <small class="field__err" id="err-plan"></small>
-              </div>
-              <div class="field">
-                <label for="team-size">Number of people</label>
-                <input type="number" id="team-size" name="teamSize" inputmode="numeric" required min="2" max="100000" step="1" placeholder="e.g. 40" aria-describedby="err-teamSize">
-                <small class="field__err" id="err-teamSize"></small>
-              </div>
-              <div class="field">
-                <span id="timing-label">When to send it</span>
-                <div class="lb" data-listbox="timing">
-                  <input type="hidden" name="timing" value="december-2026">
-                  <button class="lb__trigger" type="button" id="timing-trigger" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="timing-label timing-trigger"><span class="lb__value">Before the holidays (December 2026)</span><svg class="i lb__chev"><use href="#i-down"/></svg></button>
-                </div>
-              </div>
-              <label class="field field--wide"><span data-message-label>Anything else? <em>Optional</em></span><textarea name="message" rows="3" maxlength="1000" aria-describedby="err-message message-count"></textarea><small class="field__err" id="err-message"></small><small class="field__count" id="message-count" data-message-count>0/1000</small></label>
-            </div>
-            <div class="hp" aria-hidden="true"><label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
-            <p class="form-error" data-form-error role="alert" hidden></p>
-            <div class="team-form__foot">
-              <div class="team-form__fine">
-                <label class="consent" data-consent-row><input type="checkbox" name="consent" required aria-describedby="err-consent"><span>You may email me about this request.</span></label>
-                <small class="field__err field__err--consent" id="err-consent"></small>
-                <p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request. <a href="#privacy" data-privacy-open="requests">How requests are handled</a></p>
-                <p class="form-off" data-form-off hidden>Requests open when this site’s API is switched on.</p>
-                <noscript><p class="form-off">Sending a request needs JavaScript.</p></noscript>
-              </div>
-              <div class="team-form__actions">
-                <button class="btn btn--light btn--send" type="submit" data-form-submit disabled>Request the invoice</button>
-              </div>
-            </div>
-          </form>
-          <div class="form-done" data-form-done hidden tabindex="-1">
-            <svg class="i"><use href="#i-check"/></svg>
-            <div>
-              <p data-form-done-text>Thanks, your request is in. You’ll get a reply by email.</p>
-              <button class="btn btn--text-light" type="button" data-form-again>Send another request</button>
-            </div>
+            <a class="plus-buy__alt" href="teams/"><svg class="i" aria-hidden="true"><use href="#i-team"/></svg><span class="plus-buy__alt-name">Giving it to a team?</span><span class="plus-buy__alt-price">From <span data-min-per-person>€5</span> per person</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
           </div>
         </div>
       </div>
@@ -1404,8 +1255,26 @@
 
         <div class="pricing__foot">
           <p class="pricing__note"><svg class="i"><use href="#i-shield"/></svg><span><span data-currency-line>Prices in euros, taxes included.</span> <span data-pricing-note>One-time payments. Receipts and invoices come from Creem, our payment partner.</span></span></p>
-          <a class="pricing__teams" href="#teams">Buying for a team? See the team gift<svg class="i"><use href="#i-arrow"/></svg></a>
         </div>
+
+        <aside class="band tbanner" aria-labelledby="tbanner-title" data-teams-banner data-reveal>
+          <div class="band__grid">
+            <div class="band__copy">
+              <p class="band__kicker"><svg class="i"><use href="#i-gift"/></svg>Team gift</p>
+              <h2 id="tbanner-title">The year-end gift your team will use all year.</h2>
+              <p class="lead">Give everyone Plus with one link: each person who opens it gets Plus for life on their own planner.</p>
+              <div class="cta-row tbanner__ctas">
+                <a class="btn btn--light" href="teams/">See the team gift<svg class="i"><use href="#i-arrow"/></svg></a>
+                <a class="btn btn--text-light" href="teams/?ask=invoice#request">Get it by invoice</a>
+              </div>
+            </div>
+            <ul class="why">
+              <li><svg class="i"><use href="#i-link"/></svg><span><b>One link for the whole team.</b> Forward it by email, Slack or Teams. Nothing to install.</span></li>
+              <li><svg class="i"><use href="#i-tag"/></svg><span><b>From about <span data-min-per-person>€5</span> per person.</b> One price for the company, paid once, with an invoice.</span></li>
+              <li><svg class="i"><use href="#i-shield"/></svg><span><b>Every planner stays private.</b> No accounts to create, no names collected, no manager dashboard.</span></li>
+            </ul>
+          </div>
+        </aside>
       </div>
     </section>
 
@@ -1413,7 +1282,7 @@
       <div class="wrap faq">
         <div class="faq__intro" data-reveal-each>
           <h2 id="faq-title">Questions</h2>
-          <p>Something missing? The planner’s own Help page explains every feature and shortcut, or <a href="#request" data-request="question">ask a question</a>.</p>
+          <p>Something missing? The planner’s own Help page explains every feature and shortcut, or <a href="teams/?ask=question#request">ask a question</a>.</p>
         </div>
         <div class="faq__groups" data-faq data-reveal-each>
           <div class="faq__group">
@@ -1490,29 +1359,12 @@
                 <div class="qa__a"><p>By card, through Creem, our payment partner. Creem is the merchant of record: it charges the right VAT for where you are, included in the price, and emails you the receipt and invoice. A team gift can also be paid by bank transfer against an invoice.</p></div>
               </details>
               <details class="qa" name="faq">
+                <summary>Can my company give Plus to its people?</summary>
+                <div class="qa__a"><p>Yes, with a team gift: one link for the whole team, from about <span data-min-per-person>€5</span> per person, paid once by the company. Each person who opens it gets Plus for life on their own planner, and their planner stays private. <a href="teams/">See the team gift</a>.</p></div>
+              </details>
+              <details class="qa" name="faq">
                 <summary>Which currencies do you charge in?</summary>
                 <div class="qa__a"><p>Euros in the euro area and US dollars everywhere else, with the same numbers. The checkout charges the currency of the country you pay from, so the price you see is the price you pay, taxes included.</p></div>
-              </details>
-            </div>
-          </div>
-          <div class="faq__group">
-            <h3 class="faq__label">Team gift</h3>
-            <div class="faq__list">
-              <details class="qa" name="faq">
-                <summary>How do seats work?</summary>
-                <div class="qa__a"><p>You get one gift link. Each person who opens it activates Plus for life on their own planner, and each activation uses one seat. Your gift page shows how many seats are used and lets you change the message people see. Nobody signs up and no names are collected, so seats aren’t assigned to people: whoever opens the link first gets one. Share it only with the people it’s for. A small margin covers people who set the planner up again on a new device.</p></div>
-              </details>
-              <details class="qa" name="faq">
-                <summary>Does the company see what people plan?</summary>
-                <div class="qa__a"><p>No. Each person plans in their own planner, in their own browser. The gift only unlocks Plus: there’s no team account, no dashboard and no list of who activated it, so there’s nothing for the company, or for us, to look at.</p></div>
-              </details>
-              <details class="qa" name="faq">
-                <summary>Can we pay by invoice?</summary>
-                <div class="qa__a"><p data-faq-pay>Yes. Choose a team size and send the request: you’ll receive an invoice to pay by bank transfer, then the gift link once it’s paid. It’s one payment, with no subscription.</p></div>
-              </details>
-              <details class="qa" name="faq">
-                <summary>How long does the gift link work?</summary>
-                <div class="qa__a"><p>People can activate it for 12 months after it’s created. Once someone has activated Plus, it stays on their planner for life.</p></div>
               </details>
             </div>
           </div>
@@ -1527,7 +1379,7 @@
         <p class="lead">Open the planner, write one thing to keep in mind, and choose the outcome that would make today count.</p>
         <div class="cta-row">
           <a class="btn btn--primary" href="../" data-cta="app">Open the planner — it’s free</a>
-          <a class="btn btn--ghost" href="#teams">Give it to your team</a>
+          <a class="btn btn--ghost" href="teams/">Give it to your team</a>
         </div>
       </div>
     </section>
@@ -1542,10 +1394,10 @@
       <nav class="foot__links" aria-label="Footer">
         <a href="../" data-cta="app">Open the planner</a>
         <a href="#plus">Plus</a>
-        <a href="#teams">Teams</a>
+        <a href="teams/">Team gift</a>
         <a href="#pricing">Pricing</a>
         <a href="./partners/">Partners</a>
-        <a href="#request" data-request="question">Ask a question</a>
+        <a href="teams/?ask=question#request">Ask a question</a>
         <span class="foot__support" data-support hidden></span>
         <span class="foot__social" data-social hidden></span>
       </nav>
@@ -1598,7 +1450,7 @@
             <ul class="pv__list">
               <li>You pay on the page of Creem, our payment partner. Your card details never reach this site.</li>
               <li>A purchase sends only what you chose, to open that page. If you have Plus in this browser, a gift also sends your licence, so the server can give you the member price; it’s checked, not stored.</li>
-              <li>If you came through a partner’s link, its referral code (<code>?ref=</code>) is kept in this browser for 60 days and sent with a purchase to credit that partner. Once you’ve paid, the code is kept with the sale, so we can see which partners bring sales. It names the partner, not you.</li>
+              <li>If you came through a partner’s link, its referral code (<code>?ref=</code>) is kept in this browser for <span data-partner-days>30</span> days and sent with a purchase to credit that partner. Once you’ve paid, the code is kept with the sale, so we can see which partners bring sales. It names the partner, not you.</li>
             </ul>
           </div>
         </section>
@@ -1606,7 +1458,8 @@
           <span class="pv__icon" aria-hidden="true"><svg class="i"><use href="#i-mail"/></svg></span>
           <div class="pv__body">
             <h3 id="pv-requests" tabindex="-1">Requests</h3>
-            <p>What you send — your email, name, company, the kind of request, plan, number of people, currency, timing and message — is stored only to reply to you, with your browser’s language, the page version and where the form was opened. It’s deleted on request.</p>
+            <p>The request form on the Teams page sends what you type — your email, name, company, the kind of request, plan, number of people, currency, timing and message. It’s stored only to reply to you, with your browser’s language, the page version and where the form was opened, and deleted on request.</p>
+            <p>If you came through a partner’s link, its code goes with the request too, so the partner can be credited for a team gift they introduced.</p>
           </div>
         </section>
       </div>

@@ -4,20 +4,32 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Partners — Daily Planner</title>
-  <meta name="description" content="Recommend Daily Planner to the people you work with or write for. Share your own link, and earn a commission on every purchase made through it, paid by Creem.">
+  <meta name="description" content="Share Daily Planner and earn a 25% commission on every Plus purchase your link brings, and 10% of a team gift you introduce. Free to join, no Plus needed. Creem tracks the sales and pays you.">
   <link rel="canonical" href="https://planner.bemorin.com/welcome/partners/">
   <meta name="theme-color" content="#f6f3ed" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Daily Planner">
-  <meta property="og:title" content="Daily Planner partners — recommend a calm planner, earn on every sale">
-  <meta property="og:description" content="For coaches, creators, newsletters, consultants, teams and Plus members: share your own link to Daily Planner and earn a commission on every purchase made through it.">
+  <meta property="og:title" content="Daily Planner partners — share a calm planner, earn on every sale">
+  <meta property="og:description" content="A 25% commission on each Plus purchase your link brings, 10% of a team gift you introduce. Free to join, no Plus needed, paid on the 1st and the 15th.">
   <meta property="og:url" content="https://planner.bemorin.com/welcome/partners/">
   <meta property="og:image" content="https://planner.bemorin.com/welcome/og.png">
   <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+  <script>
+    /* Before first paint: when motion is welcome, sections below the fold wait
+       to rise in. partners.js adds `js-ready`; if it never runs, the page falls
+       back to its final, fully visible state. */
+    (function () {
+      var root = document.documentElement;
+      if (!window.matchMedia || !('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      root.classList.add('js-anim');
+      window.setTimeout(function () { if (!root.classList.contains('js-ready')) root.classList.remove('js-anim'); }, 4000);
+    })();
+  </script>
   <link rel="stylesheet" href="../landing.css">
+  <link rel="stylesheet" href="./partners.css">
   <script src="../../runtime-config.js"></script>
   <script type="module" src="./partners.js"></script>
 </head>
@@ -27,17 +39,20 @@
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
     <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
     <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5c.5 4.3 2.2 6 6.5 6.5-4.3.5-6 2.2-6.5 6.5-.5-4.3-2.2-6-6.5-6.5 4.3-.5 6-2.2 6.5-6.5Z"/><path d="M18.5 15.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5Z"/></symbol>
-    <symbol id="i-gift" viewBox="0 0 24 24"><path d="M4.5 11.5h15v8a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1v-8ZM3.5 7.5h17v4h-17zM12 7.5v13"/><path d="M12 7.5c-1.3-2.7-4.6-3.5-5.1-1.6-.4 1.5 2.4 1.6 5.1 1.6Zm0 0c1.3-2.7 4.6-3.5 5.1-1.6.4 1.5-2.4 1.6-5.1 1.6Z"/></symbol>
-    <symbol id="i-family" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="10" r="2.4"/><path d="M15.6 14.5a4.3 4.3 0 0 1 5.4 4.2"/></symbol>
     <symbol id="i-team" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3"/><path d="M6.8 19.5a5.2 5.2 0 0 1 10.4 0"/><circle cx="5.2" cy="10.2" r="2.1"/><path d="M1.8 17.6a3.6 3.6 0 0 1 4.4-3.3"/><circle cx="18.8" cy="10.2" r="2.1"/><path d="M22.2 17.6a3.6 3.6 0 0 0-4.4-3.3"/></symbol>
     <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m14.8 9.2-1.7 3.9-3.9 1.7 1.7-3.9 3.9-1.7Z"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m10.5 9.5 4 2.5-4 2.5Z"/></symbol>
     <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4.5 7 7.5 6 7.5-6"/></symbol>
     <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7L6 20v-3.6a2 2 0 0 1-1.5-1.9Z"/></symbol>
-    <symbol id="i-cart" viewBox="0 0 24 24"><path d="M3.5 4.5h2.2l2 10.5h10.6l1.9-7.5H7"/><circle cx="9" cy="19" r="1.3"/><circle cx="17" cy="19" r="1.3"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 19.5s-7.5-4.4-7.5-10a4.2 4.2 0 0 1 7.5-2.6 4.2 4.2 0 0 1 7.5 2.6c0 5.6-7.5 10-7.5 10Z"/></symbol>
     <symbol id="i-coin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.2c-.5-.9-1.5-1.4-2.6-1.4-1.6 0-2.7.8-2.7 2 0 2.8 5.5 1.5 5.5 4.3 0 1.2-1.2 2.1-2.8 2.1-1.2 0-2.3-.6-2.8-1.5M12 6v1.8M12 16.2V18"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5.5 19.5a6.5 6.5 0 0 1 13 0"/></symbol>
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6v5.5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9V6l7-2.5Z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
+    <symbol id="i-percent" viewBox="0 0 24 24"><path d="M18 6 6 18"/><circle cx="7.5" cy="7.5" r="2.4"/><circle cx="16.5" cy="16.5" r="2.4"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-bank" viewBox="0 0 24 24"><path d="M3.5 9.5 12 4.5l8.5 5"/><path d="M5.5 10.5v6.5M9.8 10.5v6.5M14.2 10.5v6.5M18.5 10.5v6.5M3.5 19.5h17"/></symbol>
+    <symbol id="i-refund" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
     <symbol id="i-stats" viewBox="0 0 24 24"><path d="M5 19.5V11M12 19.5V5M19 19.5v-6"/></symbol>
   </svg>
 
@@ -49,9 +64,15 @@
         <img src="../../favicon.svg" alt="" width="28" height="28">
         <span>Daily Planner</span>
       </a>
+      <nav class="top__nav" aria-label="Partners">
+        <a href="#how">How it works</a>
+        <a href="#earn">What it pays</a>
+        <a href="#rules">Rules</a>
+        <a href="#faq">Questions</a>
+      </nav>
       <div class="top__actions">
-        <a class="pt-top__about" href="../">About the planner</a>
-        <a class="btn btn--primary btn--sm" href="../../">Open the planner</a>
+        <a class="pt-top__link" href="../">About the planner</a>
+        <a class="btn btn--primary btn--sm" href="../teams/?ask=question&amp;topic=partners#request" data-partner-cta>Become a partner</a>
       </div>
     </div>
   </header>
@@ -60,131 +81,185 @@
     <section class="pt-hero" aria-labelledby="pt-title">
       <div class="wrap pt-hero__grid">
         <div class="pt-hero__copy">
-          <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg>Partners</p>
-          <h1 id="pt-title">Recommend Daily Planner. Earn on every sale.</h1>
-          <p class="lead">For people who help others plan their days and their year. Share your own link to Daily Planner: when someone buys through it, you earn <span data-earn>a commission</span>, paid by Creem, our payment partner.</p>
+          <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg>Partner program</p>
+          <h1 id="pt-title">Share Daily Planner. Earn on every sale.</h1>
+          <p class="lead">Recommend a calm planner to the people you coach, write for or work with. When someone buys Plus through your link, you earn a <span data-rate>25%</span> commission, tracked and paid by Creem, our payment partner.</p>
           <div class="cta-row">
-            <a class="btn btn--primary" href="../?ask=question&amp;topic=partners#request" data-partner-cta>Become a partner</a>
+            <a class="btn btn--primary" href="../teams/?ask=question&amp;topic=partners#request" data-partner-cta>Become a partner</a>
             <a class="btn btn--ghost" href="#how">How it works</a>
           </div>
-          <p class="pt-hero__fine">Free to join, no targets. Creem counts the sales and pays you.</p>
+          <ul class="pt-figures" aria-label="The program in three figures">
+            <li><b data-rate>25%</b><span>of each Plus sale</span></li>
+            <li><b><span data-cookie-days>30</span> days</b><span>for your link to count</span></li>
+            <li><b data-team-rate>10%</b><span>of a team gift</span></li>
+          </ul>
         </div>
-        <div class="pt-flow" aria-label="How a partner link works, in three steps">
-          <div class="pt-flow__row">
-            <span class="pt-flow__icon" aria-hidden="true"><svg class="i"><use href="#i-link"/></svg></span>
-            <span class="pt-flow__text"><small>Your link</small><code>planner.bemorin.com/welcome/?ref=<b>YOURCODE</b></code></span>
+
+        <figure class="pt-earn" aria-labelledby="pt-earn-caption">
+          <div class="pt-earn__link">
+            <span class="pt-earn__icon" aria-hidden="true"><svg class="i"><use href="#i-link"/></svg></span>
+            <span class="pt-earn__where"><small>Your link</small><code>planner.bemorin.com/welcome/?ref=<b>YOURCODE</b></code></span>
+            <span class="pt-chip"><span data-cookie-days>30</span> days</span>
           </div>
-          <div class="pt-flow__row">
-            <span class="pt-flow__icon" aria-hidden="true"><svg class="i"><use href="#i-cart"/></svg></span>
-            <span class="pt-flow__text"><small>Someone buys through it</small><b>Plus, a gift or a team gift</b></span>
+          <div class="pt-earn__month" data-month>
+            <p class="pt-earn__head"><b id="pt-earn-caption">An example month</b><span class="pt-chip pt-chip--soft">Before tax</span></p>
+            <div class="pt-earn__bar" aria-hidden="true" data-month-bar><i style="flex-grow:4832"></i><i style="flex-grow:2063"></i><i style="flex-grow:4958"></i></div>
+            <ul class="pt-earn__lines" data-month-lines>
+              <li><span class="pt-earn__dot" aria-hidden="true"></span><span>8 × Plus</span><small>25%</small><b>€48.32</b></li>
+              <li><span class="pt-earn__dot" aria-hidden="true"></span><span>1 × Plus Family</span><small>25%</small><b>€20.63</b></li>
+              <li><span class="pt-earn__dot" aria-hidden="true"></span><span>1 × Team gift, up to 50 people</span><small>10%</small><b>€49.58</b></li>
+            </ul>
+            <p class="pt-earn__total"><span>You earn about</span><b data-month-total>€118.53</b></p>
+            <p class="pt-earn__split" data-month-split>€68.95 paid by Creem · €49.58 by bank transfer</p>
           </div>
-          <div class="pt-flow__row pt-flow__row--earn">
-            <span class="pt-flow__icon" aria-hidden="true"><svg class="i"><use href="#i-coin"/></svg></span>
-            <span class="pt-flow__text"><small>You earn</small><b data-commission-figure>A commission</b></span>
-            <span class="pt-flow__note">Paid by Creem on the 1st and the 15th</span>
+          <figcaption class="pt-earn__note" data-tax-note>An example in France, where prices include 20% VAT, worked out on the price before tax. VAT depends on the buyer’s country, and Creem calculates the 25% under its own affiliate terms, so what you earn may differ a little.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section section--tint" id="how" aria-labelledby="pt-how-title">
+      <div class="wrap">
+        <div class="section__intro" data-reveal-each>
+          <h2 id="pt-how-title">Three steps, no paperwork.</h2>
+          <p class="lead">Creem, our payment partner, runs the program: it counts the sales made through your link and pays you.</p>
+        </div>
+        <ol class="pt-steps" data-reveal-each>
+          <li class="pt-step">
+            <span class="pt-step__n" aria-hidden="true">1</span>
+            <h3>Join</h3>
+            <p>Sign up on Creem in a few minutes. Anyone can join: you don’t need Plus, and there are no targets. You get your own code and a dashboard of your sales.</p>
+          </li>
+          <li class="pt-step">
+            <span class="pt-step__n" aria-hidden="true">2</span>
+            <h3>Share your link</h3>
+            <p>Add your code to the welcome page’s address, and share it in a post, a newsletter, a video or a note to a client. Your link counts for <span data-cookie-days>30</span> days after someone follows it.</p>
+            <p class="pt-step__link"><code>planner.bemorin.com/welcome/?ref=<b>CODE</b></code></p>
+          </li>
+          <li class="pt-step">
+            <span class="pt-step__n" aria-hidden="true">3</span>
+            <h3>Get paid</h3>
+            <p>You earn a <span data-rate>25%</span> commission on each Plus, Give Plus and Plus Family sale. Creem calculates it and pays you on the 1st and the 15th, once your balance reaches <span data-minimum>€50</span>.</p>
+          </li>
+        </ol>
+        <aside class="pt-company" aria-labelledby="pt-company-title" data-reveal>
+          <span class="pt-company__icon" aria-hidden="true"><svg class="i"><use href="#i-team"/></svg></span>
+          <div class="pt-company__copy">
+            <h3 id="pt-company-title">Bringing a company?</h3>
+            <p>Companies give Plus to their people with a team gift, for 10 to 1,000 people. Introduce Daily Planner before a company orders and you earn <span data-team-rate>10%</span> of its team gift — bought online through your link, or by invoice when the company gives us your code.</p>
           </div>
+          <a class="btn btn--light pt-company__cta" href="../teams/">See the team gift<svg class="i" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section" id="earn" aria-labelledby="pt-earn-title">
+      <div class="wrap pt-pays">
+        <div class="pt-pays__intro" data-reveal-each>
+          <h2 id="pt-earn-title">What each sale earns.</h2>
+          <p class="lead">People pay the same price through your link as anywhere else. The figures below are examples, worked out on the price before tax — the price we pay the <span data-team-rate>10%</span> on. Creem calculates the <span data-rate>25%</span> under its own affiliate terms.</p>
+          <p class="pt-pays__example" data-plus-example>One Plus bought in France: €29, of which €4.83 is VAT. You earn about <b>€6.04</b>.</p>
+        </div>
+        <div class="pt-rates-wrap" data-reveal>
+          <table class="pt-rates">
+            <caption class="sr-only">What each purchase made through your link earns you: examples, before tax</caption>
+            <thead>
+              <tr><th scope="col">What they buy</th><th scope="col" class="num">Price</th><th scope="col" class="num">You earn</th></tr>
+            </thead>
+            <tbody data-rates-personal>
+              <tr class="pt-rates__group"><th scope="colgroup" colspan="2">Plus and personal gifts <span>· Creem pays you</span></th><td></td></tr>
+              <tr><th scope="row">Daily Planner Plus<small>Paid once, for life</small></th><td class="num">€29<small>€24.17 before tax</small></td><td class="num"><b>€6.04</b><small>25%</small></td></tr>
+              <tr><th scope="row">Give Plus<small>Plus for one person</small></th><td class="num">€29<small>€24.17 before tax</small></td><td class="num"><b>€6.04</b><small>25%</small></td></tr>
+              <tr><th scope="row">Plus Family<small>Up to 5 people in one household</small></th><td class="num">€99<small>€82.50 before tax</small></td><td class="num"><b>€20.63</b><small>25%</small></td></tr>
+            </tbody>
+            <tbody data-rates-team>
+              <tr class="pt-rates__group"><th scope="colgroup" colspan="2">Team gifts <span>· we pay you, by bank transfer</span></th><td></td></tr>
+              <tr><th scope="row">Team gift<small>Up to 10 people</small></th><td class="num">€195<small>€162.50 before tax</small></td><td class="num"><b>€16.25</b><small>10%</small></td></tr>
+              <tr><th scope="row">Team gift<small>Up to 50 people</small></th><td class="num">€595<small>€495.83 before tax</small></td><td class="num"><b>€49.58</b><small>10%</small></td></tr>
+              <tr><th scope="row">Team gift<small>Up to 100 people</small></th><td class="num">€995<small>€829.17 before tax</small></td><td class="num"><b>€82.92</b><small>10%</small></td></tr>
+              <tr><th scope="row">Team gift<small>Up to 500 people</small></th><td class="num">€2,995<small>€2,495.83 before tax</small></td><td class="num"><b>€249.58</b><small>10%</small></td></tr>
+              <tr><th scope="row">Team gift<small>Up to 1,000 people</small></th><td class="num">€4,995<small>€4,162.50 before tax</small></td><td class="num"><b>€416.25</b><small>10%</small></td></tr>
+            </tbody>
+          </table>
+          <p class="pt-rates__note"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span><span data-tax-note>An example in France, where prices include 20% VAT, worked out on the price before tax. VAT depends on the buyer’s country, and Creem calculates the 25% under its own affiliate terms, so what you earn may differ a little.</span> A gift bought at the member price earns on what was paid.</span></p>
         </div>
       </div>
     </section>
 
-    <section class="section pt-who" id="who" aria-labelledby="pt-who-title">
+    <section class="section section--tint" id="rules" aria-labelledby="pt-rules-title">
       <div class="wrap">
-        <div class="section__intro">
-          <h2 id="pt-who-title">Who it’s for</h2>
-          <p class="lead">Anyone whose word people trust about how to spend their days. You don’t need a big audience: one honest recommendation to the right people is enough.</p>
+        <div class="section__intro" data-reveal-each>
+          <h2 id="pt-rules-title">The rules, plainly.</h2>
+          <p class="lead">What counts, when it counts, and how you’re paid. The full text is in our <a href="../../legal/terms/#partners">terms</a>.</p>
         </div>
-        <ul class="pt-cards">
-          <li class="pt-card"><span class="pt-card__icon" aria-hidden="true"><svg class="i"><use href="#i-compass"/></svg></span><h3>Coaches</h3><p>Give clients a calm planner that keeps their week and their year in view, and a guided half hour to plan the next one.</p></li>
-          <li class="pt-card"><span class="pt-card__icon" aria-hidden="true"><svg class="i"><use href="#i-play"/></svg></span><h3>Creators</h3><p>Show how you plan in a video, a post or a template, with your link underneath.</p></li>
-          <li class="pt-card"><span class="pt-card__icon" aria-hidden="true"><svg class="i"><use href="#i-mail"/></svg></span><h3>Newsletters</h3><p>Recommend it once to readers who care about focus, habits and a well-planned year.</p></li>
-          <li class="pt-card"><span class="pt-card__icon" aria-hidden="true"><svg class="i"><use href="#i-chat"/></svg></span><h3>Consultants</h3><p>Suggest the team gift to the companies you work with: a year-end gift people use every day.</p></li>
-          <li class="pt-card"><span class="pt-card__icon" aria-hidden="true"><svg class="i"><use href="#i-team"/></svg></span><h3>Teams</h3><p>Your team plans with Daily Planner? Tell the teams you know, and earn when they give it too.</p></li>
-          <li class="pt-card"><span class="pt-card__icon" aria-hidden="true"><svg class="i"><use href="#i-spark"/></svg></span><h3>Plus members</h3><p>You already know what Plus is worth. Share it with friends, family and colleagues.</p></li>
+        <ul class="pt-rules" data-reveal-each>
+          <li><span class="pt-rules__icon" aria-hidden="true"><svg class="i"><use href="#i-percent"/></svg></span><div><h3><span data-rate>25%</span> of Plus and personal gifts</h3><p>Daily Planner Plus, Give Plus and Plus Family bought through your link. Creem tracks these sales, calculates your commission under its affiliate terms and pays you.</p></div></li>
+          <li><span class="pt-rules__icon" aria-hidden="true"><svg class="i"><use href="#i-team"/></svg></span><div><h3><span data-team-rate>10%</span> of a team gift you introduced</h3><p>Bought online through your link, or by invoice when the company gives us your code. We pay it ourselves.</p></div></li>
+          <li><span class="pt-rules__icon" aria-hidden="true"><svg class="i"><use href="#i-link"/></svg></span><div><h3>Your link counts for <span data-cookie-days>30</span> days</h3><p>Your code stays on the visitor’s device for <span data-cookie-days>30</span> days. If they followed several partners’ links, the latest one counts.</p></div></li>
+          <li><span class="pt-rules__icon" aria-hidden="true"><svg class="i"><use href="#i-refund"/></svg></span><div><h3>Refunds earn nothing</h3><p>A refunded or disputed purchase earns nothing. A team commission is earned once the gift’s <span data-refund-days>14</span>-day refund period has passed with no refund and no dispute.</p></div></li>
+          <li><span class="pt-rules__icon" aria-hidden="true"><svg class="i"><use href="#i-calendar"/></svg></span><div><h3>Paid from <span data-minimum>€50</span>, twice a month</h3><p>Creem pays on the 1st and the 15th, once your balance reaches <span data-minimum>€50</span>, after a short hold set by its payment partners.</p></div></li>
+          <li><span class="pt-rules__icon" aria-hidden="true"><svg class="i"><use href="#i-bank"/></svg></span><div><h3>Team gifts by bank transfer</h3><p>We pay team commissions ourselves, by bank transfer, within 30 days of the sale being earned.</p></div></li>
+          <li><span class="pt-rules__icon" aria-hidden="true"><svg class="i"><use href="#i-user"/></svg></span><div><h3>Open to anyone</h3><p>No Plus needed and no targets. Purchases you make yourself, for you or as a gift, don’t count.</p></div></li>
+          <li><span class="pt-rules__icon" aria-hidden="true"><svg class="i"><use href="#i-shield"/></svg></span><div><h3>Fair play</h3><p>No spam, no ads on the Daily Planner name, no made-up discounts or promises. We may end a partnership that breaks these rules.</p></div></li>
         </ul>
       </div>
     </section>
 
-    <section class="section section--tint pt-how" id="how" aria-labelledby="pt-how-title">
+    <section class="section" id="who" aria-labelledby="pt-who-title">
       <div class="wrap">
-        <div class="section__intro">
-          <h2 id="pt-how-title">How it works</h2>
-          <p class="lead">Three steps, and Creem does the counting and the paying.</p>
+        <div class="section__intro" data-reveal-each>
+          <h2 id="pt-who-title">Who it’s for</h2>
+          <p class="lead">Anyone whose word people trust about how to spend their days. You don’t need a big audience: one honest recommendation to the right people is enough.</p>
         </div>
-        <ol class="pt-steps">
-          <li class="pt-step">
-            <span class="pt-step__n">1</span>
-            <h3>Apply</h3>
-            <p>Apply on Creem, our payment partner: it takes a few minutes. Once you’re in, Creem gives you your own partner code and a dashboard.</p>
-          </li>
-          <li class="pt-step">
-            <span class="pt-step__n">2</span>
-            <h3>Share your link</h3>
-            <p>Add your code to the address of the welcome page, and share it wherever you talk to your people: a post, a newsletter, a workshop slide, a client email.</p>
-            <p class="pt-link"><code>https://planner.bemorin.com/welcome/?ref=<b>CODE</b></code></p>
-          </li>
-          <li class="pt-step">
-            <span class="pt-step__n">3</span>
-            <h3>Earn on every sale</h3>
-            <p>When someone buys through your link, you earn <span data-earn>a commission</span>. Creem pays partners on the 1st and the 15th of each month, and shows every sale in your dashboard.</p>
-          </li>
-        </ol>
-      </div>
-    </section>
-
-    <section class="section pt-earn" id="commission" aria-labelledby="pt-earn-title">
-      <div class="wrap pt-earn__grid">
-        <div class="pt-earn__figure">
-          <p class="pt-earn__big" data-commission-big>A commission</p>
-          <p class="pt-earn__of" data-commission-of>on every purchase made through your link</p>
-        </div>
-        <div class="pt-earn__copy">
-          <h2 id="pt-earn-title">What counts</h2>
-          <p class="lead">Every purchase made through your link: Daily Planner Plus, a gift for someone else, and a team gift for a whole company.</p>
-          <ul class="oks pt-earn__list">
-            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Daily Planner Plus</b> — <span data-price="plus">€29</span>, paid once at its launch price</span></li>
-            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Give Plus and Plus Family</b> — <span data-price="gift-1">€29</span> and <span data-price="family-5">€99</span></span></li>
-            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Team gifts</b> — from <span data-price="team">€195</span> for up to 10 people</span></li>
-          </ul>
-          <p class="pt-earn__fine"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span>People pay the same price through your link, nothing more. Your link counts for 60 days: if someone comes back later on the same device and buys, the sale is still yours.</span></p>
-        </div>
+        <ul class="pt-who" data-reveal-each>
+          <li><span class="pt-who__icon" aria-hidden="true"><svg class="i"><use href="#i-compass"/></svg></span><h3>Coaches</h3><p>Give clients a calm planner that keeps their week and their year in view, and a guided half hour to plan the next one.</p></li>
+          <li><span class="pt-who__icon" aria-hidden="true"><svg class="i"><use href="#i-play"/></svg></span><h3>Creators</h3><p>Show how you plan in a video, a post or a template, with your link underneath.</p></li>
+          <li><span class="pt-who__icon" aria-hidden="true"><svg class="i"><use href="#i-mail"/></svg></span><h3>Newsletters</h3><p>Recommend it once to readers who care about focus, habits and a well-planned year.</p></li>
+          <li><span class="pt-who__icon" aria-hidden="true"><svg class="i"><use href="#i-chat"/></svg></span><h3>Consultants</h3><p>Suggest the team gift to the companies you work with: a year-end gift people use every day.</p></li>
+          <li><span class="pt-who__icon" aria-hidden="true"><svg class="i"><use href="#i-team"/></svg></span><h3>Teams</h3><p>Your team plans with Daily Planner? Tell the teams you know, and earn when they give it too.</p></li>
+          <li><span class="pt-who__icon" aria-hidden="true"><svg class="i"><use href="#i-heart"/></svg></span><h3>People who use it</h3><p>With Plus or without, you know what the planner is worth. Share it with friends, family and colleagues.</p></li>
+        </ul>
       </div>
     </section>
 
     <section class="section section--tint" id="faq" aria-labelledby="pt-faq-title">
       <div class="wrap faq">
-        <div class="faq__intro">
-          <h2 id="pt-faq-title">Questions</h2>
-          <p>Something else? <a href="../?ask=question&amp;topic=partners#request">Ask about the partner program</a>.</p>
+        <div class="faq__intro" data-reveal-each>
+          <h2 id="pt-faq-title">The program, explained.</h2>
+          <p>Something else? <a href="../teams/?ask=question&amp;topic=partners#request">Ask a question</a> about the partner program.</p>
         </div>
-        <div class="faq__groups">
-          <div class="faq__list">
+        <div class="faq__groups" data-faq>
+          <div class="faq__list" data-reveal-each>
             <details class="qa" name="faq">
-              <summary>Do I need Plus to become a partner?</summary>
-              <div class="qa__a"><p>No. Anyone can apply. Plus members often make the best partners, though: they know what they’re recommending.</p></div>
+              <summary>How much is a sale worth?</summary>
+              <div class="qa__a"><p>A <span data-rate>25%</span> commission on Plus, Give Plus and Plus Family, calculated and paid by Creem under its affiliate terms. As an example, one Plus bought <span data-tax-where>in France</span> (<span data-plus-price>€29</span>) earns you about <span data-plus-earns>€6.04</span>, on its price before tax. A team gift you introduced earns you <span data-team-rate>10%</span> of its price before tax: <span data-team-earns>€49.58</span> for a team of up to 50 people.</p></div>
             </details>
             <details class="qa" name="faq">
-              <summary>How and when am I paid?</summary>
-              <div class="qa__a"><p>By Creem, our payment partner and the seller on every receipt. Creem pays partners on the 1st and the 15th of each month, once your balance reaches its minimum payout, and lists your sales and earnings in your partner dashboard.</p></div>
+              <summary>Who can be a partner?</summary>
+              <div class="qa__a"><p>Anyone: coaches, creators, newsletters, consultants, teams and people who simply like the planner. You don’t need Plus, there are no targets, and joining is free.</p></div>
             </details>
             <details class="qa" name="faq">
-              <summary>How long does my link count?</summary>
-              <div class="qa__a"><p>60 days. The welcome page keeps your code on the visitor’s device, so if they come back later and buy Plus there or in the planner, the sale is still credited to you.</p></div>
+              <summary>How are sales tracked?</summary>
+              <div class="qa__a"><p>Your link adds your code to the welcome page’s address. The visitor’s browser keeps it for <span data-cookie-days>30</span> days and sends it with a purchase, on the welcome page or in the planner: Creem credits you for Plus and personal gifts, and we record team gifts. If they followed several partners’ links, the latest one counts. Creem lists the sales it credits to you in your partner dashboard.</p></div>
+            </details>
+            <details class="qa" name="faq">
+              <summary>When and how am I paid?</summary>
+              <div class="qa__a"><p>Creem pays your <span data-rate>25%</span> commissions on the 1st and the 15th of each month, once your balance reaches <span data-minimum>€50</span>, after a hold set by its payment partners. A team commission is earned once the gift’s <span data-refund-days>14</span>-day refund period has passed with no refund or dispute; we pay it by bank transfer within 30 days, and contact you for the details.</p></div>
+            </details>
+            <details class="qa" name="faq">
+              <summary>What if someone asks for a refund?</summary>
+              <div class="qa__a"><p>A refunded or disputed purchase earns nothing. That’s why we pay a team commission only once the gift’s <span data-refund-days>14</span>-day refund period is over; a partial refund lowers it in proportion.</p></div>
+            </details>
+            <details class="qa" name="faq">
+              <summary>What is not allowed?</summary>
+              <div class="qa__a"><p>Spam, ads that bid on “Daily Planner” or look like ours, coupon and cashback sites, and promises or discounts we don’t make. Purchases you make yourself, for you or as a gift, don’t count. We may end a partnership that breaks these rules, and sales made that way earn nothing.</p></div>
+            </details>
+            <details class="qa" name="faq">
+              <summary>And companies?</summary>
+              <div class="qa__a"><p>Send them to the Teams page with your link. A team gift bought online through it earns you <span data-team-rate>10%</span>. If the company prefers an invoice, they ask for it on that page: having come through your link, their request carries your code.</p></div>
             </details>
             <details class="qa" name="faq">
               <summary>What do the people I recommend see?</summary>
-              <div class="qa__a"><p>The same welcome page and the same prices. Your code only tells Creem whom to credit. Their planner stays private and on their own device: no account, and nothing about them is shared with you.</p></div>
-            </details>
-            <details class="qa" name="faq">
-              <summary>Where do I see my clicks and sales?</summary>
-              <div class="qa__a"><p>In your Creem partner dashboard, with your earnings and payouts.</p></div>
-            </details>
-            <details class="qa" name="faq">
-              <summary>Can I recommend the team gift to a company?</summary>
-              <div class="qa__a"><p>Yes. Send them the welcome page with your code: a team gift bought online through your link counts like any other purchase.</p></div>
-            </details>
-            <details class="qa" name="faq">
-              <summary>Do my own purchases count?</summary>
-              <div class="qa__a"><p>No. Purchases you make yourself through your own link, for yourself or as a gift, don’t earn a commission. Creem tracks and pays commissions under its affiliate terms; this is the rule of our program.</p></div>
+              <div class="qa__a"><p>The same pages and the same prices: your link costs them nothing more. Their planner stays private, on their own device, with no account. Nothing about who bought is shared with you.</p></div>
             </details>
           </div>
         </div>
@@ -192,12 +267,12 @@
     </section>
 
     <section class="final pt-final" aria-labelledby="pt-final-title">
-      <div class="wrap final__inner">
+      <div class="wrap final__inner" data-reveal-each>
         <div class="final__mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i class="is-rest"></i><i class="is-rest"></i></div>
         <h2 id="pt-final-title">Know people who would plan better with it?</h2>
-        <p class="lead">Apply in a few minutes, and earn <span data-earn-short>a commission</span> on every purchase made through your link.</p>
+        <p class="lead">Join in a few minutes, share your link, and earn a <span data-rate>25%</span> commission on every Plus purchase it brings.</p>
         <div class="cta-row">
-          <a class="btn btn--primary" href="../?ask=question&amp;topic=partners#request" data-partner-cta>Become a partner</a>
+          <a class="btn btn--primary" href="../teams/?ask=question&amp;topic=partners#request" data-partner-cta>Become a partner</a>
           <a class="btn btn--ghost" href="../">See what you’d recommend</a>
         </div>
       </div>
@@ -213,8 +288,8 @@
       <nav class="foot__links" aria-label="Footer">
         <a href="../../">Open the planner</a>
         <a href="../#plus">Plus</a>
-        <a href="../#teams">Team gift</a>
-        <a href="../?ask=question&amp;topic=partners#request">Ask a question</a>
+        <a href="../teams/">Team gift</a>
+        <a href="../teams/?ask=question&amp;topic=partners#request">Ask a question</a>
       </nav>
     </div>
     <div class="wrap foot__base">

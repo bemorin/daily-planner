@@ -12,7 +12,9 @@
 // - Waitlist: the email someone typed, with explicit consent. Deletable.
 // - Feedback: what someone chose to send; email only if they added one.
 // - Team kit requests: the work email, company, team size, plan, currency and
-//   kind of request someone typed, with explicit consent. Deletable.
+//   kind of request someone typed, with explicit consent, and the partner code
+//   remembered on that browser (?ref= link), if any, so a team order by
+//   invoice can earn that partner 10% (migration 0007). Deletable.
 // - Email (optional, Resend, see server/email.js): the owner is notified of
 //   each team request, and the dashboard can send the one waitlist
 //   announcement; every address is deleted as soon as its email is accepted.
@@ -37,12 +39,17 @@
 // - Checkouts: the currency follows the buyer's country as Cloudflare sees it
 //   (request.cf.country; the euro area pays in EUR, the rest in USD), which is
 //   read for that request only and never stored. A partner code from a ?ref=
-//   link is passed to Creem as affiliate_code and in the checkout's metadata
-//   (sealed); once the checkout is paid, the code is kept with the sale (table
-//   partner_sales, see server/partners.js: what was bought, the amount, the
-//   date — a partner code names the partner, not the buyer). Only a checkout
-//   our API opened, with a valid seal, is recorded. A code Creem refuses is
-//   named in the server log and not recorded.
+//   link is passed to Creem as affiliate_code (Plus and personal gifts only:
+//   Creem pays their commission; a team gift's 10% is paid by the owner, and
+//   its metadata says so) and in the checkout's metadata (sealed); once the
+//   checkout is paid, the code is kept with the sale (tables partner_sales and
+//   partner_sale_taxes, see server/partners.js: what was bought, who pays the
+//   commission, the amount and its tax, the date — a partner code names the
+//   partner, not the buyer). Only a checkout our API opened, with a valid
+//   seal, is recorded. A code Creem refuses is named in the server log and not
+//   recorded. The owner marks team commissions as paid (table partner_payouts:
+//   the checkout, the code, the amount, the date) and codes found to be no
+//   partner (table partner_code_rejections: the code, the date).
 // - Member price: a Plus member buying a personal gift sends their licence
 //   with the checkout; it is verified (signature, not revoked) for that
 //   request only and never stored. Creem only sees `member: '1'`.
@@ -60,8 +67,8 @@ import { cleanOrg, DEFAULT_PUBLIC_BASE_URL, formatGiftCode, giftBuyerEmail, gift
 import { GIFT_REF_RE, giftManageKey, giftRef, importSigningKey, importVerifyKey, isoDay, LICENSE_ID_RE, LICENSE_TOKEN_MAX, newLicenseId, publicKeyFromSigningKey, signLicense, verifyLicense } from './licenses.js';
 import { affiliateCode, CHECKOUT_ID_RE, checkoutSeal, checkoutSealValid, createCheckout, CREEM_ITEMS, creemMode, fetchCheckout, fetchTransaction, parseCreemProducts, readCheckout, verifyWebhookSignature } from './creem.js';
 import { CREEM_REASONS, OWNER_SOURCE_PREFIX, readRefundEvent, readTransaction, REFUND_EVENTS, refundNoticeEmail, refundScope, refundWaitingEmail, REVOCATION_NOTE_MAX, revocationTarget, shownScope } from './refunds.js';
-import { normalizePartnerSale, PARTNER_SALES_LISTED, partnerSaleRow, partnerSummary } from './partners.js';
-import { currencyForCountry, CURRENCIES, giftPlan, hasMemberPrice, isPersonalGift, PERSONAL_GIFTS, priceCents, TEAM_TIERS, validCurrency } from '../src/lib/pricing.js';
+import { normalizeCodeRejection, normalizePartnerSale, normalizePayout, PARTNER_SALES_LISTED, partnerSaleRow, partnerSummary, PAYOUT_NOTE_MAX, payoutCheck } from './partners.js';
+import { currencyForCountry, CURRENCIES, giftPlan, hasMemberPrice, isPersonalGift, isTeamGift, PARTNER_PROGRAM, PERSONAL_GIFTS, priceCents, TEAM_TIERS, validCurrency } from '../src/lib/pricing.js';
 // The release this API was deployed with (kept in step with package.json by scripts/check.mjs).
 // The dashboard compares it with its own to spot a page served from an old cache.
 import { APP_VERSION } from '../src/config.js';
@@ -126,7 +133,8 @@ export const EVENT_NAMES = new Set([
 export const FEEDBACK_KINDS = new Set(['idea', 'problem', 'praise', 'other']);
 export const DEVICE_KINDS = new Set(['iphone', 'ipad', 'android', 'mac', 'windows', 'linux', 'other']);
 export const TEAM_TIMINGS = new Set(['december-2026', 'january-2027', 'q1-2027', 'later']);
-export const TEAM_SOURCES = new Set(['landing', 'app']);
+// Where a request was sent from: the welcome page (and older Teams pages), the Teams page (1.28) or the planner.
+export const TEAM_SOURCES = new Set(['landing', 'teams', 'app']);
 export const TEAM_PLAN_LABELS = Object.freeze({
   'up-to-10': 'Up to 10 people',
   'up-to-50': 'Up to 50 people',
@@ -362,10 +370,19 @@ export function validateTeamRequest(body, now = new Date()) {
       locale: clip(body?.locale, 35),
       appVersion: version,
       source: TEAM_SOURCES.has(body?.source) ? body.source : 'landing',
-      createdAt: now.toISOString()
+      createdAt: now.toISOString(),
+      // The partner code remembered on this browser (?ref= link), when there is one: a malformed one is left out, never refused.
+      ...(affiliateCode(body?.ref) ? { ref: affiliateCode(body.ref) } : {})
     }
   };
 }
+
+/**
+ * What the owner reads about a request's partner code ('' when none): nothing
+ * checks the code (anyone can type one in a link), so it says to check it in
+ * Creem before paying.
+ */
+export const teamRequestPartnerLine = ref => (ref ? `${ref} — ${PARTNER_PROGRAM.teamRate}% if this becomes an order. Check that ${ref} is a partner in Creem → Affiliate Hub before paying.` : '');
 
 const csvResponse = (rows, columns, filename, cors) => new Response(toCsv(rows, columns), {
   headers: { ...cors, 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="${filename}"`, 'cache-control': 'no-store' }
@@ -393,7 +410,8 @@ export function teamRequestEmail(entry, dashboardUrl = '') {
     ['Name', entry.name || '—'],
     ['Email', entry.email],
     ['Source', entry.source || '—'],
-    ['Locale', entry.locale || '—']
+    ['Locale', entry.locale || '—'],
+    ...(entry.ref ? [['Partner', teamRequestPartnerLine(entry.ref)]] : [])
   ];
   const cell = 'padding:4px 16px 4px 0;vertical-align:top';
   const table = `<table style="border-collapse:collapse">${fields.map(([label, value]) => `<tr><td style="${cell};color:#706a62">${escapeHtml(label)}</td><td style="${cell}"><b>${escapeHtml(value)}</b></td></tr>`).join('')}</table>`;
@@ -506,13 +524,14 @@ export function createPlannerApi({
   /**
    * A checkout as read from Creem (readCheckout), with what our seal vouches
    * for: `sealed` when our API opened it. Anyone can open a product link by
-   * hand and add metadata, so without the seal its partner code and member
-   * flag count for nothing (no partner sale, never the member price), and the
-   * member flag counts only on a gift.
+   * hand and add metadata, so without the seal its partner code, who pays it
+   * and the member flag count for nothing (no partner sale, never the member
+   * price), and the member flag counts only on a gift.
    */
   async function sealedCheckout(paid) {
     const sealed = await checkoutSealValid(signingSecret, paid);
-    return { ...paid, sealed, ref: sealed ? paid.ref : '', member: sealed && paid.item?.kind === 'gift' && paid.member === true };
+    const ref = sealed ? paid.ref : '';
+    return { ...paid, sealed, ref, payout: ref ? paid.payout : '', member: sealed && paid.item?.kind === 'gift' && paid.member === true };
   }
   /** A gift needs our seal (a product link opened by hand can't pick its pack); every item must match its product's currency. */
   const honoured = paid => {
@@ -1031,8 +1050,10 @@ export function createPlannerApi({
     // Someone who has Plus pays the member price for a personal gift, with a licence this server verifies.
     const member = item === 'gift' && hasMemberPrice(plan, currency) ? await memberLicense(body?.license) : false;
     // A partner's code (from a ?ref= link) is sealed with the rest: only a checkout opened here is listed under a partner.
+    // A team gift's checkout also seals that the owner pays its partner (Creem doesn't: it never sees the code).
     const ref = affiliateCode(body?.ref);
-    const sealOf = code => checkoutSeal(signingSecret, { kind: item, plan, currency, rid, member, ref: code });
+    const ownerPays = isTeamGift(item, plan);
+    const sealOf = code => checkoutSeal(signingSecret, { kind: item, plan, currency, rid, member, ref: code, payout: code && ownerPays ? 'owner' : '' });
     const seal = await sealOf(ref);
     const payload = item === 'plus'
       ? { product_id: productId, request_id: rid, success_url: `${base}/`, metadata: { kind: 'plus', currency, rid, seal } }
@@ -1045,11 +1066,14 @@ export function createPlannerApi({
         success_url: `${base}/welcome/thanks/`,
         metadata: { kind: 'gift', plan, seats: String(gift.seats), currency, rid, seal, ...(member ? { member: '1' } : {}) }
       };
-    // The partner's code goes to Creem as affiliate_code, which credits the partner, and in the metadata, so the
-    // paid sale is listed under it (never the return address). The licence is never sent to Creem.
+    // The partner's code goes in the metadata, so the paid sale is listed under it (never the return address),
+    // and to Creem as affiliate_code, which credits the partner — except for a team gift: Creem has one rate per
+    // program (25%), and a team gift earns its partner 10%, paid by the owner (`payout: 'owner'`, so the sale is
+    // never taken for one sent to Creem before 1.28). The licence is never sent to Creem.
     if (ref) {
-      payload.affiliate_code = ref;
       payload.metadata.ref = ref;
+      if (ownerPays) payload.metadata.payout = 'owner';
+      else payload.affiliate_code = ref;
     }
     let checkout;
     try {
@@ -1451,6 +1475,79 @@ export function createPlannerApi({
     return json(201, { license, url: licenseUrl(baseUrl(), license) }, cors);
   }
 
+  // ---- Partner commissions (server/partners.js) ----------------------------------
+
+  /** The partner sales, their states and their refunds; null while migration 0006 is missing. */
+  function partnerLists() {
+    return Promise.all([store.listPartnerSales({ limit: PARTNER_SALES_LISTED }), store.partnerSaleStates().catch(() => []), store.partnerSaleRefunds().catch(() => [])]).catch(() => null);
+  }
+
+  /** The team commissions marked as paid and the codes found to be no partner: { payouts, rejections }, null while migration 0007 is missing. */
+  function commissionLists() {
+    return Promise.all([store.listPartnerPayouts(), store.listPartnerCodeRejections()])
+      .then(([payouts, rejections]) => ({ payouts, rejections }))
+      .catch(error => { if (isMissingTable(error)) return null; throw error; });
+  }
+
+  /**
+   * POST admin/partners/payouts { checkout, note, confirmed, amount } marks an
+   * earned team commission as paid (the owner paid it by bank transfer), with
+   * the amount worked out now — or, when that is only an upper bound (tax or a
+   * refund's amount unknown), the `amount` the owner paid, in cents.
+   * `confirmed` says the owner checked what payoutCheck() asks to check (a
+   * code nothing confirmed, a refund, the tax). DELETE
+   * admin/partners/payouts/<checkout> undoes it.
+   */
+  async function adminPayouts(request, path, cors) {
+    if (path === 'admin/partners/payouts') {
+      if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+      const body = await readJson(request);
+      const checkoutId = typeof body?.checkout === 'string' ? body.checkout.trim() : '';
+      if (!CHECKOUT_ID_RE.test(checkoutId)) return json(400, { error: 'Give the checkout of the team gift.' }, cors);
+      const note = oneLine(clip(body?.note, 1000));
+      if (note.length > PAYOUT_NOTE_MAX) return json(400, { error: `Keep the note under ${PAYOUT_NOTE_MAX} characters.` }, cors);
+      if (body?.amount != null && !Number.isInteger(body.amount)) return json(400, { error: 'Give the amount paid in cents.' }, cors);
+      const [lists, commissions] = await Promise.all([partnerLists(), commissionLists()]);
+      if (!lists || !commissions) return json(503, { error: MISSING_TABLE }, cors);
+      const summary = partnerSummary(lists[0], lists[1], lists[2], { limit: PARTNER_SALES_LISTED, ...commissions, now: now().getTime() });
+      const found = payoutCheck(summary, checkoutId, { confirmed: body?.confirmed === true, amount: body?.amount ?? null });
+      if (found.error) return json(found.status, { error: found.error, ...(found.checks ? { checks: found.checks } : {}) }, cors);
+      const payout = { checkoutId, code: found.sale.code, amount: found.amount, currency: found.sale.currency, note, paidAt: now().toISOString() };
+      if (!await store.addPartnerPayout(payout)) return json(409, { error: 'This commission is already marked as paid.' }, cors);
+      return json(201, { payout: normalizePayout(payout) }, cors);
+    }
+    const match = /^admin\/partners\/payouts\/([A-Za-z0-9_-]{1,200})$/.exec(path);
+    if (!match) return null;
+    if (request.method !== 'DELETE') return json(405, { error: 'Method not allowed' }, cors);
+    if (!CHECKOUT_ID_RE.test(match[1])) return json(404, { removed: false }, cors);
+    const removed = await store.deletePartnerPayout(match[1]);
+    return json(removed ? 200 : 404, { removed: !!removed }, cors);
+  }
+
+  /**
+   * POST admin/partners/rejections { code } records that the owner checked
+   * Creem's Affiliate Hub and found no partner with this code: its team
+   * commissions earn nothing. DELETE admin/partners/rejections/<code> undoes it.
+   */
+  async function adminCodeRejections(request, path, cors) {
+    if (path === 'admin/partners/rejections') {
+      if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+      const body = await readJson(request);
+      const code = affiliateCode(body?.code);
+      if (!code) return json(400, { error: 'Give the partner code.' }, cors);
+      const row = { code, createdAt: now().toISOString() };
+      if (!await store.addPartnerCodeRejection(row)) return json(409, { error: `${code} is already marked as not a partner.` }, cors);
+      return json(201, { rejection: normalizeCodeRejection(row) }, cors);
+    }
+    const match = /^admin\/partners\/rejections\/([A-Za-z0-9_-]{1,200})$/.exec(path);
+    if (!match) return null;
+    if (request.method !== 'DELETE') return json(405, { error: 'Method not allowed' }, cors);
+    const code = affiliateCode(match[1]);
+    if (!code) return json(404, { removed: false }, cors);
+    const removed = await store.deletePartnerCodeRejection(code);
+    return json(removed ? 200 : 404, { removed: !!removed }, cors);
+  }
+
   function corsHeaders(request) {
     const origin = request.headers.get('origin');
     if (!origin || !origins.has(origin)) return {};
@@ -1499,9 +1596,11 @@ export function createPlannerApi({
       // Reviews come from migration 0004, refunds from 0005; without them the rest still loads.
       const reviewRows = store.listReviews({ limit: REVIEWS_LATEST }).catch(() => null);
       const refundData = Promise.all([store.listRefunds({ limit: REFUNDS_LISTED }), store.listRevocations({ limit: REVOCATIONS_LISTED })]).catch(() => null);
-      // Partner sales come from migration 0006; which were refunded (in full or in part), from 0005 as well (none while it is missing).
-      const partnerData = Promise.all([store.listPartnerSales({ limit: PARTNER_SALES_LISTED }), store.partnerSaleStates().catch(() => []), store.partnerSaleRefunds().catch(() => [])]).catch(() => null);
-      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, refundLists, partnerLists, setup] = await Promise.all([
+      // Partner sales come from migration 0006; which were refunded (in full or in part), from 0005 as well (none while it is missing);
+      // team commissions marked as paid and codes found to be no partner, from 0007 (none while it is missing, and the card says so).
+      const partnerData = partnerLists();
+      const commissionData = commissionLists().catch(() => null);
+      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, refundLists, partnerRows, commissions, setup] = await Promise.all([
         store.eventTotals({ sinceDay }).then(publicEvents),
         store.eventDaily({ sinceDay }).then(publicEvents),
         store.listWaitlist(),
@@ -1513,6 +1612,7 @@ export function createPlannerApi({
         reviewRows,
         refundData,
         partnerData,
+        commissionData,
         setupInfo()
       ]);
       const [teamRequests, teamRequestTotals] = teamData || [[], { count: 0, seats: 0 }];
@@ -1524,7 +1624,8 @@ export function createPlannerApi({
         plus: { purchases: purchaseTotals.plus, manualLicenses: purchaseTotals.manual, recentLicenses: manualLicenses.map(row => ({ id: row.licenseId, note: row.note, createdAt: row.createdAt })) },
         reviews: reviews || [], reviewsUnavailable: !reviews,
         refunds: refundLists?.[0] || [], revocations: refundLists?.[1] || [], refundsUnavailable: !refundLists,
-        partners: partnerSummary(partnerLists?.[0] || [], partnerLists?.[1] || [], partnerLists?.[2] || [], { limit: PARTNER_SALES_LISTED }), partnersUnavailable: !partnerLists,
+        partners: partnerSummary(partnerRows?.[0] || [], partnerRows?.[1] || [], partnerRows?.[2] || [], { limit: PARTNER_SALES_LISTED, payouts: commissions?.payouts || [], rejections: commissions?.rejections || [], now: now().getTime() }), partnersUnavailable: !partnerRows,
+        partnerCommissionsUnavailable: !commissions, partnerProgram: { rate: PARTNER_PROGRAM.rate, teamRate: PARTNER_PROGRAM.teamRate, refundDays: PARTNER_PROGRAM.refundDays, cookieDays: PARTNER_PROGRAM.cookieDays, minimumPayout: { ...PARTNER_PROGRAM.minimumPayout } },
         setup
       }, cors);
     }
@@ -1542,7 +1643,7 @@ export function createPlannerApi({
     }
     if (request.method === 'GET' && path === 'admin/teams') {
       const rows = await store.listTeamRequests();
-      if (url.searchParams.get('format') === 'csv') return csvResponse(rows, ['id', 'createdAt', 'company', 'teamSize', 'plan', 'currency', 'kind', 'timing', 'name', 'email', 'message', 'locale', 'appVersion', 'source'], 'daily-planner-team-requests.csv', cors);
+      if (url.searchParams.get('format') === 'csv') return csvResponse(rows, ['id', 'createdAt', 'company', 'teamSize', 'plan', 'currency', 'kind', 'timing', 'name', 'email', 'message', 'locale', 'appVersion', 'source', 'ref'], 'daily-planner-team-requests.csv', cors);
       return json(200, { rows }, cors);
     }
     if (path === 'admin/waitlist/announce') return announce(request, cors);
@@ -1553,6 +1654,14 @@ export function createPlannerApi({
     }
     if (path.startsWith('admin/gifts')) {
       const answer = await adminGifts(request, path, cors);
+      if (answer) return answer;
+    }
+    if (path.startsWith('admin/partners/payouts')) {
+      const answer = await adminPayouts(request, path, cors);
+      if (answer) return answer;
+    }
+    if (path.startsWith('admin/partners/rejections')) {
+      const answer = await adminCodeRejections(request, path, cors);
       if (answer) return answer;
     }
     const removal = path.match(/^admin\/(waitlist|feedback|teams|reviews)\/(\d+)$/);
@@ -1638,8 +1747,9 @@ export function createPlannerApi({
  * In-memory store with optional persistence hooks; used by the dev server and
  * the unit tests. Mirrors the D1 store's behaviour (unique emails, counts,
  * oldest-first announcement order, internal email-send counts, gift limits,
- * one gift, purchase, payment and partner sale per checkout, one order and
- * one refund per Creem id, one revocation per target and source).
+ * one gift, purchase, payment, partner sale and payout per checkout, one order
+ * and one refund per Creem id, one revocation per target and source, a
+ * request's partner code kept with it, one rejection per partner code).
  */
 export function createMemoryStore(initial = {}, { onChange = null } = {}) {
   const data = {
@@ -1655,6 +1765,8 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
     refunds: Array.isArray(initial.refunds) ? initial.refunds : [],
     revocations: Array.isArray(initial.revocations) ? initial.revocations : [],
     partnerSales: Array.isArray(initial.partnerSales) ? initial.partnerSales : [],
+    partnerPayouts: Array.isArray(initial.partnerPayouts) ? initial.partnerPayouts : [],
+    partnerCodeRejections: Array.isArray(initial.partnerCodeRejections) ? initial.partnerCodeRejections : [],
     nextId: Number(initial.nextId) || 1
   };
   // Data files written before 1.21 call the checkout reference stripeSession.
@@ -1893,6 +2005,36 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
       return data.refunds.filter(item => item.checkoutId && sold.has(item.checkoutId) && item.status !== 'pending')
         .map(item => ({ checkoutId: item.checkoutId, amount: item.amount ?? null, currency: item.currency || '', fullRefund: !!item.fullRefund }));
     },
+    async addPartnerPayout(row) {
+      if (data.partnerPayouts.some(item => item.checkoutId === row.checkoutId)) return false;
+      data.partnerPayouts.push(normalizePayout(row));
+      changed();
+      return true;
+    },
+    async listPartnerPayouts() {
+      return [...data.partnerPayouts].sort((a, b) => String(b.paidAt).localeCompare(String(a.paidAt)) || String(a.checkoutId).localeCompare(String(b.checkoutId))).map(normalizePayout);
+    },
+    async deletePartnerPayout(checkoutId) {
+      const before = data.partnerPayouts.length;
+      data.partnerPayouts = data.partnerPayouts.filter(item => item.checkoutId !== checkoutId);
+      if (before !== data.partnerPayouts.length) changed();
+      return before !== data.partnerPayouts.length;
+    },
+    async addPartnerCodeRejection(row) {
+      if (data.partnerCodeRejections.some(item => item.code === row.code)) return false;
+      data.partnerCodeRejections.push(normalizeCodeRejection(row));
+      changed();
+      return true;
+    },
+    async listPartnerCodeRejections() {
+      return [...data.partnerCodeRejections].sort((a, b) => String(a.code).localeCompare(String(b.code))).map(normalizeCodeRejection);
+    },
+    async deletePartnerCodeRejection(code) {
+      const before = data.partnerCodeRejections.length;
+      data.partnerCodeRejections = data.partnerCodeRejections.filter(item => item.code !== code);
+      if (before !== data.partnerCodeRejections.length) changed();
+      return before !== data.partnerCodeRejections.length;
+    },
     async addReview(entry) {
       data.reviews.push({ id: data.nextId++, appVersion: entry.appVersion, rating: entry.rating, text: entry.text, name: entry.name || '', createdAt: entry.createdAt });
       changed();
@@ -1930,11 +2072,12 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
       changed();
     },
     async addTeamRequest(entry) {
-      data.teamRequests.push({ id: data.nextId++, ...entry });
+      const { ref = '', ...rest } = entry;
+      data.teamRequests.push({ id: data.nextId++, ...rest, ...(ref ? { ref } : {}) });
       changed();
     },
     async listTeamRequests({ limit = 0 } = {}) {
-      const rows = [...data.teamRequests].sort(byNewest);
+      const rows = [...data.teamRequests].sort(byNewest).map(row => ({ ...row, ref: row.ref || '' }));
       return limit ? rows.slice(0, limit) : rows;
     },
     async teamRequestTotals() {

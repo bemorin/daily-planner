@@ -1,6 +1,6 @@
 import { LEGAL_ADDRESS, LEGAL_REGISTRATION, SUPPORT_EMAIL } from '../src/config.js';
 import { COUNTED_EVENTS, LANDING_EVENTS, plannerApiEnabled, setUsageCountsEnabled, usageCountsEnabled } from '../src/lib/planner-api.js';
-import { CURRENCIES, LAUNCH, PERSONAL_GIFTS, PLUS_FEATURES, PLUS_PRICE, TEAM_TIERS, formatMoney, memberGiftPrice } from '../src/lib/pricing.js';
+import { CURRENCIES, LAUNCH, PARTNER_PROGRAM, PERSONAL_GIFTS, PLUS_FEATURES, PLUS_PRICE, TEAM_TIERS, formatMoney, memberGiftPrice } from '../src/lib/pricing.js';
 
 /**
  * Legal pages (legal/, legal/privacy/, legal/terms/, legal/cookies/).
@@ -9,8 +9,8 @@ import { CURRENCIES, LAUNCH, PERSONAL_GIFTS, PLUS_FEATURES, PLUS_PRICE, TEAM_TIE
  * fills in what depends on the deployment or on the code, so it can never
  * drift: the publisher's details (SUPPORT_EMAIL, LEGAL_ADDRESS,
  * LEGAL_REGISTRATION from runtime-config.js, each left out when blank), the
- * moments the site counts (COUNTED_EVENTS and LANDING_EVENTS), the prices and
- * the Plus features (src/lib/pricing.js). It makes no network request. It also
+ * moments the site counts (COUNTED_EVENTS and LANDING_EVENTS), the prices,
+ * the Plus features and the partner program's terms (src/lib/pricing.js). It makes no network request. It also
  * marks, in “On this page”, the section being read.
  *
  * The pure helpers below are unit-tested (tests/legal.test.js).
@@ -19,7 +19,8 @@ import { CURRENCIES, LAUNCH, PERSONAL_GIFTS, PLUS_FEATURES, PLUS_PRICE, TEAM_TIE
 export const PUBLISHER = 'Ben Morin, an individual based in France';
 // Plain addresses only: nothing that could add ?subject= or ?bcc= to a mailto: link.
 const EMAIL_RE = /^[^\s@<>()[\]\\,;:"?&=%/#]{1,64}@[a-z0-9](?:[a-z0-9.-]{0,188}[a-z0-9])?\.[a-z]{2,24}$/i;
-const ASK_PATH = 'welcome/?ask=question#request';
+// The question form lives on the Teams page (1.28).
+const ASK_PATH = 'welcome/teams/?ask=question#request';
 
 export const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 const oneLine = value => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -35,14 +36,14 @@ export function legalDetails(config = {}) {
   };
 }
 
-/** Where to write without a support address: the “Ask a question” form of the welcome page. */
+/** Where to write without a support address: the “Ask a question” form, on the Teams page. */
 export const askHref = (root = '../') => `${root}${ASK_PATH}`;
 
 /** How to reach us, as the value of a “Contact” row: the address, or the question form. */
 export function contactHtml(details, root = '../') {
   return details.email
     ? `<a href="mailto:${esc(details.email)}">${esc(details.email)}</a>`
-    : `the <a href="${esc(askHref(root))}">“Ask a question” form</a> on the welcome page`;
+    : `the <a href="${esc(askHref(root))}">“Ask a question” form</a>`;
 }
 
 /** How to reach us inside a sentence (“To use these rights, …”): “email …” or “use the … form”. */
@@ -84,6 +85,18 @@ export function priceItems() {
 }
 
 export const pricesHtml = () => priceItems().map(item => `<li>${esc(item)}</li>`).join('');
+
+/** The partner program's figures as the terms say them (PARTNER_PROGRAM): rates, days, the minimum payout. */
+export function partnerTerms(program = PARTNER_PROGRAM) {
+  const minimum = CURRENCIES.map(currency => formatMoney(program.minimumPayout[currency], currency));
+  return {
+    rate: `${program.rate}%`,
+    teamRate: `${program.teamRate}%`,
+    days: String(program.cookieDays),
+    refundDays: String(program.refundDays),
+    minimum: minimum.join(' or ')
+  };
+}
 
 /** “Plan your year”, “Your year in review” and “…”: the Plus features today. */
 export function featuresText(features = PLUS_FEATURES) {
@@ -247,6 +260,9 @@ export function applyLegal(doc, { config = { SUPPORT_EMAIL, LEGAL_ADDRESS, LEGAL
   fill(doc, '[data-legal-events="landing"]', eventsHtml(LANDING_EVENTS));
   fill(doc, '[data-legal-prices]', pricesHtml());
   doc.querySelectorAll('[data-legal-features]').forEach(node => { node.textContent = featuresText(); });
+  const partner = partnerTerms();
+  [['rate', partner.rate], ['team-rate', partner.teamRate], ['days', partner.days], ['refund-days', partner.refundDays], ['minimum', partner.minimum]]
+    .forEach(([name, text]) => doc.querySelectorAll(`[data-partner-${name}]`).forEach(node => { node.textContent = text; }));
   doc.querySelectorAll('[data-legal-js]').forEach(node => { node.hidden = false; });
   doc.querySelectorAll('[data-legal-nojs]').forEach(node => { node.hidden = true; });
   setupCountsSwitch(doc);

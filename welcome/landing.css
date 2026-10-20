@@ -564,7 +564,8 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .features b { color: var(--ink); font-weight: 680; }
 
-/* Teams band: the team gift --------------------------------------------------- */
+/* Teams band: the team gift's dark band (the landing page's banner, the Teams
+   page's offer card, prices and request form) ---------------------------------- */
 
 .band {
   --scrollbar-thumb: color-mix(in srgb, var(--band-ink) 24%, transparent);
@@ -598,7 +599,7 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 .why b { display: block; margin-bottom: 2px; color: var(--band-ink); font-weight: 680; }
 
 @media (min-width: 640px) and (max-width: 959.98px) {
-  .why { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
+  .why { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 28px; }
 }
 
 @media (min-width: 960px) {
@@ -613,36 +614,6 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .promise b { color: var(--band-ink); }
 
-/* How seats work */
-
-.seats { margin-top: clamp(40px, 6vw, 64px); padding-top: clamp(32px, 4vw, 48px); border-top: 1px solid var(--band-line); }
-
-.seats__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 24px; margin-bottom: clamp(22px, 3vw, 32px); }
-
-.seats__head h3 { font-size: clamp(1.3rem, 1.1rem + .6vw, 1.6rem); letter-spacing: -.028em; }
-
-.seats__head p { color: var(--band-muted); }
-
-.seats__grid { display: grid; gap: 32px; }
-
-@media (min-width: 1080px) {
-  .seats__grid { grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); gap: 48px; align-items: center; }
-}
-
-.seats__steps { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
-
-.seats__steps li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; color: var(--band-muted); font-size: .95rem; line-height: 1.5; }
-
-.seats__steps b { color: var(--band-ink); font-weight: 680; }
-
-.seats__n { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 999px; background: var(--band-field); box-shadow: inset 0 0 0 1px var(--band-line); color: var(--band-accent); font-size: .85rem; font-weight: 720; }
-
-@media (min-width: 640px) and (max-width: 1079.98px) {
-  .seats__steps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 28px; }
-}
-
-.seats__fine { margin-top: 24px; color: var(--band-muted); font-size: .88rem; }
-
 .band__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 36px; }
 
 .band__status { flex-basis: 100%; min-height: 1.4em; color: var(--band-accent); font-size: .92rem; }
@@ -651,6 +622,30 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 @media (max-width: 559.98px) {
   .band__actions .btn:not(.btn--text-light) { width: 100%; }
+}
+
+/* The landing page's banner, under the prices: the team gift in a few lines, and the way to the Teams page. */
+.tbanner { margin-top: clamp(48px, 7vw, 88px); }
+
+.tbanner h2 { max-width: 15em; font-size: clamp(1.65rem, 1.2rem + 1.7vw, 2.4rem); }
+
+.tbanner .lead { max-width: 30em; }
+
+.tbanner__ctas { margin-top: 4px; }
+
+.tbanner__ctas .btn--light svg.i { width: 19px; height: 19px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .tbanner__ctas .btn--light svg.i { transition: transform 220ms cubic-bezier(.22, 1, .36, 1); }
+  .tbanner__ctas .btn--light:hover svg.i { transform: translateX(3px); }
+}
+
+@media (min-width: 960px) {
+  .tbanner .band__grid { align-items: center; }
+}
+
+@media (max-width: 559.98px) {
+  .tbanner__ctas .btn { width: 100%; }
 }
 
 /* For coaches and consultants: the partner program, one quiet line under the team gift. */
@@ -672,9 +667,9 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .team-form__head { display: grid; gap: 6px; }
 
-.team-form__head h3 { font-size: clamp(1.3rem, 1.1rem + .6vw, 1.6rem); letter-spacing: -.028em; }
+.team-form__head h2 { font-size: clamp(1.3rem, 1.1rem + .6vw, 1.6rem); letter-spacing: -.028em; }
 
-.team-form__head h3:focus { outline: 0; }
+.team-form__head h2:focus { outline: 0; }
 
 .team-form__head p:last-child { max-width: 40em; color: var(--band-muted); }
 
@@ -1241,12 +1236,6 @@ input[type="number"]::-webkit-outer-spin-button { margin: 0; -webkit-appearance:
 
 .pricing__note svg.i { width: 19px; height: 19px; margin-top: 1px; color: var(--paint); }
 
-.pricing__teams { display: inline-flex; align-items: center; gap: 7px; color: var(--ink); font-weight: 650; text-decoration: none; }
-
-.pricing__teams:hover { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--paint) 60%, transparent); text-underline-offset: 3px; }
-
-.pricing__teams svg.i { width: 18px; height: 18px; }
-
 /* Coming to Plus: squares not painted yet, inside a dashed edge. */
 .soon { display: grid; gap: 14px; padding: 16px 16px 14px; border: 1.5px dashed color-mix(in srgb, var(--paint) 48%, var(--line-strong)); border-radius: 16px; background: var(--paper); }
 
@@ -1343,11 +1332,11 @@ input[type="number"]::-webkit-outer-spin-button { margin: 0; -webkit-appearance:
 
 /* Team gift prices, on the dark band: one row per tier ---------------------- */
 
-.prices { margin-top: clamp(40px, 6vw, 64px); padding-top: clamp(32px, 4vw, 48px); border-top: 1px solid var(--band-line); container: team / inline-size; }
+.prices { container: team / inline-size; }
 
 .prices__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 24px; margin-bottom: clamp(18px, 2.6vw, 28px); }
 
-.prices__head h3 { font-size: clamp(1.3rem, 1.1rem + .6vw, 1.6rem); letter-spacing: -.028em; }
+.prices__head h2 { font-size: clamp(1.45rem, 1.15rem + .9vw, 1.9rem); letter-spacing: -.03em; }
 
 .prices__head p { color: var(--band-muted); }
 
@@ -1533,7 +1522,8 @@ input[type="number"]::-webkit-outer-spin-button { margin: 0; -webkit-appearance:
 
 .foot__brand a:hover { text-decoration-color: currentColor; }
 
-.faq__intro a { color: var(--ink); font-weight: 620; text-decoration-color: color-mix(in srgb, var(--misogi) 60%, transparent); text-underline-offset: 3px; }
+.faq__intro a,
+.qa__a a { color: var(--ink); font-weight: 620; text-decoration-color: color-mix(in srgb, var(--misogi) 60%, transparent); text-underline-offset: 3px; }
 
 .foot__legal { padding-left: 20px; border-left: 1px solid var(--line); }
 
@@ -4196,7 +4186,7 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 /* Team gift: one link, one activation, one seat -------------------------------- */
 
-.rp--gift { font-size: clamp(9.5px, 1.75cqi, 13px); }
+.rp--gift { font-size: clamp(9.5px, 1.6cqi, 14.5px); }
 
 .rp-gf { display: grid; grid-template-columns: minmax(0, 1.3fr) 2.2em minmax(0, 1.1fr) 2.2em minmax(0, .85fr); align-items: center; }
 
@@ -4292,6 +4282,107 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
   .rp-gf__arrow { height: 2em; }
   .rp-gf__arrow svg.i { transform: rotate(90deg); }
 }
+
+/* Teams page (teams/): the team gift on its own page ------------------------- */
+
+/* No dock on this page, so no room kept for it. */
+body.teams-page { padding-bottom: 0; }
+
+.top__nav a[aria-current="page"] { background: var(--soft); color: var(--ink); }
+
+/* Light parts of the page borrow the band's names, so the same parts (the
+   promise, the steps, the replica's arrows) read on paper too. */
+.tm-hero__copy,
+.tm-seats {
+  --band-ink: var(--ink);
+  --band-muted: var(--muted);
+  --band-line: var(--line);
+  --band-field: var(--surface-strong);
+  --band-accent: var(--paint);
+}
+
+.tm-hero { padding: clamp(28px, 5vw, 72px) 0 clamp(64px, 8vw, 112px); }
+
+.tm-hero__grid { display: grid; gap: 40px; align-items: center; }
+
+.tm-hero__copy { display: grid; justify-items: start; gap: 22px; }
+
+.tm-hero__copy h1 { max-width: 13em; }
+
+.tm-hero__copy .cta-row { margin-top: 4px; }
+
+.tm-hero__copy .promise { max-width: 36em; margin-top: 8px; }
+
+/* The offer card: the lowest price per person, then why it's worth it. */
+.tm-offer { display: grid; align-content: start; gap: 6px; padding: clamp(24px, 3.2vw, 40px); box-shadow: var(--shadow-rp); }
+
+.tm-offer__price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 14px; }
+
+.tm-offer__price small { color: var(--band-muted); font-size: 1rem; font-weight: 600; }
+
+.tm-offer__price b { font-size: clamp(2.8rem, 2.2rem + 2vw, 3.8rem); font-weight: 780; letter-spacing: -.05em; line-height: 1; font-variant-numeric: tabular-nums; }
+
+.tm-offer__price span { font-size: 1.08rem; font-weight: 680; letter-spacing: -.012em; }
+
+.tm-offer__sub { color: var(--band-muted); }
+
+.tm-offer .why { margin-top: 18px; }
+
+.tm-offer__currency { margin-top: 14px; color: var(--band-muted); font-size: .86rem; }
+
+/* One column of reasons; on a tablet, the price on the left and the reasons beside it. */
+.tm-offer .why { grid-template-columns: minmax(0, 1fr); }
+
+@media (min-width: 640px) and (max-width: 959.98px) {
+  .tm-offer { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); grid-template-rows: auto auto auto 1fr; column-gap: 40px; }
+  .tm-offer > :not(.why) { grid-column: 1; }
+  .tm-offer .why { grid-column: 2; grid-row: 1 / span 4; margin-top: 0; }
+  .tm-offer__currency { align-self: end; }
+}
+
+@media (min-width: 960px) {
+  .tm-hero__grid { grid-template-columns: minmax(0, 13fr) minmax(0, 10fr); gap: clamp(48px, 6vw, 88px); }
+}
+
+@media (max-width: 559.98px) {
+  .tm-hero__copy .cta-row,
+  .tm-hero__copy .btn { width: 100%; }
+}
+
+/* The hero needs no script to arrive, like the landing page's. */
+@media screen and (prefers-reduced-motion: no-preference) {
+  .tm-hero__copy > *,
+  .tm-offer { animation: rise-in 820ms cubic-bezier(.22, 1, .36, 1) both; }
+  .tm-hero__copy > :nth-child(2) { animation-delay: 70ms; }
+  .tm-hero__copy > :nth-child(3) { animation-delay: 160ms; }
+  .tm-hero__copy > :nth-child(4) { animation-delay: 240ms; }
+  .tm-hero__copy > :nth-child(5) { animation-delay: 320ms; }
+  .tm-offer { animation-duration: 1000ms; animation-delay: 180ms; }
+}
+
+/* How seats work: the replica on its own stage, then the four steps. */
+.seats__visual { max-width: 1040px; margin-inline: auto; }
+
+.seats__steps { display: grid; gap: 14px; margin: clamp(40px, 5vw, 56px) 0 0; padding: 0; list-style: none; }
+
+.seats__steps li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 14px; align-content: start; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); color: var(--muted); font-size: .95rem; line-height: 1.55; }
+
+.seats__steps b { display: block; margin-bottom: 2px; color: var(--ink); font-weight: 680; }
+
+.seats__n { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: .88rem; font-weight: 720; }
+
+.seats__steps li:last-child .seats__n { background: var(--ink); color: var(--paper); }
+
+@media (min-width: 640px) {
+  .seats__steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1080px) {
+  .seats__steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .seats__steps li { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+}
+
+.seats__fine { margin-top: 22px; color: var(--muted); font-size: .9rem; }
 
 /* Manage page (thanks/): the team gift after payment ------------------------- */
 
@@ -4451,122 +4542,7 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 /* No dock on this page, so no room kept for it. */
 body.manage-page { padding-bottom: 0; }
 
-/* Partners page (partners/): who the program is for, how it works, what it pays -- */
-
-body.partners-page { padding-bottom: 0; }
-
-.pt-top__about { padding: 8px 11px; border-radius: 9px; color: var(--muted); font-size: .92rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
-
-.pt-top__about:hover { background: var(--soft); color: var(--ink); }
-
-@media (max-width: 479.98px) {
-  .pt-top__about { display: none; }
-}
-
-.pt-hero { padding: clamp(40px, 7vw, 96px) 0 clamp(48px, 6vw, 80px); }
-
-/* Right after the hero, which already leaves room above it. */
-.section.pt-who { padding-top: clamp(24px, 3vw, 40px); }
-
-.pt-hero__grid { display: grid; gap: clamp(36px, 5vw, 64px); align-items: center; }
-
-.pt-hero__copy { display: grid; justify-items: start; gap: 20px; }
-
-.pt-hero__copy h1 { max-width: 13em; }
-
-.pt-hero__fine { color: var(--muted); font-size: .92rem; }
-
-@media (min-width: 960px) {
-  .pt-hero__grid { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
-}
-
-/* The link, the sale, the commission: one card, three rows. */
-.pt-flow { display: grid; overflow: hidden; border: 1px solid color-mix(in srgb, var(--paint) 30%, var(--line)); border-radius: 22px; background: var(--surface-strong); box-shadow: 0 0 0 1px color-mix(in srgb, var(--paint) 8%, transparent), 0 30px 64px -40px color-mix(in srgb, var(--paint) 70%, transparent); }
-
-.pt-flow__row { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 4px 14px; padding: 18px 22px; }
-
-.pt-flow__row + .pt-flow__row { border-top: 1px solid var(--line); }
-
-.pt-flow__icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--paint) 11%, var(--surface-strong)); color: var(--paint); }
-
-.pt-flow__icon svg.i { width: 21px; height: 21px; }
-
-.pt-flow__text { display: grid; gap: 2px; min-width: 0; }
-
-.pt-flow__text small { color: var(--muted); font-size: .84rem; font-weight: 600; }
-
-.pt-flow__text > b { font-size: 1.04rem; font-weight: 690; letter-spacing: -.012em; }
-
-.pt-flow code,
-.pt-link code { font: 600 .9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
-
-.pt-flow code b,
-.pt-link code b { color: var(--paint); font-weight: 700; }
-
-.pt-flow__row--earn { background: color-mix(in srgb, var(--paint) 5%, var(--surface-strong)); }
-
-.pt-flow__row--earn .pt-flow__text > b { font-size: 1.5rem; font-weight: 760; letter-spacing: -.03em; }
-
-.pt-flow__note { grid-column: 2; color: var(--muted); font-size: .86rem; }
-
-/* Who it's for */
-.pt-cards { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
-
-@media (min-width: 640px) {
-  .pt-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (min-width: 1000px) {
-  .pt-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-}
-
-.pt-card { display: grid; align-content: start; gap: 8px; min-width: 0; padding: clamp(20px, 2.4vw, 26px); border: 1px solid var(--line); border-radius: 20px; background: var(--surface-strong); }
-
-.pt-card__icon { width: 40px; height: 40px; display: grid; place-items: center; margin-bottom: 6px; border-radius: 12px; background: var(--soft); color: var(--paint); }
-
-.pt-card__icon svg.i { width: 21px; height: 21px; }
-
-.pt-card p { color: var(--muted); }
-
-/* How it works */
-.pt-steps { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; counter-reset: none; }
-
-@media (min-width: 900px) {
-  .pt-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-}
-
-.pt-step { display: grid; align-content: start; gap: 10px; min-width: 0; padding: clamp(22px, 2.6vw, 30px); border: 1px solid var(--line); border-radius: 20px; background: var(--surface-strong); }
-
-.pt-step p { color: var(--muted); }
-
-.pt-step__n { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 999px; background: var(--paint); color: var(--on-paint); font-size: .92rem; font-weight: 740; }
-
-.pt-step .pt-link { margin-top: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
-
-/* What it pays */
-.pt-earn__grid { display: grid; gap: clamp(28px, 4vw, 56px); align-items: center; }
-
-@media (min-width: 900px) {
-  .pt-earn__grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
-}
-
-.pt-earn__figure { display: grid; justify-items: center; align-content: center; gap: 6px; min-height: 240px; padding: clamp(28px, 4vw, 44px); border: 1px solid color-mix(in srgb, var(--paint) 26%, var(--line)); border-radius: 28px; background: radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--paint) 12%, transparent), transparent 65%), var(--surface-strong); text-align: center; }
-
-.pt-earn__big { color: var(--paint); font-size: clamp(4rem, 3rem + 4vw, 6.4rem); font-weight: 780; letter-spacing: -.06em; line-height: 1; font-variant-numeric: tabular-nums; }
-
-.pt-earn__big.is-words { font-size: clamp(2.2rem, 1.7rem + 2vw, 3.2rem); letter-spacing: -.04em; }
-
-.pt-earn__of { max-width: 16em; color: var(--muted); font-size: 1.02rem; font-weight: 560; }
-
-.pt-earn__copy { display: grid; align-content: start; gap: 16px; }
-
-.pt-earn__list { margin-top: 4px; }
-
-.pt-earn__list b { font-weight: 680; }
-
-.pt-earn__fine { display: flex; align-items: flex-start; gap: 10px; margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: .94rem; }
-
-.pt-earn__fine svg.i { width: 20px; height: 20px; margin-top: 2px; color: var(--paint); }
+/* The partners page's styles live in partners/partners.css. */
 
 .foot__base a.foot__counts { text-decoration: none; }
 

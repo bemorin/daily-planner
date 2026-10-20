@@ -1,5 +1,5 @@
 import { APP_VERSION, PLANNER_API_URL } from '../config.js';
-import { isPersonalGift } from './pricing.js';
+import { isPersonalGift, PARTNER_PROGRAM } from './pricing.js';
 
 /**
  * Client for the optional owner API (feedback, waitlist, anonymous counts,
@@ -66,7 +66,7 @@ export const COUNTED_EVENTS = Object.freeze([
 export const LANDING_EVENTS = Object.freeze([
   ['landing_viewed', 'visited the landing page'],
   ['landing_cta_app', 'clicked “Open the planner”'],
-  ['landing_cta_teams', 'went to the team gift'],
+  ['landing_cta_teams', 'went to the Teams page'],
   ['team_form_opened', 'opened the request form'],
   ['team_request_sent', 'sent a request'],
   ['manager_email_opened', 'prepared the message for a manager'],
@@ -74,7 +74,7 @@ export const LANDING_EVENTS = Object.freeze([
   ['pack_checkout_clicked', 'went to buy a team gift'],
   ['gift_link_copied', 'copied a team gift link'],
   ['plus_viewed', 'scrolled to Plus'],
-  ['teams_viewed', 'scrolled to the team gift'],
+  ['teams_viewed', 'visited the Teams page'],
   ['pricing_viewed', 'scrolled to the prices'],
   ['partners_viewed', 'visited the partners page'],
   ['partner_cta_clicked', 'went to become a partner']
@@ -235,14 +235,16 @@ export const startCheckout = ({ item, plan = '', currency, license = '' }) => {
 
 // Outside the 'daily-planner:' prefix, so backups and sync never carry it.
 export const REFERRAL_KEY = 'daily-planner-ui:ref';
-const REFERRAL_DAYS = 60;
+/** How long a partner's link counts on this device (the same as Creem's attribution window). */
+export const REFERRAL_DAYS = PARTNER_PROGRAM.cookieDays;
 const REFERRAL_RE = /^[A-Za-z0-9_-]{2,64}$/;
 const REFERRAL_PARAMS = ['ref', 'via', 'aff'];
 
 /**
- * Keeps the partner code from a link like /welcome/?ref=CODE for 60 days on this
- * device (the latest link wins), so a purchase made later is credited to that
- * partner. Returns the code it kept, or ''. Nothing is sent until a checkout.
+ * Keeps the partner code from a link like /welcome/?ref=CODE for REFERRAL_DAYS
+ * (30) on this device (the latest link wins), so a purchase made later — or a
+ * team request — is credited to that partner. Returns the code it kept, or ''.
+ * Nothing is sent until a checkout or a request.
  */
 export function rememberReferral(search = globalThis.location?.search || '', { storage = globalThis.localStorage, now = Date.now() } = {}) {
   let params;
@@ -253,7 +255,7 @@ export function rememberReferral(search = globalThis.location?.search || '', { s
   return code;
 }
 
-/** The remembered partner code, or '' once it is older than 60 days or unreadable. */
+/** The remembered partner code, or '' once it is older than REFERRAL_DAYS (30) or unreadable. */
 export function referralCode({ storage = globalThis.localStorage, now = Date.now() } = {}) {
   try {
     const saved = JSON.parse(storage?.getItem(REFERRAL_KEY) || 'null');
@@ -267,7 +269,7 @@ export function referralCode({ storage = globalThis.localStorage, now = Date.now
 /* Partner hints ------------------------------------------------------------- */
 
 // Where the planner and the gift page mention the partner program, quietly:
-// the Plus dialog (with Plus), after a share image, and the gift page. Once
+// the Plus dialog (for everyone), after a share image, and the gift page. Once
 // dismissed (or followed), a place stays quiet on this device. UI prefix:
 // never synced or backed up.
 export const PARTNER_HINTS_KEY = 'daily-planner-ui:partner-hints';
