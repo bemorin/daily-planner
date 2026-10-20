@@ -1,6 +1,6 @@
 import { LEGAL_ADDRESS, LEGAL_REGISTRATION, SUPPORT_EMAIL } from '../src/config.js';
 import { COUNTED_EVENTS, LANDING_EVENTS, plannerApiEnabled, setUsageCountsEnabled, usageCountsEnabled } from '../src/lib/planner-api.js';
-import { CURRENCIES, PERSONAL_GIFTS, PLUS_FEATURES, PLUS_PRICE, TEAM_TIERS, formatMoney } from '../src/lib/pricing.js';
+import { CURRENCIES, LAUNCH, PERSONAL_GIFTS, PLUS_FEATURES, PLUS_PRICE, TEAM_TIERS, formatMoney, memberGiftPrice } from '../src/lib/pricing.js';
 
 /**
  * Legal pages (legal/, legal/privacy/, legal/terms/, legal/cookies/).
@@ -70,10 +70,14 @@ export const eventsHtml = (events = COUNTED_EVENTS) => events.map(([, words]) =>
 const bothCurrencies = price => CURRENCIES.map(currency => formatMoney(price[currency], currency)).join(' / ');
 const people = count => `${Number(count).toLocaleString('en-US')} ${Number(count) === 1 ? 'person' : 'people'}`;
 
-/** Today’s prices (taxes included), from src/lib/pricing.js. */
+/** Today’s prices (taxes included), from src/lib/pricing.js: the launch price of Plus, the gifts and their member price. */
 export function priceItems() {
-  const items = [`Daily Planner Plus: ${bothCurrencies(PLUS_PRICE)}`];
-  PERSONAL_GIFTS.forEach(gift => items.push(`${gift.label}: ${bothCurrencies(gift.price)} (${gift.seats === 1 ? 'one person' : `up to ${people(gift.seats)} in one household`})`));
+  const items = [`Daily Planner Plus${LAUNCH.active ? ', at its launch price' : ''}: ${bothCurrencies(PLUS_PRICE)}`];
+  PERSONAL_GIFTS.forEach(gift => {
+    const member = Object.fromEntries(CURRENCIES.map(currency => [currency, memberGiftPrice(gift.plan, currency)]));
+    const memberText = CURRENCIES.every(currency => member[currency] != null) ? `; ${bothCurrencies(member)} for someone who already has Plus` : '';
+    items.push(`${gift.label}: ${bothCurrencies(gift.price)} (${gift.seats === 1 ? 'one person' : `up to ${people(gift.seats)} in one household`}${memberText})`);
+  });
   const smallest = TEAM_TIERS[0];
   if (smallest) items.push(`Team gifts: from ${bothCurrencies(smallest.price)} for up to ${people(smallest.seats)}`);
   return items;

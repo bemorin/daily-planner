@@ -1,4 +1,5 @@
 import { APP_VERSION, PLANNER_API_URL } from '../config.js';
+import { isPersonalGift } from './pricing.js';
 
 /**
  * Client for the optional owner API (feedback, waitlist, anonymous counts,
@@ -74,7 +75,9 @@ export const LANDING_EVENTS = Object.freeze([
   ['gift_link_copied', 'copied a team gift link'],
   ['plus_viewed', 'scrolled to Plus'],
   ['teams_viewed', 'scrolled to the team gift'],
-  ['pricing_viewed', 'scrolled to the prices']
+  ['pricing_viewed', 'scrolled to the prices'],
+  ['partners_viewed', 'visited the partners page'],
+  ['partner_cta_clicked', 'went to become a partner']
 ]);
 const COUNTED = new Set([...COUNTED_EVENTS, ...LANDING_EVENTS].map(([name]) => name));
 
@@ -217,11 +220,15 @@ export const checkoutOptions = () => request('checkout', { method: 'GET' });
  * Opens a Creem checkout for Plus (`item: 'plus'`) or a gift link (`item: 'gift'`,
  * `plan` from TEAM_TIERS or PERSONAL_GIFTS). `currency` is only a hint: the server
  * charges the currency of the buyer's country when it knows it. A referral code
- * remembered on this device (rememberReferral) goes along. Answers { ok, url }.
+ * remembered on this device (rememberReferral) goes along. `license`, this
+ * planner's Plus licence, goes only with a personal gift: the server checks it
+ * and charges the member price (MEMBER_GIFT_DISCOUNT); it is not stored. Answers
+ * { ok, url, member }.
  */
-export const startCheckout = ({ item, plan = '', currency }) => {
+export const startCheckout = ({ item, plan = '', currency, license = '' }) => {
   const ref = referralCode();
-  return request('checkout', { body: ref ? { item, plan, currency, ref } : { item, plan, currency } });
+  const member = item === 'gift' && isPersonalGift(plan) && typeof license === 'string' && license.trim() ? { license: license.trim() } : {};
+  return request('checkout', { body: { item, plan, currency, ...(ref ? { ref } : {}), ...member } });
 };
 
 /* Referral codes (Creem affiliate program) -------------------------------- */
@@ -255,4 +262,34 @@ export function referralCode({ storage = globalThis.localStorage, now = Date.now
   } catch (_) {
     return '';
   }
+}
+
+/* Partner hints ------------------------------------------------------------- */
+
+// Where the planner and the gift page mention the partner program, quietly:
+// the Plus dialog (with Plus), after a share image, and the gift page. Once
+// dismissed (or followed), a place stays quiet on this device. UI prefix:
+// never synced or backed up.
+export const PARTNER_HINTS_KEY = 'daily-planner-ui:partner-hints';
+export const PARTNER_HINT_PLACES = Object.freeze(['plus', 'share', 'gift']);
+
+/** The places already dismissed on this device; [] when none or unreadable. */
+export function dismissedPartnerHints(storage = globalThis.localStorage) {
+  try {
+    const saved = JSON.parse(storage?.getItem(PARTNER_HINTS_KEY) || '[]');
+    return Array.isArray(saved) ? PARTNER_HINT_PLACES.filter(place => saved.includes(place)) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+/** True when the hint at `place` may show: the owner API is on and it was never dismissed here. */
+export const partnerHintShown = (place, storage = globalThis.localStorage) => plannerApiEnabled() && PARTNER_HINT_PLACES.includes(place) && !dismissedPartnerHints(storage).includes(place);
+
+/** Keeps the hint at `place` quiet from now on. Returns the dismissed places. */
+export function dismissPartnerHint(place, storage = globalThis.localStorage) {
+  if (!PARTNER_HINT_PLACES.includes(place)) return dismissedPartnerHints(storage);
+  const next = [...new Set([...dismissedPartnerHints(storage), place])];
+  try { storage?.setItem(PARTNER_HINTS_KEY, JSON.stringify(next)); } catch (_) {}
+  return next;
 }

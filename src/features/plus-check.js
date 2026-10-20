@@ -24,10 +24,22 @@ export const PLUS_CHECK_DELAY_MS = 4000;
 /** While the planner stays open for days, whether a check is due is asked again this often. */
 export const PLUS_CHECK_POLL_MS = 3 * 3600000;
 const NOTICE_RETRY_MS = 1500;
+/** Asks the planner to check its licence now (requestPlusCheck): heard by start(). */
+export const PLUS_RECHECK_EVENT = 'daily-planner-plus-recheck';
 
-/** Pure: true when a check should be made now. `lastAt` is 0 when this device never checked. */
-export function plusCheckDue({ now, lastAt = 0, apiOn = false, online = true, active = false }) {
+/**
+ * Asks for a licence check now, whatever the last one: the server didn't
+ * confirm the member price this planner showed (src/features/plus-dialog.js),
+ * so the licence may have been refunded since the last check.
+ */
+export function requestPlusCheck(target = globalThis) {
+  try { target.dispatchEvent?.(new CustomEvent(PLUS_RECHECK_EVENT)); } catch (_) {}
+}
+
+/** Pure: true when a check should be made now. `lastAt` is 0 when this device never checked; `force` skips the weekly interval. */
+export function plusCheckDue({ now, lastAt = 0, apiOn = false, online = true, active = false, force = false }) {
   if (!apiOn || !active || online === false) return false;
+  if (force) return true;
   const last = Number(lastAt) || 0;
   // A last check "in the future" (the clock moved back) counts as old.
   return !(last > 0 && last <= now && now - last < PLUS_CHECK_INTERVAL_MS);
@@ -72,16 +84,17 @@ export function createPlusCheck({
   let noticeTimer = 0;
 
   /**
-   * Checks the licence when due: the active one, else the revoked one kept
-   * aside. Resolves with 'skipped', 'valid', 'revoked', 'restored' or 'error'.
+   * Checks the licence when due (`force`: now): the active one, else the
+   * revoked one kept aside. Resolves with 'skipped', 'valid', 'revoked',
+   * 'restored' or 'error'.
    */
-  function run() {
+  function run({ force = false } = {}) {
     if (running) return running;
     const token = plusSettings().plus?.token || '';
     const license = plusLicense();
     const active = hasPlus() && !!token && !!license;
     const held = active ? '' : readPlusCheck().held?.token || '';
-    if (!plusCheckDue({ now: now(), lastAt: readPlusCheck().at, apiOn: apiOn(), online: online(), active: active || !!held })) return Promise.resolve('skipped');
+    if (!plusCheckDue({ now: now(), lastAt: readPlusCheck().at, apiOn: apiOn(), online: online(), active: active || !!held, force })) return Promise.resolve('skipped');
     running = (async () => {
       let result = null;
       try { result = await check(active ? token : held); } catch (_) { result = null; }
@@ -151,6 +164,8 @@ export function createPlusCheck({
     timers.setTimeout(() => { showNotice(); run(); }, PLUS_CHECK_DELAY_MS);
     timers.setInterval(() => run(), PLUS_CHECK_POLL_MS);
     globalThis.addEventListener?.('online', () => run());
+    // The Plus dialog showed a member price the server didn't confirm: check now.
+    globalThis.addEventListener?.(PLUS_RECHECK_EVENT, () => run({ force: true }));
     // Another tab found the licence revoked (or restored): follow it here too.
     globalThis.addEventListener?.('storage', event => { if (event.key === PLUS_CHECK_KEY) refreshPlus(); });
     // A licence arriving (activated, synced, restored) is checked when due.

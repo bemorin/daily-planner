@@ -153,7 +153,7 @@ test('the gift page reads a Creem return, an older confirmation link or a gift p
 });
 
 test('every count the landing page sends is in its notice, and every listed count is sent', async () => {
-  const sources = await Promise.all(['welcome/landing.js', 'welcome/thanks/thanks.js'].map(file => readFile(join(root, file), 'utf8')));
+  const sources = await Promise.all(['welcome/landing.js', 'welcome/thanks/thanks.js', 'welcome/partners/partners.js'].map(file => readFile(join(root, file), 'utf8')));
   const listed = new Set(LANDING_EVENTS.map(([name]) => name));
   const used = new Set();
   for (const source of sources) {
@@ -166,7 +166,7 @@ test('every count the landing page sends is in its notice, and every listed coun
 });
 
 test('no Stripe left on the public pages', async () => {
-  for (const file of ['welcome/index.html', 'welcome/landing.js', 'welcome/landing.css', 'welcome/landing-model.js', 'welcome/listbox.js', 'welcome/stepper.js', 'welcome/thanks/index.html', 'welcome/thanks/thanks.js']) {
+  for (const file of ['welcome/index.html', 'welcome/landing.js', 'welcome/landing.css', 'welcome/landing-model.js', 'welcome/listbox.js', 'welcome/stepper.js', 'welcome/thanks/index.html', 'welcome/thanks/thanks.js', 'welcome/partners/index.html', 'welcome/partners/partners.js', 'welcome/partners/partners-model.js']) {
     assert.doesNotMatch(await readFile(join(root, file), 'utf8'), /stripe/i, file);
   }
 });

@@ -52,7 +52,7 @@
     "author": { "@type": "Person", "name": "Ben Morin", "url": "https://bemorin.com/" },
     "offers": [
       { "@type": "Offer", "name": "Daily Planner", "description": "The planner, free for everyone.", "price": "0", "priceCurrency": "EUR" },
-      { "@type": "Offer", "name": "Daily Planner Plus", "description": "A one-time unlock: Plan your year, quarterly check-ins, Insights, Your year in review and colours for the painted year.", "price": "29", "priceCurrency": "EUR" }
+      { "@type": "Offer", "name": "Daily Planner Plus", "description": "A one-time unlock at its launch price, yours for life: Plan your year, quarterly check-ins, Insights, Your year in review and colours for the painted year.", "price": "29", "priceCurrency": "EUR" }
     ]
   }
   </script>
@@ -127,6 +127,7 @@
         <a href="#teams">Teams</a>
         <a href="#pricing">Pricing</a>
         <a href="#faq">FAQ</a>
+        <a href="./partners/">Partners</a>
       </nav>
       <div class="top__actions">
         <a class="top__teams" href="#teams">Teams</a>
@@ -661,7 +662,7 @@
         <div class="section__intro" data-reveal-each>
           <p class="kicker"><svg class="i"><use href="#i-spark"/></svg>Daily Planner Plus</p>
           <h2 id="plus-title">Make <span data-plan-year>2027</span> count.</h2>
-          <p class="lead">A ritual for every year: plan it in a guided half hour, print it and fill it in by hand, check in as each quarter ends, then look back on one page. Everything above stays free. Plus is <span data-plus-price>€29</span>, paid once, with no subscription.</p>
+          <p class="lead">A ritual for every year: plan it in a guided half hour, print it and fill it in by hand, check in as each quarter ends, then look back on one page. Everything above stays free. Plus is <span data-plus-price>€29</span><span data-launch> at its launch price</span>, paid once and yours for life.</p>
         </div>
 
         <div class="ritual" data-reveal-each>
@@ -1094,7 +1095,7 @@
             </div>
             <div class="once__copy">
               <h3 id="once-title">Paid once, on all your devices</h3>
-              <p>No subscription. Plus is saved in your planner’s settings, so Google Drive sync and backups carry it to your other devices.</p>
+              <p>Nothing to renew: Plus is saved in your planner’s settings, so Google Drive sync and backups carry it to your other devices.</p>
             </div>
           </article>
         </div>
@@ -1115,10 +1116,12 @@
             <p class="plus-buy__note">Every Plus feature for one person, today’s and those to come.</p>
           </div>
           <div class="plus-buy__offer">
+            <p class="launch" data-launch><span class="launch__badge" data-launch-label>Launch price</span></p>
             <p class="plus-buy__price"><b data-plus-price>€29</b><span>once, for life</span></p>
             <p class="plus-buy__tax" data-tax-line>In euros, taxes included</p>
             <div class="buy plus-buy__cta" data-plus-cta="plus"><button class="btn btn--primary btn--buy" type="button" disabled>Coming soon</button></div>
-            <p class="plus-buy__trust"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span>No subscription, no account. Plus is checked on your device.</span></p>
+            <p class="launch__line plus-buy__launch" data-launch data-launch-line>Pay once during the launch and Plus is yours for life. After the launch, Plus becomes a yearly subscription for new members.</p>
+            <p class="plus-buy__trust"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span>Nothing to renew, no account. Plus is checked on your device.</span></p>
           </div>
           <ul class="oks plus-buy__list" aria-label="What you get with Plus">
             <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Plan your year</b> <span>A guided half hour, printed on one page</span></span></li>
@@ -1129,8 +1132,8 @@
             <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Everything Plus gets later</b> <span>Included, at no extra cost</span></span></li>
           </ul>
           <div class="plus-buy__alts">
-            <a class="plus-buy__alt" href="#gifts"><svg class="i" aria-hidden="true"><use href="#i-gift"/></svg><span class="plus-buy__alt-name">Give it as a gift</span><span class="plus-buy__alt-price"><span data-gift-price="gift-1">€29</span>, for one person</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-            <a class="plus-buy__alt" href="#gifts"><svg class="i" aria-hidden="true"><use href="#i-family"/></svg><span class="plus-buy__alt-name">Plus Family</span><span class="plus-buy__alt-price"><span data-gift-price="family-5">€99</span>, up to 5 people at home</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+            <a class="plus-buy__alt" href="#gifts"><svg class="i" aria-hidden="true"><use href="#i-gift"/></svg><span class="plus-buy__alt-name">Give it as a gift</span><span class="plus-buy__alt-price" data-gift-offer="gift-1"><span data-gift-price="gift-1">€29</span>, for one person</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+            <a class="plus-buy__alt" href="#gifts"><svg class="i" aria-hidden="true"><use href="#i-family"/></svg><span class="plus-buy__alt-name">Plus Family</span><span class="plus-buy__alt-price" data-gift-offer="family-5"><span data-gift-price="family-5">€99</span>, up to 5 people at home</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
             <a class="plus-buy__alt" href="#teams"><svg class="i" aria-hidden="true"><use href="#i-team"/></svg><span class="plus-buy__alt-name">Giving it to a team?</span><span class="plus-buy__alt-price">From <span data-min-per-person>€5</span> per person</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
           </div>
         </div>
@@ -1225,6 +1228,7 @@
             <a class="btn btn--text-light" href="#request" data-request="question">Ask a question</a>
             <p class="band__status" data-copy-status role="status" aria-live="polite"></p>
           </div>
+          <p class="band__partner" data-teams-partner><svg class="i" aria-hidden="true"><use href="#i-link"/></svg><span><b>Coach or consultant?</b> Recommend Daily Planner to the teams you work with, and earn a commission on what they buy. <a href="./partners/">See the partner program</a></span></p>
         </div>
 
         <div class="band request" id="request" data-form-panel data-reveal>
@@ -1297,7 +1301,7 @@
       <div class="wrap">
         <div class="section__intro" data-reveal-each>
           <h2 id="pricing-title">Free to use. Paid once for more.</h2>
-          <p class="lead">The planner is free, with everything above. Plus adds what helps with the year itself, for one payment: no subscription, nothing to renew.</p>
+          <p class="lead">The planner is free, with everything above. Plus adds what helps with the year itself, for one payment<span data-launch> at its launch price</span>: nothing to renew.</p>
         </div>
 
         <div class="plans" data-reveal-each>
@@ -1319,7 +1323,7 @@
 
           <article class="plan plan--plus" aria-labelledby="plan-plus">
             <div class="plan__head">
-              <h3 class="plan__name" id="plan-plus"><svg class="i"><use href="#i-spark"/></svg>Plus</h3>
+              <h3 class="plan__name" id="plan-plus"><svg class="i"><use href="#i-spark"/></svg>Plus<span class="launch__badge" data-launch data-launch-label>Launch price</span></h3>
               <p class="plan__price"><span data-plus-price>€29</span> <small>once</small></p>
               <p class="plan__sub">For the year itself: plan it, check in each quarter, look back on one page. For one person, for life, on all your devices.</p>
             </div>
@@ -1333,13 +1337,14 @@
             </ul>
             <div class="plan__cta buy" data-plus-cta="pricing"><button class="btn btn--primary btn--buy" type="button" disabled>Coming soon</button></div>
             <div class="plan__more">
+              <p class="launch__line plan__launch" data-launch data-launch-line>Pay once during the launch and Plus is yours for life. After the launch, Plus becomes a yearly subscription for new members.</p>
               <section class="gifts" id="gifts" aria-labelledby="gifts-title" data-gifts>
-                <h4 class="gifts__title" id="gifts-title"><svg class="i"><use href="#i-gift"/></svg>Give it as a gift</h4>
+                <h4 class="gifts__title" id="gifts-title"><svg class="i"><use href="#i-gift"/></svg>Give it as a gift<span class="member__badge" data-member-badge hidden>Member price</span></h4>
                 <div class="gifts__list" data-gift-list>
                   <button class="gift-btn" type="button" disabled><span class="gift-btn__name">Give Plus</span><span class="gift-btn__note">For one person, for life</span><span class="gift-btn__price">€29</span></button>
                   <button class="gift-btn" type="button" disabled><span class="gift-btn__name">Plus Family</span><span class="gift-btn__note">Up to 5 people in one household, for life</span><span class="gift-btn__price">€99</span></button>
                 </div>
-                <p class="gifts__note">After paying, you get a link to send. Plus is theirs for life as soon as they open it.</p>
+                <p class="gifts__note" data-gifts-note>After paying, you get a link to send. Plus is theirs for life as soon as they open it.</p>
                 <p class="buy__error" role="alert" data-buy-error hidden></p>
               </section>
               <section class="teaser" aria-labelledby="teaser-title" data-plus-soon hidden>
@@ -1420,7 +1425,7 @@
               </details>
               <details class="qa" name="faq">
                 <summary>Is it really free?</summary>
-                <div class="qa__a"><p>Yes. Everything in the planner except the Plus features is free, for as long as you use it: no trial, no account and no card. Plus is an optional one-time purchase, and companies can give it to their people. That’s what pays for the planner.</p></div>
+                <div class="qa__a"><p>Yes. Everything in the planner except the Plus features is free, for as long as you use it: no trial, no account and no card. Plus is optional, paid once at its launch price, and companies can give it to their people. That’s what pays for the planner.</p></div>
               </details>
               <details class="qa" name="faq">
                 <summary>Where is my data stored?</summary>
@@ -1470,11 +1475,15 @@
               </details>
               <details class="qa" name="faq">
                 <summary>Is Plus a subscription?</summary>
-                <div class="qa__a"><p>No. You pay <span data-plus-price>€29</span> once and keep Plus for life, with the Plus features added later. It’s saved in your planner’s settings, so Google Drive sync and backups carry it to your other devices.</p></div>
+                <div class="qa__a"><p>Not if you get it now. During the launch you pay <span data-plus-price>€29</span> once and keep Plus for life, with the Plus features added later. After the launch, Plus becomes a yearly subscription for new members; if you bought it during the launch, nothing changes for you. It’s saved in your planner’s settings, so Google Drive sync and backups carry it to your other devices.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>What does “for life” mean?</summary>
+                <div class="qa__a"><p>Plus stays yours for as long as Daily Planner is offered, with no renewal and nothing more to pay. If you buy Plus during the launch, or activate a gift bought during the launch, it stays yours for life — even once Plus is sold to new buyers as a yearly subscription.</p></div>
               </details>
               <details class="qa" name="faq">
                 <summary>Can I give Plus to someone?</summary>
-                <div class="qa__a"><p>Yes. Choose Give Plus (<span data-gift-price="gift-1">€29</span>) for one person, or Plus Family (<span data-gift-price="family-5">€99</span>) for up to 5 people in one household. Right after paying, you get a link to send, by email or in a message. Whoever opens it gets Plus for life on their own planner, with your name and a message if you add them. No account needed, and the link can be activated for 12 months.</p></div>
+                <div class="qa__a"><p>Yes. Choose Give Plus (<span data-gift-price="gift-1">€29</span>) for one person, or Plus Family (<span data-gift-price="family-5">€99</span>) for up to 5 people in one household. If you already have Plus, you pay the member price: <span data-member-price="gift-1">€24</span> and <span data-member-price="family-5">€79</span>. Right after paying, you get a link to send, by email or in a message. Whoever opens it gets Plus for life on their own planner, with your name and a message if you add them. No account needed, and the link can be activated for 12 months.</p></div>
               </details>
               <details class="qa" name="faq">
                 <summary>How do I pay?</summary>
@@ -1535,6 +1544,7 @@
         <a href="#plus">Plus</a>
         <a href="#teams">Teams</a>
         <a href="#pricing">Pricing</a>
+        <a href="./partners/">Partners</a>
         <a href="#request" data-request="question">Ask a question</a>
         <span class="foot__support" data-support hidden></span>
         <span class="foot__social" data-social hidden></span>
@@ -1587,8 +1597,8 @@
             <h3 id="pv-purchases" tabindex="-1">Purchases</h3>
             <ul class="pv__list">
               <li>You pay on the page of Creem, our payment partner. Your card details never reach this site.</li>
-              <li>A purchase sends only what you chose, to open that page.</li>
-              <li>If you came through a partner’s link, its referral code (<code>?ref=</code>) is kept in this browser for 60 days and sent with a purchase, only to credit that partner.</li>
+              <li>A purchase sends only what you chose, to open that page. If you have Plus in this browser, a gift also sends your licence, so the server can give you the member price; it’s checked, not stored.</li>
+              <li>If you came through a partner’s link, its referral code (<code>?ref=</code>) is kept in this browser for 60 days and sent with a purchase to credit that partner. Once you’ve paid, the code is kept with the sale, so we can see which partners bring sales. It names the partner, not you.</li>
             </ul>
           </div>
         </section>

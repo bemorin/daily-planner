@@ -13,7 +13,12 @@
 //         whose `order` leads back to the checkout), header x-api-key
 //         https://api.creem.io (live) or https://test-api.creem.io (test)
 //         A partner's code goes in `affiliate_code` (Creem's affiliate program);
-//         Creem refuses an unknown code with HTTP 400.
+//         Creem refuses an unknown code with HTTP 400. The same code goes in the
+//         metadata (`ref`) and in the seal, so the sale can be listed by partner
+//         once it is paid — only when our API opened the checkout. (Creem's order
+//         has an `affiliate` field, but its docs don't say whether it holds the
+//         code or an id, so the sealed `ref` is what is listed.)
+//         A gift at the member price (the buyer has Plus) carries `member: '1'`.
 // Webhook header creem-signature = hex HMAC-SHA256(raw body, CREEM_WEBHOOK_SECRET)
 // Env     CREEM_API_KEY, CREEM_WEBHOOK_SECRET, CREEM_PLUS_EUR, CREEM_PLUS_USD,
 //         CREEM_GIFT_EUR, CREEM_GIFT_USD, CREEM_TEST_MODE ('1'; a creem_test_ key also means test)
@@ -180,7 +185,13 @@ export const creemIdOf = value => {
  * its metadata does not match it. `org` is the name typed on the checkout: the
  * company (`company`) for a team gift, the giver (`from`) for a personal gift.
  * `orderId` is Creem's order (kept so a later refund can be traced back), '' when absent.
+ * `ref` is the partner code from the metadata ('' when none or malformed) and
+ * `member` whether a gift was sold at the member price: both are in the seal,
+ * and count for nothing without it (see sealedCheckout in server/planner-api.js).
  */
+/** The member flag of a checkout's metadata: we send '1'; 1, true or 'true' read the same. */
+export const memberFlag = value => /^(?:1|true)$/i.test(String(value ?? '').trim());
+
 export function readCheckout(checkout, products = new Map()) {
   const entity = objectOrNull(checkout) || {};
   const order = objectOrNull(entity.order);
@@ -217,27 +228,35 @@ export function readCheckout(checkout, products = new Map()) {
     requestId: String(entity.request_id ?? ''),
     seal: { rid: String(metadata.rid ?? ''), currency: String(metadata.currency ?? ''), value: String(metadata.seal ?? '') },
     orderId: creemIdOf(entity.order),
-    mode: creemModeOf(entity.mode)
+    mode: creemModeOf(entity.mode),
+    // The partner whose link the sale came through ('' when none), and whether a gift was sold at the member price.
+    // Both are only claims until checkoutSealValid() says our API sealed them. The flag is read leniently
+    // ('1', 1, true or 'true'), in case Creem gives back metadata typed differently from what was sent.
+    ref: affiliateCode(metadata.ref),
+    member: memberFlag(metadata.member)
   };
 }
 
 /**
- * The seal our API puts in a checkout's metadata: an HMAC (with the Plus
- * signing secret) of what it sells. Creem's product links let anyone add
- * metadata, so a gift is honoured only with a valid seal — a link opened by
- * hand cannot claim a bigger pack than it paid for.
+ * The seal our API puts in a checkout's metadata (Plus and gifts): an HMAC
+ * (with the Plus signing secret) of what it sells. Creem's product links let
+ * anyone add metadata, so a gift is honoured only with a valid seal — a link
+ * opened by hand cannot claim a bigger pack than it paid for — and a partner
+ * code or the member price count only when sealed. A gift at the member price
+ * seals that (`|member`), a partner's code seals itself (`|ref:CODE`), so
+ * neither can be added afterwards; a seal with neither is unchanged.
  */
-export async function checkoutSeal(secret, { kind, plan = '', currency, rid }) {
-  return (await webhookSignature(`checkout-seal:${kind}|${plan}|${currency}|${rid}`, secret)).slice(0, 32);
+export async function checkoutSeal(secret, { kind, plan = '', currency, rid, member = false, ref = '' }) {
+  return (await webhookSignature(`checkout-seal:${kind}|${plan}|${currency}|${rid}${member ? '|member' : ''}${ref ? `|ref:${ref}` : ''}`, secret)).slice(0, 32);
 }
 
-/** True when `paid` (from readCheckout) carries a valid seal for its item and the product's currency. */
+/** True when `paid` (from readCheckout) carries a valid seal for its item, the product's currency, its member flag and its partner code. */
 export async function checkoutSealValid(secret, paid) {
   const { rid, currency, value } = paid?.seal || {};
   if (!secret || !paid?.item || !rid || !/^[0-9a-f]{32}$/.test(value) || currency !== paid.productCurrency) return false;
   // The seal belongs to the checkout our API opened: when Creem reports the request id, it must be the sealed one.
   if (paid.requestId && paid.requestId !== rid) return false;
-  return timingSafeEqual(await checkoutSeal(secret, { kind: paid.item.kind, plan: paid.item.plan, currency, rid }), value);
+  return timingSafeEqual(await checkoutSeal(secret, { kind: paid.item.kind, plan: paid.item.plan, currency, rid, member: paid.member === true, ref: paid.ref || '' }), value);
 }
 
 const hmacKeys = new Map();

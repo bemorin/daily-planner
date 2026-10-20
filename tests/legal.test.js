@@ -38,7 +38,7 @@ test('the four legal pages exist, and each footer links all four in order', asyn
   for (const [folder, file] of Object.entries(PAGES)) {
     const html = await read(file);
     assert.match(html, /^<!doctype html>/i, file);
-    assert.match(html, /Last updated: <time datetime="2026-10-19">19 October 2026<\/time>/, `${file} shows the date`);
+    assert.match(html, /Last updated: <time datetime="2026-10-20">20 October 2026<\/time>/, `${file} shows the date`);
     const legalLinks = hrefs(footerOf(html)).map(href => resolveHref(folder, href)).filter(path => path.startsWith('legal'));
     assert.deepEqual(legalLinks, ['legal/privacy/', 'legal/terms/', 'legal/cookies/', 'legal/'], `${file} footer: Privacy · Terms · Cookies · Legal notice`);
     assert.match(footerOf(html), /aria-current="page"/, `${file} marks itself in the footer`);
@@ -197,6 +197,30 @@ test('the legal pages say a refund switches Plus off and that the licence is che
   assert.doesNotMatch(text(cookies), /None of it is sent to us\. /, 'the licence check is the one exception');
 });
 
+test('after the launch: the marketing says it short, the terms say it with care, the FAQ uses the terms’ words', async () => {
+  const after = 'After the launch, Plus becomes a yearly subscription for new members.';
+  assert.equal(pricing.LAUNCH.after, after);
+  const landing = await read('welcome/index.html');
+  assert.ok(landing.includes(after), 'landing');
+  const terms = text(await read('legal/terms/index.html'));
+  assert.match(terms, /If you buy Plus during the launch, or activate a gift bought during the launch, Plus is yours for life\. After the launch, Plus is planned to be sold to new buyers as a yearly subscription; licences bought or gifts bought during the launch stay valid for life\./);
+  const forLife = /<summary>What does “for life” mean\?<\/summary>\s*<div class="qa__a"><p>([\s\S]*?)<\/p>/.exec(landing)?.[1] || '';
+  assert.match(forLife, /activate a gift bought during the launch/);
+  assert.doesNotMatch(forLife, /received as a gift/);
+});
+
+test('a partner code is said to be kept with the sale’s record; partners’ own purchases earn nothing', async () => {
+  const privacy = text(await read('legal/privacy/index.html'));
+  assert.doesNotMatch(privacy, /nothing else about you is kept with/);
+  assert.match(privacy, /kept with the sale’s record/);
+  const notice = await read('src/features/privacy.js');
+  assert.doesNotMatch(notice, /Nothing else goes with it/);
+  assert.match(notice, /the code is kept with the sale’s record/);
+  const own = /Purchases a partner makes themselves through their own link, for themselves or as a gift, don’t earn a commission\./;
+  assert.match(text(await read('legal/terms/index.html')), own);
+  assert.match(await read('welcome/partners/index.html'), /<summary>Do my own purchases count\?<\/summary>\s*<div class="qa__a"><p>No\. Purchases you make yourself through your own link, for yourself or as a gift, don’t earn a commission\./);
+});
+
 test('the 60 days in the privacy and cookies pages match how long a partner code is used', async () => {
   for (const file of ['legal/privacy/index.html', 'legal/cookies/index.html']) assert.match(text(await read(file)), /60 days/, file);
   const stored = new Map();
@@ -210,8 +234,12 @@ test('the 60 days in the privacy and cookies pages match how long a partner code
 test('prices and Plus features in the terms come from src/lib/pricing.js', () => {
   const items = legal.priceItems();
   const money = (price, currency) => pricing.formatMoney(price[currency], currency);
-  assert.equal(items[0], `Daily Planner Plus: ${money(pricing.PLUS_PRICE, 'EUR')} / ${money(pricing.PLUS_PRICE, 'USD')}`);
+  assert.equal(items[0], `Daily Planner Plus${pricing.LAUNCH.active ? ', at its launch price' : ''}: ${money(pricing.PLUS_PRICE, 'EUR')} / ${money(pricing.PLUS_PRICE, 'USD')}`);
   for (const gift of pricing.PERSONAL_GIFTS) assert.ok(items.some(item => item.startsWith(`${gift.label}: ${money(gift.price, 'EUR')} / ${money(gift.price, 'USD')}`)), gift.label);
+  // The member price, for someone who already has Plus.
+  const member = plan => ['EUR', 'USD'].map(currency => pricing.formatMoney(pricing.memberGiftPrice(plan, currency), currency)).join(' / ');
+  assert.ok(items[1].endsWith(`; ${member('gift-1')} for someone who already has Plus)`), items[1]);
+  assert.ok(items[2].endsWith(`; ${member('family-5')} for someone who already has Plus)`), items[2]);
   const smallest = pricing.TEAM_TIERS[0];
   assert.ok(items.some(item => item.includes(`from ${money(smallest.price, 'EUR')} / ${money(smallest.price, 'USD')} for up to ${smallest.seats} people`)));
   const features = legal.featuresText();
@@ -233,10 +261,13 @@ test('without JavaScript, the terms and the landing’s descriptions still list 
 
 test('the cookies page lists every storage key the code uses', async () => {
   const cookies = await read('legal/cookies/index.html');
-  const sources = ['src/lib/planner-api.js', 'src/lib/plus.js', 'src/features/plus-check.js', 'src/features/plus-dialog.js', 'src/features/feedback.js', 'src/features/sync-guide.js', 'src/features/progress-view.js', 'src/features/paint-palettes.js', 'src/ui/theme.js', 'src/sync/ledger.js'];
+  // Every script of the planner, the welcome pages and the admin, so a new key can't be missed.
+  const sources = ['app.js', 'index.html', ...(await walk('src')), ...(await walk('welcome')), ...(await walk('admin'))].filter(file => /\.(?:js|mjs|html)$/.test(file));
+  assert.ok(sources.includes('src/features/tour-model.js') && sources.includes('src/features/first-use-model.js') && sources.includes('src/features/pip-window.js'), 'nested modules are read');
   const keys = new Set();
-  for (const file of sources) for (const match of (await read(file)).matchAll(/'(daily-planner-(?:ui|sync):[a-z-]+)'/g)) keys.add(match[1]);
-  assert.ok(keys.size >= 12, `found ${keys.size} keys`);
+  for (const file of sources) for (const match of (await read(file)).matchAll(/['"`](daily-planner-(?:ui|sync):[a-z0-9-]+)['"`]/g)) keys.add(match[1]);
+  assert.ok(keys.size >= 21, `found ${keys.size} keys`);
+  for (const key of ['daily-planner-ui:tips', 'daily-planner-ui:tour', 'daily-planner-ui:share', 'daily-planner-ui:pip-view', 'daily-planner-ui:pip-size', 'daily-planner-ui:pip-unresolved', 'daily-planner-ui:partner-hints']) assert.ok(keys.has(key), `${key} found in the code`);
   for (const key of keys) assert.ok(cookies.includes(`<code>${key}</code>`), `${key} is listed`);
   assert.match(cookies, /<code>daily-planner-recovery<\/code>/, 'the recovery snapshots (IndexedDB)');
   assert.match(cookies, /<code>daily-planner:<\/code>/, 'the planner itself');

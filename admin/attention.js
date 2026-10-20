@@ -112,13 +112,13 @@ const within = (iso, now, days) => {
 const PAYMENT_ITEMS = ['plus', 'gift'];
 const PAYMENT_CURRENCIES = ['EUR', 'USD'];
 const LEGAL_FIELDS = [['SUPPORT_EMAIL', 'contact address'], ['LEGAL_ADDRESS', 'postal address']];
-const MIGRATIONS = [['teamRequestsUnavailable', '0002_team_requests.sql'], ['plusUnavailable', '0003_plus.sql'], ['reviewsUnavailable', '0004_creem_reviews.sql'], ['refundsUnavailable', '0005_refunds.sql']];
+const MIGRATIONS = [['teamRequestsUnavailable', '0002_team_requests.sql'], ['plusUnavailable', '0003_plus.sql'], ['reviewsUnavailable', '0004_creem_reviews.sql'], ['refundsUnavailable', '0005_refunds.sql'], ['partnersUnavailable', '0006_partners.sql']];
 const listed = words => (words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}` : words[0] || '');
 
 /**
  * The state of each Setup item ('ok', 'warn' or 'missing') and, when it is
  * not ok, one short sentence per problem. `config` is the page's runtime
- * config (legal details, the app's Plus public key); `pageVersion` this
+ * config (legal details, the app's Plus public key, the partner sign-up link); `pageVersion` this
  * dashboard's own version. [] when the API does not report its setup.
  */
 export function setupChecks(summary, { config = {}, pageVersion = '' } = {}) {
@@ -156,6 +156,8 @@ export function setupChecks(summary, { config = {}, pageVersion = '' } = {}) {
   }
 
   add('links', 'ok');
+  // Partners: “Become a partner” needs the Creem affiliate sign-up link (a build variable).
+  add('partners', /^https:\/\/\S+$/.test(String(config.AFFILIATE_URL || '').trim()) ? 'ok' : 'warn', ['Partners: the Creem sign-up link isn’t set']);
   const legalMissing = LEGAL_FIELDS.filter(([key]) => !String(config[key] || '').trim()).map(([, label]) => label);
   add('legal', legalMissing.length ? 'warn' : 'ok', [`Legal pages: ${listed(legalMissing)} missing`]);
 

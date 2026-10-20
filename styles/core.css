@@ -890,7 +890,15 @@ body.has-modal { overflow: hidden; }
 
 .github-support { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
 
-.github-support__actions { display: flex; gap: .5rem; flex-wrap: wrap; justify-content: flex-end; }
+.github-support > div:first-child { flex: 1 1 auto; min-width: 0; }
+
+.github-support__actions { flex: 0 0 auto; display: flex; gap: .5rem; justify-content: flex-end; }
+
+.github-support__actions a { white-space: nowrap; }
+
+.github-support__actions svg { width: 15px; height: 15px; flex: 0 0 auto; }
+
+.github-support__actions .icon-fill { fill: currentColor; stroke: none; }
 
 .bemorin-footer {
   margin-top: 1.15rem;
@@ -1272,7 +1280,8 @@ textarea,
   .example-list > div { grid-template-columns: 1fr; gap: .16rem; }
   .storage-card,
 .github-support { align-items: flex-start; flex-direction: column; }
-  .github-support__actions { justify-content: flex-start; }
+  .github-support__actions { flex-wrap: wrap; justify-content: flex-start; }
+  .github-support__actions a { flex: 1 1 180px; min-height: 40px; }
   .bemorin-footer { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .6rem; }
 }
 
@@ -2653,7 +2662,6 @@ h3,
   .time-input { flex: 1 1 auto; width: auto; min-width: 0; }
 }
 
-[data-end-day-modal] .modal__scroll { height: calc(100% - 50px); max-height: calc(100% - 50px); }
 
 /* Time menu: the whole remaining right side is the button, with the chevron at the far edge. */
 
@@ -2713,20 +2721,28 @@ h3,
 
 /* Schedule action buttons share the same physical rhythm. */
 
-/* Close day should never stretch one item to consume the modal. */
+/* Close day should never stretch one item to consume the modal. Its footer is always in view: the dialog is as
+   tall as its content, up to the window, and its scroll area shrinks to fit inside it (margins included) and
+   scrolls under the footer. The form adds no box of its own, so the footer sticks to the dialog's scroll area,
+   wherever the list is. With room, only the carry list scrolls; in a short window (a phone, say) the whole dialog
+   scrolls instead. */
 
-[data-end-day-modal] .modal__panel { height: auto; max-height: calc(100dvh - 1.4rem); }
+[data-end-day-modal] .modal__panel { height: auto; max-height: calc(100dvh - 1.4rem); display: flex; flex-direction: column; }
 
 [data-end-day-modal] .modal__scroll {
-  height: auto; max-height: calc(100dvh - 2.2rem); overflow: hidden;
+  flex: 0 1 auto; min-height: 0; height: auto; max-height: none; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
   display: block;
 }
 
-[data-end-day-form] { min-height: 0; display: block; }
+[data-end-day-form] { min-height: 0; display: contents; }
 
 .end-day-list {
   min-height: 0; max-height: min(36dvh, 330px); height: auto;
   overflow-y: auto; overscroll-behavior: contain; padding-right: 7px; margin: 0;
+}
+
+@media (max-width: 620px), (max-height: 720px) {
+  .end-day-list { max-height: none; overflow: visible; }
 }
 
 .end-day-list-head { margin-top: 11px; }
@@ -2844,6 +2860,11 @@ div.open-work-row__main { cursor: default; }
 
 .github-support,
 .storage-card { align-items: center; }
+
+/* A phone stacks the GitHub card: its buttons share the full width below the words. */
+@media (max-width: 620px) {
+  .help-priority-card.github-support { align-items: stretch; }
+}
 
 .storage-card__copy { display: grid; align-content: center; }
 

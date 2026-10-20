@@ -3,7 +3,8 @@
 import * as config from '../src/config.js';
 import { LANDING_EVENTS, trackEvent, plannerApiEnabled, checkoutOptions, startCheckout, rememberReferral, setUsageCountsEnabled, usageCountsEnabled } from '../src/lib/planner-api.js';
 import { animate } from '../src/vendor/motion.js';
-import { PERSONAL_GIFTS, PLUS_PRICE, PLUS_FEATURES, PLUS_UPCOMING, TEAM_TIERS, formatMoney, isPersonalGift } from '../src/lib/pricing.js';
+import { LAUNCH, PERSONAL_GIFTS, PLUS_PRICE, PLUS_FEATURES, PLUS_UPCOMING, TEAM_TIERS, formatMoney, isPersonalGift, memberGiftPrice, memberPriceNotice } from '../src/lib/pricing.js';
+import { savedPlusToken, verifyPlusToken, writePlusCheck } from '../src/lib/plus.js';
 import { TEAM_ROWS, buyState, checkoutUrl, countedMoments, currencyLine, defaultPlan, lowestPerPerson, monthWeeks, pageCurrency, perPerson, personalOffer, planForPeople, planRow, readCheckoutOptions, ritualYear, statusTone, taxLine, tierLabel, tierPrice, upcomingSentence } from './landing-model.js';
 import { createListbox } from './listbox.js';
 import { createPaletteCard } from './palette-card.js';
@@ -17,6 +18,10 @@ import { createStepper } from './stepper.js';
    exactly those amounts). Online checkout is Creem, through the owner API:
    GET /api/checkout says what can be bought, and in which currency this
    visitor pays (the euro area in EUR, everyone else in USD; no switch).
+   The launch price (LAUNCH) shows wherever Plus has a price ([data-launch]).
+   A visitor whose planner (same site) has Plus sees the member price of the
+   personal gifts; the licence goes with a gift checkout, and the server
+   checks it before charging that price.
 
    PROPOSALS TO CONFIRM BEFORE PUBLISHING (owner decision pending):
    - `pricingNote` (check the wording with your accountant);
@@ -83,6 +88,9 @@ const KINDS = {
   question: { label: 'Question', title: 'Ask a question', intro: 'Ask anything about the planner, Plus or the team gift. You’ll get a reply by email.', submit: 'Send the question', done: 'Thanks, your question is in. You’ll get a reply by email' },
   talk: { label: 'Remote talk', title: 'Ask about the talk', intro: 'Tell us about your team and when a remote talk would help. You’ll get a reply by email.', submit: 'Send the request', done: 'Thanks, your message is in. You’ll get a reply by email' }
 };
+// A question about the partner program (?ask=question&topic=partners, from the partners page
+// while its Creem sign-up link isn't set): the same form, its own title and a first line.
+const PARTNER_QUESTION = { title: 'Ask about the partner program', intro: 'Tell us who you are and who you’d recommend Daily Planner to. You’ll get a reply by email.', message: 'Partner program: ' };
 
 const qs = (selector, root = document) => root.querySelector(selector);
 const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -142,6 +150,32 @@ function loadSaleOptions() {
 }
 
 const saleFor = item => buyState({ apiOn, options: sale.options, item, currency });
+
+/* Members: Plus in this browser's planner (the same site) -------------------- */
+
+// The licence is read from the planner's settings and its signature checked
+// here, only to show the member price; the server checks it again (and that
+// it wasn't refunded) before charging that price. Nothing is sent until a
+// gift checkout.
+const member = { token: '', active: false };
+
+async function checkMember() {
+  const token = savedPlusToken();
+  if (!token || !apiOn) return;
+  const license = await verifyPlusToken(token).catch(() => null);
+  if (!license) return;
+  member.token = token;
+  member.active = true;
+  renderGifts();
+}
+
+/** A personal gift's price for this visitor: { amount, was } — `was` is the usual price when the member price applies. */
+function giftPriceFor(plan) {
+  const offer = personalOffer(plan, currency);
+  if (!offer || offer.amount == null) return { amount: null, was: null };
+  const reduced = member.active ? memberGiftPrice(plan, currency) : null;
+  return reduced != null && reduced < offer.amount ? { amount: reduced, was: offer.amount } : { amount: offer.amount, was: null };
+}
 
 /* Offer: Plus, personal gifts, team tiers, talk ---------------------------- */
 
@@ -204,6 +238,13 @@ function plusCta(box) {
   box.replaceChildren(...children);
 }
 
+/* The launch price: a badge and one line wherever Plus has a price (LAUNCH in pricing.js). */
+function renderLaunch() {
+  qsa('[data-launch]').forEach(node => { node.hidden = !LAUNCH.active; });
+  qsa('[data-launch-label]').forEach(node => { node.textContent = LAUNCH.label; });
+  qsa('[data-launch-line]').forEach(node => { node.textContent = LAUNCH.line; });
+}
+
 function renderPlus() {
   const price = PLUS_PRICE[currency];
   qsa('[data-plus-price]').forEach(node => { node.textContent = Number.isFinite(price) ? money(price) : ''; });
@@ -211,30 +252,55 @@ function renderPlus() {
   qsa('[data-plus-cta]').forEach(plusCta);
 }
 
-/* Give Plus and Plus Family: a gift link bought online, sent by the buyer. */
+/*
+ * Give Plus and Plus Family: a gift link bought online, sent by the buyer. A
+ * member sees the member price first and the usual one after it: “Member
+ * price €24 · was €29”.
+ */
 function renderGifts() {
   const list = qs('[data-gift-list]');
-  if (!list) return;
-  const state = saleFor('gift');
-  list.replaceChildren(...PERSONAL_GIFTS.map(gift => {
-    const offer = personalOffer(gift.plan, currency);
-    const price = offer.amount == null ? '' : money(offer.amount);
-    const buyable = state.buyable && offer.amount != null;
-    return el('button', {
-      class: 'gift-btn',
-      type: 'button',
-      'data-buy': buyable ? 'gift' : null,
-      'data-plan': gift.plan,
-      disabled: !buyable,
-      'aria-label': `${gift.label}, ${gift.note.toLowerCase()}, ${price}`
-    }, el('span', { class: 'gift-btn__icon', 'aria-hidden': 'true', html: '<svg class="i"><use href="#i-gift"/></svg>' }),
-    el('span', { class: 'gift-btn__name' }, gift.label),
-    el('span', { class: 'gift-btn__note' }, gift.note),
-    el('span', { class: 'gift-btn__price' }, price));
-  }));
+  if (list) {
+    const state = saleFor('gift');
+    list.replaceChildren(...PERSONAL_GIFTS.map(gift => {
+      const { amount, was } = giftPriceFor(gift.plan);
+      const price = amount == null ? '' : money(amount);
+      const buyable = state.buyable && amount != null;
+      return el('button', {
+        class: `gift-btn${was != null ? ' gift-btn--member' : ''}`,
+        type: 'button',
+        'data-buy': buyable ? 'gift' : null,
+        'data-plan': gift.plan,
+        disabled: !buyable,
+        'aria-label': `${gift.label}, ${gift.note.toLowerCase()}, ${was != null ? `member price ${price}, was ${money(was)}` : price}`
+      }, el('span', { class: 'gift-btn__icon', 'aria-hidden': 'true', html: '<svg class="i"><use href="#i-gift"/></svg>' }),
+      el('span', { class: 'gift-btn__name' }, gift.label),
+      el('span', { class: 'gift-btn__note' }, gift.note),
+      el('span', { class: 'gift-btn__price' }, price, was != null ? el('small', {}, `was ${money(was)}`) : null));
+    }));
+  }
+  const badge = qs('[data-member-badge]');
+  if (badge) badge.hidden = !member.active;
+  const note = qs('[data-gifts-note]');
+  if (note) note.textContent = member.active
+    ? 'As a Plus member, you pay the member price. After paying, you get a link to send: Plus is theirs for life as soon as they open it.'
+    : 'After paying, you get a link to send. Plus is theirs for life as soon as they open it.';
   qsa('[data-gift-price]').forEach(node => {
     const offer = personalOffer(node.dataset.giftPrice, currency);
     if (offer?.amount != null) node.textContent = money(offer.amount);
+  });
+  qsa('[data-member-price]').forEach(node => {
+    const reduced = memberGiftPrice(node.dataset.memberPrice, currency);
+    if (reduced != null) node.textContent = money(reduced);
+  });
+  // The ways to give it, under the Plus offer: “Member price €24 · was €29” for a member.
+  qsa('[data-gift-offer]').forEach(node => {
+    const plan = node.dataset.giftOffer;
+    const { amount, was } = giftPriceFor(plan);
+    if (amount == null) return;
+    const after = plan === 'family-5' ? ', up to 5 people at home' : ', for one person';
+    node.replaceChildren(...(was != null
+      ? ['Member price ', el('b', {}, money(amount)), ` · was ${money(was)}`]
+      : [el('span', { 'data-gift-price': plan }, money(amount)), after]));
   });
 }
 
@@ -299,6 +365,7 @@ function renderCurrencyCopy() {
 }
 
 function renderOffers() {
+  renderLaunch();
   renderPlus();
   renderGifts();
   renderTiers();
@@ -387,10 +454,47 @@ function setBusy(button, busy) {
 
 let openRequest = () => {};
 
+/*
+ * The member price was shown, but the checkout the server opened charges the
+ * usual price (the licence was refunded, or couldn't be checked): said under
+ * the gifts before paying, with Continue (to that checkout) and Cancel. The
+ * page then shows the usual prices, and the planner checks its licence the
+ * next time it opens.
+ */
+function hideMemberCheck() {
+  qs('[data-member-check]')?.remove();
+}
+
+function showMemberCheck(plan, text, url) {
+  hideMemberCheck();
+  const box = qs('[data-gifts]');
+  if (!box) return false;
+  const cancel = el('button', { class: 'btn btn--ghost btn--sm', type: 'button' }, 'Cancel');
+  const go = el('button', { class: 'btn btn--primary btn--sm', type: 'button' }, 'Continue');
+  const check = el('div', { class: 'member-check', 'data-member-check': true },
+    el('p', { role: 'alert' }, text),
+    el('div', { class: 'member-check__actions' }, cancel, go));
+  cancel.addEventListener('click', () => {
+    hideMemberCheck();
+    qs(`[data-buy="gift"][data-plan="${CSS.escape(plan)}"]`)?.focus();
+  });
+  go.addEventListener('click', () => {
+    go.disabled = true;
+    cancel.disabled = true;
+    go.textContent = 'Opening checkout…';
+    location.assign(url);
+  });
+  box.insertBefore(check, qs('[data-buy-error]', box));
+  check.scrollIntoView({ block: 'center' });
+  go.focus({ preventScroll: true });
+  return true;
+}
+
 async function buy(clicked) {
   const item = clicked.dataset.buy;
   const plan = clicked.dataset.plan || '';
   const personal = item === 'gift' && isPersonalGift(plan);
+  hideMemberCheck();
   // Loading the sale options can re-render the offers: always act on the button now on the page.
   const selector = `[data-buy="${CSS.escape(item)}"]${plan ? `[data-plan="${CSS.escape(plan)}"]` : ':not([data-plan])'}`;
   const current = () => (clicked.isConnected ? clicked : qs(selector) || clicked);
@@ -411,8 +515,18 @@ async function buy(clicked) {
     if (item === 'gift' && !personal) openRequest({ kind: 'invoice', plan });
     return;
   }
-  const result = await startCheckout({ item, plan, currency });
+  // A member's personal gift: the licence goes along, for the member price (checked by the server).
+  const shown = personal && giftPriceFor(plan).was != null;
+  const result = await startCheckout({ item, plan, currency, license: personal && member.active ? member.token : '' });
   const url = result.ok ? checkoutUrl(result.url) : '';
+  const notice = url && personal ? memberPriceNotice(plan, currency, { shown, confirmed: result.member === true }) : '';
+  if (notice) {
+    // The usual prices from now on, and the planner checks its licence when it next opens.
+    member.active = false;
+    writePlusCheck({ at: 0 });
+    renderGifts();
+    if (showMemberCheck(plan, notice, url)) return;
+  }
   if (url) {
     // The button stays busy while the browser leaves for the checkout.
     location.assign(url);
@@ -433,6 +547,7 @@ function setupBuy() {
   window.addEventListener('pageshow', event => {
     if (!event.persisted) return;
     qsa('[data-buy].is-busy').forEach(button => setBusy(button, false));
+    hideMemberCheck();
   });
 }
 
@@ -500,7 +615,7 @@ async function copyText(text) {
 /* Requests: invoice, quote or question ------------------------------------ */
 
 const requestMode = apiOn ? 'api' : (EMAIL_RE.test(LANDING.contactEmail || '') ? 'mailto' : 'off');
-const request = { kind: 'invoice', peopleTouched: false, opened: false, quoted: false, plan: null, timing: null, people: null };
+const request = { kind: 'invoice', topic: '', peopleTouched: false, opened: false, quoted: false, plan: null, timing: null, people: null };
 
 const planOptions = () => TEAM_ROWS.map(row => {
   const price = tierPrice(row, currency);
@@ -610,7 +725,7 @@ function setupRequest() {
 
   function applyKind() {
     matchKindToPlan();
-    const copy = KINDS[request.kind];
+    const copy = request.kind === 'question' && request.topic === 'partners' ? { ...KINDS.question, ...PARTNER_QUESTION } : KINDS[request.kind];
     title.textContent = copy.title;
     intro.textContent = requestMode === 'mailto' ? 'Fill this in and your email app will open with the request, ready to send.' : copy.intro;
     // Below the choice, so the buttons never move under the pointer.
@@ -635,6 +750,8 @@ function setupRequest() {
   }
 
   function open({ kind, plan: chosen }) {
+    // Any other request from the page's own links is no longer about the partner program.
+    request.topic = '';
     showForm();
     setKind(kind || request.kind, false);
     if (chosen) setPlan(chosen, true);
@@ -688,6 +805,13 @@ function setupRequest() {
   // Arriving from a link such as ../?ask=question#request.
   const ask = new URLSearchParams(location.search).get('ask');
   setKind(KINDS[ask] ? ask : 'invoice');
+  // “Become a partner” on the partners page, before the Creem sign-up link is set: a question about the program.
+  if (ask === 'question' && new URLSearchParams(location.search).get('topic') === 'partners') {
+    request.topic = 'partners';
+    if (!field('message').value) field('message').value = PARTNER_QUESTION.message;
+    updateCount();
+    applyKind();
+  }
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
@@ -1607,6 +1731,7 @@ if (apiOn) rememberReferral();
 renderYears();
 buildPaint();
 setupOffers();
+checkMember();
 setupCompare();
 setupBuy();
 renderFooter();

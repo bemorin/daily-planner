@@ -2,6 +2,15 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.27.0 — 2026-10-20
+
+- **Tips the first time you open a dialog**: Close day, the block editor, the weekly review, Horizon, the journal, Unresolved, Time stats and Insights, search and Settings each show a short spotlight guide once (Esc or Got it closes only the guide; typing is never blocked). How it works → Tips → Show tips again.
+- The tour sets the names of what it points at in bold; every How it works item does too. The How it works rows keep their button on the right on a computer; View on GitHub and Sponsor on GitHub carry the GitHub mark, under “Source code” (source-available, not open source).
+- **Launch price**: Plus shows a “Launch price” badge and says it: paid once during the launch, yours for life; after the launch, Plus becomes a yearly subscription for new members. The terms say launch buyers (and people who activate a gift bought during the launch) keep Plus for life.
+- **Member price on gifts**: with Plus, Give Plus costs €24/$24 instead of €29/$29 and Plus Family €79/$79 instead of €99/$99, checked by the server from the member's licence (never sent to Creem).
+- **Partners**: a Partners page (`/welcome/partners/`) explains the program run through Creem's Affiliate Hub; the partner code of each paid sale is recorded (migration `0006_partners.sql`) and the dashboard's Partners card shows sales by code. Quiet, dismissible invitations to become a partner in the Plus window (members), after a share image, on the gift page and in the team section. New build variables `DAILY_PLANNER_AFFILIATE_URL` and `DAILY_PLANNER_AFFILIATE_COMMISSION`.
+- If a member price cannot be confirmed, checkout says so and asks before going on at the usual price. Partner sales are recorded only from sealed checkouts; the Partners card keeps test sales apart and subtracts partial refunds. A guide closes on any key other than Esc, Enter, the arrows, Tab and Space, and that key still reaches the planner. Close day fits a 360 × 640 phone.
+
 ## 1.26.0 — 2026-10-20
 
 - **A guided tour of the planner**: right after setup (once), a spotlight tour shows each part — Day · Week · Horizon, moving through days, outcomes and tasks, the schedule, Close day, the year, the journal and Unresolved, stats and Insights, search, the floating window and print, Settings and Help — with each keyboard shortcut on a computer and a phone version that follows the bottom tabs. Existing users are offered it once; it is always in How it works and, on a phone, in More.

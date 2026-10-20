@@ -39,6 +39,8 @@
 .plus-promise svg,
 .plus-status svg,
 .plus-teams__icon svg,
+.plus-partner__icon svg,
+.plus-partner__close svg,
 .plus-sheet__mark svg,
 .plus-gift__mark svg,
 .plus-celebrate__mark svg,
@@ -59,6 +61,13 @@
 
 /* No currency to choose: the buyer's country decides, said once, quietly. */
 .plus-currency-note { margin: 7px 0 0; color: var(--faint); font-size: .7rem; font-weight: 560; line-height: 1.4; }
+
+/* The launch price (LAUNCH in pricing.js): a small badge over the price, and what comes after it in one line. */
+.plus-launch { margin: 0 0 10px; }
+
+.plus-launch__badge { display: inline-flex; align-items: center; min-height: 20px; padding: 0 8px; border-radius: 999px; background: color-mix(in srgb, var(--plus-accent) 12%, var(--surface-strong)); color: color-mix(in srgb, var(--plus-accent) 82%, var(--ink)); font-size: .64rem; font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
+
+.plus-launch__after { margin: 9px 0 0; color: var(--muted); font-size: .72rem; line-height: 1.45; }
 
 .modal__header .plus-lede { max-width: 46ch; margin: 10px 0 0; color: var(--muted); font-size: .84rem; line-height: 1.55; text-wrap: pretty; }
 
@@ -478,6 +487,8 @@
 
 .plus-bar__price { display: flex; align-items: baseline; gap: 7px; margin: 0; }
 
+.plus-bar__price .plus-bar__badge { align-self: center; margin-right: 3px; }
+
 .plus-bar__price strong { font-size: 1.2rem; font-weight: 720; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
 
 .plus-bar__price span { color: var(--muted); font-size: .78rem; font-weight: 620; white-space: nowrap; }
@@ -536,6 +547,15 @@
 
 .plus-gifts__row { display: flex; flex-wrap: wrap; gap: 8px; }
 
+/* The member price shown wasn't confirmed by the checkout: a calm question before paying the usual price. */
+.plus-member-check { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--soft); }
+
+.plus-member-check p { margin: 0; color: var(--ink); font-size: .8rem; line-height: 1.5; }
+
+.plus-member-check__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+.plus-member-check__actions button { min-height: 36px; }
+
 .plus-gifts .plus-gifts__buy { min-height: 40px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px 0 11px; border-radius: 10px; color: var(--ink); font-size: .76rem; font-weight: 640; }
 
 .plus-gifts__buy svg { width: 17px; height: 17px; flex: 0 0 auto; color: var(--accent); fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
@@ -543,6 +563,34 @@
 .plus-gifts .plus-gifts__buy:disabled { cursor: default; color: var(--muted); }
 
 .plus-gifts .plus-gifts__buy:disabled:not([aria-busy="true"]) { opacity: .6; }
+
+/* With Plus: the member price first, the usual one struck through beside it. */
+.plus-gifts__price { display: inline-flex; align-items: baseline; gap: 6px; margin-left: 2px; }
+
+.plus-gifts__price b { font-weight: 720; font-variant-numeric: tabular-nums; }
+
+.plus-gifts__price s { color: var(--faint); font-weight: 560; font-variant-numeric: tabular-nums; }
+
+.plus-gifts__lead .plus-gifts__badge { display: inline-flex; align-items: center; min-height: 20px; margin-left: 8px; padding: 0 8px; border-radius: 999px; background: color-mix(in srgb, var(--plus-green) 13%, var(--surface-strong)); color: color-mix(in srgb, var(--plus-green) 78%, var(--ink)); font-size: .64rem; font-style: normal; font-weight: 700; letter-spacing: .01em; vertical-align: 2px; }
+
+/* With Plus: the partner program, one quiet card that can be hidden for good. */
+.plus-partner { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto 32px; align-items: center; gap: 12px; margin-top: 22px; padding: 12px 10px 12px 14px; border: 1px solid color-mix(in srgb, var(--line) 85%, transparent); border-radius: 14px; background: var(--surface-strong); }
+
+.plus-partner__icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: color-mix(in srgb, var(--plus-accent) 10%, var(--surface)); color: var(--plus-accent); }
+
+.plus-partner__icon svg { width: 18px; height: 18px; }
+
+.plus-partner__copy { display: grid; gap: 2px; margin: 0; color: var(--muted); font-size: .76rem; line-height: 1.45; }
+
+.plus-partner__copy strong { color: var(--ink); font-size: .84rem; font-weight: 680; letter-spacing: -.01em; }
+
+.plus-dialog .plus-partner__go { min-height: 36px; padding-inline: 13px; border-radius: 10px; font-size: .74rem; font-weight: 650; text-decoration: none; white-space: nowrap; }
+
+.plus-partner__close { width: 32px; height: 32px; display: grid; place-items: center; color: var(--faint); }
+
+.plus-partner__close:hover { color: var(--ink); }
+
+.plus-partner__close svg { width: 16px; height: 16px; }
 
 /* The compact feature list of a gift */
 
@@ -699,6 +747,11 @@
   .plus-loop { justify-content: flex-start; text-align: left; }
   .plus-gifts__row { flex-direction: column; }
   .plus-gifts .plus-gifts__buy { width: 100%; justify-content: flex-start; }
+  .plus-gifts__price { margin-left: auto; }
+  .plus-bar__price .plus-bar__badge { display: none; }
+  .plus-partner { grid-template-columns: 34px minmax(0, 1fr) 32px; align-items: start; }
+  .plus-partner__go { grid-column: 2; justify-self: start; }
+  .plus-partner__close { grid-column: 3; grid-row: 1; }
 }
 
 @media (max-width: 620px) {

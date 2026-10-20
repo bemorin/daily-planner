@@ -2,8 +2,10 @@ import { qs, qsa } from '../lib/dom.js';
 import { ymdKey } from '../lib/dates.js';
 import { esc, escAttr, safeUrl } from '../lib/text.js';
 import { activatePlusToken, hasPlus, isCheckoutReference, normalizeGiftCode, onPlusChange, parsePlusInput, plusAvailable, plusLicense, plusSettings, plusStatusLine } from '../lib/plus.js';
-import { CURRENCIES, PERSONAL_GIFTS, PLUS_PRICE, PLUS_UPCOMING, detectCurrency, formatMoney, isPersonalGift, validCurrency } from '../lib/pricing.js';
-import { checkoutOptions, claimPurchase, fetchGift, plannerApiEnabled, redeemGift, rememberReferral, startCheckout, trackEvent } from '../lib/planner-api.js';
+import { CURRENCIES, LAUNCH, PERSONAL_GIFTS, PLUS_PRICE, PLUS_UPCOMING, detectCurrency, formatMoney, isPersonalGift, memberGiftPrice, memberPriceNotice, memberPriceShown, validCurrency } from '../lib/pricing.js';
+import { checkoutOptions, claimPurchase, dismissPartnerHint, fetchGift, partnerHintShown, plannerApiEnabled, redeemGift, rememberReferral, startCheckout, trackEvent } from '../lib/planner-api.js';
+import { AFFILIATE_COMMISSION } from '../config.js';
+import { requestPlusCheck } from './plus-check.js';
 import { burst, panelEnter, pulse } from '../ui/motion.js';
 import { readPaint, resolvePaint } from './paint-palettes.js';
 import { paintRows, recentWeeks, renderPaletteTry } from './plus-previews.js';
@@ -47,6 +49,8 @@ const ICONS = {
   chart: '<path d="M4 20h16"/><path d="M7.5 16.5v-5M12 16.5V6.5M16.5 16.5v-8"/>',
   paint: '<path d="M12 3.8a8.2 8.2 0 1 0 0 16.4c1.3 0 1.9-.9 1.9-1.8 0-1.2-1-1.6-1-2.6 0-1 .8-1.6 1.8-1.6h1.8a3.5 3.5 0 0 0 3.5-3.5c0-3.8-3.6-6.9-8-6.9Z"/><circle cx="7.8" cy="11" r="1" class="icon-fill"/><circle cx="10.3" cy="7.6" r="1" class="icon-fill"/><circle cx="14.6" cy="7.8" r="1" class="icon-fill"/>',
   gift: '<rect x="4" y="9" width="16" height="11" rx="1.6"/><path d="M3 9h18M12 9v11M12 9c-1.4-3.4-5.6-4.3-5.6-1.7C6.4 8.8 9 9 12 9Zm0 0c1.4-3.4 5.6-4.3 5.6-1.7 0 1.5-2.6 1.7-5.6 1.7Z"/>',
+  share: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  close: '<path d="m7 7 10 10M17 7 7 17"/>',
   check: '<path d="m6.5 12.5 3.3 3.3 7.7-8"/>',
   team: '<circle cx="9" cy="8.5" r="3"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/><circle cx="16.5" cy="9.5" r="2.4"/><path d="M15.4 14.5c2.5-.3 4.5 1 5.1 3.8"/>',
   notice: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.8v5M12 16.2h.01"/>',
@@ -57,11 +61,19 @@ const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}
 /** The one muted line under the price: the currency is the buyer's (euro area: EUR, elsewhere: USD), taxes included. */
 export const currencyNote = currency => (currency === 'EUR' ? 'Prices in euros, taxes included.' : 'Prices in US dollars, taxes included.');
 
-/** A personal gift button: "Give Plus — €29", "Plus Family — up to 5 people — €99". */
-export function giftLabel(gift, currency) {
+/**
+ * A personal gift button: "Give Plus — €29", "Plus Family — up to 5 people — €99";
+ * for a member, the member price: "Give Plus — member price €24, was €29".
+ */
+export function giftLabel(gift, currency, { member = false } = {}) {
   const price = formatMoney(gift.price?.[currency], currency);
-  return gift.seats > 1 ? `${gift.label} — up to ${gift.seats} people — ${price}` : `${gift.label} — ${price}`;
+  const reduced = member ? memberGiftPrice(gift.plan, currency) : null;
+  const amount = reduced != null && reduced < gift.price?.[currency] ? `member price ${formatMoney(reduced, currency)}, was ${price}` : price;
+  return gift.seats > 1 ? `${gift.label} — up to ${gift.seats} people — ${amount}` : `${gift.label} — ${amount}`;
 }
+
+/** What a partner earns: “30% of every purchase …” with a commission configured, “a commission on every purchase …” without. */
+export const partnerEarnText = (commission = AFFILIATE_COMMISSION) => (commission ? `${commission} of every purchase made through your link` : 'a commission on every purchase made through your link');
 
 /** Who a gift is from, as a sentence reads it: the server's fallbacks ("A friend", "Your family") in lower case. */
 export function giverName(org) {
@@ -230,19 +242,62 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
       </section>`;
   }
 
-  /** Personal gifts, below the main action: quiet, for someone else or a household. */
+  /**
+   * Personal gifts, below the main action: quiet, for someone else or a
+   * household. With Plus, each shows its member price beside the usual one;
+   * the server checks the licence and charges it (MEMBER_GIFT_DISCOUNT).
+   */
   function gifts() {
     if (!giftsOffered()) return '';
-    const waiting = buyable('gift') === 'loading' || !!view.buying;
+    const member = hasPlus();
+    const waiting = buyable('gift') === 'loading' || !!view.buying || !!view.confirm;
     const buttons = PERSONAL_GIFTS.map(gift => {
       const busy = view.buying === gift.plan;
-      return `<button class="secondary-button plus-gifts__buy" type="button" data-plus-gift="${gift.plan}"${waiting ? ' disabled' : ''}${busy ? ' aria-busy="true"' : ''}>${icon(gift.seats > 1 ? 'team' : 'gift')}<span>${esc(busy ? 'Opening checkout…' : giftLabel(gift, currency))}</span></button>`;
+      const normal = gift.price?.[currency];
+      const reduced = member ? memberGiftPrice(gift.plan, currency) : null;
+      const name = gift.seats > 1 ? `${gift.label} — up to ${gift.seats} people` : gift.label;
+      const price = reduced != null && reduced < normal
+        ? `<span class="plus-gifts__price"><b>${esc(formatMoney(reduced, currency))}</b><s>${esc(formatMoney(normal, currency))}</s></span>`
+        : `<span class="plus-gifts__price"><b>${esc(formatMoney(normal, currency))}</b></span>`;
+      const label = busy ? '<span>Opening checkout…</span>' : `<span>${esc(name)}</span>${price}`;
+      return `<button class="secondary-button plus-gifts__buy" type="button" data-plus-gift="${gift.plan}" aria-label="${escAttr(busy ? 'Opening checkout…' : giftLabel(gift, currency, { member }))}"${waiting ? ' disabled' : ''}${busy ? ' aria-busy="true"' : ''}>${icon(gift.seats > 1 ? 'team' : 'gift')}${label}</button>`;
     }).join('');
-    return `<section class="plus-gifts" aria-labelledby="plus-gifts-title">
-        <p class="plus-gifts__lead"><strong id="plus-gifts-title">Give Plus to someone</strong><span>You get a link to send. Plus is theirs for life once they open it, any time within a year.</span></p>
+    const lead = member
+      ? '<span>You get a link to send. Plus is theirs for life once they open it, any time within a year. As a Plus member, you pay less.</span>'
+      : '<span>You get a link to send. Plus is theirs for life once they open it, any time within a year.</span>';
+    return `<section class="plus-gifts${member ? ' plus-gifts--member' : ''}" aria-labelledby="plus-gifts-title">
+        <p class="plus-gifts__lead"><strong id="plus-gifts-title">Give Plus to someone${member ? ' <em class="plus-gifts__badge">Member price</em>' : ''}</strong>${lead}</p>
         <div class="plus-gifts__row">${buttons}</div>
         ${view.giftError ? `<p class="plus-inline-error" role="alert">${esc(view.giftError)}</p>` : ''}
+        ${memberCheck()}
       </section>`;
+  }
+
+  /** The question about the member price, in the middle of the dialog: never under its sticky bar. */
+  const showMemberCheck = () => qs('[data-plus-member-check]', root())?.scrollIntoView({ block: 'center' });
+
+  /** The member price shown wasn't confirmed by the checkout: said before paying, with Continue or Cancel. */
+  function memberCheck() {
+    const check = view.confirm;
+    if (!check) return '';
+    return `<div class="plus-member-check" data-plus-member-check>
+        <p role="alert">${esc(check.text)}</p>
+        <div class="plus-member-check__actions">
+          <button class="text-button" type="button" data-plus-member-cancel${check.leaving ? ' disabled' : ''}>Cancel</button>
+          <button class="primary-button" type="button" data-plus-member-continue${check.leaving ? ' disabled aria-busy="true"' : ''}>${check.leaving ? 'Opening checkout…' : 'Continue'}</button>
+        </div>
+      </div>`;
+  }
+
+  /** With Plus: a quiet card about the partner program, until it is dismissed or followed on this device. */
+  function partnerCard() {
+    if (!hasPlus() || !partnerHintShown('plus')) return '';
+    return `<aside class="plus-partner" aria-labelledby="plus-partner-title" data-plus-partner>
+        <span class="plus-partner__icon">${icon('share')}</span>
+        <p class="plus-partner__copy"><strong id="plus-partner-title">Recommend Daily Planner</strong><span>Know people who would like it? As a partner, you share your own link and earn ${esc(partnerEarnText())}.</span></p>
+        <a class="secondary-button plus-partner__go" href="./welcome/partners/" target="_blank" rel="noopener" data-plus-partner-go>Partner program</a>
+        <button class="icon-button plus-partner__close" type="button" data-plus-partner-dismiss aria-label="Hide the partner program">${icon('close')}</button>
+      </aside>`;
   }
 
   function redeemForm() {
@@ -255,10 +310,16 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
       ${view.inputError ? `<p class="plus-inline-error" id="plus-redeem-error" role="alert">${esc(view.inputError)}</p>` : ''}`;
   }
 
-  /** The price as one unit, "€29 once, for life", with the currency said once, quietly, under it. */
+  /**
+   * The price as one unit, "€29 once, for life", with the currency said once,
+   * quietly, under it. During the launch (LAUNCH in pricing.js) a small badge
+   * says it is the launch price, and one line what comes after it.
+   */
   function priceBlock() {
-    return `<p class="plus-price"><strong>${esc(price())}</strong><span>once, for life</span></p>
-      ${plusAvailable() ? `<p class="plus-currency-note">${esc(currencyNote(currency))}</p>` : ''}`;
+    const launch = LAUNCH.active ? `<p class="plus-launch"><span class="plus-launch__badge">${esc(LAUNCH.label)}</span></p>` : '';
+    const after = LAUNCH.active ? `<p class="plus-launch__after">${esc(LAUNCH.after)}</p>` : '';
+    return `${launch}<p class="plus-price"><strong>${esc(price())}</strong><span>once, for life</span></p>
+      ${after}${plusAvailable() ? `<p class="plus-currency-note">${esc(currencyNote(currency))}</p>` : ''}`;
   }
 
   /** Get Plus, in the offer (`top`) and in the bar that follows the scroll (`bar`). */
@@ -287,7 +348,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
   function bar() {
     if (!plusAvailable() || buyable() === 'no') return '';
     return `<div class="plus-bar${barShown ? ' is-shown' : ''}" data-plus-bar>
-        <p class="plus-bar__price"><strong>${esc(price())}</strong><span>once, for life</span></p>
+        <p class="plus-bar__price">${LAUNCH.active ? `<span class="plus-launch__badge plus-bar__badge">${esc(LAUNCH.label)}</span>` : ''}<strong>${esc(price())}</strong><span>once, for life</span></p>
         ${buyButton('bar')}
       </div>`;
   }
@@ -320,6 +381,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
         ${also(focus?.id || '', true)}
         ${upcoming(true)}
         ${gifts()}
+        ${partnerCard()}
         ${footer}
         <div class="plus-bar plus-bar--done is-shown"><button class="primary-button plus-cta__buy" type="button" data-plus-close>Done</button></div>`;
     }
@@ -365,8 +427,22 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     render({ focus: false });
     trackEvent('plus_checkout_clicked');
     flush();
-    const result = await startCheckout(plan ? { item, plan, currency } : { item, currency });
+    // A member's gift: the licence goes along, so the server can check it and charge the member price.
+    const license = plan && hasPlus() ? plusSettings().plus?.token || '' : '';
+    const shown = !!plan && memberPriceShown(plan, currency, hasPlus());
+    const result = await startCheckout(plan ? { item, plan, currency, license } : { item, currency });
     const href = result.ok ? checkoutHref(result.url) : '';
+    // The member price was shown but the server charges the usual one (a refunded licence, say): ask first,
+    // and check the licence now, so the dialog follows what the server knows.
+    const text = href && plan ? memberPriceNotice(plan, currency, { shown, confirmed: result.member === true }) : '';
+    if (text) {
+      view = { ...view, buying: false, confirm: { plan, href, text } };
+      render({ focus: false });
+      showMemberCheck();
+      qs('[data-plus-member-continue]', root())?.focus({ preventScroll: true });
+      requestPlusCheck();
+      return;
+    }
     if (href) { globalThis.location.assign(href); return; }
     const error = result.error && !result.ok ? result.error : 'The checkout could not be opened. Please try again in a minute.';
     view = { ...view, buying: false, [plan ? 'giftError' : 'buyError']: error };
@@ -616,7 +692,27 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     qsa('[data-plus-close]', el).forEach(button => button.addEventListener('click', () => closeModal(modal())));
     qsa('[data-plus-checkout]', el).forEach(button => button.addEventListener('click', () => buy('', button.dataset.plusCheckout)));
     qsa('[data-plus-gift]', el).forEach(button => button.addEventListener('click', () => buy(button.dataset.plusGift)));
+    qs('[data-plus-member-continue]', el)?.addEventListener('click', () => {
+      const check = view.confirm;
+      if (!check || check.leaving) return;
+      view = { ...view, confirm: { ...check, leaving: true } };
+      render({ focus: false });
+      globalThis.location.assign(check.href);
+    });
+    qs('[data-plus-member-cancel]', el)?.addEventListener('click', () => {
+      const plan = view.confirm?.plan || '';
+      view = { ...view, confirm: null };
+      render({ focus: false });
+      qs(`[data-plus-gift="${plan}"]`, root())?.focus({ preventScroll: true });
+    });
     qs('[data-plus-privacy]', el)?.addEventListener('click', () => openPrivacy?.());
+    // The partner card goes for good once dismissed or followed.
+    qs('[data-plus-partner-go]', el)?.addEventListener('click', () => dismissPartnerHint('plus'));
+    qs('[data-plus-partner-dismiss]', el)?.addEventListener('click', () => {
+      dismissPartnerHint('plus');
+      qs('[data-plus-partner]', el)?.remove();
+      qs('[data-plus-close]', el)?.focus({ preventScroll: true });
+    });
     qs('[data-plus-overview]', el)?.addEventListener('click', () => show({ stage: 'overview' }));
     qs('[data-plus-redeem-gift]', el)?.addEventListener('click', redeem);
     qs('[data-plus-retry]', el)?.addEventListener('click', () => (view.retryCheckout ? claim(view.retryCheckout) : view.retryGift ? openGift(view.retryGift) : show({ stage: 'overview' })));
@@ -697,9 +793,19 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     return true;
   }
 
-  onPlusChange(() => { renderEntryPoints(); if (isOpen() && view.stage === 'overview') render({ focus: false }); });
+  onPlusChange(() => {
+    renderEntryPoints();
+    if (!isOpen() || view.stage !== 'overview') return;
+    render({ focus: false });
+    // Plus switched off while the member price was being asked about: the question stays in view.
+    if (view.confirm) showMemberCheck();
+  });
   // Back from the payment page with the browser's Back button: the page may come from the cache, still busy.
-  globalThis.addEventListener?.('pageshow', event => { if (event.persisted && view.buying) { view = { ...view, buying: false }; if (isOpen()) render({ focus: false }); } });
+  globalThis.addEventListener?.('pageshow', event => {
+    if (!event.persisted || !(view.buying || view.confirm?.leaving)) return;
+    view = { ...view, buying: false, ...(view.confirm ? { confirm: { ...view.confirm, leaving: false } } : {}) };
+    if (isOpen()) render({ focus: false });
+  });
   renderEntryPoints();
 
   return { open, handleLaunch, renderEntryPoints };

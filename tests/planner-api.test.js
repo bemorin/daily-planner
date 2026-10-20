@@ -458,6 +458,7 @@ test('every migration runs when the D1 console joins it into one line', async t 
   assert.ok(files.includes('0003_plus.sql'));
   assert.ok(files.includes('0004_creem_reviews.sql'));
   assert.ok(files.includes('0005_refunds.sql'));
+  assert.ok(files.includes('0006_partners.sql'));
   const sqlite = new DatabaseSync(':memory:');
   for (const file of files) {
     const source = readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8');
@@ -479,7 +480,7 @@ test('every migration runs when the D1 console joins it into one line', async t 
     sqlite.exec(flat);
   }
   const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(row => row.name);
-  assert.deepEqual(tables, ['events', 'feedback', 'gifts', 'orders', 'payments', 'purchases', 'refunds', 'reviews', 'revocations', 'team_requests', 'waitlist']);
+  assert.deepEqual(tables, ['events', 'feedback', 'gifts', 'orders', 'partner_sales', 'payments', 'purchases', 'refunds', 'reviews', 'revocations', 'team_requests', 'waitlist']);
   const teamColumns = sqlite.prepare('PRAGMA table_info(team_requests)').all();
   const column = name => teamColumns.find(row => row.name === name);
   assert.deepEqual(['plan', 'currency', 'kind'].map(name => [column(name)?.type, column(name)?.notnull, column(name)?.dflt_value]), [['TEXT', 1, "''"], ['TEXT', 1, "''"], ['TEXT', 1, "'quote'"]]);

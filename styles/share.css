@@ -286,7 +286,24 @@
   background: var(--surface);
 }
 
+.share-sheet__messages { min-width: 0; flex: 1 1 auto; display: grid; gap: 4px; }
+
 .share-sheet__status { min-width: 0; margin: 0; color: var(--muted); font-size: .74rem; line-height: 1.4; }
+
+/* Once an image is made: one quiet line about the partner program, until it is hidden. */
+.share-sheet__partner { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--muted); font-size: .72rem; line-height: 1.4; }
+
+.share-sheet__partner[hidden] { display: none; }
+
+.share-sheet__partner > svg { width: 14px; height: 14px; flex: 0 0 auto; color: var(--faint); stroke-width: 1.7; }
+
+.share-sheet__partner a { display: inline-flex; align-items: center; gap: 3px; color: var(--ink); font-weight: 650; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 60%, transparent); text-underline-offset: 3px; white-space: nowrap; }
+
+.share-sheet__partner a svg { width: 13px; height: 13px; stroke-width: 1.8; }
+
+.share-sheet__partner .share-sheet__partner-close { width: 28px; height: 28px; margin-left: 2px; color: var(--faint); }
+
+.share-sheet__partner-close svg { width: 14px; height: 14px; }
 
 .share-sheet__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-left: auto; }
 
@@ -305,6 +322,7 @@
   .share-choice--format .share-choice__card { min-height: 66px; flex-direction: column; justify-content: center; gap: 4px; padding: 8px 6px; text-align: center; }
   .share-choice--format .share-choice__text small { display: none; }
   .share-sheet__foot { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 16px max(14px, env(safe-area-inset-bottom)); }
+  .share-sheet__messages { display: contents; }
   .share-sheet__status:empty { display: none; }
   .share-sheet__actions { flex-wrap: wrap; margin-left: 0; }
   .share-sheet__action { flex: 1 1 0; justify-content: center; min-height: 44px; }

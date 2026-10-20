@@ -791,9 +791,25 @@
 
 .device-action small { display: block; margin-top: 2px; color: var(--muted); font-size: .72rem; }
 
-.help-feedback { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 16px; padding: 10px 12px 10px 14px; border-radius: 12px; background: var(--soft); color: var(--muted); font-size: .8rem; }
+/* How it works: a row of words and its action. The words wrap on their side;
+   the action stays at the far right, on the same line, whatever their
+   length. On a phone the action goes below, full width. */
+.help-feedback { display: flex; align-items: center; justify-content: space-between; gap: 10px 18px; margin: 0 0 16px; padding: 10px 12px 10px 14px; border-radius: 12px; background: var(--soft); color: var(--muted); font-size: .8rem; line-height: 1.45; }
+
+.help-feedback > span { flex: 1 1 auto; min-width: 0; text-wrap: pretty; }
+
+.help-feedback > :is(button, a) { flex: 0 0 auto; white-space: nowrap; }
 
 .help-feedback strong { color: var(--ink); }
+
+.help-tour + .help-tips { margin-top: -8px; }
+
+.help-tips [data-tips-reset][aria-disabled="true"] { opacity: .55; cursor: default; }
+
+@media (max-width: 560px) {
+  .help-feedback { flex-direction: column; align-items: stretch; padding: 12px; }
+  .help-feedback > :is(button, a) { width: 100%; min-height: 40px; }
+}
 
 .settings-group[data-personal-sync] { transition: box-shadow 400ms ease; border-radius: 14px; }
 

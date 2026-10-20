@@ -7,7 +7,36 @@
  * layout (max-width: 790px), "desktop" everything wider. Shortcuts are shown
  * by the same rule as Help's shortcut list — hidden at max-width 760px and on
  * touch-only screens — so a tablet with a keyboard still sees them.
+ *
+ * Step words name the parts of the screen in bold with `**…**`, exactly as
+ * the interface labels them (tests/tour.test.js checks): richText() turns
+ * that into plain parts the page builds as text and <strong>, never HTML.
  */
+
+/** "Close **Print** now" → [{ text: 'Close ', strong: false }, { text: 'Print', strong: true }, …]. A lone `**` stays as typed. */
+export function richText(text) {
+  const source = String(text ?? '');
+  const parts = [];
+  const pattern = /\*\*(.+?)\*\*/g;
+  let last = 0;
+  for (let match = pattern.exec(source); match; match = pattern.exec(source)) {
+    if (match.index > last) parts.push({ text: source.slice(last, match.index), strong: false });
+    parts.push({ text: match[1], strong: true });
+    last = pattern.lastIndex;
+  }
+  if (last < source.length) parts.push({ text: source.slice(last), strong: false });
+  return parts;
+}
+
+/** The words without their bold marks (what a screen reader announces). */
+export function plainText(text) {
+  return richText(text).map(part => part.text).join('');
+}
+
+/** The names a step sets in bold. */
+export function boldTerms(text) {
+  return richText(text).filter(part => part.strong).map(part => part.text);
+}
 
 /**
  * Every shortcut the tour teaches, in one place. `codes` are the keys in
@@ -52,7 +81,7 @@ const OUTCOMES = {
     join: true,
     name: 'Keep in mind and the outcomes',
     title: 'Start with outcomes',
-    body: () => 'Keep in mind holds one intention for the day. Below it, the most important outcome — the one result that would make today count — and up to two others worth moving forward.'
+    body: () => '**Keep in mind** holds one intention for the day. Below it, the **Most important outcome** — the one result that would make today count — and up to two **Other important outcomes** worth moving forward.'
   }]
 };
 
@@ -63,7 +92,7 @@ const TASKS = {
     spot: ['.tasks-section'],
     name: 'the task list',
     title: 'Then the tasks',
-    body: ({ touch }) => `List the concrete actions behind those outcomes: write in an empty row, and Add a task makes room for more. ${touch ? 'Tap' : 'Click'} the calendar beside a task or an outcome to put it on your schedule.`
+    body: ({ touch }) => `List the concrete actions behind those outcomes in **Tasks**: write in an empty row, and **Add a task** makes room for more. ${touch ? 'Tap' : 'Click'} the calendar beside a task or an outcome, **Schedule**, to put it on your schedule.`
   }]
 };
 
@@ -74,12 +103,12 @@ const CLOSE_DAY = {
     spot: ['[data-end-day-open]'],
     name: 'the Close day button',
     title: 'Close the day',
-    body: () => 'When the day is over, Close day shows what got done and keeps a memory and a lesson. Then each unfinished item gets a new date, waits in Unresolved, or is let go — nothing is lost until you decide.',
+    body: () => 'When the day is over, **Close day** shows what got done and keeps a memory and a lesson. Then each unfinished item gets a new date, waits in **Unresolved**, or is let go — nothing is lost until you decide.',
     keys: ['closeDay']
   }]
 };
 
-const HORIZON_BODY = () => 'Horizon holds your Misogi — the one hard thing that defines the year — up to six mini-adventures, three commitments, a winning habit each quarter and your key dates. Progress paints a square for every day you close.';
+const HORIZON_BODY = () => '**Horizon** holds your Misogi — the one hard thing that defines the year — up to six mini-adventures, three commitments, a winning habit each quarter and your key dates. **Progress** paints a square for every day you close.';
 
 const DESKTOP_STEPS = [
   {
@@ -88,7 +117,7 @@ const DESKTOP_STEPS = [
       spot: ['[data-view-switch]'],
       name: 'the Day · Week · Horizon switch',
       title: 'Day, Week and Horizon',
-      body: () => 'This switch moves between three views of the same plans. Day shows one day in detail. Week puts your planning days side by side, each with its main outcome above its schedule.',
+      body: () => '**Day · Week · Horizon** moves between three views of the same plans. **Day** shows one day in detail. **Week** puts your planning days side by side, each with its main outcome above its schedule.',
       keys: ['view']
     }]
   },
@@ -98,7 +127,7 @@ const DESKTOP_STEPS = [
       spot: ['.date-nav', '[data-date-picker]'],
       name: 'the day arrows, Now and the date',
       title: 'Move through your days',
-      body: ({ touch }) => `The arrows step one day back or forward, and Now brings you back to the present. ${touch ? 'Tap' : 'Click'} the date to pick any day on the calendar.`,
+      body: ({ touch }) => `**Previous day** and **Next day** step through your days, and **Now** brings you back to the present. ${touch ? 'Tap' : 'Click'} the date to pick any day on the calendar.`,
       keys: ['days', 'now']
     }]
   },
@@ -111,8 +140,8 @@ const DESKTOP_STEPS = [
       name: 'the schedule',
       title: 'Give the work real time',
       body: ({ touch }) => (touch
-        ? 'Tap an empty slot to add a block, or use Add a block. Hold a block, then drag to move it; drag its lower edge to resize. Tap a block to edit it.'
-        : 'Click an empty slot to add a block, or use Add a block. Hold a block briefly and drag to move it; drag its lower edge to resize. Click a block to edit it.'),
+        ? 'Tap an empty slot in the **Schedule** to add a block, or use **Add a block**. Hold a block, then drag to move it; drag its lower edge to resize. Tap a block to edit it.'
+        : 'Click an empty slot in the **Schedule** to add a block, or use **Add a block**. Hold a block briefly and drag to move it; drag its lower edge to resize. Click a block to edit it.'),
       keys: ['addBlock']
     }]
   },
@@ -127,7 +156,7 @@ const DESKTOP_STEPS = [
       spot: ['[data-journal-open]', '[data-open-work-open]', '[data-stats-open]'],
       name: 'Journal, Unresolved and Time stats',
       title: 'Look back, then decide',
-      body: () => 'The Journal collects each day’s memory and lesson. Unresolved holds what you saved for later and anything still waiting for a decision. Time stats show where your hours went; with Plus, Insights finds when you work best.',
+      body: () => 'The **Journal** collects each day’s memory and lesson. **Unresolved** holds what you saved for later and anything still waiting for a decision. **Time stats** show where your hours went; with Plus, **Insights** finds when you work best.',
       keys: ['journal', 'unresolved', 'stats']
     }]
   },
@@ -138,10 +167,10 @@ const DESKTOP_STEPS = [
       name: 'Search, Floating mode and Print',
       title: 'Find, float and print',
       body: ({ visible }) => {
-        const print = visible('[data-print]') ? 'Print gives you a clean landscape sheet of the day.' : 'Print, under More, gives you a clean landscape sheet of the day.';
+        const print = visible('[data-print]') ? '**Print** gives you a clean landscape sheet of the day.' : '**Print**, under **More**, gives you a clean landscape sheet of the day.';
         return visible('[data-pip]')
-          ? `Search looks through every saved day. Floating mode keeps your day in a small window above your other apps. ${print}`
-          : `Search looks through every saved day. ${print}`;
+          ? `**Search** looks through every saved day. **Floating mode** keeps your day in a small window above your other apps. ${print}`
+          : `**Search** looks through every saved day. ${print}`;
       },
       keys: ['search', 'floating', 'print']
     }]
@@ -154,7 +183,7 @@ const DESKTOP_STEPS = [
         spot: ['[data-settings-open]', '[data-help-open]'],
         name: 'Settings and How it works',
         title: 'Settings and help',
-        body: () => 'Settings holds your hours, planning days, categories, appearance and sync. How it works explains each part, lists every shortcut, and starts this tour again whenever you like.',
+        body: () => '**Settings** holds your hours, planning days, categories, appearance and sync. **How it works** explains each part, lists every shortcut, and starts this tour again whenever you like.',
         keys: ['settings', 'help']
       },
       {
@@ -163,7 +192,7 @@ const DESKTOP_STEPS = [
         spot: ['[data-mobile-more]', '[data-mobile-more-menu]'],
         name: 'the More menu',
         title: 'Settings, help and more',
-        body: () => 'More holds print and export, Settings, installing the app, sync and How it works — where you can take this tour again whenever you like.',
+        body: () => '**More** holds **Print / PDF** and **Export**, **Settings**, **Install the app**, **Sync my devices** and **How it works** — where you can take this tour again whenever you like.',
         keys: ['settings', 'help']
       }
     ]
@@ -179,13 +208,13 @@ const PHONE_STEPS = [
         spot: ['[data-mobile-view-switch]'],
         name: 'the Plan, Schedule and Horizon tabs',
         title: 'Plan, Schedule, Horizon',
-        body: () => 'Your day lives in two tabs: Plan for what matters, Schedule for when. Horizon keeps the year in view. Each tab says where you stand.'
+        body: () => 'Your day lives in two tabs: **Plan** for what matters, **Schedule** for when. **Horizon** keeps the year in view. Each tab says where you stand.'
       },
       {
         spot: ['[data-mobile-view-switch]'],
         name: 'the Plan and Schedule tabs',
         title: 'Plan and Schedule',
-        body: () => 'Your day lives in two tabs: Plan for what matters, Schedule for when. Each tab says where you stand.'
+        body: () => 'Your day lives in two tabs: **Plan** for what matters, **Schedule** for when. Each tab says where you stand.'
       }
     ]
   },
@@ -197,14 +226,14 @@ const PHONE_STEPS = [
         spot: ['[data-week-view]', '[data-date-picker]', '[data-today]'],
         name: 'the Day / Week button and the date',
         title: 'Day or week, any date',
-        body: () => 'The calendar button switches between Day and Week. Tap the date to open any day, or swipe the plan sideways to move one day.',
+        body: () => 'The calendar button switches between **Day** and **Week**. Tap the date to open any day, or swipe the plan sideways to move one day.',
         keys: ['view', 'days']
       },
       {
         spot: ['[data-view-switch]', '[data-date-picker]', '[data-today]'],
         name: 'the Day · Week · Horizon switch and the date',
         title: 'Day, Week and Horizon',
-        body: () => 'The switch moves between Day, Week and Horizon. Tap the date to open any day, or swipe the plan sideways to move one day.',
+        body: () => '**Day · Week · Horizon** moves between the three views. Tap the date to open any day, or swipe the plan sideways to move one day.',
         keys: ['view', 'days']
       }
     ]
@@ -218,7 +247,7 @@ const PHONE_STEPS = [
       spot: ['[data-mobile-schedule-add]', { css: '[data-blocks] .time-block', pick: 'first-in-view' }],
       name: 'the add button',
       title: 'Give the work real time',
-      body: () => 'Tap an empty time, or +, to add a block. Hold a block, then drag to move it; drag its lower edge to resize. Tap a block to edit it.',
+      body: () => 'Tap an empty time, or **+**, to add a block. Hold a block, then drag to move it; drag its lower edge to resize. Tap a block to edit it.',
       keys: ['addBlock']
     }]
   },
@@ -236,7 +265,7 @@ const PHONE_STEPS = [
       spot: ['[data-search-open]', '[data-journal-open]', '[data-open-work-open]', '[data-stats-open]'],
       name: 'Search, Journal, Unresolved and Time stats',
       title: 'Search and look back',
-      body: () => 'Search looks through every saved day. The Journal collects each day’s memory and lesson, Unresolved holds what is waiting for a decision, and Time stats show where your hours went.',
+      body: () => '**Search** looks through every saved day. The **Journal** collects each day’s memory and lesson, **Unresolved** holds what is waiting for a decision, and **Time stats** show where your hours went.',
       keys: ['search', 'journal', 'unresolved', 'stats']
     }]
   },
@@ -248,7 +277,7 @@ const PHONE_STEPS = [
       spot: ['[data-mobile-more]', '[data-mobile-more-menu]'],
       name: 'the More menu',
       title: 'Everything else is under More',
-      body: () => 'Settings, print and export, installing the app, sync and How it works. You can take this tour again from here whenever you like.',
+      body: () => '**Settings**, **Print / PDF** and **Export**, **Install the app**, **Sync my devices** and **How it works**. You can take this tour again from here whenever you like.',
       keys: ['settings', 'help']
     }]
   }
@@ -256,29 +285,37 @@ const PHONE_STEPS = [
 
 export const TOUR_STEPS = Object.freeze({ desktop: DESKTOP_STEPS, phone: PHONE_STEPS });
 
-const spotSelector = entry => (typeof entry === 'string' ? entry : entry.css);
+/** A spotlight entry is a selector, or `{ css, pick, closest }` (tour.js lights `closest` around what `css` finds). */
+export const spotSelector = entry => (typeof entry === 'string' ? entry : entry.css);
 
 /**
- * The steps this screen gets, resolved: the first variant whose `when` (or
+ * Steps resolved for what is on screen: the first variant whose `when` (or
  * first spotlight) is visible, its visible spotlight targets, its words and
- * keys. A step with nothing visible to show is left out. `visible(selector,
- * pane)` answers for the phone pane the step shows (Plan or Schedule); a menu
- * the step opens (More) is not visible yet, so it counts once its button is.
+ * keys (`shortcuts` maps their ids). A step with nothing visible to show is
+ * left out. `visible(selector, pane)` answers for the phone pane the step
+ * shows (Plan or Schedule); a menu the step opens (More) is not visible yet,
+ * so it counts once its button is. The contextual guides
+ * (src/features/first-use-model.js) resolve their steps the same way, with
+ * `context` saying what their dialog shows.
  */
-export function buildTourSteps({ layout = 'desktop', keys = true, touch = false, visible = () => true } = {}) {
-  const defs = TOUR_STEPS[layout] || TOUR_STEPS.desktop;
-  const ctx = { touch, visible: selector => visible(selector, '') };
+export function resolveSteps(defs, { layout = 'desktop', keys = true, touch = false, visible = () => true, context = {}, shortcuts = SHORTCUTS } = {}) {
+  const ctx = { touch, keys, context, visible: selector => visible(selector, '') };
   const steps = [];
   defs.forEach(def => {
     const pane = layout === 'phone' ? def.pane || '' : '';
-    const variant = def.variants.find(item => visible(item.when || spotSelector(item.spot[0]), pane));
+    const variant = def.variants.find(item => (!item.if || item.if(ctx)) && visible(item.when || spotSelector(item.spot[0]), pane));
     if (!variant) return;
     const spot = variant.spot.filter((entry, index) => visible(spotSelector(entry), pane) || (variant.menu && index > 0));
     if (!spot.length) return;
-    const shortcuts = keys ? (variant.keys || []).map(id => SHORTCUTS[id]).filter(item => item && (!item.requires || visible(item.requires, ''))).map(item => ({ keys: [...item.keys], label: item.label })) : [];
-    steps.push({ id: def.id, pane, menu: variant.menu || '', join: !!variant.join, spot, name: variant.name, title: variant.title, body: variant.body(ctx), keys: shortcuts });
+    const taught = keys ? (variant.keys || []).map(id => shortcuts[id]).filter(item => item && (!item.requires || visible(item.requires, ''))).map(item => ({ keys: [...item.keys], label: item.label })) : [];
+    steps.push({ id: def.id, pane, menu: variant.menu || '', join: !!variant.join, spot, name: variant.name, title: variant.title, body: variant.body(ctx), keys: taught });
   });
   return steps;
+}
+
+/** The tour for this screen (see resolveSteps). */
+export function buildTourSteps({ layout = 'desktop', keys = true, touch = false, visible = () => true } = {}) {
+  return resolveSteps(TOUR_STEPS[layout] || TOUR_STEPS.desktop, { layout, keys, touch, visible });
 }
 
 /** "Tour · 3 of 9" */

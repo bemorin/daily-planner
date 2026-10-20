@@ -14,7 +14,8 @@ const DAY = 24 * HOUR;
 const ago = ms => new Date(NOW - ms).toISOString();
 const later = ms => new Date(NOW + ms).toISOString();
 const format = { money: (amount, currency) => (amount == null ? '' : `${amount / 100} ${currency}`), number: String };
-const CONFIG = { SUPPORT_EMAIL: 'hello@example.com', LEGAL_ADDRESS: '1 rue de la Paix, Paris', PLUS_PUBLIC_KEY: 'pub' };
+const AFFILIATE_URL = 'https://affiliates.example.com/daily-planner';
+const CONFIG = { SUPPORT_EMAIL: 'hello@example.com', LEGAL_ADDRESS: '1 rue de la Paix, Paris', PLUS_PUBLIC_KEY: 'pub', AFFILIATE_URL };
 
 /** A deployment with nothing to do; each test adds its own trouble. */
 function calm(extra = {}) {
@@ -166,7 +167,7 @@ test('Setup: test mode, legal pages, two-factor and a stale page each get a line
   const summary = calm({ version: '1.27.0' });
   summary.setup.payments.mode = 'test';
   summary.setup.twoFactor = false;
-  const items = build(summary, { config: { PLUS_PUBLIC_KEY: 'pub', SUPPORT_EMAIL: 'hello@example.com' } });
+  const items = build(summary, { config: { PLUS_PUBLIC_KEY: 'pub', SUPPORT_EMAIL: 'hello@example.com', AFFILIATE_URL } });
   assert.deepEqual(texts(items), [
     'This dashboard is 1.26.0, 1.27.0 is deployed: reload it',
     'Creem is in test mode: no real payments',
@@ -177,7 +178,8 @@ test('Setup: test mode, legal pages, two-factor and a stale page each get a line
   assert.deepEqual(items.map(item => item.rows[0]), ['setup:version', 'setup:payments', 'setup:legal', 'setup:sign-in']);
   assert.equal(items[0].icon, 'version');
   const blank = build(calm(), { config: { PLUS_PUBLIC_KEY: 'pub' } });
-  assert.deepEqual(texts(blank), ['Legal pages: contact address and postal address missing']);
+  assert.deepEqual(texts(blank), ['Partners: the Creem sign-up link isn’t set', 'Legal pages: contact address and postal address missing']);
+  assert.deepEqual(build(calm(), { config: { ...CONFIG, AFFILIATE_URL: 'http://not-https.example.com' } }).map(item => [item.text, item.tone, item.rows[0]]), [['Partners: the Creem sign-up link isn’t set', 'warn', 'setup:partners']]);
 });
 
 test('Setup: missing pieces are urgent and come before every to-do', () => {
@@ -202,7 +204,8 @@ test('setupChecks gives the Setup card its states', () => {
   summary.setup.payments.products.gift.USD = '';
   summary.setup.payments.webhookSecretSet = false;
   const checks = Object.fromEntries(setupChecks(summary, { config: { ...CONFIG, PLUS_PUBLIC_KEY: '' }, pageVersion: '1.26.0' }).map(check => [check.key, check]));
-  assert.deepEqual(Object.keys(checks), ['version', 'email', 'owner-email', 'plus', 'payments', 'links', 'legal', 'database', 'sign-in']);
+  assert.deepEqual(Object.keys(checks), ['version', 'email', 'owner-email', 'plus', 'payments', 'links', 'partners', 'legal', 'database', 'sign-in']);
+  assert.equal(checks.partners.state, 'ok');
   assert.equal(checks.version.state, 'ok');
   assert.equal(checks.plus.state, 'warn');
   assert.deepEqual(checks.plus.problems, ['The app has no Plus public key']);
@@ -237,6 +240,7 @@ test('gifts: about to expire (soonest first) and fully claimed are worth a look,
   assert.equal(items[3].detail, '11 of 11 activations used');
   assert.equal(attentionWhen(items[3], NOW), 'created 3 weeks ago');
   assert.deepEqual(texts(build(calm({ plusUnavailable: true, gifts: [{ code: 'X', org: 'X', status: 'claimed', createdAt: ago(DAY) }] }))), ['Database: migration 0003_plus.sql not applied']);
+  assert.deepEqual(texts(build(calm({ partnersUnavailable: true }))), ['Database: migration 0006_partners.sql not applied']);
 });
 
 test('new reviews are one line, from the oldest, pointing at every new review', () => {

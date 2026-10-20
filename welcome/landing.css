@@ -653,6 +653,17 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
   .band__actions .btn:not(.btn--text-light) { width: 100%; }
 }
 
+/* For coaches and consultants: the partner program, one quiet line under the team gift. */
+.band__partner { display: flex; align-items: flex-start; gap: 10px; margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--band-line); color: var(--band-muted); font-size: .92rem; line-height: 1.5; }
+
+.band__partner svg.i { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 2px; color: var(--band-accent); }
+
+.band__partner b { color: var(--band-ink); font-weight: 680; }
+
+.band__partner a { color: var(--band-ink); font-weight: 650; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--band-accent) 70%, transparent); text-underline-offset: 3px; white-space: nowrap; }
+
+.band__partner a:hover { text-decoration-color: currentColor; }
+
 /* Requests: invoice, quote or question --------------------------------------- */
 
 .request { margin-top: clamp(28px, 4vw, 40px); }
@@ -1111,6 +1122,34 @@ input[type="number"]::-webkit-outer-spin-button { margin: 0; -webkit-appearance:
 }
 
 .gifts__note { color: var(--muted); font-size: .88rem; line-height: 1.5; }
+
+/* A member price the checkout didn't confirm: a calm question before paying the usual price. */
+.member-check { display: grid; gap: 12px; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 13px; background: var(--soft); }
+
+.member-check p { color: var(--ink); font-size: .92rem; line-height: 1.5; }
+
+.member-check__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+/* The launch price (LAUNCH in src/lib/pricing.js): a small badge, and one line on what comes after it. */
+.launch { display: flex; margin-bottom: 8px; }
+
+.launch__badge { display: inline-flex; align-items: center; min-height: 24px; padding: 0 10px; border-radius: 999px; background: color-mix(in srgb, var(--paint) 13%, transparent); color: var(--paint); font-size: .76rem; font-weight: 700; letter-spacing: .01em; white-space: nowrap; }
+
+.launch__line { color: var(--muted); font-size: .88rem; line-height: 1.5; }
+
+.plus-buy__launch { margin-top: 12px; }
+
+.plan__name .launch__badge { margin-left: 4px; }
+
+/* Under Get Plus in the pricing card, before the gifts. */
+.plan__launch { margin-top: -4px; text-align: center; font-size: .86rem; text-wrap: balance; }
+
+/* A member (Plus in this browser's planner): the member price first, the usual one after it. */
+.member__badge { display: inline-flex; align-items: center; min-height: 22px; margin-left: 4px; padding: 0 9px; border-radius: 999px; background: color-mix(in srgb, var(--habit) 15%, transparent); color: color-mix(in srgb, var(--habit) 85%, var(--ink)); font-size: .74rem; font-weight: 700; white-space: nowrap; }
+
+.gift-btn__price small { display: block; color: var(--muted); font-size: .76rem; font-weight: 560; letter-spacing: 0; text-align: right; }
+
+.plus-buy__alt-price b { color: var(--ink); font-weight: 700; }
 
 /* Coming to Plus, compact: titles and status only. */
 .teaser { display: grid; gap: 10px; padding: 15px 16px; border: 1.5px dashed color-mix(in srgb, var(--paint) 45%, var(--line-strong)); border-radius: 14px; }
@@ -2102,6 +2141,8 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 }
 
 @media (min-width: 1100px) {
+  /* The price card spans the words and the list: the words keep their height, the list takes the rest. */
+  .plus-buy { grid-template-rows: auto 1fr auto; }
   .plus-buy__list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 32px; }
 }
 
@@ -4382,5 +4423,150 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 .mg-keep { margin-top: 18px; }
 
+/* The partner program, once per device: a quiet card under the gift. */
+.mg-partner { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto 36px; align-items: center; gap: 12px 16px; margin-top: 28px; padding: 18px 14px 18px 20px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface-strong); }
+
+.mg-partner__icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--paint) 11%, var(--surface-strong)); color: var(--paint); }
+
+.mg-partner__icon svg.i { width: 21px; height: 21px; }
+
+.mg-partner__copy { display: grid; gap: 2px; min-width: 0; }
+
+.mg-partner h2 { font-size: 1rem; font-weight: 690; letter-spacing: -.015em; }
+
+.mg-partner p { color: var(--muted); font-size: .94rem; }
+
+.mg-partner__close { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 999px; background: none; color: var(--muted); cursor: pointer; }
+
+.mg-partner__close:hover { background: var(--soft); color: var(--ink); }
+
+.mg-partner__close svg.i { width: 18px; height: 18px; }
+
+@media (max-width: 639.98px) {
+  .mg-partner { grid-template-columns: 40px minmax(0, 1fr) 36px; align-items: start; }
+  .mg-partner .btn { grid-column: 2; justify-self: start; }
+  .mg-partner__close { grid-column: 3; grid-row: 1; }
+}
+
 /* No dock on this page, so no room kept for it. */
 body.manage-page { padding-bottom: 0; }
+
+/* Partners page (partners/): who the program is for, how it works, what it pays -- */
+
+body.partners-page { padding-bottom: 0; }
+
+.pt-top__about { padding: 8px 11px; border-radius: 9px; color: var(--muted); font-size: .92rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
+
+.pt-top__about:hover { background: var(--soft); color: var(--ink); }
+
+@media (max-width: 479.98px) {
+  .pt-top__about { display: none; }
+}
+
+.pt-hero { padding: clamp(40px, 7vw, 96px) 0 clamp(48px, 6vw, 80px); }
+
+/* Right after the hero, which already leaves room above it. */
+.section.pt-who { padding-top: clamp(24px, 3vw, 40px); }
+
+.pt-hero__grid { display: grid; gap: clamp(36px, 5vw, 64px); align-items: center; }
+
+.pt-hero__copy { display: grid; justify-items: start; gap: 20px; }
+
+.pt-hero__copy h1 { max-width: 13em; }
+
+.pt-hero__fine { color: var(--muted); font-size: .92rem; }
+
+@media (min-width: 960px) {
+  .pt-hero__grid { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+}
+
+/* The link, the sale, the commission: one card, three rows. */
+.pt-flow { display: grid; overflow: hidden; border: 1px solid color-mix(in srgb, var(--paint) 30%, var(--line)); border-radius: 22px; background: var(--surface-strong); box-shadow: 0 0 0 1px color-mix(in srgb, var(--paint) 8%, transparent), 0 30px 64px -40px color-mix(in srgb, var(--paint) 70%, transparent); }
+
+.pt-flow__row { display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 4px 14px; padding: 18px 22px; }
+
+.pt-flow__row + .pt-flow__row { border-top: 1px solid var(--line); }
+
+.pt-flow__icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--paint) 11%, var(--surface-strong)); color: var(--paint); }
+
+.pt-flow__icon svg.i { width: 21px; height: 21px; }
+
+.pt-flow__text { display: grid; gap: 2px; min-width: 0; }
+
+.pt-flow__text small { color: var(--muted); font-size: .84rem; font-weight: 600; }
+
+.pt-flow__text > b { font-size: 1.04rem; font-weight: 690; letter-spacing: -.012em; }
+
+.pt-flow code,
+.pt-link code { font: 600 .9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+
+.pt-flow code b,
+.pt-link code b { color: var(--paint); font-weight: 700; }
+
+.pt-flow__row--earn { background: color-mix(in srgb, var(--paint) 5%, var(--surface-strong)); }
+
+.pt-flow__row--earn .pt-flow__text > b { font-size: 1.5rem; font-weight: 760; letter-spacing: -.03em; }
+
+.pt-flow__note { grid-column: 2; color: var(--muted); font-size: .86rem; }
+
+/* Who it's for */
+.pt-cards { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+
+@media (min-width: 640px) {
+  .pt-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1000px) {
+  .pt-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+}
+
+.pt-card { display: grid; align-content: start; gap: 8px; min-width: 0; padding: clamp(20px, 2.4vw, 26px); border: 1px solid var(--line); border-radius: 20px; background: var(--surface-strong); }
+
+.pt-card__icon { width: 40px; height: 40px; display: grid; place-items: center; margin-bottom: 6px; border-radius: 12px; background: var(--soft); color: var(--paint); }
+
+.pt-card__icon svg.i { width: 21px; height: 21px; }
+
+.pt-card p { color: var(--muted); }
+
+/* How it works */
+.pt-steps { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; counter-reset: none; }
+
+@media (min-width: 900px) {
+  .pt-steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+}
+
+.pt-step { display: grid; align-content: start; gap: 10px; min-width: 0; padding: clamp(22px, 2.6vw, 30px); border: 1px solid var(--line); border-radius: 20px; background: var(--surface-strong); }
+
+.pt-step p { color: var(--muted); }
+
+.pt-step__n { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 999px; background: var(--paint); color: var(--on-paint); font-size: .92rem; font-weight: 740; }
+
+.pt-step .pt-link { margin-top: 4px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--ink); }
+
+/* What it pays */
+.pt-earn__grid { display: grid; gap: clamp(28px, 4vw, 56px); align-items: center; }
+
+@media (min-width: 900px) {
+  .pt-earn__grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); }
+}
+
+.pt-earn__figure { display: grid; justify-items: center; align-content: center; gap: 6px; min-height: 240px; padding: clamp(28px, 4vw, 44px); border: 1px solid color-mix(in srgb, var(--paint) 26%, var(--line)); border-radius: 28px; background: radial-gradient(120% 120% at 50% 0%, color-mix(in srgb, var(--paint) 12%, transparent), transparent 65%), var(--surface-strong); text-align: center; }
+
+.pt-earn__big { color: var(--paint); font-size: clamp(4rem, 3rem + 4vw, 6.4rem); font-weight: 780; letter-spacing: -.06em; line-height: 1; font-variant-numeric: tabular-nums; }
+
+.pt-earn__big.is-words { font-size: clamp(2.2rem, 1.7rem + 2vw, 3.2rem); letter-spacing: -.04em; }
+
+.pt-earn__of { max-width: 16em; color: var(--muted); font-size: 1.02rem; font-weight: 560; }
+
+.pt-earn__copy { display: grid; align-content: start; gap: 16px; }
+
+.pt-earn__list { margin-top: 4px; }
+
+.pt-earn__list b { font-weight: 680; }
+
+.pt-earn__fine { display: flex; align-items: flex-start; gap: 10px; margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: .94rem; }
+
+.pt-earn__fine svg.i { width: 20px; height: 20px; margin-top: 2px; color: var(--paint); }
+
+.foot__base a.foot__counts { text-decoration: none; }
+

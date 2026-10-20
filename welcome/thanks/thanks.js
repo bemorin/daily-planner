@@ -1,7 +1,7 @@
 // Imported as a namespace so a value missing from an older config.js reads as
 // undefined instead of failing the whole module.
 import * as config from '../../src/config.js';
-import { trackEvent, plannerApiEnabled, claimPurchase, rememberReferral } from '../../src/lib/planner-api.js';
+import { trackEvent, plannerApiEnabled, claimPurchase, dismissPartnerHint, partnerHintShown, rememberReferral } from '../../src/lib/planner-api.js';
 import { giftAudience, giftPageParams, isDefaultCompany } from '../landing-model.js';
 
 /* ============================================================================
@@ -15,6 +15,8 @@ import { giftAudience, giftPageParams, isDefaultCompany } from '../landing-model
    ?gift=CODE&key=KEY     the gift page link (email, bookmark, gifts made by invoice)
 
    The key only travels to PATCH /gifts/:code; the page never stores it.
+   Under the gift, one quiet card mentions the partner program, until it is
+   hidden or followed on this device (daily-planner-ui:partner-hints).
    ============================================================================ */
 
 const API = typeof config.PLANNER_API_URL === 'string' ? config.PLANNER_API_URL : '';
@@ -372,9 +374,20 @@ function readyTitle(gift) {
   document.title = name ? `Your gift page, ${name} — Daily Planner` : 'Your gift page — Daily Planner';
 }
 
+/* The partner program, once per device ------------------------------------- */
+
+function renderPartnerHint() {
+  const hint = qs('[data-partner-hint]');
+  if (!hint) return;
+  const commission = typeof config.AFFILIATE_COMMISSION === 'string' ? config.AFFILIATE_COMMISSION.trim() : '';
+  qs('[data-partner-text]', hint).textContent = `Become a partner: share your own link to Daily Planner, and earn ${commission ? `${commission} of` : 'a commission on'} every purchase made through it.`;
+  hint.hidden = !partnerHintShown('gift');
+}
+
 function showReady() {
   const gift = state.gift;
   renderAudience();
+  renderPartnerHint();
   readyTitle(gift);
   qs('[data-gift-url]').value = state.url;
   renderSeats();
@@ -467,6 +480,13 @@ function setupActions() {
     } else {
       setStatus(seatsStatus, result.status === 0 ? 'The server couldn’t be reached. Try again in a moment.' : (result.data.error || 'Couldn’t refresh. Try again in a moment.'), true);
     }
+  });
+
+  qs('[data-partner-go]')?.addEventListener('click', () => dismissPartnerHint('gift'));
+  qs('[data-partner-dismiss]')?.addEventListener('click', () => {
+    dismissPartnerHint('gift');
+    qs('[data-partner-hint]').hidden = true;
+    qs('[data-own-link]')?.focus({ preventScroll: true });
   });
 
   const form = qs('[data-message-form]');

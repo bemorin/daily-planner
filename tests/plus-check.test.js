@@ -15,7 +15,7 @@ Object.defineProperty(globalThis, 'localStorage', {
 });
 
 const plus = await import('../src/lib/plus.js');
-const { checkOutcome, createPlusCheck, PLUS_CHECK_INTERVAL_MS, plusCheckDue, plusNotice } = await import('../src/features/plus-check.js');
+const { checkOutcome, createPlusCheck, PLUS_CHECK_INTERVAL_MS, PLUS_RECHECK_EVENT, plusCheckDue, plusNotice, requestPlusCheck } = await import('../src/features/plus-check.js');
 
 const DAY = 86400000;
 const NOW = Date.parse('2026-10-19T09:00:00Z');
@@ -65,6 +65,26 @@ test('a check is due at most once every 7 days, only with the API, online and wi
   assert.equal(plusCheckDue({ ...base, lastAt: 0, online: false }), false, 'offline');
   assert.equal(plusCheckDue({ ...base, lastAt: 0, active: false }), false, 'no Plus, nothing to check');
   assert.equal(PLUS_CHECK_INTERVAL_MS, 7 * DAY);
+});
+
+test('a member price the server didn’t confirm asks for a check now, whatever the last one', async () => {
+  const base = { now: NOW, apiOn: true, online: true, active: true, lastAt: NOW - DAY };
+  assert.equal(plusCheckDue({ ...base, force: true }), true);
+  for (const off of [{ apiOn: false }, { online: false }, { active: false }]) assert.equal(plusCheckDue({ ...base, force: true, ...off }), false, JSON.stringify(off));
+  const { token } = await planner();
+  plus.writePlusCheck({ at: NOW - DAY });
+  const { check, calls } = checker({ answer: { ok: true, revoked: true } });
+  assert.equal(await check.run(), 'skipped', 'checked yesterday');
+  assert.equal(await check.run({ force: true }), 'revoked');
+  assert.deepEqual(calls, [token]);
+  assert.equal(plus.hasPlus(), false, 'the dialog follows: no member price any more');
+  // The Plus dialog asks through an event, which start() listens for.
+  const target = new EventTarget();
+  let heard = 0;
+  target.addEventListener(PLUS_RECHECK_EVENT, () => { heard += 1; });
+  requestPlusCheck(target);
+  assert.equal(heard, 1);
+  assert.doesNotThrow(() => requestPlusCheck(null));
 });
 
 test('only a clear answer counts; anything else never removes Plus', () => {
