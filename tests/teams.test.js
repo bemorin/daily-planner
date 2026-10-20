@@ -198,8 +198,8 @@ test('the team questions moved to the Teams page FAQ, in the welcome FAQ’s sty
   assert.deepEqual([...faq.matchAll(/<h3 class="faq__label">([^<]+)<\/h3>/g)].map(match => match[1]), ['Buying', 'Seats and people', 'Privacy']);
   assert.match(faq, /<p data-faq-pay>/, 'the invoice answer follows what is on sale');
   assert.match(faq, /<span data-largest-tier>1,000<\/span>/);
-  const gets = /<summary>What does each person get\?<\/summary>\s*<div class="qa__a"><p>([\s\S]*?)<\/p>/.exec(faq)[1];
-  for (const feature of PLUS_FEATURES) assert.ok(gets.includes(feature.title), feature.title);
+  const gets = /<summary>What does each person get\?<\/summary>\s*<div class="qa__a">([\s\S]*?)<\/div>/.exec(faq)[1];
+  for (const feature of PLUS_FEATURES) assert.ok(gets.includes(`<b>${feature.title}.</b>`), feature.title);
   // The landing page keeps one pointer for companies.
   assert.match(landing, /<summary>Can my company give Plus to its people\?<\/summary>[\s\S]*?href="teams\/">See the team gift<\/a>/);
   assert.doesNotMatch(landing, /<h3 class="faq__label">Team gift<\/h3>/);

@@ -94,7 +94,13 @@ test('config: the partner link must be https; the commission is no longer a buil
   const check = await read('scripts/check.mjs');
   assert.match(check, /'LEGAL_REGISTRATION', 'AFFILIATE_URL'\]/);
   assert.doesNotMatch(check, /AFFILIATE_COMMISSION/);
-  for (const file of ['src/config.js', 'admin/admin.js', 'admin/attention.js', 'welcome/partners/partners.js', 'welcome/partners/partners-model.js', 'docs/FEEDBACK_AND_WAITLIST.md', 'OWNER_NOTES.md']) assert.doesNotMatch(await read(file), /AFFILIATE_COMMISSION/, file);
+  for (const file of ['src/config.js', 'admin/admin.js', 'admin/attention.js', 'admin/partners-view.js', 'welcome/partners/partners.js', 'welcome/partners/partners-model.js']) assert.doesNotMatch(await read(file), /AFFILIATE_COMMISSION/, file);
+  // The owner is told the variable is gone, nowhere asked to set it.
+  for (const file of ['docs/FEEDBACK_AND_WAITLIST.md', 'OWNER_NOTES.md']) {
+    const doc = await read(file);
+    assert.match(doc, /`DAILY_PLANNER_AFFILIATE_COMMISSION` is gone/, file);
+    assert.doesNotMatch(doc, /\| `DAILY_PLANNER_AFFILIATE_COMMISSION` \||into `DAILY_PLANNER_AFFILIATE_COMMISSION`/, file);
+  }
 });
 
 test('the partners page: Become a partner goes to Creem, or to the question form on the Teams page while no link is set', () => {
