@@ -5,12 +5,16 @@
 // itself is never stored. Every value rendered here is escaped. Secret values
 // (Resend, Creem, Plus signing key) never reach this page: the Setup card
 // only says whether they are set. Trends (./trends-view.js) read the daily
-// series once per sign-in and again on Refresh.
+// series once per sign-in and again on Refresh. The page carries its own
+// version (APP_VERSION) and compares it with the one the API was deployed
+// with: when they differ, a banner offers a reload past the caches
+// (./version.js).
 
 import { createTrendsView } from './trends-view.js';
 import { dayOf, normalizeSeries, seriesWindow } from './trends.js';
 // The landing page's stepper (− value +): no browser spin arrows on Seats.
 import { createStepper } from '../welcome/stepper.js';
+import { compareVersions, readReloadMark, reloadUrl, versionNotice } from './version.js';
 
 const SESSION_KEY = 'daily-planner-owner-session';
 const LEGACY_TOKEN_KEY = 'daily-planner-owner-token';
@@ -43,6 +47,13 @@ const SIGNED_OUT_MESSAGE = 'Your session has ended. Please sign in again.';
 const SIGN_IN_FAILED_MESSAGE = 'Sign-in failed. Check the token and the code, then try again.';
 const UPDATE_API_MESSAGE = 'Update the API to see trends: this one does not answer admin/series yet (added in 1.21).';
 const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', manual: 'Invoice / manual' };
+// This page's own release, kept in step with package.json and src/config.js
+// (tests/admin-version.test.js). Not imported: it must come from this very
+// file, so an old cached admin.js shows its old number.
+const APP_VERSION = '1.25.0';
+// What Reload fetches again past the browser cache before opening the page anew.
+const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js'];
+const RELOAD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/></svg>';
 
 class ApiError extends Error {
   constructor(kind, message = '') {
@@ -1133,10 +1144,25 @@ function legalItem(base = 'https://planner.bemorin.com') {
   };
 }
 
+// The release the API was deployed with, and whether this page is the same one.
+function versionItem(summary) {
+  const server = String(summary.version || '').trim();
+  const page = esc(APP_VERSION);
+  const order = compareVersions(server, APP_VERSION);
+  if (Number.isNaN(order)) return { title: 'Deployed version', state: 'warn', label: 'Unknown', html: `<p>This API does not report its version yet (it is older than 1.25.0): redeploy it. This page is version ${page}.</p>` };
+  if (order === 0) return { title: `Deployed version ${server}`, state: 'ok', label: 'Up to date', html: '<p>This page is the deployed dashboard.</p>' };
+  return {
+    title: `Deployed version ${server}`,
+    state: 'warn',
+    label: 'Reload needed',
+    html: `<p>This page is version ${page}, from ${order > 0 ? 'an older' : 'a different'} deployment kept in a cache. Use Reload at the top of the page. If it stays, purge Cloudflare’s cache: your domain → Caching → Configuration → Purge Everything.</p>`
+  };
+}
+
 function setupItems(summary) {
   const setup = summary.setup;
   const base = setup.publicBaseUrl || 'https://planner.bemorin.com';
-  const items = [];
+  const items = [versionItem(summary)];
   const email = setup.email || {};
   items.push(email.configured
     ? { title: 'Email (Resend)', state: 'ok', html: `<p>Sending as ${esc(email.from)}, at most ${number(email.dailyLimit)} emails a day (<code>EMAIL_DAILY_LIMIT</code>; Resend’s free plan allows 100 a day, 3,000 a month).</p>` }
@@ -1212,13 +1238,65 @@ function renderReviews(summary) {
   target.innerHTML = rows.length ? `<div class="owner-reviews">${rows.map(reviewHtml).join('')}</div>` : '<p class="owner-empty">No reviews yet.</p>';
 }
 
+// ---- Version -------------------------------------------------------------------
+
+// A reload for another version arrives as ?v=<version>: read it, then put the
+// plain address back.
+const reloadMark = readReloadMark(location.href);
+if (reloadMark.cleanUrl !== location.href) {
+  try { history.replaceState(history.state, '', reloadMark.cleanUrl); } catch (_) {}
+}
+
+// “Version X” in the header and the banner's live region, made here so they
+// also appear when an older index.html comes from a cache.
+function mountVersion() {
+  const eyebrow = $('.owner-head .modal__eyebrow');
+  if (eyebrow && !$('[data-owner-version]')) eyebrow.insertAdjacentHTML('beforeend', `<span class="owner-version" data-owner-version> · Version ${esc(APP_VERSION)}</span>`);
+  if ($('[data-owner-update]')) return;
+  const banner = document.createElement('div');
+  banner.className = 'owner-update';
+  banner.dataset.ownerUpdate = '';
+  banner.setAttribute('role', 'status');
+  banner.hidden = true;
+  banner.addEventListener('click', event => {
+    const button = event.target.closest('[data-owner-update-reload]');
+    if (button) reloadDashboard(button);
+  });
+  $('.owner-shell').prepend(banner);
+}
+
+function renderVersion(summary) {
+  const banner = $('[data-owner-update]');
+  if (!banner) return;
+  const server = String(summary.version || '').trim();
+  const notice = versionNotice(APP_VERSION, server, { retried: !!reloadMark.version && reloadMark.version === server });
+  banner.hidden = !notice;
+  banner.dataset.version = notice ? notice.server : '';
+  banner.innerHTML = notice
+    ? `<span class="owner-update__icon" aria-hidden="true">${RELOAD_SVG}</span>
+      <div class="owner-update__body"><p class="owner-update__title"><b>${esc(notice.title)}</b> ${esc(notice.action)}</p><p>${esc(notice.detail)}</p>${notice.hint ? `<p class="owner-update__hint">${esc(notice.hint)}</p>` : ''}</div>
+      <button class="primary-button" type="button" data-owner-update-reload>Reload</button>`
+    : '';
+}
+
+// Fetch every file of the page again past the browser cache, then open the
+// page at a new address (?v=), which no cached copy can answer.
+async function reloadDashboard(button) {
+  const version = $('[data-owner-update]')?.dataset.version;
+  if (!version) return;
+  button.disabled = true;
+  button.textContent = 'Reloading…';
+  await Promise.allSettled(DASHBOARD_FILES.map(path => fetch(new URL(path, import.meta.url), { cache: 'reload' })));
+  location.replace(reloadUrl(location.href, version));
+}
+
 function renderSetup(summary) {
   const target = $('[data-owner-setup]');
   if (!summary.setup) {
     target.innerHTML = '<li class="owner-empty">This API does not report its setup yet. Redeploy it.</li>';
     return;
   }
-  target.innerHTML = setupItems(summary).map(item => `<li class="owner-setup__item is-${item.state}"><span class="owner-setup__mark" aria-hidden="true"></span><div class="owner-setup__body"><p class="owner-setup__title"><b>${esc(item.title)}</b><span>${SETUP_STATES[item.state]}</span></p>${item.html}</div></li>`).join('');
+  target.innerHTML = setupItems(summary).map(item => `<li class="owner-setup__item is-${item.state}"><span class="owner-setup__mark" aria-hidden="true"></span><div class="owner-setup__body"><p class="owner-setup__title"><b>${esc(item.title)}</b><span>${esc(item.label || SETUP_STATES[item.state])}</span></p>${item.html}</div></li>`).join('');
 }
 
 document.addEventListener('click', event => {
@@ -1238,8 +1316,8 @@ function renderSignals(summary) {
     landing_viewed: 'Landing page visits',
     landing_cta_app: 'Landing → opened the planner',
     landing_cta_teams: 'Landing → clicked toward Teams',
-    team_form_opened: 'Opened the team kit form',
-    team_request_sent: 'Sent a team kit request',
+    team_form_opened: 'Opened the request form',
+    team_request_sent: 'Sent a request (invoice, quote or question)',
     manager_email_opened: 'Opened the email to a manager',
     plus_modal_opened: 'Opened the Plus details',
     plus_checkout_clicked: 'Went to buy Plus',
@@ -1247,7 +1325,9 @@ function renderSignals(summary) {
     gift_opened: 'Opened a gift link',
     gift_redeemed: 'Activated a gift',
     year_plan_completed: 'Finished planning a year',
+    quarter_review_completed: 'Finished a quarter check-in',
     year_review_opened: 'Opened a year in review',
+    share_image_created: 'Made a share image (week or year)',
     pack_checkout_clicked: 'Landing → went to buy a team gift',
     gift_link_copied: 'Copied a team gift link',
     plus_viewed: 'Landing → scrolled to Plus',
@@ -1299,6 +1379,7 @@ async function load({ series: refreshSeries = false } = {}) {
     show('dashboard');
     $('[data-owner-session]').textContent = `Signed in until ${untilLabel(session.expiresAt)}`;
     $('[data-owner-sub]').textContent = `Private. Updated ${when(summary.generatedAt)} · counts since ${summary.sinceDay}.`;
+    renderVersion(summary);
     renderKpis(summary, days);
     renderFunnel(summary, days);
     renderTeamFunnel(summary, days);
@@ -1448,5 +1529,6 @@ $('[data-owner-announce-send]').addEventListener('click', () => {
 $('[data-owner-announce-cancel]').addEventListener('click', () => { hideAnnounceConfirm(); $('[data-owner-announce-send]').focus(); });
 $('[data-owner-announce-confirm-send]').addEventListener('click', () => sendAnnouncement(false));
 prefillAnnouncement();
+mountVersion();
 
 start();

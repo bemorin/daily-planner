@@ -9,6 +9,18 @@ const DEFAULT_INTERACTIVE_SELECTOR = [
   '.week-time-block'
 ].join(',');
 
+/**
+ * Which way a move between two days (or two week starts) travels, as the day
+ * arrows and swipes do: 1 forward in time, -1 back, 0 when nothing changes.
+ * Keys are `YYYY-MM-DD`, so they compare in calendar order.
+ */
+export function navigationDirection(fromKey, toKey) {
+  const from = String(fromKey || '');
+  const to = String(toKey || '');
+  if (!from || !to || from === to) return 0;
+  return to > from ? 1 : -1;
+}
+
 export function swipeDirection(deltaX, deltaY, { minDistance = 64, axisRatio = 1.25 } = {}) {
   const horizontal = Math.abs(Number(deltaX) || 0);
   const vertical = Math.abs(Number(deltaY) || 0);

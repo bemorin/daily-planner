@@ -2,6 +2,17 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.25.0 — 2026-10-20
+
+- **Share your week and your year (free)**: closing the last day of the week offers “Share your week”, and Horizon → Progress offers “Share your year” — an image drawn on the device (square, story or landscape; paper or ink) in your palette, shared, copied or downloaded. Private text (a lesson, the Misogi) appears only when you switch it on.
+- **Plus: Quarterly check-ins** — ten guided minutes as each quarter ends: the quarter's days, habit, time, Horizon and journal; two questions; the next quarter's habit and what to reschedule; a one-page print with room to write by hand. A card in Horizon from two weeks before a quarter ends to four weeks after.
+- **Plus: Insights** — in Stats and from Progress: findings in plain words, weekday rates and a focus heatmap, hours by category over time, outcomes per week and what happens to unfinished work, streaks, and this year against last. Computed on the device; free users see a sample.
+- Plus is now told as a four-step ritual (plan, print, check in, look back) plus Insights; the “Coming to Plus” list is gone.
+- **Floating window (Picture-in-Picture)**: a new Focus view (the block in progress with time left, what's next, the main outcome and the next tasks), a Plan that never crops wrapped rows and a Schedule timeline with no sideways scrolling; its arrows always move one day, in step with the main window; light and dark follow the app; Plan ends with a folded Unresolved list. Browsers without Picture-in-Picture no longer show the button.
+- “Now” slides in the right direction, like the arrows, in Day, Week and the floating window.
+- Plan your year offers the previous year's key dates on the same days (29 February becomes 28), once.
+- Owner dashboard: shows its version, warns when a cached copy is older than the deployed one and reloads it; a `_headers` file makes pages, scripts and styles revalidate on every visit.
+
 ## 1.24.0 — 2026-10-19
 
 - **Refunds switch Plus off.** A full refund or a dispute received from Creem (`refund.created`, `dispute.created`) switches off the purchase's activation link and its licence, or the gift link and every licence activated from it; a partial refund only notifies the owner. Planners ask about once a week, when online, whether their licence still holds (only the licence is sent) and show a one-time notice if it was revoked. A refund that arrives before the purchase is delivered blocks the delivery. The dashboard lists refunds and disputes (including ones still waiting for Creem) and can revoke or restore by hand; a restored licence comes back on its planners at their next weekly check. Run `migrations/0005_refunds.sql` and add the two webhook events in Creem.

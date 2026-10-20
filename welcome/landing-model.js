@@ -100,6 +100,22 @@ export function statusTone(status) {
   return ['next', 'planned', 'exploring'].includes(value) ? value : 'other';
 }
 
+const listText = items => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}` : items[0] || '');
+
+/**
+ * What Plus promises next, in one sentence for the FAQ, grouped by status:
+ * "Planned: “A” and “B”. Exploring: “C”." Empty when nothing is promised
+ * (the page then hides every part of the promise).
+ */
+export function upcomingSentence(items) {
+  const groups = new Map();
+  (Array.isArray(items) ? items : []).forEach(next => {
+    const status = String(next?.status || '').trim() || 'Coming';
+    groups.set(status, [...(groups.get(status) || []), `“${next.title}”`]);
+  });
+  return [...groups].map(([status, titles]) => `${status}: ${listText(titles)}.`).join(' ');
+}
+
 /** The company name the server uses when the buyer typed none at checkout. */
 export const DEFAULT_COMPANY = 'Your company';
 /** The same for personal gifts: Give Plus, then Plus Family. */

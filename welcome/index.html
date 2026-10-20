@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Daily Planner — free, private planner for your day and year</title>
-  <meta name="description" content="Plan what matters, close the day and keep the year in view. Free, no account, works offline: your plans stay in your browser. Daily Planner Plus adds a guided year plan and a one-page year in review, and makes a year-end gift for your team.">
+  <meta name="description" content="Plan what matters, close the day and keep the year in view. Free, no account, works offline: your plans stay in your browser. Daily Planner Plus adds a guided year plan, quarterly check-ins, Insights and a one-page year in review, and makes a year-end gift for your team.">
   <link rel="canonical" href="https://planner.bemorin.com/welcome/">
   <meta name="theme-color" content="#f6f3ed" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)">
@@ -52,7 +52,7 @@
     "author": { "@type": "Person", "name": "Ben Morin", "url": "https://bemorin.com/" },
     "offers": [
       { "@type": "Offer", "name": "Daily Planner", "description": "The planner, free for everyone.", "price": "0", "priceCurrency": "EUR" },
-      { "@type": "Offer", "name": "Daily Planner Plus", "description": "A one-time unlock: Plan your year, Your year in review and colours for the painted year.", "price": "29", "priceCurrency": "EUR" }
+      { "@type": "Offer", "name": "Daily Planner Plus", "description": "A one-time unlock: Plan your year, quarterly check-ins, Insights, Your year in review and colours for the painted year.", "price": "29", "priceCurrency": "EUR" }
     ]
   }
   </script>
@@ -105,6 +105,9 @@
     <symbol id="i-laptop" viewBox="0 0 24 24"><path d="M4.8 15.5V7a1.6 1.6 0 0 1 1.6-1.6h11.2A1.6 1.6 0 0 1 19.2 7v8.5"/><path d="M2.6 15.5h18.8l-.9 2.4a1.2 1.2 0 0 1-1.1.8H4.6a1.2 1.2 0 0 1-1.1-.8Z"/></symbol>
     <symbol id="i-tablet" viewBox="0 0 24 24"><rect x="4.5" y="3" width="15" height="18" rx="2.2"/><path d="M10.8 18h2.4"/></symbol>
     <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2.2"/><path d="M11 18h2"/></symbol>
+    <symbol id="i-checkin" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2.2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="m9.3 14.7 1.9 1.9 3.6-3.8"/></symbol>
+    <symbol id="i-insights" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7.5 16.5v-5M12 16.5V6.5M16.5 16.5v-8"/></symbol>
+    <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M16.5 3 20 6.5 16.5 10"/><path d="M4 11.5V10a3.5 3.5 0 0 1 3.5-3.5H20"/><path d="M7.5 21 4 17.5 7.5 14"/><path d="M20 12.5V14a3.5 3.5 0 0 1-3.5 3.5H4"/></symbol>
     <symbol id="i-history" viewBox="0 0 24 24"><path d="M4.6 12.8A7.5 7.5 0 1 0 6.9 6.6"/><path d="M5.8 3.8v3.6h3.6"/><path d="M12 8.2v4l2.7 1.7"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></symbol>
   </svg>
@@ -658,14 +661,15 @@
         <div class="section__intro" data-reveal-each>
           <p class="kicker"><svg class="i"><use href="#i-spark"/></svg>Daily Planner Plus</p>
           <h2 id="plus-title">Make <span data-plan-year>2027</span> count.</h2>
-          <p class="lead">A ritual for every year: plan it in a guided half hour, print it and fill it in by hand as the months go, then look back on one page. Everything above stays free. Plus is <span data-plus-price>€29</span>, paid once, with no subscription.</p>
+          <p class="lead">A ritual for every year: plan it in a guided half hour, print it and fill it in by hand, check in as each quarter ends, then look back on one page. Everything above stays free. Plus is <span data-plus-price>€29</span>, paid once, with no subscription.</p>
         </div>
 
         <div class="ritual" data-reveal-each>
           <ol class="ritual__steps" aria-label="The yearly ritual">
             <li class="ritual__step"><span class="ritual__icon" aria-hidden="true"><svg class="i"><use href="#i-compass"/></svg></span><span class="ritual__text"><b><span class="ritual__n">1</span>Plan it</b><span>A guided half hour</span></span></li>
             <li class="ritual__step"><span class="ritual__icon" aria-hidden="true"><svg class="i"><use href="#i-print"/></svg></span><span class="ritual__text"><b><span class="ritual__n">2</span>Print it</b><span>On your desk, filled in by hand all year</span></span></li>
-            <li class="ritual__step"><span class="ritual__icon" aria-hidden="true"><svg class="i"><use href="#i-history"/></svg></span><span class="ritual__text"><b><span class="ritual__n">3</span>Look back</b><span>Your year in review on one page, then plan the next</span></span></li>
+            <li class="ritual__step"><span class="ritual__icon" aria-hidden="true"><svg class="i"><use href="#i-checkin"/></svg></span><span class="ritual__text"><b><span class="ritual__n">3</span>Check in</b><span>Ten guided minutes as each quarter ends</span></span></li>
+            <li class="ritual__step"><span class="ritual__icon" aria-hidden="true"><svg class="i"><use href="#i-history"/></svg></span><span class="ritual__text"><b><span class="ritual__n">4</span>Look back</b><span>Your year in review on one page, then plan the next</span></span></li>
           </ol>
           <p class="ritual__loop"><span><svg class="i" aria-hidden="true"><use href="#i-sync"/></svg>Every year</span></p>
         </div>
@@ -847,6 +851,113 @@
 
         <div class="split split--visual-first plus-split">
           <div class="split__visual" data-reveal>
+            <div class="rp-scale rp-scale--quarter">
+              <div class="rp rp--quarter s-in s-bars s-notes s-ink" data-scene="quarter" data-final="s-in s-bars s-notes s-ink" aria-hidden="true">
+                <div class="rp-qp">
+                  <div class="rp-qp__mast">
+                    <div class="rp-qp__titles">
+                      <p class="rp-qp__period">1 July – 30 September <span data-plan-year data-year-offset="-1">2026</span></p>
+                      <p class="rp-qp__title">Q3 <span data-plan-year data-year-offset="-1">2026</span><span class="rp-qp__sub">, in review</span></p>
+                    </div>
+                    <p class="rp-qp__lead"><span data-q-text="closed">63</span> days closed, a mini-adventure lived and 238 h scheduled.</p>
+                  </div>
+                  <div class="rp-qp__band rp-qp__band--paint">
+                    <div class="rp-qp__figs">
+                      <span class="rp-qp__fig"><b data-count data-from="0" data-q="closed">63</b><span><strong>Days closed</strong><small>of <span data-q-text="planning">66</span> planning days</small></span></span>
+                      <span class="rp-qp__fig"><b><span data-count data-from="0" data-q="rate">95</span><small>%</small></b><span><strong>Close rate</strong><small>of planning days closed</small></span></span>
+                      <span class="rp-qp__fig rp-qp__fig--streak"><b><svg class="i"><use href="#i-flame"/></svg><span data-count data-from="0" data-q="streak">34</span><small>days</small></b><span><strong>Best streak</strong><small>Planning days in a row</small></span></span>
+                      <span class="rp-qp__fig"><b data-count data-from="0" data-q="mits">44</b><span><strong>Main outcomes done</strong><small>On <span data-q-text="mit-share">70</span>% of closed days</small></span></span>
+                      <span class="rp-qp__fig"><b><span data-count data-from="0" data-q="habit">54</span><small>%</small></b><span><strong>Habit kept</strong><small><span data-q-text="kept">50</span> of 92 days</small></span></span>
+                    </div>
+                    <div class="rp-qp__paint">
+                      <p class="rp-qp__h">The quarter, painted<span><span data-q-text="squares">63</span> squares, one per closed day</span></p>
+                      <div class="rp-qp__months" data-quarter-months></div>
+                      <ul class="rp-qp__legend"><li class="is-l1">Closed</li><li class="is-l2">+ main outcome</li><li class="is-l3">+ winning habit</li><li class="is-joker">Joker used</li><li class="is-miss">Not closed</li><li class="is-rest">Rest day</li></ul>
+                    </div>
+                    <div class="rp-qp__time">
+                      <p class="rp-qp__h">Where the time went<span>238 h over <span data-q-text="closed">63</span> days</span></p>
+                      <ol class="rp-qp__bars">
+                        <li style="--c:var(--c-deep);--w:100;--i:0"><b>Deep work</b><span>122 h</span><small>51%</small><i></i></li>
+                        <li style="--c:var(--c-admin);--w:41;--i:1"><b>Admin</b><span>50 h</span><small>21%</small><i></i></li>
+                        <li style="--c:var(--c-health);--w:30;--i:2"><b>Health</b><span>36 h</span><small>15%</small><i></i></li>
+                        <li style="--c:var(--c-personal);--w:16;--i:3"><b>Personal</b><span>19 h</span><small>8%</small><i></i></li>
+                        <li style="--c:var(--c-learn);--w:9;--i:4"><b>Learning</b><span>11 h</span><small>5%</small><i></i></li>
+                      </ol>
+                    </div>
+                  </div>
+                  <div class="rp-qp__band rp-qp__band--story">
+                    <div class="rp-qp__sec rp-qp__habit">
+                      <p class="rp-qp__h rp-qp__h--habit"><svg class="i"><use href="#i-repeat"/></svg>Winning habit<span>Q3</span></p>
+                      <p class="rp-qp__habit-name">Write three lines</p>
+                      <p class="rp-qp__habit-note">Best streak <span data-q-text="habit-streak">5</span> days · tracked from 1 Jul</p>
+                      <ol class="rp-qp__months-bars" data-quarter-habit>
+                        <li style="--w:58;--i:0"><span>Jul</span><i></i><b>58%</b></li>
+                        <li style="--w:52;--i:1"><span>Aug</span><i></i><b>52%</b></li>
+                        <li style="--w:53;--i:2"><span>Sep</span><i></i><b>53%</b></li>
+                      </ol>
+                    </div>
+                    <div class="rp-qp__sec rp-qp__horizon">
+                      <p class="rp-qp__h rp-qp__h--horizon"><svg class="i"><use href="#i-flag"/></svg>In Horizon this quarter<span>1 of 2 milestones · 1 of 1 lived</span></p>
+                      <ul class="rp-qp__checks">
+                        <li class="is-milestone is-done" style="--i:0"><i></i><b>30 km in training</b><em>30 Aug</em></li>
+                        <li class="is-milestone" style="--i:1"><i></i><b>Book the race hotel</b><em>12 Sep</em></li>
+                        <li class="is-adventure is-done" style="--i:2"><i><svg class="i"><use href="#i-check"/></svg></i><b>Kayak to the island</b><em>25 Jul</em></li>
+                      </ul>
+                    </div>
+                    <div class="rp-qp__sec rp-qp__journal">
+                      <p class="rp-qp__h">From the journal<span>2 memories · 2 lessons</span></p>
+                      <ul class="rp-qp__notes">
+                        <li style="--i:0"><time>27 Sep</time><b>Crossing the finish line with Sam</b></li>
+                        <li style="--i:1"><time>27 Jul</time><b>Kayak to the island at dawn</b></li>
+                        <li class="is-lesson" style="--i:2"><time>12 Aug</time><b>Short runs still count</b></li>
+                        <li class="is-lesson" style="--i:3"><time>15 Jul</time><b>Two priorities are plenty</b></li>
+                      </ul>
+                    </div>
+                  </div>
+                  <div class="rp-qp__band rp-qp__band--checkin">
+                    <div class="rp-qp__answer" style="--i:0">
+                      <p class="rp-qp__h">What went well</p>
+                      <p class="rp-qp__text">The long runs on Sunday mornings. Writing three lines most evenings made the busy weeks easier to read.</p>
+                      <span class="rp-qp__lines"><i><svg class="pen pen--line" viewBox="0 0 70 14" preserveAspectRatio="xMinYMax meet" style="--pen:0"><path pathLength="1" d="M1 10.9c.2-.1 1-.3 1.4-.6c.5-.4 1.1-1.2 1.6-1.6c.4-.5 .9-1.1 1.2-1.3c.3-.2 .5-.2 .7 0c.1 .2 .2 .8 .4 1.2c.1 .5 .2 1.3 .5 1.6c.2 .4 .4 .7 1 .7c.6 0 1.9-.3 2.7-.7c.8-.4 1.5-1.2 1.8-1.7c.4-.6 .4-1.2 .3-1.4c-.1-.2-.6-.2-.9 .1c-.2 .2-.6 .8-.6 1.4c0 .5 .3 1.2 .8 1.6c.5 .4 1.3 .8 2.2 .7c.9-.1 2.1-.7 3.1-1.6c.9-.8 2-2.6 2.5-3.7c.6-1.1 .9-2.5 .9-3c.1-.5-.4-.5-.7 0c-.2 .5-.8 1.9-1 3c-.1 1.1-.1 2.9 .2 3.7c.4 .9 1.7 1.4 2.1 1.6M23.8 11c.5-.3 2-.8 2.9-1.8c.9-.9 2-2.7 2.5-3.8c.6-1.2 .9-2.6 1-3.1c0-.5-.4-.5-.7 0c-.3 .6-.8 1.9-1 3.1c-.2 1.2-.3 2.9 0 3.9c.3 .9 1.3 1.5 1.8 1.7c.6 .1 1-.3 1.5-.7c.5-.4 1.1-1.2 1.5-1.7c.5-.6 .9-1.2 1.2-1.5c.4-.2 .5-.2 .7 .1c.2 .2 .2 .8 .4 1.3c.1 .6 .2 1.4 .4 1.8c.3 .4 .3 .8 1 .8c.6-.1 2-.5 2.8-1c.8-.5 1.5-1.3 1.9-1.9c.4-.6 .4-1.2 .3-1.5c-.1-.2-.6-.3-.8-.1c-.3 .3-.7 1-.7 1.6c0 .6 .2 1.4 .7 1.9c.5 .5 1.9 .8 2.2 .9"/></svg></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                    </div>
+                    <div class="rp-qp__answer" style="--i:1">
+                      <p class="rp-qp__h">What I’ll do differently in Q4</p>
+                      <p class="rp-qp__text">No email before the first block. Book the taper weeks before the race.</p>
+                      <span class="rp-qp__lines"><i><svg class="pen pen--line" viewBox="0 0 70 14" preserveAspectRatio="xMinYMax meet" style="--pen:1.6"><path pathLength="1" d="M1 11.1c.5-.3 2.1-.8 3.1-1.8c.9-.9 2-2.7 2.6-3.9c.6-1.2 .9-2.7 .9-3.3c.1-.5-.4-.4-.7 .1c-.2 .5-.9 2-1 3.2c-.2 1.2-.3 3 .1 3.9c.3 1 1.3 1.6 1.9 1.7c.7 .2 1.4-.4 2.1-.8c.6-.5 1.3-1.4 1.7-1.9c.4-.6 .7-1.3 .8-1.6c.1-.3 0-.3-.1-.1c0 .3-.2 1-.2 1.6c.1 .6 .2 1.5 .5 2c.4 .4 1 .8 1.5 .8c.5 0 1-.3 1.5-.7c.6-.5 1.2-1.4 1.7-1.9c.4-.5 .9-1.1 1.2-1.4c.4-.2 .6-.3 .7 0c.2 .2 .2 .8 .4 1.4c.1 .5 .2 1.4 .4 1.9c.3 .4 .4 .8 1 .8c.7 0 2-.4 2.8-.8c.8-.4 1.5-1.3 1.9-1.8c.3-.5 .3-1.1 .2-1.3c-.1-.2-.6-.3-.8-.1c-.3 .3-.7 .9-.7 1.4c0 .6 .3 1.3 .8 1.7c.5 .5 1.9 .8 2.2 .9M30.1 11.1c.5-.3 2.1-.8 3-1.7c1-1 2.1-2.8 2.7-4c.6-1.1 .9-2.6 .9-3.1c.1-.5-.3-.5-.6 0c-.3 .5-.9 2-1 3.2c-.2 1.1-.3 3 .1 3.9c.3 .9 1.1 1.5 1.9 1.7c.8 .2 2.1-.4 2.9-.7c.8-.4 1.6-1.2 1.9-1.7c.4-.5 .4-1.1 .3-1.3c-.1-.3-.7-.3-.9-.1c-.3 .3-.7 .9-.7 1.4c.1 .5 .3 1.3 .9 1.7c.5 .4 2 .6 2.4 .7"/></svg></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                    </div>
+                    <div class="rp-qp__next" style="--i:2">
+                      <p class="rp-qp__h rp-qp__h--next"><svg class="i"><use href="#i-arrow"/></svg>Next · Q4<span>October – December</span></p>
+                      <dl>
+                        <div><dt>Winning habit</dt><dd>Stretch before bed</dd></div>
+                        <div><dt>Focus</dt><dd>Run the marathon, then rest properly</dd></div>
+                      </dl>
+                    </div>
+                  </div>
+                  <p class="rp-qp__domain"><span>B</span>planner.bemorin.com</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="split__copy" data-reveal-each>
+            <p class="ritual-tag">Step 3 · Check in</p>
+            <h3 class="h3-lg">Check in every quarter</h3>
+            <p>Ten guided minutes as each quarter ends: see the days you closed and how your winning habit held, answer two honest questions, and set the habit for the next three months.</p>
+            <ul class="ticks">
+              <li>Move what slipped to the next quarter in one tap, or tick what you did.</li>
+              <li>Everything is saved in Horizon as you type, so you can stop and come back.</li>
+            </ul>
+            <p class="print-note"><svg class="i"><use href="#i-print"/></svg><span><b>Then print the quarter on one page,</b> with room to write by hand.</span></p>
+          </div>
+        </div>
+
+        <div class="split plus-split">
+          <div class="split__copy" data-reveal-each>
+            <p class="ritual-tag">Step 4 · Look back</p>
+            <h3 class="h3-lg">Your year in review</h3>
+            <p>One page for a whole year: days closed, the painted year, your best streak, trophies unlocked, main outcomes done and where your time went. Then how the Misogi, the mini-adventures and the habits turned out, with a few memories and lessons from your journal.</p>
+            <p class="print-note"><svg class="i"><use href="#i-print"/></svg><span><b>It prints on one page.</b> Keep it with the plan it answers, then plan the next year.</span></p>
+          </div>
+          <div class="split__visual" data-reveal>
             <div class="rp-scale">
               <div class="rp rp--review s-in s-bars s-notes" data-scene="review" data-final="s-in s-bars s-notes" aria-hidden="true">
                 <div class="rp-rv">
@@ -891,11 +1002,62 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <div class="split split--visual-first plus-split plus-split--insights">
+          <div class="split__visual" data-reveal>
+            <div class="rp-scale rp-scale--insights">
+              <div class="rp rp--insights s-in s-bars" data-scene="insights" data-final="s-in s-bars" aria-hidden="true">
+                <div class="rp-ins">
+                  <div class="rp-ins__head">
+                    <span><span class="rp-eyebrow">Insights</span><b class="rp-title">What your days add up to</b></span>
+                    <span class="rp-ins__range"><i>4 weeks</i><i>Quarter</i><i class="is-on">Year</i></span>
+                  </div>
+                  <p class="rp-ins__meta"><span data-plan-year data-year-offset="-1">2026</span> · 214 days closed</p>
+                  <div class="rp-ins__finds">
+                    <p class="rp-ins__h">What stands out</p>
+                    <ul>
+                      <li style="--i:0">Wednesdays and Thursdays are your strongest days: 93% closed.</li>
+                      <li style="--i:1">Most of your deep work happens 9–11.</li>
+                      <li style="--i:2">You finish your main outcome on 73% of the days you set one.</li>
+                      <li style="--i:3">60 more days closed than by this time last year.</li>
+                    </ul>
+                  </div>
+                  <div class="rp-ins__cards">
+                    <div class="rp-ins__card">
+                      <p class="rp-ins__title">Days that work</p>
+                      <p class="rp-ins__sub">Days closed, and main outcomes done, by weekday.</p>
+                      <div class="rp-ins__week">
+                        <span style="--a:86;--b:71;--i:0"><b>Mon</b><i></i><i></i><em>86%<small>71%</small></em></span>
+                        <span style="--a:90;--b:80;--i:1"><b>Tue</b><i></i><i></i><em>90%<small>80%</small></em></span>
+                        <span style="--a:93;--b:68;--i:2"><b>Wed</b><i></i><i></i><em>93%<small>68%</small></em></span>
+                        <span style="--a:93;--b:74;--i:3"><b>Thu</b><i></i><i></i><em>93%<small>74%</small></em></span>
+                        <span style="--a:55;--b:60;--i:4"><b>Fri</b><i></i><i></i><em>55%<small>60%</small></em></span>
+                        <span class="is-rest" style="--a:10;--b:79;--i:5"><b>Sat<small>rest</small></b><i></i><i></i><em>10%<small>79%</small></em></span>
+                        <span class="is-rest" style="--a:5;--b:84;--i:6"><b>Sun<small>rest</small></b><i></i><i></i><em>5%<small>84%</small></em></span>
+                      </div>
+                      <p class="rp-ins__key"><span><i></i>Days closed</span><span><i class="is-b"></i>Main outcome done</span></p>
+                    </div>
+                    <div class="rp-ins__card">
+                      <p class="rp-ins__title">When your time is scheduled</p>
+                      <p class="rp-ins__sub">Average minutes scheduled in each hour, by weekday.</p>
+                      <div class="rp-ins__heat" data-insights-heat></div>
+                      <p class="rp-ins__key rp-ins__key--scale"><span>Less</span><i class="is-l0"></i><i class="is-l1"></i><i class="is-l2"></i><i class="is-l3"></i><i class="is-l4"></i><i class="is-l5"></i><span>More</span></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="split__copy" data-reveal-each>
-            <p class="ritual-tag">Step 3 · Look back</p>
-            <h3 class="h3-lg">Your year in review</h3>
-            <p>One page for a whole year: days closed, the painted year, your best streak, trophies unlocked, main outcomes done and where your time went. Then how the Misogi, the mini-adventures and the habits turned out, with a few memories and lessons from your journal.</p>
-            <p class="print-note"><svg class="i"><use href="#i-print"/></svg><span><b>It prints on one page.</b> Keep it with the plan it answers, then plan the next year.</span></p>
+            <p class="ritual-tag">Also with Plus</p>
+            <h3 class="h3-lg">Insights</h3>
+            <p>See which weekdays work best for you, when your focus really happens, where your hours go month by month, and how this year compares with the last.</p>
+            <ul class="ticks">
+              <li>In Stats, beside Day and Week, and from Horizon under Progress.</li>
+              <li>A few plain sentences on top, each chart with a table behind it.</li>
+            </ul>
+            <p class="print-note"><svg class="i"><use href="#i-shield"/></svg><span><b>Worked out on your device</b> from the days you close. Nothing is sent anywhere.</span></p>
           </div>
         </div>
 
@@ -937,24 +1099,19 @@
           </article>
         </div>
 
-        <section class="soon soon--wide" aria-labelledby="soon-plus" data-reveal>
+        <section class="soon soon--wide" aria-labelledby="soon-plus" data-plus-soon hidden>
           <div class="soon__head">
             <h3 id="soon-plus"><svg class="i"><use href="#i-spark"/></svg>Coming to Plus</h3>
             <p>Included, at no extra cost. Buy once: everything Plus gets later is yours.</p>
           </div>
-          <ul class="soon__list" data-plus-upcoming data-detailed>
-            <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><h4 class="soon__name">Sync without Google</h4><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></div><span class="soon__text">Your planner on all your devices with a Daily Planner account, encrypted on your device before it leaves it.</span></div></li>
-            <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><h4 class="soon__name">Your calendar beside your day</h4><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></div><span class="soon__text">See Google, Outlook or iCloud events next to your blocks, read-only.</span></div></li>
-            <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><h4 class="soon__name">Share your year</h4><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></div><span class="soon__text">An image of your painted year or your Misogi, ready to post.</span></div></li>
-            <li class="soon__item"><span class="soon__mark" aria-hidden="true"></span><div class="soon__body"><div class="soon__top"><h4 class="soon__name">An evening nudge</h4><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></div><span class="soon__text">A gentle reminder to close the day, at the time you choose.</span></div></li>
-          </ul>
+          <ul class="soon__list" data-plus-upcoming data-detailed></ul>
           <p class="soon__foot"><span>Planned means it’s on the way; Exploring means it’s still being worked out.</span><a href="#pricing">See all prices</a></p>
         </section>
 
         <div class="plus-buy" data-reveal>
           <div class="plus-buy__head">
             <p class="plus-buy__kicker"><svg class="i"><use href="#i-spark"/></svg>Daily Planner Plus</p>
-            <h3 class="plus-buy__title">Plan it, print it, look back. Every year.</h3>
+            <h3 class="plus-buy__title">Plan it, print it, check in, look back. Every year.</h3>
             <p class="plus-buy__note">Every Plus feature for one person, today’s and those to come.</p>
           </div>
           <div class="plus-buy__offer">
@@ -964,9 +1121,10 @@
             <p class="plus-buy__trust"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span>No subscription, no account. Plus is checked on your device.</span></p>
           </div>
           <ul class="oks plus-buy__list" aria-label="What you get with Plus">
-            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Plan your year</b> <span>A guided half hour</span></span></li>
-            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Print it</b> <span>Your year on one page, for your desk</span></span></li>
+            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Plan your year</b> <span>A guided half hour, printed on one page</span></span></li>
+            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Quarterly check-ins</b> <span>Ten minutes as each quarter ends</span></span></li>
             <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Your year in review</b> <span>One page, ready to print</span></span></li>
+            <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Insights</b> <span>Your best weekdays, focus hours and time</span></span></li>
             <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Five more palettes</b> <span>For the year that paints itself</span></span></li>
             <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span><span><b>Everything Plus gets later</b> <span>Included, at no extra cost</span></span></li>
           </ul>
@@ -1153,6 +1311,7 @@
               <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Day and Week views, with time blocks</li>
               <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Close the day, Unresolved, the journal and time stats</li>
               <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Horizon and Progress: your year on one page, painted as you go</li>
+              <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Share your week and your year as an image</li>
               <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Works offline, installs as an app, syncs through your Google Drive</li>
             </ul>
             <div class="plan__cta"><a class="btn btn--ghost" href="../" data-cta="app">Open the planner</a></div>
@@ -1162,11 +1321,13 @@
             <div class="plan__head">
               <h3 class="plan__name" id="plan-plus"><svg class="i"><use href="#i-spark"/></svg>Plus</h3>
               <p class="plan__price"><span data-plus-price>€29</span> <small>once</small></p>
-              <p class="plan__sub">For the year itself: plan it in one sitting, review it on one page. For one person, for life, on all your devices.</p>
+              <p class="plan__sub">For the year itself: plan it, check in each quarter, look back on one page. For one person, for life, on all your devices.</p>
             </div>
             <ul class="oks" data-plus-lines>
               <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Everything in Free</li>
               <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Plan your year</li>
+              <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Quarterly check-ins</li>
+              <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Insights</li>
               <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Your year in review</li>
               <li><span class="ok" aria-hidden="true"><svg class="i"><use href="#i-check"/></svg></span>Colours for your painted year</li>
             </ul>
@@ -1181,14 +1342,9 @@
                 <p class="gifts__note">After paying, you get a link to send. Plus is theirs for life as soon as they open it.</p>
                 <p class="buy__error" role="alert" data-buy-error hidden></p>
               </section>
-              <section class="teaser" aria-labelledby="teaser-title">
+              <section class="teaser" aria-labelledby="teaser-title" data-plus-soon hidden>
                 <h4 class="teaser__title" id="teaser-title">Coming to Plus — included</h4>
-                <ul class="teaser__list" data-plus-upcoming data-compact>
-                  <li><span class="teaser__name">Sync without Google</span><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></li>
-                  <li><span class="teaser__name">Your calendar beside your day</span><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></li>
-                  <li><span class="teaser__name">Share your year</span><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></li>
-                  <li><span class="teaser__name">An evening nudge</span><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></li>
-                </ul>
+                <ul class="teaser__list" data-plus-upcoming data-compact></ul>
               </section>
             </div>
           </article>
@@ -1217,11 +1373,14 @@
                   <tr><th scope="row">Horizon: Misogi, mini-adventures, commitments, habits and year map</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
                   <tr><th scope="row">Progress: the painted year, the streak and twenty trophies</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
                   <tr><th scope="row">Print your year on one page</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Share your week and your year as an image</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
                 </tbody>
                 <tbody class="cmp__plus">
                   <tr class="cmp__group"><th scope="rowgroup" colspan="2">Only in Plus</th><td></td></tr>
                   <tr><th scope="row">Plan your year: a guided session of about 30 minutes</th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Quarterly check-ins: ten guided minutes, printed on one page</th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
                   <tr><th scope="row">Your year in review, on one printable page</th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
+                  <tr><th scope="row">Insights: your best weekdays, focus hours and where time goes</th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
                   <tr><th scope="row">Five more palettes for the painted year</th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
                 </tbody>
                 <tbody>
@@ -1230,12 +1389,8 @@
                   <tr><th scope="row">Installs as an app on computer, tablet and phone</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
                   <tr><th scope="row">Sync through your own Google Drive</th><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td><td><span class="ok"><svg class="i"><use href="#i-check"/></svg><span class="sr-only">Included</span></span></td></tr>
                 </tbody>
-                <tbody class="cmp__soon" data-compare-upcoming>
+                <tbody class="cmp__soon" data-compare-upcoming hidden>
                   <tr class="cmp__group"><th scope="rowgroup" colspan="2">Coming to Plus</th><td></td></tr>
-                  <tr><th scope="row"><span class="cmp__name">Sync without Google</span><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="soon-ok"><span class="soon-ok__mark" aria-hidden="true"></span><span class="soon-ok__text">Included when it ships</span></span></td></tr>
-                  <tr><th scope="row"><span class="cmp__name">Your calendar beside your day</span><span class="chip chip--planned"><span class="sr-only">Status: </span>Planned</span></th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="soon-ok"><span class="soon-ok__mark" aria-hidden="true"></span><span class="soon-ok__text">Included when it ships</span></span></td></tr>
-                  <tr><th scope="row"><span class="cmp__name">Share your year</span><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="soon-ok"><span class="soon-ok__mark" aria-hidden="true"></span><span class="soon-ok__text">Included when it ships</span></span></td></tr>
-                  <tr><th scope="row"><span class="cmp__name">An evening nudge</span><span class="chip chip--exploring"><span class="sr-only">Status: </span>Exploring</span></th><td><span class="no" aria-hidden="true"></span><span class="sr-only">Not included</span></td><td><span class="soon-ok"><span class="soon-ok__mark" aria-hidden="true"></span><span class="soon-ok__text">Included when it ships</span></span></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1281,7 +1436,11 @@
               </details>
               <details class="qa" name="faq">
                 <summary>Can I sync without Google?</summary>
-                <div class="qa__a"><p>Not yet. Google Drive sync is free today: one hidden file in your own Drive keeps your devices in step. Sync with a Daily Planner account, without Google, is planned for Plus. Meanwhile, a backup file moves everything from one browser to another.</p></div>
+                <div class="qa__a"><p>Not at the moment. Google Drive sync is free: one hidden file in your own Drive keeps your devices in step, and nothing is stored on our servers. Without it, a backup file moves everything from one browser to another.</p></div>
+              </details>
+              <details class="qa" name="faq">
+                <summary>Can I share my week or my year?</summary>
+                <div class="qa__a"><p>Yes, for free. When you close the last planning day of a week, its summary offers Share your week, and Progress offers Share your year. Either becomes a clean image for a post or a message, made on your device: nothing is uploaded.</p></div>
               </details>
               <details class="qa" name="faq">
                 <summary>Which devices does it work on?</summary>
@@ -1297,7 +1456,9 @@
                 <div class="qa__a">
                   <ul class="qa__list">
                     <li><b>Plan your year.</b> A guided session that sets up Horizon for the year in about 30 minutes: your Misogi and when it happens, milestones, six mini-adventures, three commitments, a habit per quarter and key dates. It ends with your year printed on one page.</li>
+                    <li><b>Quarterly check-ins.</b> Ten guided minutes as each quarter ends: the days you closed, how your winning habit held, two honest questions and the habit for the next three months. The quarter then prints on one page.</li>
                     <li><b>Your year in review.</b> One printable page: days closed, the painted year, your best streak, trophies, main outcomes done, time by category, how the Misogi, adventures and habits went, and a few memories and lessons from your journal.</li>
+                    <li><b>Insights.</b> Which weekdays work best for you, when your focus happens, where your hours go month by month and how this year compares with the last, worked out on your device.</li>
                     <li><b>Colours for your painted year.</b> Five more palettes. Terracotta stays free.</li>
                     <li><b>What comes next.</b> Everything Plus gets later is included, at no extra cost.</li>
                   </ul>
@@ -1305,7 +1466,7 @@
               </details>
               <details class="qa" name="faq">
                 <summary>Are future Plus features included?</summary>
-                <div class="qa__a"><p>Yes. You pay once, and everything added to Plus later is yours at no extra cost. <span data-faq-upcoming>Planned: “Sync without Google” and “Your calendar beside your day”. Exploring: “Share your year” and “An evening nudge”.</span></p></div>
+                <div class="qa__a"><p>Yes. You pay once, and everything added to Plus later is yours at no extra cost.<span data-faq-upcoming hidden></span></p></div>
               </details>
               <details class="qa" name="faq">
                 <summary>Is Plus a subscription?</summary>

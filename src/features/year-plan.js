@@ -7,8 +7,9 @@ import { panelEnter } from '../ui/motion.js';
 /**
  * "Plan your year" (Daily Planner Plus): a guided session that sets up Horizon
  * for one year in eight short steps — look back, Misogi, milestones, six
- * mini-adventures, three commitments, quarterly habits, key dates — and ends
- * with a summary and "Print your year".
+ * mini-adventures, three commitments, quarterly habits, key dates (with the
+ * year before's key dates offered on the same days) — and ends with a summary
+ * and "Print your year".
  *
  * Every field writes straight into the year's Horizon data with the shapes
  * Horizon already uses, so leaving half-way never loses anything and the
@@ -255,6 +256,82 @@ export function upsertKeyDate(d, year, { id, text: title = '', startDate = '', e
   return true;
 }
 
+// Key dates from the year before -------------------------------------------
+
+const dayNumber = key => Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1, Number(key.slice(8, 10))) / 86400000;
+const dayKeyOf = number => new Date(number * 86400000).toISOString().slice(0, 10);
+const sameTitle = value => text(value).trim().toLocaleLowerCase().replace(/[‘’]/g, '\'').replace(/\s+/g, ' ');
+
+/** A 'YYYY-MM-DD' key moved by whole years: same day and month, 29 February → 28 February. */
+export function shiftYearKey(key, years) {
+  if (!ISO_DAY.test(key || '')) return '';
+  const year = Number(key.slice(0, 4)) + years;
+  const month = Number(key.slice(5, 7)) - 1;
+  return `${year}-${pad(month + 1)}-${pad(Math.min(Number(key.slice(8, 10)), daysIn(year, month)))}`;
+}
+
+/** A key date moved by whole years. A period keeps its length in days, even across 29 February or the year end. */
+export function shiftKeyDate(item, years) {
+  const startDate = shiftYearKey(item?.startDate, years);
+  if (!startDate) return null;
+  const length = ISO_DAY.test(item.endDate || '') && item.endDate > item.startDate ? dayNumber(item.endDate) - dayNumber(item.startDate) : 0;
+  return { text: text(item.text).trim(), startDate, endDate: length ? dayKeyOf(dayNumber(startDate) + length) : '' };
+}
+
+/**
+ * The key dates of the year before `year` that the Key dates step offers to
+ * bring into `year`, moved to the same days. Leaves out the ones an earlier
+ * “Add” already handled (`carriedKeyDates` on the year’s data), exact
+ * duplicates and any that would no longer touch `year`. `present` marks the
+ * ones `year` already has under the same name (paired one to one, the same day
+ * first): they start unticked.
+ */
+export function keyDatesToCarry(previous, current, year) {
+  const handled = new Set(Array.isArray(current?.carriedKeyDates) ? current.carriedKeyDates : []);
+  const seen = new Set();
+  const offers = [];
+  yearKeyDates(previous || {}, year - 1).forEach(anchor => {
+    if (!anchor.id || handled.has(anchor.id)) return;
+    const legacy = ISO_DAY.test(anchor.date || '') ? anchor.date : `${year - 1}-${pad(anchor.ownerMonth + 1)}-01`;
+    const shifted = shiftKeyDate({ ...anchor, startDate: ISO_DAY.test(anchor.startDate || '') ? anchor.startDate : legacy }, 1);
+    if (!shifted?.text || (shifted.endDate || shifted.startDate) < `${year}-01-01` || shifted.startDate > `${year}-12-31`) return;
+    const key = `${sameTitle(shifted.text)}|${shifted.startDate}|${shifted.endDate}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    offers.push({ id: anchor.id, ...shifted, present: false });
+  });
+  const existing = yearKeyDates(current || {}, year).map(item => ({ title: sameTitle(item.text), startDate: item.startDate, used: false }));
+  [true, false].forEach(sameDay => offers.forEach(offer => {
+    if (offer.present) return;
+    const match = existing.find(item => !item.used && item.title === sameTitle(offer.text) && (!sameDay || item.startDate === offer.startDate));
+    if (match) { match.used = true; offer.present = true; }
+  }));
+  return offers.sort((a, b) => a.startDate.localeCompare(b.startDate) || a.text.localeCompare(b.text));
+}
+
+/**
+ * Add the chosen offers to `year` as ordinary key dates, stored under the
+ * month they start in (as Horizon stores them), and remember every offer that
+ * was on the card, ticked or not, so the step does not offer them again.
+ */
+export function carryKeyDates(d, year, offers, chosenIds, makeId = () => uid('keydate')) {
+  if (!d.months || typeof d.months !== 'object') d.months = {};
+  const chosen = new Set(chosenIds);
+  const added = [];
+  offers.forEach(offer => {
+    if (!chosen.has(offer.id) || !ISO_DAY.test(offer.startDate || '') || !filled(offer.text)) return;
+    const key = `${year}-${offer.startDate.slice(5, 7)}`;
+    if (!d.months[key] || typeof d.months[key] !== 'object') d.months[key] = { outcomes: [], anchors: [] };
+    if (!Array.isArray(d.months[key].anchors)) d.months[key].anchors = [];
+    const anchor = { id: makeId(), text: offer.text.trim(), startDate: offer.startDate, endDate: offer.endDate || '' };
+    d.months[key].anchors.push(anchor);
+    added.push(anchor);
+  });
+  const handled = Array.isArray(d.carriedKeyDates) ? d.carriedKeyDates : [];
+  d.carriedKeyDates = [...new Set([...handled, ...offers.map(offer => offer.id)])];
+  return added;
+}
+
 /** What the session has set for a year — the Done step and the step rail ticks. */
 export function planSummary(d, year) {
   const keyDates = yearKeyDates(d, year);
@@ -304,7 +381,7 @@ export function isHorizonMostlyEmpty(d, keyDateCount = 0) {
 
 /**
  * @param {object} options
- * @param {object} options.ctx Horizon context (yearData, persist, keyDates, openPeriod, openCalendar, openList, confirm, printYear, getYear, shiftYear, track?)
+ * @param {object} options.ctx Horizon context (yearData, persist, keyDates, openPeriod, openCalendar, openList, confirm, printYear, getYear, shiftYear, minYear?, track?)
  * @param {(options: object) => {el: HTMLElement, close: Function}} options.overlay mounts an overlay over the Horizon dialog
  * @param {(name: string, className?: string) => string} options.icon
  * @param {(year: number, target: 'close'|'horizon'|'print', typed: boolean) => void} options.onLeave called after the session closes
@@ -491,6 +568,51 @@ export function createYearPlan({ ctx, overlay, icon, onLeave }) {
     return `<button type="button" class="hz-date-chip${startKey ? ' has-value' : ''}" ${attr}="${escAttr(id)}" aria-label="${escAttr(`${empty}${startKey ? ` (currently ${value})` : ''}`)}">${icon('calendar')}<span>${esc(value)}</span></button>`;
   }
 
+  // Key dates of the year before, offered once per year (read when the step first shows).
+  function carryState(d) {
+    const drafts = session.drafts;
+    if (!drafts.carry) {
+      // A year before Horizon's first one has nothing to offer: don't create it just to look.
+      const before = session.year - 1;
+      const previous = typeof ctx.minYear === 'function' && before < ctx.minYear() ? null : ctx.yearData(before);
+      const offers = keyDatesToCarry(previous, d, session.year);
+      drafts.carry = { offers, checked: new Set(offers.filter(offer => !offer.present).map(offer => offer.id)), added: null };
+    }
+    return drafts.carry;
+  }
+
+  const carryCount = carry => `${carry.checked.size} of ${carry.offers.length} selected`;
+  const datesWord = count => (count === 1 ? '1 date' : `${count} dates`);
+
+  function carryCard(d) {
+    const carry = carryState(d);
+    const from = session.year - 1;
+    if (carry.added !== null) {
+      return `<p class="yp-carry-done" role="status" tabindex="-1" data-plan-carry-done>${icon('check')}<span>${datesWord(carry.added)} from ${from} added to ${session.year}. Change or remove them in Horizon any time.</span></p>`;
+    }
+    if (!carry.offers.some(offer => !offer.present)) return '';
+    const rows = carry.offers.map(offer => `<li><label class="yp-carry__item${offer.present ? ' is-present' : ''}">
+        <input type="checkbox" class="check" data-plan-carry="${escAttr(offer.id)}" ${carry.checked.has(offer.id) ? 'checked' : ''}>
+        <span class="yp-carry__date">${esc(rangeLabel(offer.startDate, offer.endDate))}</span><span class="yp-carry__text">${esc(offer.text)}</span>${offer.present ? `<small>Already on ${session.year}</small>` : ''}</label></li>`).join('');
+    return `<section class="yp-carry" aria-labelledby="yp-carry-title">
+        <header class="yp-carry__head"><span class="yp-carry__icon" aria-hidden="true">${icon('history')}</span>
+          <div><h4 id="yp-carry-title">From ${from}</h4><p>Your key dates from ${from}, on the same days in ${session.year}. Untick the ones that won’t come back.</p></div></header>
+        <ul class="yp-carry__list">${rows}</ul>
+        <div class="yp-carry__foot"><button type="button" class="primary-button" data-plan-carry-add ${carry.checked.size ? '' : 'disabled'}>${icon('plus')}Add to ${session.year}</button><span data-plan-carry-count aria-live="polite">${carryCount(carry)}</span></div>
+      </section>`;
+  }
+
+  function addCarried() {
+    const carry = session.drafts.carry;
+    if (!carry || carry.added !== null || !carry.checked.size) return;
+    const added = carryKeyDates(data(), session.year, carry.offers, carry.checked);
+    added.forEach(anchor => session.drafts.existingKeyDates.add(anchor.id));
+    carry.added = added.length;
+    persist();
+    renderStep(0, false);
+    requestAnimationFrame(() => el('[data-plan-carry-done]')?.focus({ preventScroll: true }));
+  }
+
   const STEP_RENDERERS = {
     lookback(d) {
       const ending = session.year - 1;
@@ -546,14 +668,16 @@ export function createYearPlan({ ctx, overlay, icon, onLeave }) {
       return `${stepHead('Step 6 · Winning habits', 'One practice per quarter.', 'Choose the first quarter now; the others can wait until their quarter begins. You check it off when you close the day.')}
         <div class="yp-rows">${rows.replace(`data-plan-habit="${firstEditable}"`, `data-plan-habit="${firstEditable}" data-plan-autofocus`)}</div>`;
     },
-    keydates() {
-      const existing = ctx.keyDates(session.year).filter(item => text(item.text).trim() && session.drafts.existingKeyDates.has(item.id));
+    keydates(d) {
+      const existing = ctx.keyDates(session.year).filter(item => text(item.text).trim() && session.drafts.existingKeyDates.has(item.id)).sort((a, b) => text(a.startDate).localeCompare(text(b.startDate)));
       const list = existing.length ? `<ul class="yp-keydates">${existing.map(item => `<li><span class="yp-keydates__date">${esc(rangeLabel(item.startDate, item.endDate))}</span><span>${esc(item.text)}</span></li>`).join('')}</ul>` : '';
+      const carry = carryCard(d);
       const rows = session.drafts.keydates.map((draft, index) => `<div class="yp-row yp-row--keydate"><span class="yp-row__index" aria-hidden="true">${icon('pin')}</span>
-          <input type="text" class="yp-row__input" data-plan-keydate-text="${escAttr(draft.id)}" ${index === 0 ? 'data-plan-autofocus' : ''} value="${escAttr(draft.text)}" maxlength="180" placeholder="${escAttr(['A birthday worth protecting', 'A trip, a launch, a school holiday'][index] || 'Another date')}" aria-label="${escAttr(`Key date ${index + 1}`)}">
+          <input type="text" class="yp-row__input" data-plan-keydate-text="${escAttr(draft.id)}" ${index === 0 && !carry ? 'data-plan-autofocus' : ''} value="${escAttr(draft.text)}" maxlength="180" placeholder="${escAttr(['A birthday worth protecting', 'A trip, a launch, a school holiday'][index] || 'Another date')}" aria-label="${escAttr(`Key date ${index + 1}`)}">
           ${chip('data-plan-keydate-date', draft.id, draft.startDate, draft.endDate, 'Choose dates')}</div>`).join('');
       return `${stepHead('Step 7 · Key dates', 'The dates worth protecting.', 'Birthdays, trips, launches, school holidays: the moments the rest of the year should bend around. A key date is saved once it has a name and a date.')}
-        ${list ? `<div class="yp-subhead">Already on ${session.year}</div>${list}<div class="yp-subhead">Add</div>` : ''}
+        ${carry}
+        ${list ? `<div class="yp-subhead">Already on ${session.year}</div>${list}` : ''}${list || carry ? '<div class="yp-subhead">Add</div>' : ''}
         <div class="yp-rows" data-plan-keydate-rows>${rows}</div>
         <button type="button" class="hz-add-row" data-plan-add-keydate>${icon('plus')}<span>Add another date</span></button>`;
     },
@@ -621,6 +745,17 @@ export function createYearPlan({ ctx, overlay, icon, onLeave }) {
   function onChange(event) {
     if (!session) return;
     const target = event.target;
+    if (target.dataset.planCarry !== undefined) {
+      const carry = session.drafts.carry;
+      if (!carry) return;
+      if (target.checked) carry.checked.add(target.dataset.planCarry);
+      else carry.checked.delete(target.dataset.planCarry);
+      const count = el('[data-plan-carry-count]');
+      if (count) count.textContent = carryCount(carry);
+      const add = el('[data-plan-carry-add]');
+      if (add) add.disabled = !carry.checked.size;
+      return;
+    }
     if (target.dataset.planHabit) {
       const d = data();
       if (setHabit(d, Number(target.dataset.planHabit), target.value.trim(), session.year, today())) { target.value = target.value.trim(); persist(); }
@@ -670,6 +805,7 @@ export function createYearPlan({ ctx, overlay, icon, onLeave }) {
     if ('planOpenHorizon' in dataset) { close('horizon'); return; }
     if ('planPrint' in dataset) { close('print'); return; }
     if (dataset.planAdventureMonth) { event.stopPropagation(); openMonthMenu(target); return; }
+    if ('planCarryAdd' in dataset) { addCarried(); return; }
     if ('planAddKeydate' in dataset) {
       const draft = { id: uid('keydate'), text: '', startDate: '', endDate: '' };
       session.drafts.keydates.push(draft);

@@ -4,8 +4,7 @@ import { clamp, uid } from './src/lib/utils.js';
 import { atNoon, ymdKey, dateFromKey, addDaysKey, daysBetweenKeys, weekdayNames } from './src/lib/dates.js';
 import { APP_VERSION, snap, minTaskSlots, scheduleTopPad, scheduleBottomPad, PROJECT_GITHUB_URL, GITHUB_SPONSOR_URL, SOCIAL_X_URL, SOCIAL_LINKEDIN_URL, CLOUD_API_URL, GOOGLE_CLIENT_ID, palette, defaultCategories } from './src/config.js';
 import { createPrintFeature } from './src/features/print.js';
-import { pipStyles } from './src/features/pip-styles.js';
-import { openPipDatePicker } from './src/features/pip-date-picker.js';
+import { createPipFeature } from './src/features/pip-window.js';
 import { rangeLabel, horizonCountdown, rangeOverlapsMonth, dayInRange, habitQuarterForMonth, habitChecked, habitQuarterBounds, habitActivityStats, horizonTabLine } from './src/features/horizon-model.js';
 import { buildHorizonModel, createHorizonView } from './src/features/horizon-view.js';
 import { modalEnter, modalExit, popoverEnter, panelEnter, resetMotion } from './src/ui/motion.js';
@@ -23,6 +22,7 @@ import { defaultPlanYear, planSummary } from './src/features/year-plan.js';
 import { adoptPlus, connectPlus, hasPlus, keepPlus, onPlusChange, plusSettingsFrom, refreshPlus } from './src/lib/plus.js';
 import { buildProgressModel, newlyUnlocked } from './src/features/progress-model.js';
 import { markTrophiesSeen, readSeenTrophies, renderDayClosedProgress } from './src/features/progress-view.js';
+import { markQuarterNudged, quarterNudgeFor, renderQuarterNudge } from './src/features/quarter-review.js';
 import { trackAppActive, trackEvent, trackOncePer } from './src/lib/planner-api.js';
 import { viewSummaries } from './src/features/day-summary.js';
 import { createViewSwitch } from './src/features/view-switch.js';
@@ -35,11 +35,12 @@ import { buildPlannerBackup, formatStorageBytes } from './src/state/planner-back
 import { openDatePopover, openDateRangePopover } from './src/ui/calendar-popover.js';
 import { openListbox } from './src/ui/listbox.js';
 import { createStatsFeature } from './src/features/stats.js';
+import { createInsightsFeature, renderInsightsEntry } from './src/features/insights.js';
 import { createWeekFeature } from './src/features/week.js';
 import { searchPlannerDays, searchSnippet } from './src/features/search.js';
 import { createWeekReviewFeature } from './src/features/week-review.js';
 import { createWorkspaceFeature } from './src/features/workspace.js';
-import { createDaySwipeNavigation } from './src/features/day-swipe.js';
+import { createDaySwipeNavigation, navigationDirection } from './src/features/day-swipe.js';
 import { parseVisibleHour, renderPlanningWeekSettings, renderVisibleHourInputs, visibleHourChoices } from './src/features/settings-schedule.js';
 import { visualScale, computeFitLayout } from './src/features/fit.js';
 import { detectedWeekStart, activeWeekdays as getActiveWeekdays, isPlanningDay as isConfiguredPlanningDay, nextPlanningDateFrom as getNextPlanningDateFrom, previousPlanningDateFrom as getPreviousPlanningDateFrom, firstPlanningSlotAfter, planningWeekStart as getPlanningWeekStart, planningWeekDates as getPlanningWeekDates } from './src/domain/planning-calendar.js';
@@ -68,8 +69,9 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   let blockDoneDraft = false;
   let blockEndDateExplicit = false;
   let initialScheduleScrollDone = false;
-  let pipWindow = null;
-  let pipTab = 'schedule';
+  // Floating window (src/features/pip-window.js): it shows the selected day and redraws with it.
+  let pipFeature = null;
+  const renderPip = options => pipFeature?.render(options);
   let categoryReturnModal = null;
   let confirmationReturnModal = null;
   let confirmationReturnScrollTop = 0;
@@ -177,6 +179,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     catch (_) { state = createBlankDay(); }
     initialScheduleScrollDone = false;
     render();
+    renderPip();
   }
 
   function save() {
@@ -1513,7 +1516,10 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     const model = progressFor(year);
     const fresh = newlyUnlocked(model, readSeenTrophies(year), ymd(date));
     markTrophiesSeen(year, model.unlocked.map(trophy => trophy.id));
-    wrap.innerHTML = renderDayClosedProgress(model, ymd(date), fresh);
+    // With Plus, the last planning day of a quarter offers its check-in, once (quarter-review.js).
+    const nudge = hasPlus() ? quarterNudgeFor({ dayKey: ymd(date), planningDays: activeWeekdays(), yearData: horizonYearData(year) }) : null;
+    wrap.innerHTML = renderDayClosedProgress(model, ymd(date), fresh) + (nudge ? renderQuarterNudge(nudge) : '');
+    if (nudge) { markQuarterNudged(horizonYearData(year), nudge.quarter); persistSettings(); qs('[data-quarter-nudge]', wrap)?.addEventListener('click', event => { const quarter = event.currentTarget.dataset.quarterNudge; closeModal(qs('[data-day-closed-modal]')); setTimeout(() => openPlusFeature('quarter-review', quarter), 200); }); }
     wrap.hidden = false;
     if (fresh.length) trackEvent('trophy_unlocked');
   }
@@ -1564,8 +1570,10 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     return categoryFor(id) || { id: '__uncategorized', name: 'Uncategorized', color: '#8c867f' };
   }
 
+  // Insights (Plus): the Stats dialog's third view, worked out from stored days on this device.
+  const insightsFeature = createInsightsFeature({ readDay: key => (key === ymd(date) ? state : store.readJSON(`daily-planner:${key}`)), categoryFor, planningDays: activeWeekdays, weekStartsOn: () => settings.weekStartsOn, hours: () => ({ startHour: startHour(), endHour: endHour() }), dayKeys: () => store.keys('daily-planner:'), modal: () => qs('[data-stats-modal]'), plus: { active: hasPlus, unlock: feature => plusFeature.open({ feature }) } });
   const statsFeature = createStatsFeature({
-    qs, qsa, esc, escAttr, clamp,
+    qs, qsa, esc, escAttr, clamp, insights: insightsFeature,
     getState: () => state,
     getDate: () => date,
     categoryFor,
@@ -1839,16 +1847,28 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   // Navigation, responsive layout, search, and storage utilities
   // ---------------------------------------------------------------------------
 
+  // Now travels like the arrows: back from a later day or week, forward from an earlier one, still when already there.
   function goToNow() {
     weekFeature?.resetAutoScroll?.();
     const alreadyToday = isToday();
+    const direction = navigationDirection(navigationUnitKey(date), navigationUnitKey(new Date()));
     if (!alreadyToday || plannerRangeView === 'week') {
       try { store.writeJSON(storageKey(), state); } catch (_) {}
       date = atNoon(new Date());
       load();
     }
+    if (direction) animatePlannerChange(direction);
     requestAnimationFrame(() => requestAnimationFrame(() => scrollScheduleToRelevantTime({ smooth: true, centerNow: true })));
   }
+  // The span the main window moves through: a day, or the planning week in Week view.
+  const navigationUnitKey = day => ymd(plannerRangeView === 'week' ? planningWeekStart(day) : day);
+  const showDate = target => {
+    const direction = navigationDirection(navigationUnitKey(date), navigationUnitKey(target));
+    weekFeature?.resetAutoScroll?.();
+    date = atNoon(target);
+    load();
+    if (direction) animatePlannerChange(direction);
+  };
 
   function recommendedStart() {
     if (isToday()) {
@@ -1864,15 +1884,15 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     return clamp(9 * 60, visibleStartMinutes(), visibleEndMinutes() - 60);
   }
 
-  function shiftDate(direction) {
+  // The arrows move a week in Week view; the floating window (byDay) always moves one planning
+  // day, and Week view then only moves when that day crosses into another week.
+  function shiftDate(direction, { byDay = plannerRangeView !== 'week' } = {}) {
     weekFeature?.resetAutoScroll?.();
-    if (plannerRangeView === 'week') {
-      date.setDate(date.getDate() + direction * 7);
-    } else {
-      date = direction < 0 ? previousPlanningDateFrom(date) : nextPlanningDateFrom(date);
-    }
+    const before = navigationUnitKey(date);
+    if (byDay) date = direction < 0 ? previousPlanningDateFrom(date) : nextPlanningDateFrom(date);
+    else date.setDate(date.getDate() + direction * 7);
     load();
-    animatePlannerChange(direction);
+    if (navigationUnitKey(date) !== before) animatePlannerChange(direction);
   }
 
   // Direction-aware settle so moving through days and weeks keeps its spatial sense.
@@ -2860,12 +2880,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     trackOncePer('day', 'horizon_opened');
   }
 
-  function horizonOpenItems(limit = 4) {
-    const needs = needsAttentionEntries().map(item => ({ text: item.kind === 'block' ? item.block.title : item.item.text, count: Number(item.item?.carriedCount ?? item.block?.carriedCount ?? 0), kind: 'Needs attention', originDay: item.item?.originDay || item.block?.originDay || item.originDay }));
-    const later = (settings.openWork || []).map(item => ({ text: item.text, count: Number(item.carriedCount || 0), kind: 'Later' }));
-    return [...needs, ...later].filter(item => item.text?.trim()).sort((a, b) => b.count - a.count).slice(0, limit);
-  }
-
   function renderHorizon(options) { horizonView.render(options); }
 
   const horizonView = createHorizonView({
@@ -2891,6 +2905,9 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     readDay: key => (key === ymd(date) ? state : store.readJSON(`daily-planner:${key}`)),
     categoryFor: id => { const category = categoryFor(id); return category ? { id: category.id, name: category.name, color: category.color } : null; },
     categories: () => settings.categories.map(category => ({ ...category })),
+    weekStartsOn: () => settings.weekStartsOn,
+    insightsEntry: year => renderInsightsEntry(year, { plusActive: hasPlus() }),
+    openInsights: year => { insightsFeature.focusYear(year); insightsFeature.invalidate(); statsFeature.setView('insights'); openModal(qs('[data-stats-modal]'), null, { stack: true }); },
     track: trackEvent,
     trackOncePer,
     openDay: dayKey => { closeModal(qs('[data-horizon-modal]')); date = dateFromKey(dayKey); plannerRangeView = 'day'; load(); }
@@ -3259,118 +3276,50 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  async function pip() {
-    if (window.matchMedia('(max-width: 790px)').matches) return;
-    if (!('documentPictureInPicture' in window)) {
-      alert('Floating mode needs a browser with Document Picture-in-Picture support.');
-      return;
-    }
-    if (pipWindow && !pipWindow.closed) { pipWindow.focus(); return; }
-    pipWindow = await documentPictureInPicture.requestWindow({ width: 420, height: 600 });
-    pipWindow.document.title = 'Daily Planner · Floating';
-    pipWindow.document.head.innerHTML = `<meta name="viewport" content="width=device-width,initial-scale=1"><style>${pipStyles()}</style>`;
-    themeController.mirrorTo(pipWindow.document);
-    pipWindow.addEventListener('pagehide', () => { pipWindow = null; });
-    renderPip();
-    trackOncePer('day', 'pip_opened');
-  }
-
-  function renderPip() {
-    if (!pipWindow || pipWindow.closed || !state) return;
-    const doc = pipWindow.document;
-    const now = new Date();
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const sortedBlocks = [...state.blocks].sort((a, b) => a.start - b.start);
-    const current = isToday() ? sortedBlocks.find(b => nowMinutes >= b.start && nowMinutes < b.start + b.duration) : null;
-    const upcoming = isToday() ? sortedBlocks.filter(b => b.start > nowMinutes).slice(0, 8) : sortedBlocks.slice(0, 10);
-    const mit = state.priorities[0];
-    const secondaries = state.priorities.slice(1);
-    const pipUnresolvedMap = new Map();
-    horizonOpenItems(12).forEach(item => pipUnresolvedMap.set(`${item.type || item.kind}:${item.id || item.text}`, item));
-    state.priorities.filter(item => item.text?.trim() && !item.done).forEach(item => pipUnresolvedMap.set(`priority:${item.id}`, { ...item, kind: 'Outcome' }));
-    state.tasks.filter(item => item.text?.trim() && !item.done).forEach(item => pipUnresolvedMap.set(`task:${item.id}`, { ...item, kind: 'Task' }));
-    const pipUnresolved = [...pipUnresolvedMap.values()].slice(0, 8);
-
-    const blockCard = (block, emphasis = false) => {
-      const cat = categoryFor(block.categoryId);
-      return `<article class="pip-block${emphasis ? ' is-current' : ''}${isBlockDone(block) ? ' done' : ''}" style="--block-color:${cat?.color || '#716b64'}" data-pip-block="${escAttr(block.id)}">
-        <span class="pip-block__copy"><strong>${esc(block.title || 'Untitled block')}</strong><small>${cat ? `${esc(cat.name)} · ` : ''}${durationLabel(block.duration)} · ${blockTimeRange(block)}</small>${block.notes && emphasis ? `<em>${esc(searchSnippet(block.notes, 125))}</em>` : ''}</span>
-        <input data-b="${escAttr(block.id)}" type="checkbox" ${isBlockDone(block) ? 'checked' : ''} aria-label="Mark block done">
-      </article>`;
-    };
-
-    const itemCard = (item, attr, index, label, linked, placeholder) => `<article class="pip-item${item.done ? ' done' : ''}${label === 'Most important outcome' ? ' is-mit' : ''}">
-      <input ${attr}="${index}" type="checkbox" ${item.done ? 'checked' : ''} aria-label="Mark done">
-      <span class="pip-item__copy"><small>${esc(label)}</small><textarea rows="1" ${attr}-text="${index}" placeholder="${escAttr(placeholder)}">${esc(item.text || '')}</textarea>${linked ? `<time>${blockTimeRange(linked)}</time>` : ''}</span>
-      <button class="pip-calendar" type="button" ${attr}-calendar="${index}" aria-label="${linked ? 'Edit schedule' : 'Schedule item'}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/></svg></button>
-    </article>`;
-
-    doc.body.innerHTML = `
-      <div class="pip-shell">
-        <header class="pip-topbar">
-          <div class="pip-date-wrap"><button class="pip-date" type="button" data-pip-date aria-label="Choose date"><span>${date.toLocaleDateString(undefined, { weekday: 'long' })}</span><h1>${date.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</h1></button></div>
-          <nav class="pip-date-nav" aria-label="Day navigation"><button class="pip-nav-icon" data-pip-prev aria-label="Previous day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button><button class="pip-now" data-pip-now>Now</button><button class="pip-nav-icon" data-pip-next aria-label="Next day"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button></nav>
-          <time>${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
-        </header>
-
-        <main class="pip-content">
-          ${pipTab === 'schedule' ? `
-            <section class="pip-section"><div class="pip-section__head"><h2>${current ? 'Now' : (isToday() ? 'Schedule' : 'Selected day')}</h2>${current ? `<time>${blockTimeRange(current)}</time>` : ''}</div>${current ? blockCard(current, true) : `<div class="pip-empty">${isToday() ? (upcoming[0] ? `Next block at ${clockTime(upcoming[0].start)}` : 'Nothing else scheduled.') : `${sortedBlocks.length} scheduled block${sortedBlocks.length === 1 ? '' : 's'}.`}</div>`}</section>
-            <section class="pip-section"><div class="pip-section__head"><h2>${isToday() ? 'Next' : 'Schedule'}</h2><span>${upcoming.length}</span></div><div class="pip-list">${upcoming.length ? upcoming.map(block => blockCard(block)).join('') : '<div class="pip-empty">The schedule is clear.</div>'}</div></section>
-            ${pipUnresolved.length ? `<section class="pip-section pip-unresolved"><div class="pip-section__head"><h2>Unresolved</h2><span>${pipUnresolved.length}</span></div><div class="pip-unresolved-list">${pipUnresolved.map(item=>`<div><strong>${esc(item.text)}</strong><small>${esc(item.kind)}${item.count?` · carried ${item.count}×`:''}</small></div>`).join('')}</div></section>` : ''}
-          ` : `
-            <section class="pip-field-section"><label><span>Keep in mind</span><textarea rows="1" data-pip-focus placeholder="e.g. Don’t let urgency drive the decision">${esc(state.focus || '')}</textarea></label></section>
-            <section class="pip-section pip-section--outcomes"><div class="pip-section__head"><h2>Outcomes</h2><span>${state.priorities.filter(item => item.text.trim()).filter(item => !item.done).length} open</span></div><div class="pip-list pip-outcomes">
-              ${itemCard(mit, 'data-p', 0, 'Most important outcome', linkedBlock('priority', mit.id), 'e.g. Send the final proposal')}
-              ${secondaries.map((item, index) => itemCard(item, 'data-p', index + 1, 'Other important outcome', linkedBlock('priority', item.id), index === 0 ? 'Another outcome worth moving forward' : 'One more, if it truly matters')).join('')}
-            </div></section>
-            <section class="pip-section"><div class="pip-section__head"><h2>Tasks</h2><span>${state.tasks.filter(t => t.text.trim()).length}</span></div><div class="pip-list">${state.tasks.map((item, index) => itemCard(item, 'data-t', index, 'Task', linkedBlock('task', item.id), 'Concrete action')).join('')}</div></section>
-            <section class="pip-field-section pip-notes"><label><span>Notes</span><textarea rows="4" data-pip-notes placeholder="Anything worth keeping from today…">${esc(state.notes || '')}</textarea></label></section>
-          `}
-        </main>
-        <nav class="pip-tabs" aria-label="Floating planner view"><button data-tab="tasks" class="${pipTab === 'tasks' ? 'is-active' : ''}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h12M6 10h12M6 16h8"/></svg><span>Plan</span></button><button data-tab="schedule" class="${pipTab === 'schedule' ? 'is-active' : ''}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/></svg><span>Schedule</span></button></nav>
-      </div>`;
-
-    const autoGrowPip = field => { if (!field) return; field.style.height = 'auto'; field.style.height = `${Math.max(24, field.scrollHeight)}px`; };
-    const persistFromPip = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { try { store.writeJSON(storageKey(), state); } catch (_) {} updateStorageUsage(); }, 70); };
-    doc.querySelectorAll('textarea').forEach(autoGrowPip);
-    doc.querySelectorAll('[data-tab]').forEach(btn => btn.onclick = () => { pipTab = btn.dataset.tab; renderPip(); });
-    doc.querySelector('[data-pip-prev]').onclick = () => { shiftDate(-1); renderPip(); };
-    doc.querySelector('[data-pip-next]').onclick = () => { shiftDate(1); renderPip(); };
-    doc.querySelector('[data-pip-now]').onclick = () => { goToNow(); renderPip(); };
-    doc.querySelector('[data-pip-date]').onclick = event => openPipDatePicker({
-      doc,
-      anchor: event.currentTarget,
-      selectedKey: ymd(date),
-      weekStartsOn: settings.weekStartsOn,
-      minKey: '2026-01-01',
-      onSelect: value => { date = dateFromKey(value); load(); renderPip(); }
-    });
-    doc.querySelectorAll('[data-pip-block]').forEach(card => card.onclick = event => { if (event.target.closest('input')) return; const block = state.blocks.find(item => item.id === card.dataset.pipBlock); if (block) { window.focus(); openBlockModal(block); } });
-    doc.querySelectorAll('[data-b]').forEach(input => input.onchange = () => { const block = state.blocks.find(item => item.id === input.dataset.b); if (!block) return; setBlockDone(block, input.checked); renderItems(); renderBlocks(); renderStats(); save(); renderPip(); });
-    doc.querySelectorAll('[data-p]').forEach(input => input.onchange = () => { const priority = state.priorities[+input.dataset.p]; if (!priority) return; priority.done = input.checked; state.blocks.filter(block => block.linkedType === 'priority' && block.linkedId === priority.id).forEach(block => setBlockDone(block, priority.done)); renderItems(); renderBlocks(); renderStats(); save(); renderPip(); });
-    doc.querySelectorAll('[data-t]').forEach(input => input.onchange = () => { const task = state.tasks[+input.dataset.t]; if (!task) return; task.done = input.checked; state.blocks.filter(block => block.linkedType === 'task' && block.linkedId === task.id).forEach(block => setBlockDone(block, task.done)); renderItems(); renderBlocks(); renderStats(); save(); renderPip(); });
-    doc.querySelectorAll('[data-p-text]').forEach(field => field.oninput = () => { const item = state.priorities[+field.dataset.pText]; if (!item) return; item.text = field.value; state.blocks.filter(block => block.linkedType === 'priority' && block.linkedId === item.id).forEach(block => { block.title = item.text; }); autoGrowPip(field); renderItems(); renderBlocks(); persistFromPip(); });
-    doc.querySelectorAll('[data-t-text]').forEach(field => field.oninput = () => { const item = state.tasks[+field.dataset.tText]; if (!item) return; item.text = field.value; state.blocks.filter(block => block.linkedType === 'task' && block.linkedId === item.id).forEach(block => { block.title = item.text; }); autoGrowPip(field); renderItems(); renderBlocks(); persistFromPip(); });
-    const focusField = doc.querySelector('[data-pip-focus]'); if (focusField) focusField.oninput = () => { state.focus = focusField.value; autoGrowPip(focusField); qs('[data-focus]').value = state.focus; autoGrowInlineField(qs('[data-focus]')); persistFromPip(); };
-    const notesField = doc.querySelector('[data-pip-notes]'); if (notesField) notesField.oninput = () => { state.notes = notesField.value; autoGrowPip(notesField); setDayNotesEditor(state.notes); autoGrowNotes(); persistFromPip(); };
-    const openScheduleFor = (type, index) => {
-      const item = type === 'priority' ? state.priorities[index] : state.tasks[index];
-      if (!item || !item.text.trim()) return;
+  // The floating window shows the selected day. Its arrows move one planning day (the main window
+  // follows and keeps its Day or Week view); ticks and edits in either window show in the other.
+  const pipItem = (type, id) => (type === 'priority' ? state.priorities : type === 'task' ? state.tasks : []).find(item => item.id === id);
+  const linkedBlocks = (type, id) => state.blocks.filter(block => block.linkedType === type && block.linkedId === id);
+  const commitFromPip = () => { renderItems(); renderScheduleRange(); renderStats(); save(); };
+  // Floating mode needs Document Picture-in-Picture (Chromium on a computer): elsewhere its button,
+  // shortcut hint and shortcut are gone rather than answering with an error.
+  const pipSupported = !!window.documentPictureInPicture;
+  qsa('[data-pip], [data-pip-hint]').forEach(node => { node.hidden = !pipSupported; });
+  // Scheduling needs the full planner: the floating window closes so the dialog never opens behind it.
+  const openInPlanner = open => { pipFeature.close(); setTimeout(() => { window.focus(); open(); }, 30); };
+  pipFeature = createPipFeature({
+    canOpen: () => pipSupported && !window.matchMedia('(max-width: 790px)').matches,
+    onOpen: () => trackOncePer('day', 'pip_opened'),
+    mirrorTheme: doc => themeController.mirrorTo(doc),
+    getDate: () => date,
+    getState: () => state,
+    ymd,
+    weekStartsOn: () => settings.weekStartsOn,
+    minDateKey: '2026-01-01',
+    categoryFor,
+    isBlockDone,
+    linkedBlock,
+    blockTimeRange,
+    stepDay: direction => shiftDate(direction, { byDay: true }),
+    goToNow,
+    goToDate: key => showDate(dateFromKey(key)),
+    toggleBlock: (id, done) => { const block = state.blocks.find(item => item.id === id); if (!block) return; setBlockDone(block, done); commitFromPip(); },
+    toggleItem: (type, id, done) => { const item = pipItem(type, id); if (!item) return; item.done = done; linkedBlocks(type, id).forEach(block => setBlockDone(block, done)); commitFromPip(); },
+    editItem: (type, id, text) => { const item = pipItem(type, id); if (!item) return; item.text = text; linkedBlocks(type, id).forEach(block => { block.title = text; }); renderItems(); renderScheduleRange(); save(); },
+    editFocus: text => { state.focus = text; qs('[data-focus]').value = text; autoGrowInlineField(qs('[data-focus]')); save(); },
+    editNotes: text => { state.notes = text; setDayNotesEditor(text); autoGrowNotes(); save(); },
+    addTask: () => { const task = { id: uid('task'), text: '', done: false, carriedCount: 0 }; state.tasks.push(task); renderItems(); save(); return task.id; },
+    openBlock: id => { const block = state.blocks.find(item => item.id === id); if (block) { window.focus(); openBlockModal(block); } },
+    scheduleItem: (type, id) => {
+      const item = pipItem(type, id);
+      if (!item?.text.trim()) return;
       const existing = linkedBlock(type, item.id);
-      // Editing a schedule block needs the full planner surface. Close the
-      // floating window first so the modal cannot open invisibly behind it.
-      if (pipWindow && !pipWindow.closed) pipWindow.close();
-      pipWindow = null;
-      setTimeout(() => {
-        window.focus();
-        if (existing) openBlockModal(existing);
-        else openBlockModal(null, { title: item.text, linkedType: type, linkedId: item.id, start: recommendedStart() });
-      }, 30);
-    };
-    doc.querySelectorAll('[data-p-calendar]').forEach(button => button.onclick = () => openScheduleFor('priority', +button.dataset.pCalendar));
-    doc.querySelectorAll('[data-t-calendar]').forEach(button => button.onclick = () => openScheduleFor('task', +button.dataset.tCalendar));
-  }
+      openInPlanner(() => (existing ? openBlockModal(existing) : openBlockModal(null, { title: item.text, linkedType: type, linkedId: item.id, start: recommendedStart() })));
+    },
+    addBlock: () => openInPlanner(() => openBlockModal(null, { start: recommendedStart() })),
+    // Plan ends with what the planner's Unresolved holds: past items to decide on, and Later.
+    unresolved: () => ({ needs: needsAttentionEntries(), later: settings.openWork || [] })
+  });
 
   function setMobileView(view, { animate = true } = {}) {
     qs('[data-workspace]').dataset.mobileActive = view;
@@ -3466,7 +3415,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qs('[data-today]').addEventListener('click', goToNow);
   qs('[data-week-view]')?.addEventListener('click', toggleWeekView);
   const datePicker = qs('[data-date-picker]');
-  const openHeaderDatePicker = () => openCalendarPopover(datePicker, ymd(date), value => { date = dateFromKey(value); load(); }, { minKey: '2026-01-01' });
+  const openHeaderDatePicker = () => openCalendarPopover(datePicker, ymd(date), value => showDate(dateFromKey(value)), { minKey: '2026-01-01' });
   datePicker?.addEventListener('click', openHeaderDatePicker);
   datePicker?.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHeaderDatePicker(); } });
   qs('[data-search-open]').addEventListener('click', openSearchModal);
@@ -3484,9 +3433,9 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qs('[data-export-backup]')?.addEventListener('click', exportPlannerBackup);
   qs('[data-import-menu]')?.addEventListener('click', openImportPicker);
   qs('[data-export-pdf]').addEventListener('click', printPlanner);
-  qs('[data-pip]').addEventListener('click', pip);
+  qs('[data-pip]').addEventListener('click', () => pipFeature.open());
   const openJournal = () => { journalPage = 0; renderJournal(); openModal(qs('[data-journal-modal]')); trackOncePer('day', 'journal_opened'); };
-  const openStats = () => { statsFeature.ensureWeek(); renderStats(); openModal(qs('[data-stats-modal]')); trackOncePer('day', 'stats_opened'); };
+  const openStats = () => { statsFeature.ensureWeek(); insightsFeature.invalidate(); renderStats(); openModal(qs('[data-stats-modal]')); trackOncePer('day', 'stats_opened'); };
   qs('[data-journal-open]').addEventListener('click', openJournal);
   qs('[data-open-work-open]').addEventListener('click', openUnresolvedModal);
   qs('[data-horizon-scroll]')?.addEventListener('scroll', () => closeAllPopovers(), { passive: true });
@@ -3660,7 +3609,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     const shortcuts = {
       arrowleft: () => shiftDate(-1), arrowright: () => shiftDate(1),
       n: goToNow, v: toggleWeekView, f: openSearchModal, w: toggleExpandedView,
-      i: () => { if (pipWindow && !pipWindow.closed) { pipWindow.close(); pipWindow = null; } else pip(); },
+      i: () => { if (pipSupported) pipFeature.toggle(); },
       j: () => toggleModalShortcut('[data-journal-modal]', openJournal),
       u: () => toggleModalShortcut('[data-open-work-modal]', openUnresolvedModal),
       y: () => toggleModalShortcut('[data-horizon-modal]', () => openHorizon('year', date)),
@@ -3678,7 +3627,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   window.addEventListener('resize', () => { hideAppTooltip(); closePopover(); applyExpandedView(); renderScheduleRange(); updateNow(); requestAnimationFrame(fitHeaderDate); requestAnimationFrame(regrowItemFields); });
   window.addEventListener('beforeprint', printFeature.handleBeforePrint);
   window.addEventListener('afterprint', cleanupPrintMode);
-  setInterval(() => { updateNow(); renderStats(); renderPip(); viewSwitch.write(); }, 30000);
+  setInterval(() => { updateNow(); renderStats(); renderPip({ tick: true }); viewSwitch.write(); }, 30000);
 
   qs('[data-mobile-export-md]')?.addEventListener('click', () => download(`daily-planner-${ymd()}.md`, markdown(), 'text/markdown'));
   qs('[data-mobile-export-json]')?.addEventListener('click', () => download(`daily-planner-${ymd()}.json`, JSON.stringify(state, null, 2), 'application/json'));
@@ -3727,7 +3676,7 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qsa('[data-year]').forEach(el => { el.textContent = new Date().getFullYear(); });
   const printHost = qs('[data-print-domain]');
   if (printHost) { printHost.textContent = 'planner.bemorin.com'; printHost.href = 'https://planner.bemorin.com'; }
-  const themeController = createThemeController({ onChange: () => { if (pipWindow && !pipWindow.closed) themeController.mirrorTo(pipWindow.document); } });
+  const themeController = createThemeController({ onChange: () => pipFeature.syncTheme() });
   checkLocalStorage();
   setupHelpFaq();
   personalSyncFeature = createPersonalSyncFeature({
@@ -3743,11 +3692,16 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   const privacyNotice = createPrivacyNotice({ openModal, closeModal });
   const syncGuide = createSyncGuide({ openModal, closeModal, openPrivacy: privacyNotice.open, driveAvailable: () => !!GOOGLE_CLIENT_ID, openDriveSettings: () => { renderCategorySettings(); renderSettingsHours(); renderPlanningWeek(); openModal(qs('[data-settings-modal]')); requestAnimationFrame(() => { const section = qs('[data-personal-sync]'); section?.scrollIntoView({ behavior: 'smooth', block: 'center' }); section?.classList.add('is-spotlit'); qs('[data-personal-sync-primary]')?.focus({ preventScroll: true }); setTimeout(() => section?.classList.remove('is-spotlit'), 2400); }); } });
   const feedbackFeature = createFeedbackFeature({ openModal, closeModal, openPrivacy: privacyNotice.open });
-  // The Plus dialog previews this planner: the year "Plan your year" would set up, its printed page, this year's painted days and its review.
-  const plusPreview = () => { const planYear = defaultPlanYear(new Date()); return { plan: planSummary(horizonYearData(planYear), planYear), progress: progressFor(new Date().getFullYear()), print: yearPrintData, review: year => ({ progress: progressFor(year), yearData: horizonYearData(year), readDay: key => (key === ymd(date) ? state : store.readJSON(`daily-planner:${key}`)), categoryFor }) }; };
-  const openPlusFeature = feature => { if (qs('[data-horizon-modal]').hidden) openHorizon('year', date); if (feature === 'year-plan') horizonView.openPlan(); else if (feature === 'year-review') horizonView.openReview(); else horizonView.setSection('progress'); };
+  // The Plus dialog previews this planner: the year "Plan your year" would set up, its printed page, a quarter check-in, this year's painted days, its review and the rhythm Insights finds.
+  const plusPreview = () => {
+    const planYear = defaultPlanYear(new Date());
+    const readDay = key => (key === ymd(date) ? state : store.readJSON(`daily-planner:${key}`));
+    const weekStartsOn = () => settings.weekStartsOn;
+    return { plan: planSummary(horizonYearData(planYear), planYear), progress: progressFor(new Date().getFullYear()), print: yearPrintData, review: year => ({ progress: progressFor(year), yearData: horizonYearData(year), readDay, categoryFor }), quarter: { progress: progressFor, yearData: horizonYearData, minYear: horizonMinYear, readDay, categoryFor, weekStartsOn }, insights: { readDay, planningDays: activeWeekdays, weekStartsOn } };
+  };
+  const openPlusFeature = (feature, quarter = '') => { if (feature === 'insights') { insightsFeature.invalidate(); statsFeature.setView('insights'); openModal(qs('[data-stats-modal]')); return; } if (qs('[data-horizon-modal]').hidden) openHorizon('year', date); if (feature === 'year-plan') horizonView.openPlan(); else if (feature === 'year-review') horizonView.openReview(); else if (feature === 'quarter-review') horizonView.openQuarter(quarter); else horizonView.setSection('progress'); };
   const plusFeature = createPlusFeature({ openModal, closeModal, getActiveModal: () => activeModal, openPrivacy: privacyNotice.open, flush: flushPlannerForSync, preview: plusPreview, openFeature: openPlusFeature, printYear: year => printFeature.printYear(year) });
-  onPlusChange(() => horizonView.refreshPlus());
+  onPlusChange(() => { horizonView.refreshPlus(); renderStats(); });
   // About once a week, a licence from a refunded purchase or gift switches Plus off here (src/features/plus-check.js).
   createPlusCheck({ openModal, closeModal, getActiveModal: () => activeModal }).start();
   // Another tab activated Plus (a gift or purchase link opened there): take the licence before this tab saves over it.

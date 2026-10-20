@@ -79,5 +79,6 @@ test('the Plus offer keeps its hooks: price, currency line, buy button, gift pri
   for (const hook of ['data-plus-price', 'data-tax-line', 'data-plus-cta="plus"', 'data-gift-price="gift-1"', 'data-gift-price="family-5"', 'data-min-per-person', 'href="#gifts"', 'href="#teams"']) {
     assert.ok(block.includes(hook), hook);
   }
-  assert.equal((block.match(/class="ok"/g) || []).length, 5, 'five ticks: what you get');
+  assert.equal((block.match(/class="ok"/g) || []).length, 6, 'six ticks: what you get');
+  for (const name of ['Plan your year', 'Quarterly check-ins', 'Your year in review', 'Insights', 'Five more palettes']) assert.ok(block.includes(`<b>${name}</b>`), name);
 });

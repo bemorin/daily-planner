@@ -21,4 +21,11 @@ jobs:
           node-version: 22
 
       - name: Verify production release
-        run: npm run verify
+        shell: bash
+        run: npm run verify 2>&1 | tee verify.log; exit "${PIPESTATUS[0]}"
+
+      # Failures as annotations, readable on the run's page and through the API.
+      - name: Report failures
+        if: failure()
+        shell: bash
+        run: grep -E "^not ok|# fail|Smoke test failed|^- |Error|failed" verify.log | head -40 | while IFS= read -r line; do echo "::error::${line}"; done

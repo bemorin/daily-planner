@@ -42,21 +42,20 @@ export const TEAM_QUOTE = Object.freeze({ plan: 'over-1000', label: 'More than 1
 /** What Plus adds today (short, for lists; the planner and the landing add their own visuals). */
 export const PLUS_FEATURES = Object.freeze([
   Object.freeze({ id: 'plan', title: 'Plan your year', text: 'A guided session of about 30 minutes that sets up Horizon: look back, one Misogi, milestones, six mini-adventures, three commitments, quarterly habits and key dates. It ends with your year on one printed page.' }),
+  Object.freeze({ id: 'quarter', title: 'Quarterly check-ins', text: 'Ten guided minutes as each quarter ends: the days you closed, how your winning habit held, two honest questions and the habit for the next three months. Printable on one page.' }),
+  Object.freeze({ id: 'insights', title: 'Insights', text: 'Which weekdays work best, when your focus happens, where your hours go month by month, and how this year compares with last. Worked out on your device.' }),
   Object.freeze({ id: 'review', title: 'Your year in review', text: 'One page with your closed days, the painted year, streaks, trophies, outcomes, time by category and what you lived. Printable.' }),
   Object.freeze({ id: 'palettes', title: 'Colours for your painted year', text: 'Five more palettes for Progress and your review: ocean, forest, plum, graphite and sunset.' })
 ]);
 
 /**
- * What Plus promises next, included at no extra cost when it ships.
- * PROPOSAL — confirm or edit before publishing: this is a public promise.
- * `status` is shown as a small label ('Next', 'Planned', 'Exploring').
+ * What Plus promises next, included at no extra cost when it ships: empty for
+ * now (owner's decision, 1.25 — sharing became free, calendars and an evening
+ * nudge would be free too). The landing page and the Plus dialog hide the
+ * “Coming to Plus” parts while it is empty. Items look like
+ * { id, title, text, status: 'Next' | 'Planned' | 'Exploring' }.
  */
-export const PLUS_UPCOMING = Object.freeze([
-  Object.freeze({ id: 'account-sync', title: 'Sync without Google', text: 'Your planner on all your devices with a Daily Planner account, encrypted on your device before it leaves it.', status: 'Planned' }),
-  Object.freeze({ id: 'calendars', title: 'Your calendar beside your day', text: 'See Google, Outlook or iCloud events next to your blocks, read-only.', status: 'Planned' }),
-  Object.freeze({ id: 'share-year', title: 'Share your year', text: 'An image of your painted year or your Misogi, ready to post.', status: 'Exploring' }),
-  Object.freeze({ id: 'evening', title: 'An evening nudge', text: 'A gentle reminder to close the day, at the time you choose.', status: 'Exploring' })
-]);
+export const PLUS_UPCOMING = Object.freeze([]);
 
 /** The euro area (and countries that use the euro) pays in EUR; everyone else in USD. */
 export const EURO_REGIONS = Object.freeze(new Set(['AT', 'BE', 'BG', 'CY', 'DE', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PT', 'SI', 'SK', 'AD', 'MC', 'SM', 'VA', 'ME', 'XK']));

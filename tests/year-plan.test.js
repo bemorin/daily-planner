@@ -3,11 +3,13 @@ import assert from 'node:assert/strict';
 import {
   PLAN_STEPS,
   adventureMonth,
+  carryKeyDates,
   clampStep,
   defaultPlanYear,
   ensurePlanShape,
   habitEditable,
   isHorizonMostlyEmpty,
+  keyDatesToCarry,
   planSummary,
   planYearOptions,
   setCommitment,
@@ -17,6 +19,8 @@ import {
   setMisogiPeriod,
   setMisogiWhy,
   setReflection,
+  shiftKeyDate,
+  shiftYearKey,
   upsertAdventure,
   upsertKeyDate,
   yearKeyDates
@@ -253,4 +257,107 @@ test('a year is mostly empty while at most one part of Horizon is filled in', ()
   const summary = planSummary(emptyYear(), 2027);
   assert.equal(summary.done, 0);
   assert.equal(Object.values(summary.steps).some(Boolean), false);
+});
+
+// Key dates from the year before ----------------------------------------------
+
+const keyYear = anchorsByMonth => ({ ...emptyYear(), months: Object.fromEntries(Object.entries(anchorsByMonth).map(([key, anchors]) => [key, { outcomes: [], anchors }])) });
+
+test('a key date moves to the same day and month; 29 February becomes 28 February', () => {
+  assert.equal(shiftYearKey('2026-03-12', 1), '2027-03-12');
+  assert.equal(shiftYearKey('2026-12-31', 1), '2027-12-31');
+  assert.equal(shiftYearKey('2028-02-29', 1), '2029-02-28');
+  assert.equal(shiftYearKey('2027-02-28', 1), '2028-02-28', 'into a leap year the day stays the 28th');
+  assert.equal(shiftYearKey('2028-02-29', 4), '2032-02-29');
+  assert.equal(shiftYearKey('', 1), '');
+  assert.equal(shiftYearKey('12 March', 1), '');
+  assert.deepEqual(shiftKeyDate({ text: ' Mum turns 71 ', startDate: '2026-11-14', endDate: '' }, 1), { text: 'Mum turns 71', startDate: '2027-11-14', endDate: '' });
+  assert.equal(shiftKeyDate({ text: 'No day', startDate: '' }, 1), null);
+});
+
+test('a period keeps its length, across 29 February and across the year end', () => {
+  assert.deepEqual(shiftKeyDate({ text: 'Summer in Brittany', startDate: '2026-08-01', endDate: '2026-08-21' }, 1), { text: 'Summer in Brittany', startDate: '2027-08-01', endDate: '2027-08-21' });
+  // 27 Feb → 1 Mar 2028 is three days (through the 29th); in 2029 it ends on 2 March.
+  assert.deepEqual(shiftKeyDate({ text: 'Ski week', startDate: '2028-02-27', endDate: '2028-03-01' }, 1), { text: 'Ski week', startDate: '2029-02-27', endDate: '2029-03-02' });
+  assert.deepEqual(shiftKeyDate({ text: 'Ski week', startDate: '2027-02-26', endDate: '2027-03-01' }, 1), { text: 'Ski week', startDate: '2028-02-26', endDate: '2028-02-29' }, 'three days stay three days in a leap year');
+  assert.deepEqual(shiftKeyDate({ text: 'Leap stay', startDate: '2028-02-29', endDate: '2028-03-02' }, 1), { text: 'Leap stay', startDate: '2029-02-28', endDate: '2029-03-02' });
+  assert.deepEqual(shiftKeyDate({ text: 'Christmas holidays', startDate: '2026-12-19', endDate: '2027-01-03' }, 1), { text: 'Christmas holidays', startDate: '2027-12-19', endDate: '2028-01-03' });
+  assert.deepEqual(shiftKeyDate({ text: 'Winter break', startDate: '2025-12-22', endDate: '2026-01-04' }, 1), { text: 'Winter break', startDate: '2026-12-22', endDate: '2027-01-04' });
+  assert.equal(shiftKeyDate({ text: 'Backwards', startDate: '2026-05-10', endDate: '2026-05-02' }, 1).endDate, '', 'an end before the start is dropped');
+});
+
+test('only the key dates of the year just before are offered, moved into the planned year', () => {
+  const y2025 = keyYear({ '2025-06': [{ id: 'old', text: 'Two years ago', startDate: '2025-06-01', endDate: '' }] });
+  const y2026 = keyYear({
+    '2026-11': [{ id: 'k1', text: 'Mum turns 70', startDate: '2026-11-14', endDate: '' }],
+    '2026-08': [{ id: 'k2', text: 'Summer in Brittany', startDate: '2026-08-01', endDate: '2026-08-21' }, { id: 'blank', text: '  ', startDate: '2026-08-05', endDate: '' }],
+    '2026-12': [{ id: 'k3', text: 'Christmas in Annecy', startDate: '2026-12-23', endDate: '2026-12-27' }, { id: 'k4', text: 'Winter break', startDate: '2025-12-22', endDate: '2026-01-04' }],
+    '2026-03': [{ id: 'k5', text: 'Old-style anchor', date: '2026-03-08' }, { id: 'k6', text: 'Month only' }]
+  });
+  const y2027 = emptyYear();
+  const offers = keyDatesToCarry(y2026, y2027, 2027);
+  assert.deepEqual(offers.map(offer => [offer.id, offer.startDate, offer.endDate, offer.present]), [
+    ['k6', '2027-03-01', '', false],
+    ['k5', '2027-03-08', '', false],
+    ['k2', '2027-08-01', '2027-08-21', false],
+    ['k1', '2027-11-14', '', false],
+    ['k4', '2026-12-22', '2027-01-04', false],
+    ['k3', '2027-12-23', '2027-12-27', false]
+  ].sort((a, b) => a[1].localeCompare(b[1])));
+  assert.equal(offers.find(offer => offer.id === 'k4').startDate, '2026-12-22', 'a break that runs into the year is still offered');
+  assert.deepEqual(keyDatesToCarry(y2025, y2027, 2027), [], 'nothing from two years before');
+  assert.deepEqual(keyDatesToCarry(emptyYear(), y2027, 2027), [], 'nothing when the year before has no key dates');
+  assert.deepEqual(keyDatesToCarry(undefined, y2027, 2027), []);
+  assert.deepEqual(y2026.months['2026-11'].anchors[0], { id: 'k1', text: 'Mum turns 70', startDate: '2026-11-14', endDate: '' }, 'the year before is not changed');
+});
+
+test('dates the planned year already has start unticked; exact duplicates are offered once', () => {
+  const y2026 = keyYear({
+    '2026-02': [{ id: 's1', text: 'School holidays', startDate: '2026-02-14', endDate: '2026-03-01' }],
+    '2026-04': [{ id: 's2', text: 'School holidays', startDate: '2026-04-11', endDate: '2026-04-26' }],
+    '2026-11': [{ id: 'k1', text: 'Mum’s birthday', startDate: '2026-11-14', endDate: '' }, { id: 'k1b', text: 'mum’s  birthday', startDate: '2026-11-14', endDate: '' }],
+    '2026-07': [{ id: 'k2', text: 'Launch day', startDate: '2026-07-01', endDate: '' }]
+  });
+  const y2027 = keyYear({
+    '2027-04': [{ id: 'n1', text: 'School holidays', startDate: '2027-04-11', endDate: '2027-04-26' }],
+    '2027-11': [{ id: 'n2', text: "Mum's birthday", startDate: '2027-11-13', endDate: '' }]
+  });
+  const offers = keyDatesToCarry(y2026, y2027, 2027);
+  assert.deepEqual(offers.map(offer => [offer.id, offer.present]), [['s1', false], ['s2', true], ['k2', false], ['k1', true]]);
+});
+
+test('adding writes ordinary key dates and the step never offers them again', () => {
+  const y2026 = keyYear({
+    '2026-11': [{ id: 'k1', text: 'Mum turns 70', startDate: '2026-11-14', endDate: '' }],
+    '2026-08': [{ id: 'k2', text: 'Summer in Brittany', startDate: '2026-08-01', endDate: '2026-08-21' }],
+    '2026-07': [{ id: 'k3', text: 'Launch day', startDate: '2026-07-01', endDate: '' }],
+    '2026-12': [{ id: 'k4', text: 'Winter break', startDate: '2025-12-22', endDate: '2026-01-04' }]
+  });
+  const y2027 = keyYear({ '2027-08': [{ id: 'mine', text: 'Wedding', startDate: '2027-08-28', endDate: '' }] });
+  const offers = keyDatesToCarry(y2026, y2027, 2027);
+  let n = 0;
+  const added = carryKeyDates(y2027, 2027, offers, new Set(['k1', 'k2', 'k4']), () => `new-${++n}`);
+  assert.deepEqual(added.map(anchor => anchor.text), ['Winter break', 'Summer in Brittany', 'Mum turns 70']);
+  assert.deepEqual(y2027.months['2027-08'].anchors, [
+    { id: 'mine', text: 'Wedding', startDate: '2027-08-28', endDate: '' },
+    { id: 'new-2', text: 'Summer in Brittany', startDate: '2027-08-01', endDate: '2027-08-21' }
+  ]);
+  assert.deepEqual(y2027.months['2027-11'], { outcomes: [], anchors: [{ id: 'new-3', text: 'Mum turns 70', startDate: '2027-11-14', endDate: '' }] });
+  assert.deepEqual(y2027.months['2027-12'].anchors, [{ id: 'new-1', text: 'Winter break', startDate: '2026-12-22', endDate: '2027-01-04' }], 'stored under the month it starts in, as Horizon does');
+  assert.deepEqual(y2027.carriedKeyDates.sort(), ['k1', 'k2', 'k3', 'k4'], 'the unticked one counts as handled too');
+  assert.deepEqual(yearKeyDates(y2027, 2027).map(item => item.text), ['Winter break', 'Summer in Brittany', 'Wedding', 'Mum turns 70']);
+  assert.equal(planSummary(y2027, 2027).keyDates.length, 4);
+
+  // Reopening the session: nothing left to offer, nothing added twice.
+  assert.deepEqual(keyDatesToCarry(y2026, y2027, 2027), []);
+  assert.deepEqual(carryKeyDates(y2027, 2027, keyDatesToCarry(y2026, y2027, 2027), new Set(['k1'])), []);
+  assert.equal(yearKeyDates(y2027, 2027).length, 4);
+
+  // A date added to the year before later is still offered, alone.
+  y2026.months['2026-05'] = { outcomes: [], anchors: [{ id: 'k5', text: 'Anniversary', startDate: '2026-05-30', endDate: '' }] };
+  assert.deepEqual(keyDatesToCarry(y2026, y2027, 2027).map(offer => offer.id), ['k5']);
+
+  // Removing an added date in Horizon does not bring the offer back.
+  y2027.months['2027-11'].anchors = [];
+  assert.deepEqual(keyDatesToCarry(y2026, y2027, 2027).map(offer => offer.id), ['k5']);
 });

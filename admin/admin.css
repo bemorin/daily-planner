@@ -54,6 +54,30 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .owner-notice { margin: 0; padding: 10px 14px; border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--danger) 7%, var(--surface-strong)); color: var(--danger); font-size: .82rem; line-height: 1.5; }
 
+/* This page's version (admin.js APP_VERSION), after "Daily Planner · owner". */
+.owner-version { font-variant-numeric: tabular-nums; }
+
+/* A newer (or another) dashboard is deployed than this page: a cache served old files. */
+.owner-update { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 14px 14px 14px 16px; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--accent) 8%, var(--surface-strong)); box-shadow: 0 1px 2px rgba(25, 22, 17, .04), 0 10px 26px rgba(25, 22, 17, .05); }
+
+.owner-update[hidden] { display: none; }
+
+.owner-update__icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 10px; background: color-mix(in srgb, var(--accent) 16%, var(--surface-strong)); color: var(--accent); }
+
+.owner-update__icon svg { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+.owner-update__body { min-width: 0; display: grid; gap: 2px; font-size: .82rem; line-height: 1.5; }
+
+.owner-update__body p { margin: 0; color: var(--muted); }
+
+.owner-update__body .owner-update__title { color: var(--ink); font-size: .9rem; }
+
+.owner-update__title b { font-weight: 680; }
+
+.owner-update__body .owner-update__hint { margin-top: 4px; color: var(--ink); }
+
+.owner-update .primary-button { min-height: 38px; padding: 0 18px; border-radius: 999px; font-size: .84rem; }
+
 .owner-checking { margin: 40px auto; color: var(--muted); font-size: .84rem; text-align: center; }
 
 /* Shown instead of the sign-in form when no API answers or it is not configured. */
@@ -603,6 +627,8 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 }
 
 @media (max-width: 600px) {
+  .owner-update { grid-template-columns: 36px minmax(0, 1fr); align-items: start; gap: 12px; padding: 14px; }
+  .owner-update .primary-button { grid-column: 1 / -1; width: 100%; }
   .trends-switch { width: 100%; }
   .trend-detail > .owner-card__head { flex-wrap: wrap; }
   .trend-tiles { gap: 8px; }

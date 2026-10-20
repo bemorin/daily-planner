@@ -6,11 +6,11 @@
  * (1.22.1, 1.22.2…) keep the same note and are never asked about again.
  */
 export const WHATS_NEW = Object.freeze({
-  version: '1.24',
+  version: '1.25',
   items: Object.freeze([
-    'Your year in review prints as a designed page: big numbers, your painted year in your colours, where the time went, Horizon and your journal.',
-    'The date sits right of ‹ Now ›, so the arrows stay put from one month to the next.',
-    'The Daily Planner Plus window is clearer, with the price and Get Plus side by side.',
-    'Setup asks Light or Dark (your system’s is chosen), and its daily loop reads at a glance.'
+    'Share your week when you close it, and your painted year from Progress, as a ready-to-post image. Free.',
+    'Plus: a guided check-in each quarter, printable on one page, and Insights — which days work best, when you focus, where the hours go.',
+    'The floating window has a Focus view with the block in progress and what comes next; its arrows always move one day.',
+    'Plan your year offers last year’s key dates on the same days.'
   ])
 });

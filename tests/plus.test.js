@@ -21,7 +21,7 @@ Object.defineProperty(globalThis, 'localStorage', {
 });
 
 const plus = await import('../src/lib/plus.js');
-const { currencyNote, giftLabel, giverName, plusFeatureId, plusProblem, PLUS_FEATURES } = await import('../src/features/plus-dialog.js');
+const { currencyNote, featureHeadline, giftLabel, giverName, plusFeatureId, plusProblem, PLUS_FEATURES, PLUS_POINTS } = await import('../src/features/plus-dialog.js');
 const { PERSONAL_GIFTS } = await import('../src/lib/pricing.js');
 
 const b64url = bytes => Buffer.from(bytes).toString('base64url');
@@ -183,7 +183,11 @@ test('the status line says where Plus came from', () => {
 });
 
 test('Horizon features open the dialog on themselves, and problems are explained calmly', () => {
-  assert.deepEqual(PLUS_FEATURES.map(feature => feature.id), ['year-plan', 'year-review', 'paint-palettes']);
+  assert.deepEqual(PLUS_FEATURES.map(feature => feature.id), ['year-plan', 'quarter-review', 'year-review', 'insights', 'paint-palettes']);
+  assert.equal(plusFeatureId('insights'), 'insights');
+  assert.equal(plusFeatureId('statistics'), 'insights');
+  assert.equal(plusFeatureId('quarter'), 'quarter-review');
+  assert.equal(plusFeatureId('Quarter-Review'), 'quarter-review');
   assert.equal(plusFeatureId('year-plan'), 'year-plan');
   assert.equal(plusFeatureId('Year-Review'), 'year-review');
   assert.equal(plusFeatureId('palettes'), 'paint-palettes');
@@ -248,4 +252,22 @@ test('a gift from no one in particular reads as a sentence', () => {
   assert.equal(giverName(''), '');
   assert.match(plusProblem('gift', { status: 409 }, { org: 'A friend' }).text, /Ask the person who sent it/);
   assert.match(plusProblem('gift', { status: 409 }, { org: 'Claire' }).text, /Ask Claire/);
+});
+
+test('a feature opens under its own headline, in the right number, with its own icon', () => {
+  const byId = id => PLUS_FEATURES.find(feature => feature.id === id);
+  assert.equal(featureHeadline(byId('quarter-review')), 'Quarterly check-ins come with Plus.');
+  assert.equal(featureHeadline(byId('insights')), 'Insights come with Plus.', 'as the Stats lock card says');
+  assert.equal(featureHeadline(byId('year-plan')), 'Plan your year comes with Plus.');
+  assert.equal(featureHeadline(byId('year-review')), 'Your year in review comes with Plus.');
+  assert.equal(featureHeadline(byId('paint-palettes')), 'Colours for your painted year come with Plus.');
+  assert.deepEqual(PLUS_FEATURES.filter(feature => feature.plural).map(feature => feature.id), ['quarter-review', 'insights', 'paint-palettes']);
+  const icons = PLUS_FEATURES.map(feature => feature.icon);
+  assert.equal(new Set(icons).size, icons.length, 'no two features share an icon');
+  assert.deepEqual([byId('quarter-review').icon, byId('insights').icon], ['quarter', 'chart']);
+  assert.ok(PLUS_POINTS.length >= 3 && PLUS_POINTS.length <= 4);
+  assert.ok(PLUS_POINTS.some(point => /check-in each quarter/.test(point)));
+  assert.ok(PLUS_POINTS.some(point => /^Insights/.test(point)));
+  assert.ok(PLUS_POINTS.some(point => /^Paid once/.test(point)));
+  PLUS_POINTS.forEach(point => assert.ok(point.length <= 64, point));
 });

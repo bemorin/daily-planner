@@ -3,18 +3,21 @@ import { defaultCategories } from '../config.js';
 import { rangeLabel } from './horizon-model.js';
 import { TROPHIES } from './progress-model.js';
 import { buildYearPrintModel } from './year-print.js';
+import { buildQuarterReview, defaultCheckInQuarter, previousQuarter } from './quarter-review.js';
 
 /**
  * Sample years for the Daily Planner Plus dialog, shown when the person has
  * nothing of their own to preview yet: a planned year (the same one the
  * landing page shows: the Camino de Santiago, six mini-adventures, three
- * commitments, a habit per quarter, three key dates) and a year in review.
- * Pure data, run through the real print renderers (year-print.js,
- * year-review.js) by the dialog; unit-tested.
+ * commitments, a habit per quarter, three key dates), a quarter check-in and
+ * a year in review. Pure data, run through the real print renderers
+ * (year-print.js, quarter-print.js, year-review.js) by the dialog; unit-tested.
  */
 
 /** Below this many closed days this year, "Look back" shows the sample review. */
 export const REVIEW_SAMPLE_BELOW = 20;
+/** Below this many closed days in a quarter, "Check in" looks at an earlier quarter, then at the sample. */
+export const QUARTER_SAMPLE_BELOW = 10;
 
 /** The parts of a plan that appear on the printed year (the look back doesn't). */
 const PRINTED_PARTS = ['misogi', 'milestones', 'adventures', 'commitments', 'habits', 'keydates'];
@@ -192,4 +195,109 @@ export function sampleReview(year) {
   };
   const progress = { year, months: paint.months, closed, planningElapsed: paint.planningElapsed, closeRate: review.days.closeRate, streak: { yearBest: SAMPLE_STREAK }, metrics: { mitDone }, unlocked, trophies: TROPHIES };
   return { review, progress };
+}
+
+// ---------------------------------------------------------------------------
+// A quarter check-in: the same person's third quarter, checked in on 2 October
+// ---------------------------------------------------------------------------
+
+/** Closed days in one quarter of a progress model (no day records read). */
+export function quarterClosed(progress, quarter) {
+  return [0, 1, 2].reduce((sum, offset) => sum + (Number(progress?.months?.[quarter * 3 + offset]?.closed) || 0), 0);
+}
+
+/**
+ * The quarter "Check in" previews from the person's own planner: the one a
+ * check-in opens on, else up to three before it, the first with enough closed
+ * days; null when none has (the sample stands in).
+ */
+export function ownQuarter({ today = new Date(), minYear = today.getFullYear(), closedIn = () => 0, below = QUARTER_SAMPLE_BELOW, back = 4 } = {}) {
+  let at = defaultCheckInQuarter(today);
+  for (let step = 0; step < back && at.year >= (Number(minYear) || at.year); step += 1, at = previousQuarter(at)) {
+    let closed = 0;
+    try { closed = Number(closedIn(at)) || 0; } catch (_) { closed = 0; }
+    if (closed >= below) return at;
+  }
+  return null;
+}
+
+const QUARTER_SAMPLE = {
+  quarter: 2,
+  habits: ['Walk after lunch', 'No phone in the bedroom', 'Write three lines', 'Stretch before bed'],
+  milestones: [['Run 10 km without stopping', [2, 15], true], ['A half marathon in June', [5, 14], true], ['30 km in training', [7, 30], true], ['Book the race hotel', [8, 12], false]],
+  adventures: [['Swim in the sea in April', [3, 18], true], ['Kayak to the island', [6, 25], true], ['Cook for twelve people', [10, 21], false]],
+  memories: [['Kayak to the island at dawn', [6, 27]], ['Crossing the finish line with Sam', [8, 25]]],
+  lessons: [['Two priorities are plenty', [6, 15]], ['Short runs still count', [7, 12]]],
+  entry: {
+    wentWell: 'The long runs on Sunday mornings. Writing three lines most evenings made the busy weeks easier to read.',
+    change: 'No email before the first block. Book the taper weeks before the race.',
+    focus: 'Run the marathon, then rest properly'
+  },
+  // Minutes per closed day: [category, chance, shortest, longest].
+  blocks: [['deep-work', 0.92, 90, 180], ['admin', 0.8, 30, 90], ['health', 0.62, 30, 75], ['personal', 0.42, 30, 90], ['learning', 0.28, 30, 60]]
+};
+
+/**
+ * Everything buildQuarterReview() reads, for the sample person's third quarter
+ * of `year` (the year of the sample review): the painted days of that review,
+ * the habit "Write three lines" checked on most days, a milestone and a
+ * mini-adventure of the marathon year, a few journal lines, scheduled blocks
+ * and the check-in's answers.
+ */
+export function sampleQuarterInput(year, { weekStartsOn = 1 } = {}) {
+  const { quarter } = QUARTER_SAMPLE;
+  const paint = samplePaint(year);
+  let seed = 9311;
+  const random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const habitChecks = {};
+  const records = new Map();
+  const closedKeys = [];
+  for (let month = quarter * 3; month < quarter * 3 + 3; month += 1) {
+    paint.months[month].days.forEach(cell => {
+      const kept = cell.closed ? random() < 0.8 : !cell.planning && random() < 0.4;
+      if (kept) habitChecks[cell.key] = [quarter];
+      cell.habitKept = cell.closed && kept;
+      cell.level = cell.closed ? 1 + (cell.mitDone ? 1 : 0) + (cell.habitKept ? 1 : 0) : 0;
+      if (!cell.closed) return;
+      closedKeys.push(cell.key);
+      const blocks = QUARTER_SAMPLE.blocks.filter(([, chance]) => random() < chance).map(([categoryId, , low, high], index) => ({ id: `b${index}`, title: '', start: 540 + index * 120, duration: low + Math.round(random() * (high - low) / 15) * 15, categoryId }));
+      records.set(cell.key, { blocks, endedAt: `${cell.key}T18:30:00`, memory: '', lesson: '' });
+    });
+  }
+  // Each journal line goes on the first closed day from its date.
+  const write = (field, [text, [month, day]]) => {
+    const dayKey = closedKeys.find(item => item >= key(year, month, day));
+    if (dayKey) records.get(dayKey)[field] = text;
+  };
+  QUARTER_SAMPLE.memories.forEach(item => write('memory', item));
+  QUARTER_SAMPLE.lessons.forEach(item => write('lesson', item));
+  const yearData = {
+    misogi: REVIEW_HORIZON.misogi[0],
+    misogiStartDate: key(year, ...REVIEW_HORIZON.misogi[1]),
+    misogiEndDate: '',
+    misogiDone: false,
+    misogiMilestones: QUARTER_SAMPLE.milestones.map(([text, [month, day], done], index) => ({ id: `sample-q-milestone-${index + 1}`, text, date: key(year, month, day), done })),
+    miniAdventures: QUARTER_SAMPLE.adventures.map(([text, [month, day], done], index) => ({ id: `sample-q-adventure-${index + 1}`, text, startDate: key(year, month, day), endDate: '', status: done ? 'done' : 'planned', done })),
+    habits: [...QUARTER_SAMPLE.habits],
+    habitStartedAt: ['', '', key(year, quarter * 3, 1), ''],
+    habitChecks,
+    months: {},
+    quarterReviews: { [`Q${quarter + 1}`]: { done: true, ...QUARTER_SAMPLE.entry, completedAt: key(year, quarter * 3 + 3, 2) } }
+  };
+  return {
+    year,
+    quarter,
+    progress: { year, months: paint.months },
+    yearData,
+    nextYearData: null,
+    readDay: dayKey => records.get(dayKey) || null,
+    categoryFor: id => defaultCategories.find(category => category.id === id) || null,
+    weekStartsOn,
+    today: new Date(year, quarter * 3 + 3, 2, 12)
+  };
+}
+
+/** The sample quarter, as buildQuarterReview() returns it for renderQuarterPrint(). */
+export function sampleQuarterReview(year, options) {
+  return buildQuarterReview(sampleQuarterInput(year, options));
 }
