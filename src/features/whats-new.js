@@ -10,6 +10,6 @@ export const WHATS_NEW = Object.freeze({
   items: Object.freeze([
     'Insights: the outline of the day or bar you point at now shows on every side, above its neighbours.',
     'The welcome page shows the planner two ways, your day and your year in Horizon, with a switch to pause or choose.',
-    'Legal pages: clearer contacts, the director of publication in the table, and the same thin scrollbar as the planner.'
+    'Thin scrollbars without arrows everywhere in Chrome and Edge, and clearer contacts on the legal pages.'
   ])
 });

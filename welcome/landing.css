@@ -397,17 +397,19 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 }
 
 /* The hero needs no script to arrive: its copy rises line by line and the
-   replica follows on first paint, already on its first frame. */
+   replica and its switch follow on first paint, already on the first frame.
+   The caption is simply there: painted at once, it is the page's Largest
+   Contentful Paint, and the turns only change its text (hero-views.js). */
 @media screen and (prefers-reduced-motion: no-preference) {
   .hero__copy h1 span,
   .hero__copy > :not(h1),
-  .hero__visual { animation: rise-in 820ms cubic-bezier(.22, 1, .36, 1) both; }
+  .hero__visual > :not(.hero-captions) { animation: rise-in 820ms cubic-bezier(.22, 1, .36, 1) both; }
   .hero__copy h1 span:nth-child(2) { animation-delay: 70ms; }
   .hero__copy h1 span:nth-child(3) { animation-delay: 140ms; }
   .hero__copy .lead { animation-delay: 240ms; }
   .hero__copy .cta-row { animation-delay: 320ms; }
   .hero__copy .devices { animation-delay: 390ms; }
-  .hero__visual { animation-duration: 1000ms; animation-delay: 180ms; }
+  .hero__visual > :not(.hero-captions) { animation-duration: 1000ms; animation-delay: 180ms; }
 }
 
 @keyframes rise-in {
@@ -526,12 +528,13 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .hero__visual.is-live .hero-view.is-shown { z-index: 1; visibility: visible; }
 
-.hero__visual.is-live [data-hero-caption] { visibility: hidden; opacity: 0; }
-
-.hero__visual.is-live[data-view="day"] [data-hero-caption="day"],
-.hero__visual.is-live[data-view="year"] [data-hero-caption="year"] { visibility: visible; opacity: 1; }
-
 .hero__visual.is-live[data-view="year"] .hero-switch__thumb { transform: translateX(100%); }
+
+/* A hidden view goes back to its first frame at once, with no transition
+   running unseen (hero-views.js adds the class for that moment). */
+.motion-ok .hero__visual.is-live .hero-view.is-resetting *,
+.motion-ok .hero__visual.is-live .hero-view.is-resetting *::before,
+.motion-ok .hero__visual.is-live .hero-view.is-resetting *::after { transition: none; }
 
 /* Going out: its content and floating card fade first, its window stays.
    Coming in: no shadow of its own until the window underneath is gone, so the
@@ -545,8 +548,6 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 .motion-ok .hero-view.is-entering { animation: hero-view-in 520ms cubic-bezier(.4, 0, .2, 1) 140ms both; }
 
 .motion-ok .hero-view.is-entering :is(.rp-day, .rp-hz) { animation: hero-content-in 760ms cubic-bezier(.22, 1, .36, 1) 140ms both; }
-
-.motion-ok .hero__visual.is-live [data-hero-caption] { transition: opacity 420ms ease; }
 
 @keyframes hero-view-in {
   from { opacity: 0; }
@@ -664,6 +665,8 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .hero-captions { display: grid; margin-top: 14px; }
 
+/* The captions share a cell, which keeps the taller one's height. With the
+   script, the first one shows each view's caption in turn (hero-views.js). */
 .hero-captions > span { grid-area: 1 / 1; }
 
 @media (min-width: 560px) {
@@ -2714,8 +2717,20 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
    the year at a glance, the Misogi and the mini-adventures. The scene fills
    the year in, lands a key date on the map, ticks a mini-adventure as lived,
    then the last Misogi milestone. Same box as the Day view, whose card hangs
-   below its window. */
+   below its window: wide enough, the switch rises into that room beside the
+   card (.hero-switch), so Horizon keeps it free; narrower, its window fills
+   the whole box, with no empty band above the switch. */
 .rp--horizon { padding: 0 0 3.6em; }
+
+@container hero-visual (max-width: 519.98px) {
+  .rp--horizon { padding-bottom: 0; }
+  /* The room it gains goes half to the year at a glance (around its content), half to the two tiles. */
+  .rp--horizon .rp-hz-map { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
+  /* Going out, its window is taller than the Day's: once the Day view is in
+     over it, the part still showing below fades out too. */
+  .hero-view.is-leaving .rp--horizon .rp-window { opacity: 0; }
+  .motion-ok .hero-view.is-leaving .rp--horizon .rp-window { transition: opacity 220ms ease 660ms; }
+}
 
 .rp--horizon .rp-window { display: flex; flex-direction: column; }
 

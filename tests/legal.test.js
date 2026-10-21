@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 // config.js reads the runtime configuration when it loads: give it sample
 // legal details (with stray spaces) before anything imports it.
-globalThis.__DAILY_PLANNER_CONFIG__ = { SUPPORT_EMAIL: '  hello@example.com ', PRIVACY_EMAIL: ' privacy@example.com ', LEGAL_PHONE: ' +33 1 23 45 67 89 ', LEGAL_ADDRESS: ' 1 rue Exemple, 75000 Paris ', LEGAL_REGISTRATION: 'SIRET 000 000 000 00000' };
+globalThis.__DAILY_PLANNER_CONFIG__ = { SUPPORT_EMAIL: '  hello@example.com ', PRIVACY_EMAIL: ' privacy@example.com ', LEGAL_PHONE: ' +33 1 99 00 12 34 ', LEGAL_ADDRESS: ' 1 rue Exemple, 75000 Paris ', LEGAL_REGISTRATION: 'SIRET 000 000 000 00000' };
 
 const config = await import('../src/config.js');
 const api = await import('../src/lib/planner-api.js');
@@ -138,19 +138,46 @@ test('support and privacy addresses: privacy questions go to the privacy one, th
   assert.equal(legal.contactEmail(only, 'privacy'), 'privacy@example.com');
 });
 
+// Phone numbers in tests are from ARCEP's range for fiction (01 99 00 xx xx), never a real line.
 test('a phone number becomes a Phone row of the legal notice, as a tel: link; anything else is left out', () => {
-  const details = legal.legalDetails({ SUPPORT_EMAIL: 'support@example.com', LEGAL_PHONE: ' +33 (0)6 12-34.56.78 ', LEGAL_ADDRESS: '1 rue Exemple', LEGAL_REGISTRATION: 'SIRET 1' });
-  assert.equal(details.phone, '+33 (0)6 12-34.56.78');
+  const details = legal.legalDetails({ SUPPORT_EMAIL: 'support@example.com', LEGAL_PHONE: ' +33 (0)1 99-00.12.34 ', LEGAL_ADDRESS: '1 rue Exemple', LEGAL_REGISTRATION: 'SIRET 1' });
+  assert.equal(details.phone, '+33 (0)1 99-00.12.34');
   assert.deepEqual(labels(details, 'notice'), ['Publisher', 'Address', 'Registration', 'Email', 'Phone', 'Director of publication'], 'the order the legal notice reads');
   assert.deepEqual(labels(details, 'privacy'), ['Data controller', 'Address', 'Registration', 'Email'], 'the privacy policy shows no phone');
-  assert.match(legal.detailsHtml(legal.detailRows(details)), /<dt>Phone<\/dt><dd><a href="tel:\+33612345678">\+33 \(0\)6 12-34\.56\.78<\/a><\/dd>/);
-  assert.equal(legal.telHref('06 12 34 56 78'), 'tel:0612345678');
+  assert.match(legal.detailsHtml(legal.detailRows(details)), /<dt>Phone<\/dt><dd><a href="tel:\+33199001234">\+33 \(0\)1 99-00\.12\.34<\/a><\/dd>/);
+  assert.equal(legal.telHref('01 99 00 12 34'), 'tel:0199001234');
   assert.equal(legal.telHref('+1 (650) 319-8930'), 'tel:+16503198930');
-  for (const bad of ['12345', 'call me', '+33 6 12 34 56 78 ext. 2', '06 12 34 56 78<script>', '+33 6+12 34 56 78', '1'.repeat(21), '06 12 34\n56 78 <b>']) {
+  for (const bad of ['12345', 'call me', '+33 1 99 00 12 34 ext. 2', '+33 1 99 00 12 34 (office)', '01 99 00 12 34<script>', '+33 1+99 00 12 34', '1'.repeat(21), '01 99 00\n12 34 <b>']) {
     assert.equal(legal.legalPhone(bad), '', JSON.stringify(bad));
   }
-  assert.equal(legal.legalPhone('06 12 34\n56 78'), '06 12 34 56 78', 'one line');
+  assert.equal(legal.legalPhone('01 99 00\n12 34'), '01 99 00 12 34', 'one line');
   assert.deepEqual(labels(legal.legalDetails({ LEGAL_PHONE: 'call me' }), 'notice'), ['Publisher', 'Contact', 'Director of publication']);
+});
+
+test('the national “(0)” is dropped only from an international number', () => {
+  assert.equal(legal.telHref('+33 (0)1 99 00 12 34'), 'tel:+33199001234', 'after +33 the 0 is not dialled');
+  assert.equal(legal.telHref('(0)1 99 00 12 34'), 'tel:0199001234', 'a national number keeps its 0');
+  assert.equal(legal.telHref('(01) 99 00 12 34'), 'tel:0199001234');
+  assert.equal(legal.telHref(' +44 (0)20 7946 0000 '), 'tel:+442079460000');
+  assert.equal(legal.phoneHtml('(0)1 99 00 12 34'), '<a href="tel:0199001234">(0)1 99 00 12 34</a>');
+});
+
+test('legalValueProblem says why a set value is left out, with the same checks as the pages', () => {
+  assert.equal(legal.legalValueProblem('SUPPORT_EMAIL', 'ben at example dot com'), 'not a plain email address');
+  assert.equal(legal.legalValueProblem('PRIVACY_EMAIL', 'privacy@example'), 'not a plain email address');
+  assert.equal(legal.legalValueProblem('SUPPORT_EMAIL', 'me@example.com?bcc=x@example.com'), 'not a plain email address');
+  assert.equal(legal.legalValueProblem('LEGAL_PHONE', '+33 1 99 00 12 34 (office)'), 'not a phone number');
+  assert.equal(legal.legalValueProblem('LEGAL_PHONE', 'call me'), 'not a phone number');
+  for (const [key, value] of [['SUPPORT_EMAIL', ' support@example.com '], ['PRIVACY_EMAIL', 'privacy@example.com'], ['LEGAL_PHONE', '+33 1 99 00 12 34'], ['LEGAL_ADDRESS', 'anything'], ['LEGAL_REGISTRATION', 'SIRET 1'], ['SUPPORT_EMAIL', '   '], ['LEGAL_PHONE', ''], ['LEGAL_PHONE', undefined]]) {
+    assert.equal(legal.legalValueProblem(key, value), '', `${key}=${JSON.stringify(value)}`);
+  }
+  // Whatever it reports as usable, the pages show; whatever it rejects, they leave out.
+  for (const value of ['ben at example dot com', 'privacy@example', 'support@example.com']) {
+    assert.equal(legal.legalDetails({ SUPPORT_EMAIL: value }).email === '', legal.legalValueProblem('SUPPORT_EMAIL', value) !== '', value);
+  }
+  for (const value of ['+33 1 99 00 12 34 (office)', '+33 1 99 00 12 34']) {
+    assert.equal(legal.legalDetails({ LEGAL_PHONE: value }).phone === '', legal.legalValueProblem('LEGAL_PHONE', value) !== '', value);
+  }
 });
 
 test('applyLegal fills every placeholder from the configuration', () => {
@@ -174,7 +201,7 @@ test('applyLegal fills every placeholder from the configuration', () => {
   legal.applyLegal(doc);
   assert.match(nodes['[data-legal-details="notice"]'][0].innerHTML, /1 rue Exemple, 75000 Paris/);
   assert.match(nodes['[data-legal-details="notice"]'][0].innerHTML, /mailto:hello@example\.com/);
-  assert.match(nodes['[data-legal-details="notice"]'][0].innerHTML, /tel:\+33123456789/);
+  assert.match(nodes['[data-legal-details="notice"]'][0].innerHTML, /tel:\+33199001234/);
   assert.match(nodes['[data-legal-details="privacy"]'][0].innerHTML, /mailto:privacy@example\.com/);
   assert.match(nodes['[data-legal-contact="support"]'][0].innerHTML, /mailto:hello@example\.com/);
   assert.match(nodes['[data-legal-contact="privacy"]'][0].innerHTML, /mailto:privacy@example\.com/);
@@ -183,7 +210,7 @@ test('applyLegal fills every placeholder from the configuration', () => {
 test('src/config.js exports the legal details, trimmed, and runtime-config.js and check.mjs keep them blank', async () => {
   assert.equal(config.SUPPORT_EMAIL, 'hello@example.com');
   assert.equal(config.PRIVACY_EMAIL, 'privacy@example.com');
-  assert.equal(config.LEGAL_PHONE, '+33 1 23 45 67 89');
+  assert.equal(config.LEGAL_PHONE, '+33 1 99 00 12 34');
   assert.equal(config.LEGAL_ADDRESS, '1 rue Exemple, 75000 Paris');
   assert.equal(config.LEGAL_REGISTRATION, 'SIRET 000 000 000 00000');
   const runtime = await read('runtime-config.js');
@@ -221,6 +248,48 @@ test('the static pages say what the script writes with nothing configured (no Ja
   assert.equal((await read('legal/terms/index.html')).match(/data-legal-contact="support"/g).length, 2);
 });
 
+test('the build writes the configured details into the static pages, as legal.js would, escaped', async () => {
+  const sample = { SUPPORT_EMAIL: ' support@example.com ', PRIVACY_EMAIL: 'privacy@example.com', LEGAL_PHONE: '+33 (0)1 99 00 12 34', LEGAL_ADDRESS: '12 rue de l’Exemple <b>\n75011 Paris', LEGAL_REGISTRATION: 'SIRET 123 & co' };
+  const details = legal.legalDetails(sample);
+  const squeeze = html => html.replace(/>\s+</g, '><').trim();
+  for (const [folder, file] of Object.entries(PAGES)) {
+    const source = await read(file);
+    const root = folder === 'legal/' ? '../' : '../../';
+    const built = legal.staticLegalHtml(source, sample);
+    // Outside the hooks, the page is unchanged.
+    const strip = html => html.replace(/(data-legal-details="[a-z]+">)[\s\S]*?<\/dl>/g, '$1</dl>').replace(/(data-legal-contact="[a-z]+">)[\s\S]*?<\/span>/g, '$1</span>');
+    assert.equal(strip(built), strip(source), `${file}: only the hooks change`);
+    for (const match of built.matchAll(/<dl class="lg-dl" data-legal-details="([a-z]+)">([\s\S]*?)<\/dl>/g)) {
+      assert.equal(match[2], legal.detailsHtml(legal.detailRows(details, root, match[1])), `${file}: the ${match[1]} table`);
+    }
+    for (const match of built.matchAll(/<span data-legal-contact="([a-z]+)">([\s\S]*?)<\/span>/g)) {
+      assert.equal(match[2], legal.contactPhrase(details, root, match[1]), `${file}: a ${match[1]} contact`);
+    }
+    // With nothing configured, the build writes what the source already says.
+    assert.equal(squeeze(legal.staticLegalHtml(source, {})), squeeze(source), `${file}: blank config, blank fallback`);
+  }
+  const notice = legal.staticLegalHtml(await read('legal/index.html'), sample);
+  assert.match(notice, /<dt>Address<\/dt><dd>12 rue de l’Exemple &lt;b&gt; 75011 Paris<\/dd>/, 'escaped, on one line');
+  assert.match(notice, /<dt>Registration<\/dt><dd>SIRET 123 &amp; co<\/dd>/);
+  assert.match(notice, /<dt>Email<\/dt><dd><a href="mailto:support@example\.com">support@example\.com<\/a><\/dd>/);
+  assert.match(notice, /<dt>Phone<\/dt><dd><a href="tel:\+33199001234">\+33 \(0\)1 99 00 12 34<\/a><\/dd>/);
+  assert.doesNotMatch(notice, /<b>/, 'nothing from the configuration is read as markup');
+  const privacy = legal.staticLegalHtml(await read('legal/privacy/index.html'), sample);
+  assert.match(privacy, /To use any of these rights, <span data-legal-contact="privacy">email <a href="mailto:privacy@example\.com">/);
+  // An invalid value is left out, as in the browser.
+  const invalid = legal.staticLegalHtml(await read('legal/index.html'), { SUPPORT_EMAIL: 'ben at example dot com', LEGAL_PHONE: 'call me' });
+  assert.match(invalid, /<dt>Contact<\/dt><dd>the <a href="\.\.\/welcome\/teams\/\?ask=question#request">/);
+  assert.doesNotMatch(invalid, /mailto:|ben at example|call me/);
+  // The build applies it to every legal page, from the deployment's configuration, after copying legal/.
+  const build = await read('scripts/build.mjs');
+  assert.match(build, /import \{ staticLegalHtml \} from '\.\.\/legal\/legal-details\.js';/);
+  const listed = JSON.parse(/const LEGAL_PAGES = (\[[^\]]+\]);/.exec(build)[1].replace(/'/g, '"'));
+  assert.deepEqual(listed.sort(), Object.values(PAGES).sort());
+  assert.match(build, /staticLegalHtml\(await fs\.readFile\(file, 'utf8'\), deploymentConfig\)/);
+  assert.ok(build.indexOf("await copyTree('legal');") < build.indexOf('staticLegalHtml(await'), 'after the copy');
+  assert.ok(build.indexOf('const deploymentConfig') < build.indexOf('staticLegalHtml(await'), 'with the deployment’s values');
+});
+
 test('no personal email address or phone number is written in legal/', async () => {
   for (const file of await walk('legal')) {
     const source = await read(file);
@@ -242,6 +311,18 @@ test('the build copies legal/ and _redirects, and reads the five legal build var
     assert.match(build, new RegExp(`${key}: process\\.env\\.DAILY_PLANNER_${variable} \\|\\| ''`), key);
     assert.match(docs, new RegExp(`\\| \`DAILY_PLANNER_${variable}\` \\| Text \\|`), `docs: ${variable} in the variables table`);
     assert.match(admin, new RegExp(`\\['${key}', '`), `admin Setup: ${key} in the Legal pages line`);
+  }
+});
+
+test('the dev server takes the legal and partner build variables from the environment, as the build does', async () => {
+  const build = await read('scripts/build.mjs');
+  const serve = await read('scripts/serve.mjs');
+  const fromBuild = new Map([...build.matchAll(/^ {2}([A-Z_]+): process\.env\.(DAILY_PLANNER_[A-Z_]+) \|\| ''/gm)].map(match => [match[1], match[2]]));
+  const fromServe = [...(/const ENV_CONFIG = \[([\s\S]*?)\n\];/.exec(serve)?.[1] || '').matchAll(/\['([A-Z_]+)', '(DAILY_PLANNER_[A-Z_]+)'\]/g)].map(match => [match[1], match[2]]);
+  assert.deepEqual(fromServe.map(([key]) => key), ['SUPPORT_EMAIL', 'PRIVACY_EMAIL', 'LEGAL_PHONE', 'LEGAL_ADDRESS', 'LEGAL_REGISTRATION', 'AFFILIATE_URL']);
+  for (const [key, variable] of fromServe) {
+    assert.equal(variable, fromBuild.get(key), `${key}: the same variable as the build`);
+    assert.ok(serve.slice(0, serve.indexOf('import ')).includes(variable), `${variable} is in the header`);
   }
 });
 
@@ -340,7 +421,8 @@ test('the terms’ partner program: the rates, the days and the minimum come fro
   assert.doesNotMatch(words, /Plus Family bought through your link, on the price before tax/);
   assert.match(words, /10% of a team gift you introduced, on its price before tax: bought online through your link, or ordered by invoice or quote when the company’s request carries your code\. We pay this commission ourselves\./);
   assert.match(words, /A link counts for 30 days\./);
-  assert.match(words, /A purchase refunded in full, or disputed, earns nothing\. A team commission is earned once the gift’s 14-day refund period has passed without a full refund or a dispute\. If only part of the price is refunded, the commission is on the part that was kept: for example, half the price refunded halves the commission\./);
+  assert.match(words, /A purchase refunded in full, or disputed, earns nothing\. A team commission is earned once the gift’s 14-day refund period has passed without a full refund or a dispute\. If only part of a team gift is refunded, its commission is on the part kept: for example, half the price refunded halves the commission\./);
+  assert.doesNotMatch(words, /If only part of the price is refunded/, 'a partial refund is about team gifts: Creem’s 25% follows its own terms');
   assert.match(words, /on the 1st and the 15th of each month, once your balance reaches €50 or \$50/);
   assert.match(words, /We pay team commissions by bank transfer within 30 days of being earned/);
   assert.match(words, /spam/);

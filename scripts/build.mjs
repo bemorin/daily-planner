@@ -2,6 +2,10 @@ import { promises as fs } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync, brotliCompressSync, constants } from 'node:zlib';
+import { staticLegalHtml } from '../legal/legal-details.js';
+
+// The legal pages whose publisher details the build writes in (see below).
+const LEGAL_PAGES = ['legal/index.html', 'legal/privacy/index.html', 'legal/terms/index.html', 'legal/cookies/index.html'];
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = resolve(root, 'dist');
@@ -57,6 +61,15 @@ const deploymentConfig = {
   AFFILIATE_URL: process.env.DAILY_PLANNER_AFFILIATE_URL || ''
 };
 await fs.writeFile(resolve(dist, 'runtime-config.js'), `globalThis.__DAILY_PLANNER_CONFIG__ = Object.freeze(${JSON.stringify(deploymentConfig, null, 2)});\n`);
+
+// The legal pages show the publisher's details without JavaScript too: their
+// copies in dist/ get the rows and links legal.js writes (escaped, invalid
+// values left out: legal/legal-details.js). The source pages keep the blank
+// fallback, the “Ask a question” form.
+for (const page of LEGAL_PAGES) {
+  const file = resolve(dist, page);
+  await fs.writeFile(file, staticLegalHtml(await fs.readFile(file, 'utf8'), deploymentConfig));
+}
 await copyTree('src');
 
 // Source uses domain CSS imports for maintainability; production gets one CSS file.

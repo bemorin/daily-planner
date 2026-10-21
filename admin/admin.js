@@ -18,6 +18,8 @@ import { dayOf, normalizeSeries, seriesWindow } from './trends.js';
 // The landing page's stepper (− value +): no browser spin arrows on Seats.
 import { createStepper } from '../welcome/stepper.js';
 import { compareVersions, readReloadMark, reloadUrl, versionNotice } from './version.js';
+// The legal pages' checks (a plain email address, a phone number): Setup says what the pages will leave out.
+import { legalDetails, legalValueProblem } from '../legal/legal-details.js';
 
 const SESSION_KEY = 'daily-planner-owner-session';
 const LEGACY_TOKEN_KEY = 'daily-planner-owner-token';
@@ -58,7 +60,7 @@ const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', ma
 // file, so an old cached admin.js shows its old number.
 const APP_VERSION = '1.29.0';
 // What Reload fetches again past the browser cache before opening the page anew.
-const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/lib/pricing.js'];
+const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/lib/pricing.js', '../legal/legal-details.js'];
 const RELOAD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/></svg>';
 
 class ApiError extends Error {
@@ -1242,33 +1244,44 @@ function partnersItem(summary, base = 'https://planner.bemorin.com') {
 }
 
 // Legal pages (legal/): their contact details and address come from build
-// variables (LEGAL_VARIABLES: what each one fills). Creem's store review asks
+// variables (LEGAL_VARIABLES: what each one fills). A value the pages can't
+// use (legal/legal-details.js: not a plain email address, not a phone
+// number) is left out of them, and said so here. Creem's store review asks
 // for the terms, the privacy policy and the website.
 const LEGAL_VARIABLES = [
-  ['SUPPORT_EMAIL', 'the contact address, in the legal notice and the terms, and for privacy questions unless <code>DAILY_PLANNER_PRIVACY_EMAIL</code> is set. Blank: the “Ask a question” form.'],
+  ['SUPPORT_EMAIL', 'the contact address, in the legal notice, the terms and the “Support” line of the welcome and Teams pages’ footer, and for privacy questions unless <code>DAILY_PLANNER_PRIVACY_EMAIL</code> is set. Blank: the “Ask a question” form, and no Support line.'],
   ['PRIVACY_EMAIL', 'optional, the address for privacy questions, in the privacy policy (data controller, your rights) and the cookies page.'],
-  ['LEGAL_PHONE', 'optional, a phone number in the legal notice, which French law asks of an individual publisher. Digits, spaces and <code>+&nbsp;(&nbsp;)&nbsp;-&nbsp;.</code> only.'],
+  ['LEGAL_PHONE', 'recommended (French law asks an individual publisher for one): a phone number, as a Phone row in the legal notice. Digits, spaces and <code>+&nbsp;(&nbsp;)&nbsp;.&nbsp;-</code> only.'],
   ['LEGAL_ADDRESS', 'the postal address, in the legal notice and the privacy policy.'],
   ['LEGAL_REGISTRATION', 'optional, SIRET and/or VAT number, in the legal notice and the privacy policy.']
 ];
 
+/** A legal build variable's state in the Setup card: “set”, “blank”, or “set, but not used: …”. */
+function legalVariableState(key) {
+  const problem = legalValueProblem(key, APP_CONFIG[key]);
+  if (problem) return `set, but not used: ${problem}`;
+  return String(APP_CONFIG[key] || '').trim() ? 'set' : 'blank';
+}
+
 function legalItem(base = 'https://planner.bemorin.com') {
-  const value = key => String(APP_CONFIG[key] || '').trim();
-  const missing = [['SUPPORT_EMAIL', 'DAILY_PLANNER_SUPPORT_EMAIL', 'contact address'], ['LEGAL_ADDRESS', 'DAILY_PLANNER_LEGAL_ADDRESS', 'postal address']].filter(([key]) => !value(key));
+  const details = legalDetails(APP_CONFIG);
+  const unusable = key => !!legalValueProblem(key, APP_CONFIG[key]);
+  const missing = [['email', 'SUPPORT_EMAIL', 'contact address'], ['address', 'LEGAL_ADDRESS', 'postal address']].filter(([field]) => !details[field]);
   // The public site (PUBLIC_BASE_URL), not a preview deployment this page may be open on.
   const page = path => new URL(path, `${base.replace(/\/+$/, '')}/`).href;
   const urls = `<p>The addresses Creem asks for:</p>${copyRow('Terms', page('legal/terms/'))}${copyRow('Privacy', page('legal/privacy/'))}${copyRow('Website', page('welcome/'))}`;
-  const variables = LEGAL_VARIABLES.map(([key, what]) => `<p><code>DAILY_PLANNER_${key}</code> (${value(key) ? 'set' : 'blank'}): ${what}</p>`).join('');
+  const variables = LEGAL_VARIABLES.map(([key, what]) => `<p><code>DAILY_PLANNER_${key}</code> (${legalVariableState(key)}): ${what}</p>`).join('');
+  const fix = LEGAL_VARIABLES.some(([key]) => unusable(key)) ? ' A value marked “not used” is left out of the pages until you correct it.' : '';
   if (!missing.length) {
-    const privacy = value('PRIVACY_EMAIL') ? `, privacy questions to ${esc(value('PRIVACY_EMAIL'))}` : '';
-    return { key: 'legal', title: 'Legal pages', html: `<p>The legal notice shows your contact (${esc(value('SUPPORT_EMAIL'))}${privacy}) and postal address. Build variables (type Text; redeploy after a change):</p>${variables}${urls}` };
+    const privacy = details.privacyEmail ? `, privacy questions to ${esc(details.privacyEmail)}` : '';
+    return { key: 'legal', title: 'Legal pages', html: `<p>The legal notice shows your contact (${esc(details.email)}${privacy}) and postal address.${fix} Build variables (type Text; redeploy after a change):</p>${variables}${urls}` };
   }
-  const names = missing.map(([, variable]) => `<code>${variable}</code>`).join(' and ');
+  const names = missing.map(([, key]) => `<code>DAILY_PLANNER_${key}</code>${unusable(key) ? ' to a plain email address' : ''}`).join(' and ');
   const what = missing.map(([, , label]) => label).join(' or ');
   return {
     key: 'legal',
     title: 'Legal pages',
-    html: `<p>Set the build variable${missing.length > 1 ? 's' : ''} ${names} (Settings → Variables and Secrets, type Text), then redeploy. Until then the legal pages show no ${what}${value('SUPPORT_EMAIL') ? '' : ' and point to the “Ask a question” form'}. What each variable fills:</p>${variables}${urls}`
+    html: `<p>Set the build variable${missing.length > 1 ? 's' : ''} ${names} (Settings → Variables and Secrets, type Text), then redeploy. Until then the legal pages show no ${what}${details.email ? '' : ' and point to the “Ask a question” form'}.${fix} What each variable fills:</p>${variables}${urls}`
   };
 }
 

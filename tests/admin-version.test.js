@@ -74,9 +74,10 @@ test('Reload fetches every file the dashboard loads', () => {
   const imports = file => [...read(`admin/${file}`).matchAll(/\bfrom '(\.{1,2}\/[^']+)';/g)].map(match => match[1]);
   const loaded = [
     ...[...html.matchAll(/(?:src|href)="(\.{1,2}\/[^"]+\.(?:js|css))"/g)].map(match => match[1]),
-    ...['admin.js', 'trends-view.js', 'trends.js', 'charts.js', 'version.js'].flatMap(imports)
+    ...['admin.js', 'attention.js', 'partners-view.js', 'trends-view.js', 'trends.js', 'charts.js', 'version.js'].flatMap(imports)
   ];
   assert.ok(loaded.includes('./charts.js') && loaded.includes('../welcome/stepper.js'), 'the scan sees the imports');
+  assert.ok(loaded.includes('../legal/legal-details.js'), 'and the legal pages’ checks Setup uses');
   for (const file of loaded) assert.ok(files.includes(file), `${file} is fetched again by Reload`);
   assert.ok(files.includes('./'), 'and the page itself');
 });

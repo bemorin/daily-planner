@@ -132,6 +132,18 @@ test('reduced motion: nothing turns or plays, the choice still switches, and mot
   const moving = rotationStep(chosen, { type: 'motion', on: true });
   assert.equal(moving.cue, 'restart');
   assert.equal(moving.auto, true);
+  assert.equal(rotationRunning(moving), true);
+  // Paused by the visitor, then reduced motion on and off again: still paused, on its last frame.
+  const paused = step(rotationStart(), { type: 'tick', ms: 3000 }, { type: 'toggle' }, { type: 'motion', on: false });
+  assert.equal(paused.auto, false);
+  const back = rotationStep(paused, { type: 'motion', on: true });
+  assert.equal(back.auto, false, 'the pause is kept');
+  assert.equal(back.motion, true);
+  assert.equal(back.cue, 'finish', 'the scene stands on its last frame');
+  assert.equal(rotationRunning(back), false);
+  assert.equal(rotationPlays(back), false);
+  assert.equal(rotationStep(back, { type: 'tick', ms: 60000 }).view, 'day', 'no turn');
+  assert.equal(rotationStep(back, { type: 'toggle' }).cue, 'restart', 'play still starts it');
   const off = rotationStep(rotationStep(rotationStart(), { type: 'tick', ms: 2000 }), { type: 'motion', on: false });
   assert.equal(off.cue, 'finish');
   assert.equal(off.motion, false);
@@ -196,7 +208,7 @@ test('hero styles: the views share a box, the switch works without the script, m
   assert.match(css, /\.hero-switch__view:has\(input:focus-visible\) \{ outline: 2\.5px solid var\(--focus\);/, 'visible focus');
   // Every transition or animation of the Horizon replica waits for motion-ok.
   const horizon = /\/\* Hero: Horizon -+ \*\/([\s\S]*?)\/\* Close day -+ \*\//.exec(css)[1];
-  for (const rule of horizon.split('\n').filter(line => /\b(transition|animation):/.test(line))) assert.match(rule, /^\.motion-ok /, rule);
+  for (const rule of horizon.split('\n').filter(line => /\b(transition|animation):/.test(line))) assert.match(rule.trim(), /^\.motion-ok /, rule);
 });
 
 test('the welcome pages use the planner’s scrollbar, without the browser’s arrows', async () => {
@@ -210,4 +222,52 @@ test('the welcome pages use the planner’s scrollbar, without the browser’s a
   for (const page of ['welcome/index.html', 'welcome/teams/index.html', 'welcome/partners/index.html', 'welcome/thanks/index.html']) {
     assert.match(await read(page), /<link rel="stylesheet" href="(?:\.\.\/)?(?:\.\/)?landing\.css">/, page);
   }
+});
+
+test('the caption is painted at once and stays one node: a turn changes its text, never adds a Largest Contentful Paint', async () => {
+  const css = await read('welcome/landing.css');
+  // The stage and the switch rise in; the caption, out of the rise-in, is on screen from first paint.
+  assert.match(css, /\.hero__visual > :not\(\.hero-captions\) \{ animation: rise-in 820ms/);
+  assert.match(css, /\.hero__visual > :not\(\.hero-captions\) \{ animation-duration: 1000ms; animation-delay: 180ms; \}/);
+  assert.doesNotMatch(css, /\.hero__visual \{[^}]*animation/, 'the figure itself (with its caption) does not fade in');
+  // With the script, no caption is shown or hidden: the first one gets each view's text.
+  assert.doesNotMatch(css, /\.hero__visual\.is-live[^{]*\[data-hero-caption/, 'no caption toggles once live');
+  assert.match(css, /\.hero-captions \[data-hero-caption="year"\] \{ visibility: hidden; \}|\.hero-view--year,\n\.hero-captions \[data-hero-caption="year"\] \{ visibility: hidden; \}/, 'the others keep the box at the tallest caption, hidden');
+  const module = await read('welcome/hero-views.js');
+  assert.match(module, /const caption = captionNodes\[0\] \|\| null;/);
+  assert.match(module, /caption\.textContent = text;/);
+  assert.match(module, /caption\.animate\(\[\{ opacity: 0 \}, \{ opacity: 1 \}\]/, 'with motion it fades in with the view, on the same node');
+  assert.doesNotMatch(module, /caption[A-Za-z]*\.(?:hidden|style\.visibility)/);
+});
+
+test('a view going out is reset to its first frame with its transitions off, so none runs unseen', async () => {
+  const module = await read('welcome/hero-views.js');
+  const rearm = /function rearm\(pane, replica\) \{([\s\S]*?)\n {2}\}/.exec(module)?.[1] || '';
+  assert.ok(rearm.includes('replica.arm()') && rearm.indexOf("pane.classList.add('is-resetting')") < rearm.indexOf('replica.arm()'), 'transitions off first');
+  assert.ok(rearm.indexOf('replica.arm()') < rearm.indexOf('void pane.offsetWidth') && rearm.indexOf('void pane.offsetWidth') < rearm.indexOf("pane.classList.remove('is-resetting')"), 'the reset styles apply before transitions are back');
+  assert.match(module, /if \(key !== id && state\.motion\) rearm\(pane, scenes\.get\(key\)\);/);
+  const css = await read('welcome/landing.css');
+  // More specific than any replica transition (at most four classes), pseudo-elements included.
+  assert.match(css, /\.motion-ok \.hero__visual\.is-live \.hero-view\.is-resetting \*,\n\.motion-ok \.hero__visual\.is-live \.hero-view\.is-resetting \*::before,\n\.motion-ok \.hero__visual\.is-live \.hero-view\.is-resetting \*::after \{ transition: none; \}/);
+  // Every transition the two hero replicas can run (the other scenes' own rules aside).
+  const selectors = [...css.matchAll(/^\s*(\.motion-ok [^{]*)\{[^}]*\btransition:/gm)].flatMap(match => match[1].split(/,(?![^(]*\))/)).map(selector => selector.trim());
+  // (The panes' own entrance and exit run on visible panes, before any reset.)
+  const hero = selectors.filter(selector => /\.rp(?:\b|-)/.test(selector) && !/\.rp--(?!day\b|horizon\b)[\w-]+/.test(selector) && !/\.(?:yp|mg)-|\.hero-/.test(selector));
+  assert.ok(hero.length > 20, `${hero.length} replica transitions found`);
+  for (const selector of hero) {
+    const classes = (selector.match(/[.:][\w-]+/g) || []).length;
+    assert.ok(classes <= 4 || /is-resetting/.test(selector), `${selector} would beat the reset`);
+  }
+});
+
+test('narrower than the switch’s rise, Horizon fills the whole box: no empty band above the switch', async () => {
+  const css = await read('welcome/landing.css');
+  assert.match(css, /@container hero-visual \(min-width: 520px\) \{\n {2}\.hero-switch \{ margin-top: calc\(18px - 3\.6 \* /, 'wide: the switch rises into the room under the windows');
+  assert.match(css, /\.rp--horizon \{ padding: 0 0 3\.6em; \}/, 'the same room as the Day view, kept free when the switch rises into it');
+  const narrow = /@container hero-visual \(max-width: 519\.98px\) \{([\s\S]*?)\n\}/.exec(css)?.[1] || '';
+  assert.match(narrow, /\.rp--horizon \{ padding-bottom: 0; \}/, 'narrow: its window takes that room');
+  assert.match(narrow, /\.rp--horizon \.rp-hz-map \{ flex: 1 1 auto;/, 'shared between the year at a glance and the tiles');
+  assert.match(narrow, /\.hero-view\.is-leaving \.rp--horizon \.rp-window \{ opacity: 0; \}/, 'going out, the taller window fades');
+  assert.match(css, /\.hero-view > \.rp \{ flex: 1 1 auto; display: flex; flex-direction: column; \}/);
+  assert.match(css, /\.hero-view \.rp-window \{ flex: 1 1 auto; \}/);
 });

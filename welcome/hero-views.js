@@ -52,7 +52,8 @@ export const rotationLeft = (state, views = HERO_VIEWS) => Math.max(0, dwellOf(s
  *   { type: 'choose', view }       the visitor picked a view
  *   { type: 'hold', reason, on }   a reason to wait starts or ends (HOLDS)
  *   { type: 'toggle' }             the pause button
- *   { type: 'motion', on }         reduced motion turned off or on
+ *   { type: 'motion', on }         motion welcome again (on) or reduced motion turned on;
+ *                                  a paused hero stays paused
  * The new state's `cue` is what the page does now: 'switch' (show `view`:
  * its scene from the start, or its last frame when nothing plays),
  * 'restart' (the scene again from its start), 'freeze' (the scene stops
@@ -88,7 +89,9 @@ export function rotationStep(state, event = {}, views = HERO_VIEWS) {
     const on = !!event.on;
     if (on === state.motion) return next;
     if (!on) return { ...next, motion: false, elapsed: 0, cue: 'finish' };
-    return { ...next, motion: true, auto: true, elapsed: 0, cue: rotationSeen(state) ? 'restart' : '' };
+    // Motion back: a hero the visitor paused stays paused, on its last frame.
+    if (!state.auto) return { ...next, motion: true, elapsed: 0, cue: 'finish' };
+    return { ...next, motion: true, elapsed: 0, cue: rotationSeen(state) ? 'restart' : '' };
   }
   return next;
 }
@@ -115,6 +118,14 @@ export function setupHeroViews(figure, { scene = () => null, motionOn = false, m
   const fill = figure.querySelector('[data-hero-fill]');
   const stage = figure.querySelector('.hero-stage') || figure;
   const watch = 'IntersectionObserver' in window;
+  // The caption is one node, the first (on screen from first paint), whose
+  // text follows the view: a turn shows no new text, so the page's Largest
+  // Contentful Paint stays the first one. The others stay hidden and only
+  // keep the box at the tallest caption's height (landing.css). Without the
+  // script, CSS shows the caption of the checked choice instead.
+  const captionNodes = [...figure.querySelectorAll('[data-hero-caption]')];
+  const caption = captionNodes[0] || null;
+  const captions = new Map(captionNodes.map(node => [node.dataset.heroCaption, node.textContent]));
 
   let state = rotationStart({ motion: motionOn, holds: [watch ? 'offscreen' : '', document.hidden ? 'hidden' : ''] }, views);
   let since = 0;
@@ -122,12 +133,32 @@ export function setupHeroViews(figure, { scene = () => null, motionOn = false, m
   let settleTimer = 0;
   let line = null;
 
+  // Takes a hidden view back to its first frame at once: its transitions are
+  // off while it resets (landing.css, .is-resetting), so none runs unseen.
+  function rearm(pane, replica) {
+    if (!replica) return;
+    pane.classList.add('is-resetting');
+    replica.arm();
+    // The first frame's styles apply now, without transitions; then they are back for its turn.
+    void pane.offsetWidth;
+    pane.classList.remove('is-resetting');
+  }
+
+  // The caption says what is shown; with motion, it fades in with the view.
+  function showCaption(id, animate) {
+    const text = captions.get(id);
+    if (!caption || text == null || caption.textContent === text) return;
+    caption.textContent = text;
+    if (animate && typeof caption.animate === 'function') caption.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, delay: 140, easing: 'ease', fill: 'backwards' });
+  }
+
   // Shows a view: the one coming in fades in over the one going out, which
   // then hides and goes back to its first frame, ready for its next turn.
   function show(id, animate) {
     window.clearTimeout(settleTimer);
     figure.dataset.view = id;
     choices.forEach(input => { input.checked = input.value === id; });
+    showCaption(id, animate);
     panes.forEach((pane, key) => {
       const was = pane.classList.contains('is-shown') || pane.classList.contains('is-entering');
       pane.classList.remove('is-entering', 'is-leaving');
@@ -138,7 +169,7 @@ export function setupHeroViews(figure, { scene = () => null, motionOn = false, m
     const settle = () => {
       panes.forEach((pane, key) => {
         pane.classList.remove('is-entering', 'is-leaving');
-        if (key !== id && state.motion) scenes.get(key)?.arm();
+        if (key !== id && state.motion) rearm(pane, scenes.get(key));
       });
     };
     if (animate) settleTimer = window.setTimeout(settle, SETTLE);

@@ -61,7 +61,12 @@ button { margin: 0; padding: 0; border: 0; background: none; cursor: pointer; -w
 button:disabled { cursor: default; }
 svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 :focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 2px; }
-* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--line) 82%, var(--paper)) transparent; }
+@supports not selector(::-webkit-scrollbar) { * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--line) 82%, var(--paper)) transparent; } }
+*::-webkit-scrollbar { width: 7px; height: 7px; }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+*::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb { min-height: 2.5rem; border: 2px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--line) 82%, var(--paper)); background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--line-strong) 72%, var(--paper)); background-clip: padding-box; }
 .pip-short { display: none; }
 .pip-eyebrow { display: block; color: var(--faint); font-size: 10.5px; font-weight: 650; line-height: 1.3; letter-spacing: .07em; text-transform: uppercase; }
 .pip-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; color: var(--muted); font-size: 11.5px; line-height: 1.35; font-variant-numeric: tabular-nums; }

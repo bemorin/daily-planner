@@ -56,6 +56,16 @@
 // Links in emails and checkout returns point at this server unless
 // PUBLIC_BASE_URL is set.
 //
+// Build variables: the served runtime-config.js takes the legal pages' and the
+// partners page's from this environment, as scripts/build.mjs does, so their
+// states can be previewed (legal pages, welcome footer, partners page,
+// dashboard Setup): DAILY_PLANNER_SUPPORT_EMAIL, DAILY_PLANNER_PRIVACY_EMAIL,
+// DAILY_PLANNER_LEGAL_PHONE, DAILY_PLANNER_LEGAL_ADDRESS,
+// DAILY_PLANNER_LEGAL_REGISTRATION and DAILY_PLANNER_AFFILIATE_URL, e.g.
+//   DAILY_PLANNER_SUPPORT_EMAIL=support@example.com DAILY_PLANNER_LEGAL_PHONE="+33 1 99 00 12 34" node scripts/serve.mjs --api
+// Unset, they stay blank. (PLANNER_API_URL and PLUS_PUBLIC_KEY come from --api,
+// above.) With --dist, runtime-config.js is served as the build wrote it.
+//
 // Currency: in production the buyer's country (from Cloudflare) decides it.
 // Locally the country is unknown, so the page's own guess is used, unless a
 // request carries a CF-IPCountry header or the server runs with --country FR
@@ -311,9 +321,28 @@ async function plusOptions() {
   return { plusSigningKey };
 }
 
-// Served runtime-config.js: the local API, and the public key licences are checked with.
+// Build variables the served runtime-config.js takes from this environment,
+// as scripts/build.mjs does (see the header).
+const ENV_CONFIG = [
+  ['SUPPORT_EMAIL', 'DAILY_PLANNER_SUPPORT_EMAIL'],
+  ['PRIVACY_EMAIL', 'DAILY_PLANNER_PRIVACY_EMAIL'],
+  ['LEGAL_PHONE', 'DAILY_PLANNER_LEGAL_PHONE'],
+  ['LEGAL_ADDRESS', 'DAILY_PLANNER_LEGAL_ADDRESS'],
+  ['LEGAL_REGISTRATION', 'DAILY_PLANNER_LEGAL_REGISTRATION'],
+  ['AFFILIATE_URL', 'DAILY_PLANNER_AFFILIATE_URL']
+];
+
+// Served runtime-config.js: the build variables set in this environment; with
+// --api, the local API and the public key licences are checked with.
 function devRuntimeConfig(source) {
-  let text = source.replace("PLANNER_API_URL: ''", "PLANNER_API_URL: '/api'");
+  let text = source;
+  for (const [key, variable] of ENV_CONFIG) {
+    const value = String(process.env[variable] || '').trim();
+    // A function, so a “$” in the value is written as it is.
+    if (value) text = text.replace(`${key}: ''`, () => `${key}: ${JSON.stringify(value)}`);
+  }
+  if (!plannerApi) return text;
+  text = text.replace("PLANNER_API_URL: ''", "PLANNER_API_URL: '/api'");
   if (plusPublicKey) {
     if (/PLUS_PUBLIC_KEY:\s*''/.test(text)) text = text.replace(/PLUS_PUBLIC_KEY:\s*''/, `PLUS_PUBLIC_KEY: '${plusPublicKey}'`);
     else if (!/PLUS_PUBLIC_KEY\s*:/.test(text)) text = text.replace('Object.freeze({', `Object.freeze({\n  PLUS_PUBLIC_KEY: '${plusPublicKey}',`);
@@ -422,8 +451,9 @@ async function handle(request, response) {
       }
     }
     let body = await fs.readFile(target);
-    // Point the served runtime config at the local API and its Plus public key, unless a build already set them.
-    if (plannerApi && relative(root, target) === 'runtime-config.js') body = Buffer.from(devRuntimeConfig(body.toString('utf8')));
+    // The served runtime config: the build variables of this environment, and with --api the local API and its
+    // Plus public key, unless a build already set them (dist/ writes its values another way, so it is left as built).
+    if (relative(root, target) === 'runtime-config.js') body = Buffer.from(devRuntimeConfig(body.toString('utf8')));
     response.writeHead(200, {
       'content-type': types[extname(target).toLowerCase()] || 'application/octet-stream',
       'cache-control': 'no-store',

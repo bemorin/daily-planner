@@ -182,6 +182,33 @@ test('Setup: test mode, legal pages, two-factor and a stale page each get a line
   assert.deepEqual(build(calm(), { config: { ...CONFIG, AFFILIATE_URL: 'http://not-https.example.com' } }).map(item => [item.text, item.tone, item.rows[0]]), [['Partners: the Creem sign-up link isn’t set', 'warn', 'setup:partners']]);
 });
 
+test('Setup: a legal value the pages can’t use is not ready, with the same checks as legal/legal-details.js', () => {
+  const legal = config => Object.fromEntries(setupChecks(calm(), { config: { ...CONFIG, ...config }, pageVersion: '1.26.0' }).map(check => [check.key, check])).legal;
+  assert.equal(legal({ PRIVACY_EMAIL: 'privacy@example.com', LEGAL_PHONE: '+33 1 99 00 12 34', LEGAL_REGISTRATION: 'SIRET 1' }).state, 'ok');
+  assert.equal(legal({ LEGAL_PHONE: '' }).state, 'ok', 'no phone number: recommended, not required');
+  const bad = legal({ SUPPORT_EMAIL: 'ben at example dot com', PRIVACY_EMAIL: 'privacy@example', LEGAL_PHONE: '+33 1 99 00 12 34 (office)' });
+  assert.equal(bad.state, 'warn');
+  assert.deepEqual(bad.problems, [
+    'Legal pages: DAILY_PLANNER_SUPPORT_EMAIL is set, but not used (not a plain email address)',
+    'Legal pages: DAILY_PLANNER_PRIVACY_EMAIL is set, but not used (not a plain email address)',
+    'Legal pages: DAILY_PLANNER_LEGAL_PHONE is set, but not used (not a phone number)'
+  ]);
+  assert.deepEqual(legal({ SUPPORT_EMAIL: 'me@example.com?bcc=x@example.com', LEGAL_ADDRESS: '  ' }).problems, [
+    'Legal pages: postal address missing',
+    'Legal pages: DAILY_PLANNER_SUPPORT_EMAIL is set, but not used (not a plain email address)'
+  ], 'an unusable address is said once, not also as missing');
+});
+
+test('the Setup card says “set, but not used” with the legal pages’ own checks, and calls the phone number recommended', () => {
+  const source = readFileSync(new URL('../admin/admin.js', import.meta.url), 'utf8');
+  assert.match(source, /import \{ legalDetails, legalValueProblem \} from '\.\.\/legal\/legal-details\.js';/);
+  assert.match(source, /`set, but not used: \$\{problem\}`/);
+  const variables = /const LEGAL_VARIABLES = \[([\s\S]*?)\n\];/.exec(source)?.[1] || '';
+  assert.match(variables, /\['LEGAL_PHONE', 'recommended \(French law asks an individual publisher for one\)/);
+  assert.doesNotMatch(variables, /\['LEGAL_PHONE', 'optional/);
+  assert.match(variables, /\['SUPPORT_EMAIL', '[^']*“Support” line of the welcome and Teams pages’ footer/);
+});
+
 test('Setup: missing pieces are urgent and come before every to-do', () => {
   const summary = calm({ refundsUnavailable: true, reviewsUnavailable: true, teamRequests: [{ id: 1, company: 'Acme', kind: 'quote', teamSize: 5, createdAt: ago(HOUR) }] });
   summary.setup.email = { configured: false, ownerEmail: '' };
