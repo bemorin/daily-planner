@@ -27,11 +27,25 @@
   <link rel="icon" href="../favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <script>
-    /* Before first paint: when motion is welcome, the replica starts on the
-       first frame of its animation and sections below the fold wait to rise
-       in. teams.js adds `js-ready`; if it never runs, the page falls back to
-       its final, fully visible state. */
+    /* Before first paint. The question form is the Contact page's (1.31,
+       /contact/, next to this folder): its old addresses here
+       (?ask=question, &topic=partners from the partners page) go there,
+       without ?ask, ?plan and the #hash (contactAddress in teams-model.js).
+       Then, when motion is welcome, the replica starts on the first frame of
+       its animation and sections below the fold wait to rise in. teams.js
+       adds `js-ready`; if it never runs, the page falls back to its final,
+       fully visible state. */
     (function () {
+      var here = window.location;
+      var query = null;
+      try { query = new URLSearchParams(here.search); } catch (error) { query = null; }
+      if (query && query.get('ask') === 'question') {
+        query.delete('ask');
+        query.delete('plan');
+        var rest = query.toString();
+        here.replace(here.pathname.replace(/\/(?:index\.html)?$/, '').replace(/\/[^/]*$/, '') + '/contact/' + (rest ? '?' + rest : ''));
+        return;
+      }
       var root = document.documentElement;
       if (!window.matchMedia || !('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
       root.classList.add('js-anim');
@@ -374,7 +388,7 @@
         <a href="../welcome/#plus">Plus</a>
         <a href="../welcome/#pricing">Pricing</a>
         <a href="../partners/">Partners</a>
-        <a href="#request" data-request="question">Ask a question</a>
+        <a href="../contact/">Ask a question</a>
         <span class="foot__support" data-support hidden></span>
         <span class="foot__social" data-social hidden></span>
       </nav>
@@ -431,7 +445,7 @@
           <span class="pv__icon" aria-hidden="true"><svg class="i"><use href="#i-mail"/></svg></span>
           <div class="pv__body">
             <h3 id="pv-requests" tabindex="-1">Requests</h3>
-            <p>The request form on the Teams page sends what you type — your email, name, company, the kind of request, plan, number of people, currency, timing and message; for a question, only your email, name and question. It’s stored only to reply to you, with your browser’s language, the page version and where the form was opened, and deleted on request.</p>
+            <p>The Teams page’s request form sends what you type — your email, name, company, the kind of request, plan, number of people, currency, timing and message; a question, asked there or on the Contact page, only your email, name and question. It’s stored only to reply to you, with your browser’s language, the page version and where the form was opened, and deleted on request.</p>
             <p>If you came through a partner’s link, its code goes with the request too, so the partner can be credited for a team gift they introduced.</p>
           </div>
         </section>

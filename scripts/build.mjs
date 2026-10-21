@@ -36,9 +36,11 @@ await copyTree('docs');
 await copyTree('assets');
 await copyTree('admin');
 await copyTree('welcome');
-// The Teams and partners pages, at /teams/ and /partners/ (1.30; they load ../welcome/ modules and styles).
+// The Teams and partners pages, at /teams/ and /partners/ (1.30), and the Contact page, at /contact/ (1.31;
+// they load ../welcome/ modules and styles).
 await copyTree('teams');
 await copyTree('partners');
+await copyTree('contact');
 await copyTree('legal');
 // Cloudflare Pages reads _redirects from the root of the output (short /privacy, /terms, /cookies links;
 // the old /welcome/teams/ and /welcome/partners/ addresses).

@@ -14,7 +14,8 @@ import { createTeamOffer } from '../welcome/team-offer.js';
    TEAMS (/teams/): the team gift — what it is, how seats work, its
    prices (Buy online through Creem, or by invoice; a quote above the last
    tier), “Send this to my manager”, the request form “Invoice, quote or
-   question” (#request) and the team questions.
+   question” (#request; a question here is about the team gift, anyone's
+   other questions are the Contact page's, /contact/) and the team questions.
 
    Copy the owner may change: welcome/landing-settings.js (LANDING); the
    prices: src/lib/pricing.js (TEAM_TIERS, TEAM_QUOTE). The pieces are shared
@@ -104,7 +105,7 @@ if (arrived?.closest('main')) {
   html.style.scrollBehavior = 'auto';
   arrived.scrollIntoView({ block: 'start' });
   html.style.removeProperty('scroll-behavior');
-  // The request form (“Ask a question” from another page): its title takes the focus.
+  // The request form (“Get it by invoice” from another page): its title takes the focus.
   if (arrived.matches('[data-form-panel]')) form?.arrive();
 }
 

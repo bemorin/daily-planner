@@ -7,7 +7,7 @@ import vm from 'node:vm';
 
 import { PARTNER_PROGRAM, PLUS_FEATURES, TEAM_TIERS } from '../src/lib/pricing.js';
 import { TEAM_ROWS, partnerInvitation } from '../welcome/landing-model.js';
-import { EMAIL_FIELD, KINDS, PARTNER_QUESTION, TIMING_LABELS, emailField, invoiceAnswer, isTeamKind, managerMessage, requestCopy, requestEmail, requestFromAddress, requestPayload, teamsAddress } from '../welcome/teams-model.js';
+import { CONTACT_TOPICS, EMAIL_FIELD, KINDS, TIMING_LABELS, emailField, invoiceAnswer, isTeamKind, managerMessage, movedAddress, requestCopy, requestEmail, requestFromAddress, requestPayload } from '../welcome/teams-model.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = file => readFile(join(root, file), 'utf8');
@@ -29,10 +29,12 @@ async function headScriptTarget(address) {
   return { target, armed: classes.has('js-anim') };
 }
 
-test('old /welcome/ addresses of the team gift lead to the Teams page, query and hash kept', async () => {
+test('old /welcome/ addresses: a question leads to the Contact page, the team gift to the Teams page, query and hash kept', async () => {
   const cases = [
-    ['/welcome/?ask=question#request', '/teams/?ask=question#request'],
-    ['/welcome/?ask=question&topic=partners#request', '/teams/?ask=question&topic=partners#request'],
+    ['/welcome/?ask=question#request', '/contact/'],
+    ['/welcome/?ask=question&topic=partners#request', '/contact/?topic=partners'],
+    ['/welcome/?ref=CAMILLE&ask=question&plan=up-to-50#request', '/contact/?ref=CAMILLE'],
+    ['/welcome/index.html?ask=question', '/contact/'],
     ['/welcome/?ask=quote&plan=over-1000', '/teams/?ask=quote&plan=over-1000'],
     ['/welcome/?ref=CAMILLE&ask=invoice#request', '/teams/?ref=CAMILLE&ask=invoice#request'],
     ['/welcome/#teams', '/teams/'],
@@ -50,30 +52,29 @@ test('old /welcome/ addresses of the team gift lead to the Teams page, query and
   ];
   for (const [from, to] of cases) {
     const url = new URL(from, 'https://planner.bemorin.com');
-    assert.equal(teamsAddress({ path: url.pathname, search: url.search, hash: url.hash }), to, from);
+    assert.equal(movedAddress({ path: url.pathname, search: url.search, hash: url.hash }), to, from);
     // The inline script in <head> does the same before first paint, and only then arms the entrances.
     const head = await headScriptTarget(from);
     assert.equal(head.target, to, `head script: ${from}`);
     assert.equal(head.armed, !to, `head script arms the entrances only when the page stays: ${from}`);
   }
-  assert.equal(teamsAddress(), '');
+  assert.equal(movedAddress(), '');
   const script = await read('welcome/landing.js');
-  assert.match(script, /teamsAddress\(\{ path: location\.pathname, search: location\.search, hash: location\.hash \}\)/, 'landing.js checks again');
+  assert.match(script, /movedAddress\(\{ path: location\.pathname, search: location\.search, hash: location\.hash \}\)/, 'landing.js checks again');
 });
 
-test('the request form reads what an address asks: kind, plan and the partner program', () => {
-  assert.deepEqual(requestFromAddress('?ask=question'), { kind: 'question', plan: '', topic: '' });
-  assert.deepEqual(requestFromAddress('?ask=quote&plan=over-1000'), { kind: 'quote', plan: 'over-1000', topic: '' });
-  assert.deepEqual(requestFromAddress('?ask=invoice&plan=up-to-100'), { kind: 'invoice', plan: 'up-to-100', topic: '' });
-  assert.deepEqual(requestFromAddress('?ask=question&topic=partners'), { kind: 'question', plan: '', topic: 'partners' });
-  assert.deepEqual(requestFromAddress('?ask=invoice&topic=partners'), { kind: 'invoice', plan: '', topic: '' }, 'the program is a question');
-  assert.deepEqual(requestFromAddress('?ask=talk'), { kind: '', plan: '', topic: '' }, 'no talk while it is not offered');
+test('the request form reads what an address asks: kind and plan', () => {
+  assert.deepEqual(requestFromAddress('?ask=question'), { kind: 'question', plan: '' });
+  assert.deepEqual(requestFromAddress('?ask=quote&plan=over-1000'), { kind: 'quote', plan: 'over-1000' });
+  assert.deepEqual(requestFromAddress('?ask=invoice&plan=up-to-100'), { kind: 'invoice', plan: 'up-to-100' });
+  assert.deepEqual(requestFromAddress('?ask=invoice&topic=partners'), { kind: 'invoice', plan: '' }, 'the program is the Contact page’s');
+  assert.deepEqual(requestFromAddress('?ask=talk'), { kind: '', plan: '' }, 'no talk while it is not offered');
   assert.deepEqual(requestFromAddress('?ask=talk', { talk: true }).kind, 'talk');
-  assert.deepEqual(requestFromAddress('?ask=toString&plan=nope'), { kind: '', plan: '', topic: '' }, 'unknown values are dropped');
-  assert.deepEqual(requestFromAddress(''), { kind: '', plan: '', topic: '' });
-  assert.deepEqual(requestFromAddress(undefined), { kind: '', plan: '', topic: '' });
+  assert.deepEqual(requestFromAddress('?ask=toString&plan=nope'), { kind: '', plan: '' }, 'unknown values are dropped');
+  assert.deepEqual(requestFromAddress(''), { kind: '', plan: '' });
+  assert.deepEqual(requestFromAddress(undefined), { kind: '', plan: '' });
   assert.deepEqual(Object.keys(KINDS), ['invoice', 'quote', 'question', 'talk']);
-  assert.equal(PARTNER_QUESTION.title, 'Ask about the partner program');
+  assert.equal(CONTACT_TOPICS.partners.title, 'Ask about the partner program');
   assert.deepEqual(Object.keys(TIMING_LABELS), ['december-2026', 'january-2027', 'q1-2027', 'later']);
 });
 
@@ -85,16 +86,15 @@ test('a question is the plain form: email, name and the question; an invoice, a 
   assert.equal(emailField('question'), EMAIL_FIELD.question);
   assert.deepEqual([EMAIL_FIELD.question.label, EMAIL_FIELD.question.placeholder, EMAIL_FIELD.question.missing], ['Email', 'you@example.com', 'Enter your email.']);
   for (const kind of ['invoice', 'quote', 'talk']) assert.equal(emailField(kind).label, 'Work email', kind);
-  // The panel reads as a general question, not as the team gift.
+  // On the Teams page, a question is about the team gift: anyone's other questions are the Contact page's.
   const question = requestCopy('question');
-  assert.deepEqual([question.kicker, question.title], ['Contact', 'Ask a question']);
-  for (const topic of ['the planner', 'Plus', 'a purchase', 'the partner program', 'the team gift']) assert.ok(question.intro.includes(topic), topic);
-  assert.deepEqual(['kicker', 'title', 'intro'].map(key => requestCopy('question', 'partners')[key]), ['Contact', PARTNER_QUESTION.title, PARTNER_QUESTION.intro]);
-  // The team requests read exactly as before.
-  for (const kind of ['invoice', 'quote', 'talk']) assert.equal(requestCopy(kind).kicker, 'Invoice, quote or question', kind);
+  assert.deepEqual([question.kicker, question.title, question.intro], ['Invoice, quote or question', 'Ask about the team gift', 'Paying, seats, privacy or timing: anything about the team gift.']);
+  for (const topic of ['the planner', 'Plus', 'a purchase', 'the partner program']) assert.ok(CONTACT_TOPICS.general.intro.includes(topic), topic);
+  // The team requests read exactly as before, under the same kicker.
+  for (const kind of Object.keys(KINDS)) assert.equal(requestCopy(kind).kicker, 'Invoice, quote or question', kind);
   assert.deepEqual([KINDS.invoice.title, KINDS.invoice.intro], ['Get it by invoice', 'Tell us where to send the invoice. You’ll get it by email, then the gift link once it’s paid.']);
   assert.deepEqual([KINDS.quote.title, KINDS.quote.intro], ['Ask for a quote', 'Tell us about your organisation, and you’ll get a quote by email.']);
-  assert.equal(requestCopy('invoice', 'partners'), KINDS.invoice, 'the program is a question');
+  assert.equal(requestCopy('nope'), KINDS.invoice);
   assert.deepEqual([KINDS.question.again, KINDS.invoice.again], ['Ask another question', 'Send another request']);
 });
 
@@ -103,9 +103,8 @@ test('a question is sent without the team’s fields, and an address never gives
   assert.deepEqual(requestPayload(values, { currency: 'EUR', version: '1.29.1', locale: 'fr-FR', ref: 'COACH_ANNA' }), { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', consent: true, website: '', version: '1.29.1', locale: 'fr-FR', source: 'teams', kind: 'question', ref: 'COACH_ANNA' });
   const invoice = requestPayload({ ...values, kind: 'invoice' }, { currency: 'EUR' });
   assert.deepEqual([invoice.company, invoice.teamSize, invoice.timing, invoice.plan, invoice.currency], ['ignored', 50, 'december-2026', 'up-to-50', 'EUR'], 'an invoice: as today');
-  assert.deepEqual(requestFromAddress('?ask=question&plan=up-to-100'), { kind: 'question', plan: '', topic: '' });
-  assert.deepEqual(requestFromAddress('?ask=question&topic=partners&plan=up-to-100'), { kind: 'question', plan: '', topic: 'partners' });
-  assert.deepEqual(requestFromAddress('?plan=up-to-100'), { kind: '', plan: 'up-to-100', topic: '' }, 'no kind: the invoice keeps its plan');
+  assert.deepEqual(requestFromAddress('?ask=question&plan=up-to-100'), { kind: 'question', plan: '' });
+  assert.deepEqual(requestFromAddress('?plan=up-to-100'), { kind: '', plan: 'up-to-100' }, 'no kind: the invoice keeps its plan');
   // Without the API, the email says the same.
   assert.deepEqual(requestEmail(values, { plan: 'Team gift, up to 50 people (€595)', timing: 'Before the holidays', ref: 'COACH_ANNA' }), {
     subject: 'Daily Planner — Question from Ann',
@@ -130,10 +129,10 @@ test('the request form hides the team’s fields for a question, and keeps its h
   const script = await read('welcome/request-form.js');
   assert.match(script, /teamFields\.forEach\(node => \{ node\.hidden = !team; \}\);/);
   assert.match(script, /\['company', !team \? '' :/, 'a question never asks for a company');
-  assert.match(script, /sizeHead\(asked\.topic\);/);
+  assert.match(script, /sizeHead\(\);/);
   assert.match(script, /ghost\.setAttribute\('aria-hidden', 'true'\);/);
   // Arriving from “Ask a question” elsewhere: the title takes the focus, even after the browser moves it to the link's target.
-  assert.match(script, /panel\.tabIndex = -1;\n {2}panel\.addEventListener\('focus', event => \{ if \(event\.target === panel\) title\.focus\(\{ preventScroll: true \}\); \}\);/);
+  assert.match(script, /panel\.tabIndex = -1;\n {4}panel\.addEventListener\('focus', event => \{ if \(event\.target === panel\) title\.focus\(\{ preventScroll: true \}\); \}\);/);
   assert.match(await read('teams/teams.js'), /if \(arrived\.matches\('\[data-form-panel\]'\)\) form\?\.arrive\(\);/);
   const css = await read('welcome/landing.css');
   assert.match(css, /\.team-form__heads > \.team-form__head \{ grid-area: 1 \/ 1; align-self: start; \}/);
@@ -153,7 +152,7 @@ test('a request carries the remembered partner code as `ref`, and nothing when t
 
 test('the request form sends the code from referralCode(), and the Teams page remembers a partner’s link', async () => {
   const form = await read('welcome/request-form.js');
-  assert.match(form, /requestPayload\(values, \{ currency, version: APP_VERSION, locale: navigator\.language \|\| '', ref: referralCode\(\) \}\)/);
+  assert.match(form, /requestPayload\(values, \{ currency, version: APP_VERSION, locale: navigator\.language \|\| '', ref: referralCode\(\), source \}\)/);
   assert.match(form, /import \{ plannerApiEnabled, referralCode \} from '\.\.\/src\/lib\/planner-api\.js';/);
   const teams = await read('teams/teams.js');
   assert.match(teams, /if \(apiOn\) rememberReferral\(\);/);
@@ -281,7 +280,8 @@ test('the landing page leads to the Teams page: menu, banner, footer and every r
   assert.match(page, /<a class="top__teams" href="\.\.\/teams\/">Teams<\/a>/);
   const foot = /<nav class="foot__links"[\s\S]*?<\/nav>/.exec(page)[0];
   assert.match(foot, /<a href="\.\.\/teams\/">Team gift<\/a>/);
-  assert.match(foot, /<a href="\.\.\/teams\/\?ask=question#request">Ask a question<\/a>/);
+  assert.match(foot, /<a href="\.\.\/contact\/">Ask a question<\/a>/);
+  assert.match(page, /Help page explains every feature and shortcut, or <a href="\.\.\/contact\/">ask a question<\/a>\./);
   assert.doesNotMatch(page, /href="#(?:teams|request|team-prices|seats)"|data-request=/, 'no link to a part that moved');
   // Every in-page link points at something on the page, on both pages.
   for (const file of ['welcome/index.html', 'teams/index.html']) {
@@ -299,7 +299,7 @@ test('the privacy notice is the same on both pages, with 30 days for a partner c
   assert.equal(teams, landing);
   assert.match(landing, /kept in this browser for <span data-partner-days>30<\/span> days/);
   assert.equal(PARTNER_PROGRAM.cookieDays, 30, 'the written fallback matches the program');
-  assert.match(landing, /The request form on the Teams page sends what you type/);
+  assert.match(landing, /The Teams page’s request form sends what you type — [^<]*; a question, asked there or on the Contact page, only your email, name and question\./);
   assert.match(landing, /its code goes with the request too/);
   const dialogScript = await read('welcome/privacy-dialog.js');
   assert.match(dialogScript, /\[data-partner-days\]/);
@@ -320,10 +320,10 @@ test('the Teams page script: entrances, FAQ, replica, counts', async () => {
   for (const gone of ['.pricing__teams', '.seats__head', '.seats__grid', '.team-form__head h3', '.prices__head h3']) assert.ok(!css.includes(gone), `landing.css: ${gone}`);
 });
 
-test('the gift page sends questions to the Teams page', async () => {
+test('the gift page sends questions to the Contact page', async () => {
   const page = await read('welcome/thanks/index.html');
-  assert.doesNotMatch(page, /href="\.\.\/\?ask=|href="\.\.\/#teams"/);
-  assert.equal((page.match(/href="\.\.\/\.\.\/teams\/\?ask=question#request"/g) || []).length, 2);
+  assert.doesNotMatch(page, /href="\.\.\/\?ask=|href="\.\.\/#teams"|ask=question/);
+  assert.equal((page.match(/href="\.\.\/\.\.\/contact\/"/g) || []).length, 2);
   assert.equal((page.match(/href="\.\.\/\.\.\/teams\/"/g) || []).length, 2);
 });
 

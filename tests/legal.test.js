@@ -78,7 +78,7 @@ test('the privacy page renders every counted moment from the code, in both lists
 
 // The ranges kept for fiction (ARCEP 01 99 00, NANP 555-01xx, Ofcom 020 7946 0xxx): the only phone numbers examples may use.
 const FICTION = /^(?:3319900\d{4}|1\d{3}55501\d{2}|442079460\d{3})$/;
-const FORM_PHRASE = root => `use the <a href="${root}teams/?ask=question#request">“Ask a question” form</a>`;
+const FORM_PHRASE = root => `use the <a href="${root}contact/">“Ask a question” form</a>`;
 const labels = (details, page) => legal.detailRows(details, '../', page).map(([label]) => label);
 
 test('blank details are left out and every contact falls back to the “Ask a question” form', () => {
@@ -87,15 +87,16 @@ test('blank details are left out and every contact falls back to the “Ask a qu
   assert.deepEqual(labels(blank, 'notice'), ['Publisher', 'Contact', 'Director of publication'], 'the director of publication is a row of the table');
   assert.deepEqual(labels(blank, 'privacy'), ['Data controller', 'Contact']);
   const html = legal.detailsHtml(legal.detailRows(blank, '../../'));
-  assert.match(html, /href="\.\.\/\.\.\/teams\/\?ask=question#request"/);
-  assert.doesNotMatch(html, /on the welcome page/, 'the form lives on the Teams page now');
+  assert.match(html, /href="\.\.\/\.\.\/contact\/"/);
+  assert.doesNotMatch(html, /on the welcome page|teams\/\?ask=/, 'the form lives on the Contact page now');
   assert.doesNotMatch(html, /Address|Registration|Phone|mailto:|tel:/);
   assert.match(html, /<dt>Director of publication<\/dt><dd>Ben Morin<\/dd>/);
   for (const topic of ['support', 'privacy']) {
     assert.equal(legal.contactEmail(blank, topic), '');
     assert.equal(legal.contactPhrase(blank, '../', topic), FORM_PHRASE('../'), topic);
   }
-  assert.equal(legal.askHref('../'), '../teams/?ask=question#request');
+  assert.equal(legal.askHref('../'), '../contact/');
+  assert.equal(legal.askHref('../../'), '../../contact/');
   for (const bad of ['not-an-email', 'a@b', 'me@example.com?bcc=x@evil.com', 'a b@example.com']) {
     assert.equal(legal.legalDetails({ SUPPORT_EMAIL: bad }).email, '', `${bad} is not used in a mailto: link`);
     assert.equal(legal.legalDetails({ PRIVACY_EMAIL: bad }).privacyEmail, '', `${bad} is not used as the privacy address`);
@@ -286,7 +287,7 @@ test('applyLegal fills every placeholder from the configuration', () => {
   selectors.forEach(selector => { nodes[selector] = [node()]; });
   const doc = { body: { dataset: { root: '../../' } }, querySelectorAll: selector => nodes[selector] || [], querySelector: () => null };
   legal.applyLegal(doc, { config: {} });
-  assert.match(nodes['[data-legal-details="notice"]'][0].innerHTML, /\.\.\/\.\.\/teams\/\?ask=question#request/);
+  assert.match(nodes['[data-legal-details="notice"]'][0].innerHTML, /\.\.\/\.\.\/contact\//);
   assert.match(nodes['[data-legal-details="notice"]'][0].innerHTML, /Director of publication/);
   assert.doesNotMatch(nodes['[data-legal-details="notice"]'][0].innerHTML, /Address/);
   assert.match(nodes['[data-legal-details="privacy"]'][0].innerHTML, /Data controller/);
@@ -377,7 +378,7 @@ test('the build writes the configured details into the static pages, as legal.js
   assert.match(privacy, /To use any of these rights, <span data-legal-contact="privacy">email <a href="mailto:privacy@example\.com">/);
   // An invalid value is left out, as in the browser.
   const invalid = legal.staticLegalHtml(await read('legal/index.html'), { SUPPORT_EMAIL: 'ben at example dot com', LEGAL_PHONE: 'call me' });
-  assert.match(invalid, /<dt>Contact<\/dt><dd>the <a href="\.\.\/teams\/\?ask=question#request">/);
+  assert.match(invalid, /<dt>Contact<\/dt><dd>the <a href="\.\.\/contact\/">/);
   assert.doesNotMatch(invalid, /mailto:|ben at example|call me/);
   // The build applies it to every legal page, from the deployment's configuration, after copying legal/.
   const build = await read('scripts/build.mjs');
@@ -553,14 +554,16 @@ test('the 30 days in the privacy and cookies pages match how long a partner code
   assert.equal(api.referralCode({ storage, now: now + 31 * 86400000 }), '');
 });
 
-test('every “Ask a question” link in legal/ goes to the Teams page’s form', async () => {
+test('every “Ask a question” link in legal/ goes to the Contact page', async () => {
   for (const [folder, file] of Object.entries(PAGES)) {
     const html = await read(file);
-    const asks = hrefs(html).filter(href => href.includes('ask='));
+    const asks = [...html.matchAll(/<a href="([^"]+)">“Ask a question” form<\/a>/g)].map(match => match[1]);
     assert.ok(asks.length > 0, file);
-    for (const href of asks) assert.equal(resolveHref(folder, href) + href.slice(href.indexOf('?')), 'teams/?ask=question#request', `${file}: ${href}`);
+    for (const href of asks) assert.equal(resolveHref(folder, href), 'contact/', `${file}: ${href}`);
+    assert.doesNotMatch(html, /ask=question|teams\/\?ask|#request"/, `${file}: nothing left pointing at the Teams page’s form`);
   }
   assert.doesNotMatch(await read('legal/legal.js'), /'welcome\/\?ask=/);
+  assert.match(await read('legal/legal-details.js'), /const ASK_PATH = 'contact\/';/);
 });
 
 test('prices and Plus features in the terms come from src/lib/pricing.js', () => {
@@ -594,7 +597,7 @@ test('without JavaScript, the terms and the landing’s descriptions still list 
 test('the cookies page lists every storage key the code uses', async () => {
   const cookies = await read('legal/cookies/index.html');
   // Every script of the planner, the welcome, Teams and partners pages and the admin, so a new key can't be missed.
-  const sources = ['app.js', 'index.html', ...(await walk('src')), ...(await walk('welcome')), ...(await walk('teams')), ...(await walk('partners')), ...(await walk('admin'))].filter(file => /\.(?:js|mjs|html)$/.test(file));
+  const sources = ['app.js', 'index.html', ...(await walk('src')), ...(await walk('welcome')), ...(await walk('teams')), ...(await walk('partners')), ...(await walk('contact')), ...(await walk('admin'))].filter(file => /\.(?:js|mjs|html)$/.test(file));
   assert.ok(sources.includes('src/features/tour-model.js') && sources.includes('src/features/first-use-model.js') && sources.includes('src/features/pip-window.js'), 'nested modules are read');
   const keys = new Set();
   for (const file of sources) for (const match of (await read(file)).matchAll(/['"`](daily-planner-(?:ui|sync):[a-z0-9-]+)['"`]/g)) keys.add(match[1]);

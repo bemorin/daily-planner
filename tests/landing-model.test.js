@@ -153,7 +153,7 @@ test('the gift page reads a Creem return, an older confirmation link or a gift p
 });
 
 test('every count the landing page sends is in its notice, and every listed count is sent', async () => {
-  const files = ['welcome/landing.js', 'teams/teams.js', 'welcome/team-offer.js', 'welcome/request-form.js', 'welcome/thanks/thanks.js', 'partners/partners.js'];
+  const files = ['welcome/landing.js', 'teams/teams.js', 'welcome/team-offer.js', 'welcome/request-form.js', 'welcome/thanks/thanks.js', 'partners/partners.js', 'contact/contact.js'];
   const sources = await Promise.all(files.map(file => readFile(join(root, file), 'utf8')));
   const listed = new Set(LANDING_EVENTS.map(([name]) => name));
   const used = new Set();
@@ -169,7 +169,7 @@ test('every count the landing page sends is in its notice, and every listed coun
 test('no Stripe left on the public pages', async () => {
   const files = ['welcome/index.html', 'welcome/landing.js', 'welcome/landing.css', 'welcome/landing-model.js', 'welcome/landing-settings.js', 'welcome/listbox.js', 'welcome/stepper.js',
     'welcome/sale.js', 'welcome/team-offer.js', 'welcome/request-form.js', 'welcome/teams-model.js', 'teams/index.html', 'teams/teams.js',
-    'welcome/thanks/index.html', 'welcome/thanks/thanks.js', 'partners/index.html', 'partners/partners.js', 'partners/partners-model.js'];
+    'welcome/thanks/index.html', 'welcome/thanks/thanks.js', 'partners/index.html', 'partners/partners.js', 'partners/partners-model.js', 'contact/index.html', 'contact/contact.js'];
   for (const file of files) {
     assert.doesNotMatch(await readFile(join(root, file), 'utf8'), /stripe/i, file);
   }

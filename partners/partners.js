@@ -17,7 +17,7 @@ import { exampleMonth, formatCents, formatCommission, pageFigures, partnerPage, 
    Build variable (runtime-config.js):
    DAILY_PLANNER_AFFILIATE_URL  the Creem sign-up link behind “Become a
                                 partner”; blank: the question form on the
-                                Teams page, about the program
+                                Contact page, about the program
    ============================================================================ */
 
 const qs = (selector, root = document) => root.querySelector(selector);

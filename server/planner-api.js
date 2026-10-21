@@ -67,6 +67,7 @@ import { announcementEmail, createResendMailer, DEFAULT_EMAIL_TIMEOUT_MS, EMAILS
 import { cleanOrg, DEFAULT_PUBLIC_BASE_URL, formatGiftCode, giftBuyerEmail, giftExpiry, giftLimit, giftManageUrl, giftStatus, giftUrl, licenseUrl, newGiftCode, normalizeBaseUrl, normalizeGift, normalizeGiftCode, publicGift, validateGiftFields } from './gifts.js';
 import { GIFT_REF_RE, giftManageKey, giftRef, importSigningKey, importVerifyKey, isoDay, LICENSE_ID_RE, LICENSE_TOKEN_MAX, newLicenseId, publicKeyFromSigningKey, signLicense, verifyLicense } from './licenses.js';
 import { affiliateCode, CHECKOUT_ID_RE, checkoutSeal, checkoutSealValid, createCheckout, CREEM_ITEMS, creemMode, fetchCheckout, fetchTransaction, parseCreemProducts, readCheckout, verifyWebhookSignature } from './creem.js';
+import { createCreemSetupRoute } from './creem-setup.js';
 import { CREEM_REASONS, OWNER_SOURCE_PREFIX, readRefundEvent, readTransaction, REFUND_EVENTS, refundNoticeEmail, refundScope, refundWaitingEmail, REVOCATION_NOTE_MAX, revocationTarget, shownScope } from './refunds.js';
 import { normalizeCodeRejection, normalizePartnerSale, normalizePayout, PARTNER_SALES_LISTED, partnerSaleRow, partnerSummary, PAYOUT_NOTE_MAX, payoutCheck } from './partners.js';
 import { currencyForCountry, CURRENCIES, giftPlan, hasMemberPrice, isPersonalGift, isTeamGift, PARTNER_PROGRAM, PERSONAL_GIFTS, priceCents, TEAM_TIERS, validCurrency } from '../src/lib/pricing.js';
@@ -1614,11 +1615,22 @@ export function createPlannerApi({
     return json(200, { session, expiresAt: new Date(expiresAt).toISOString() }, cors);
   }
 
+  // Creem setup assistant (server/creem-setup.js, 1.31): POST admin/creem/setup/plan, then
+  // admin/creem/setup/apply { confirm: true, mode, create } makes only what is missing.
+  const creemSetupRoute = createCreemSetupRoute(() => ({
+    apiKey: creem.apiKey, mode: creem.mode, fetch: creem.fetch, products: creemProducts, webhookSecret,
+    webhookUrl: `${baseUrl()}/api/creem/webhook`, events: ['checkout.completed', ...Object.keys(REFUND_EVENTS)], now: () => now().getTime()
+  }), { now: () => now().getTime() });
+
   async function admin(request, path, url, cors) {
     if (!adminToken) return json(503, { error: 'ADMIN_TOKEN is not configured.' }, cors);
     if (totpBroken) return json(503, { error: 'ADMIN_TOTP_SECRET is not valid base32 (A–Z and 2–7, at least 16 characters).' }, cors);
     if (path === 'admin/session') return signIn(request, cors);
     if (!await isAdmin(request)) return request.headers.has('authorization') ? unauthorized(cors) : json(401, { error: 'Unauthorized' }, cors);
+    if (path.startsWith('admin/creem/setup/')) {
+      const answer = await creemSetupRoute(request, path, () => readJson(request));
+      if (answer) return json(answer.status, answer.body, { ...cors, ...(answer.headers || {}) });
+    }
     const days = Math.min(366, Math.max(1, Math.round(Number(url.searchParams.get('days')) || 90)));
     const sinceDay = dayKey(new Date(now().getTime() - days * 86400000));
     if (request.method === 'GET' && path === 'admin/summary') {

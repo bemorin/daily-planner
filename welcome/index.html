@@ -27,21 +27,32 @@
   <link rel="icon" href="../favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <script>
-    /* Before first paint. The team gift lives on the Teams page (/teams/,
-       next to this folder): its old addresses here (?ask=…, #request,
-       #teams, #team-prices, #seats) go there, query and hash kept (#teams,
-       the whole team gift, opens the Teams page at the top)
-       (teamsAddress in teams-model.js, which landing.js checks again).
+    /* Before first paint. The question form lives on the Contact page
+       (/contact/, next to this folder) and the team gift on the Teams page
+       (/teams/): their old addresses here go there — a question
+       (?ask=question, &topic=partners) to the Contact page, without ?ask,
+       ?plan and the #hash; another request (?ask=…) or a part of the team
+       gift (#request, #teams, #team-prices, #seats) to the Teams page, query
+       and hash kept (#teams, the whole team gift, opens it at the top)
+       (movedAddress in teams-model.js, which landing.js checks again).
        Then, when motion is welcome, replicas start on the first frame of their
        animation and sections below the fold wait to rise in. landing.js adds
        `js-ready`; if it never runs, the page falls back to its final, fully
        visible state. */
     (function () {
       var here = window.location;
-      var ask = false;
-      try { ask = new URLSearchParams(here.search).has('ask'); } catch (error) { ask = false; }
-      if (ask || /^#(?:request|teams|team-prices|seats)$/.test(here.hash)) {
-        here.replace(here.pathname.replace(/\/(?:index\.html)?$/, '').replace(/\/[^/]*$/, '') + '/teams/' + here.search + (here.hash === '#teams' ? '' : here.hash));
+      var site = here.pathname.replace(/\/(?:index\.html)?$/, '').replace(/\/[^/]*$/, '');
+      var query = null;
+      try { query = new URLSearchParams(here.search); } catch (error) { query = null; }
+      if (query && query.get('ask') === 'question') {
+        query.delete('ask');
+        query.delete('plan');
+        var rest = query.toString();
+        here.replace(site + '/contact/' + (rest ? '?' + rest : ''));
+        return;
+      }
+      if ((query && query.has('ask')) || /^#(?:request|teams|team-prices|seats)$/.test(here.hash)) {
+        here.replace(site + '/teams/' + here.search + (here.hash === '#teams' ? '' : here.hash));
         return;
       }
       var root = document.documentElement;
@@ -1363,7 +1374,7 @@
       <div class="wrap faq">
         <div class="faq__intro" data-reveal-each>
           <h2 id="faq-title">Questions</h2>
-          <p>Something missing? The planner’s own Help page explains every feature and shortcut, or <a href="../teams/?ask=question#request">ask a question</a>.</p>
+          <p>Something missing? The planner’s own Help page explains every feature and shortcut, or <a href="../contact/">ask a question</a>.</p>
         </div>
         <div class="faq__groups" data-faq data-reveal-each>
           <div class="faq__group">
@@ -1478,7 +1489,7 @@
         <a href="../teams/">Team gift</a>
         <a href="#pricing">Pricing</a>
         <a href="../partners/">Partners</a>
-        <a href="../teams/?ask=question#request">Ask a question</a>
+        <a href="../contact/">Ask a question</a>
         <span class="foot__support" data-support hidden></span>
         <span class="foot__social" data-social hidden></span>
       </nav>
@@ -1539,7 +1550,7 @@
           <span class="pv__icon" aria-hidden="true"><svg class="i"><use href="#i-mail"/></svg></span>
           <div class="pv__body">
             <h3 id="pv-requests" tabindex="-1">Requests</h3>
-            <p>The request form on the Teams page sends what you type — your email, name, company, the kind of request, plan, number of people, currency, timing and message; for a question, only your email, name and question. It’s stored only to reply to you, with your browser’s language, the page version and where the form was opened, and deleted on request.</p>
+            <p>The Teams page’s request form sends what you type — your email, name, company, the kind of request, plan, number of people, currency, timing and message; a question, asked there or on the Contact page, only your email, name and question. It’s stored only to reply to you, with your browser’s language, the page version and where the form was opened, and deleted on request.</p>
             <p>If you came through a partner’s link, its code goes with the request too, so the partner can be credited for a team gift they introduced.</p>
           </div>
         </section>
