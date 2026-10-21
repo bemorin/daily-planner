@@ -8,7 +8,7 @@
 export const WHATS_NEW = Object.freeze({
   version: '1.30',
   items: Object.freeze([
-    'Opening the planner is calmer: no empty frame or jump while it loads, and a short entrance the first time you open it in a session.',
+    'Opening the planner is calmer: no empty frame or jump while it loads, and a short entrance when you open it in a new tab.',
     'The team gift and the partner program now live at their own addresses: /teams and /partners.',
     'Ask a question is a simple contact form: your email, your name and your question.'
   ])
