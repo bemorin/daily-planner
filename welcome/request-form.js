@@ -137,7 +137,7 @@ export function createRequestForm({ sale = null, track = () => {}, settings, que
   const contactEmail = emailAddress(settings.contactEmail || configText('SUPPORT_EMAIL'));
   const requestMode = plannerApiEnabled() ? 'api' : (EMAIL_RE.test(contactEmail) ? 'mailto' : 'off');
   const request = { kind: questionsOnly ? 'question' : 'invoice', opened: false, quoted: false };
-  const contactCopy = CONTACT_TOPICS[topic] || CONTACT_TOPICS.general;
+  const contactCopy = Object.hasOwn(CONTACT_TOPICS, topic) ? CONTACT_TOPICS[topic] : CONTACT_TOPICS.general;
   const smoothBehavior = () => (reduceQuery.matches ? 'auto' : 'smooth');
 
   const field = name => qs(`[name="${name}"]`, form);
