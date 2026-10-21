@@ -42,7 +42,7 @@
       <section class="cfg-run" aria-labelledby="cfg-run-title">
         <div class="cfg-run__intro">
           <h2 id="cfg-run-title">Check everything</h2>
-          <p data-cfg-status>Not checked yet. The server tries each setting with its service — Creem, Resend, the database, the Plus keys — with read-only calls of 5 seconds at most, all at once. Nothing is changed anywhere.</p>
+          <p data-cfg-status>Not checked yet. The server tries each setting with its service — Creem, Resend, the database, the Plus keys — with read-only calls side by side, each one 5 seconds at most: the whole check usually takes under 10 seconds. Nothing is changed anywhere.</p>
         </div>
         <div class="cfg-run__actions">
           <button class="primary-button cfg-check" type="button" data-cfg-check><span class="cfg-spinner" aria-hidden="true"></span><span data-cfg-check-label>Check everything</span></button>

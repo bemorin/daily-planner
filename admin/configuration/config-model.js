@@ -42,6 +42,12 @@ export const utcStamp = iso => {
   return Number.isNaN(date.getTime()) ? '' : `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
 };
 
+/** “in 1.4 s”, or “in under 0.1 s” for a check quicker than that. */
+export const tookText = durationMs => {
+  const ms = Math.max(0, Number(durationMs) || 0);
+  return ms < 100 ? 'in under 0.1 s' : `in ${(ms / 1000).toFixed(1)} s`;
+};
+
 const where = deployment => (deployment?.production ? 'on the production address' : deployment?.local ? 'on a local dev server' : 'on another address than the production one (a preview deployment?)');
 
 function line(item) {
@@ -62,7 +68,7 @@ export function summaryText(result) {
   const first = fixFirst(items);
   const lines = [
     'Daily Planner — configuration check',
-    `Checked ${utcStamp(result?.checkedAt)}, ${where(result?.deployment)}, in ${Math.max(0, Math.round(Number(result?.durationMs) || 0) / 1000).toFixed(1)} s.`,
+    `Checked ${utcStamp(result?.checkedAt)}, ${where(result?.deployment)}, ${tookText(result?.durationMs)}.`,
     `Totals: ${totalsText(result?.counts) || 'nothing checked'}.`,
     ...(Array.isArray(result?.notes) ? result.notes.map(note => `Note: ${note}`) : []),
     '',

@@ -25,17 +25,26 @@
 // every event twice) and named "Daily Planner · dp-setup".
 //
 // Idempotent: Create plans again first (a fresh read of the store) and makes
-// only what is still missing; each product request carries an Idempotency-Key
-// built from the mode, the product, its price and the day, so a double click
-// or a retry on another worker answers the same product. Product ids are not
-// secrets; the webhook's signing secret goes to the owner's browser once, in
-// the Create answer, and is never logged or stored. The API key and
-// CREEM_WEBHOOK_SECRET never appear in an answer (scrubbed, in case Creem
-// echoes them). Every call has a short timeout; reads have no side effect.
-// `fetch` is injectable so tests never reach the network.
+// only what is still missing. What is guaranteed when two Creates overlap: in
+// one worker isolate they are serialised (the second is refused, see
+// server/admin-limits.js); across isolates each product request carries an
+// Idempotency-Key derived from the mode and the product's marker (with its
+// price, the UTC day and the count of earlier copies), so two workers that read
+// the same store send the same key and Creem answers the same product; the
+// webhook list is read again right before the webhook is created, which
+// narrows (but can't close) the window for a second endpoint — the plan then
+// shows the extra one. Product ids are not secrets; the webhook's signing
+// secret goes to the owner's browser once, in the Create answer, and is never
+// logged or stored. The API key and the signing secrets never appear anywhere
+// else in an answer, nor any part of them (server/secret-scrub.js: Creem's
+// words are dropped after a 401 or a 403, scrubbed otherwise). Every call has
+// a short timeout; reads have no side effect. `fetch` is injectable so tests
+// never reach the network.
 
 import { timingSafeEqual } from './admin-auth.js';
+import { ADMIN_LIMITS, sharedAdminLimits, waitWords } from './admin-limits.js';
 import { CREEM_ITEMS, creemApiBase } from './creem.js';
+import { scrubAnswer, upstreamText } from './secret-scrub.js';
 import { CURRENCIES, formatMoney, PLUS_PRICE, TEAM_TIERS } from '../src/lib/pricing.js';
 
 export const SETUP_TIMEOUT_MS = 5000;
@@ -113,40 +122,30 @@ const urlKey = value => {
   } catch { return ''; }
 };
 
-/** Anything that looks like a Creem key or a signing secret, and the configured values, are hidden from a message. */
-function scrubText(value, secrets) {
-  let result = String(value ?? '');
-  for (const secret of secrets) if (secret && secret.length >= 6) result = result.split(secret).join('[hidden]');
-  return result.replace(/\b(?:creem|whsec)_[A-Za-z0-9_-]{16,}/g, '[hidden]');
-}
-
-/** A deep copy of an answer with every string scrubbed, except the keys listed in `keep`. */
-export function scrubAnswer(value, secrets, keep = new Set()) {
-  if (typeof value === 'string') return scrubText(value, secrets);
-  if (Array.isArray(value)) return value.map(entry => scrubAnswer(entry, secrets, keep));
-  if (!objectOrNull(value)) return value;
-  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, keep.has(key) ? entry : scrubAnswer(entry, secrets, keep)]));
-}
-
 function creemMessage(data) {
   const message = Array.isArray(data?.message) ? data.message.join(', ') : data?.message ?? data?.error ?? '';
-  return typeof message === 'string' ? text(message, 200) : '';
+  return typeof message === 'string' ? message : '';
 }
 
-/** A failed HTTP answer from Creem as a CreemSetupError. */
+/** A failed HTTP answer from Creem as a CreemSetupError. Creem's own words only when they can't hold the key (server/secret-scrub.js). */
 function failure(ctx, status, data, what) {
-  const detail = scrubText(creemMessage(data), ctx.secrets);
-  const suffix = detail ? `: ${detail}` : '';
   if (status === 401 || status === 403) {
     const hint = ctx.mode === 'test'
       ? 'A test key starts with creem_test_ and works only with Creem’s test API; a live key needs CREEM_TEST_MODE unset.'
       : 'Check that it is the live key from Creem → Developers → API keys (a test key starts with creem_test_).';
-    return new CreemSetupError('key', `Creem refused CREEM_API_KEY while ${what} (HTTP ${status}${suffix}). ${hint}`, status);
+    return new CreemSetupError('key', `Creem refused CREEM_API_KEY while ${what} (HTTP ${status}). ${hint}`, status);
   }
+  const detail = upstreamText(status, creemMessage(data), ctx.secrets);
+  const suffix = detail ? `: ${detail}` : '';
   if (status === 429) return new CreemSetupError('busy', `Creem is limiting requests (HTTP 429) while ${what}. Wait a minute, then try again.`, status);
   if (status >= 500) return new CreemSetupError('creem', `Creem had a problem while ${what} (HTTP ${status}${suffix}). Try again in a few minutes.`, status);
   return new CreemSetupError('refused', `Creem refused ${what} (HTTP ${status}${suffix}).`, status);
 }
+
+const timeoutError = ctx => {
+  const seconds = Math.max(1, Math.round(ctx.timeoutMs / 1000));
+  return new CreemSetupError('timeout', `Creem didn’t answer within ${seconds} ${seconds === 1 ? 'second' : 'seconds'}. Try again.`);
+};
 
 async function creemCall(ctx, method, path, { body, headers = {} } = {}) {
   const controller = new AbortController();
@@ -158,11 +157,14 @@ async function creemCall(ctx, method, path, { body, headers = {} } = {}) {
       ...(body ? { body: JSON.stringify(body) } : {}),
       signal: controller.signal
     });
+    // The body is read under the same timeout: a body cut off by it is a timeout, not an odd answer.
     const data = await response.json().catch(() => null);
+    if (data === null && controller.signal.aborted) throw timeoutError(ctx);
     return { status: response.status, ok: response.ok, data };
   } catch (error) {
-    if (error?.name === 'AbortError') throw new CreemSetupError('timeout', `Creem did not answer within ${Math.round(ctx.timeoutMs / 1000)} seconds. Try again.`);
-    throw new CreemSetupError('network', 'Creem could not be reached. Check the connection, then try again.');
+    if (error instanceof CreemSetupError) throw error;
+    if (error?.name === 'AbortError' || controller.signal.aborted) throw timeoutError(ctx);
+    throw new CreemSetupError('network', 'Creem couldn’t be reached. Check the connection, then try again.');
   } finally {
     clearTimeout(timer);
   }
@@ -299,6 +301,28 @@ function planSlot(slot, current, catalogue, keyMode) {
   return view;
 }
 
+/**
+ * The webhook address the assistant registers for a page opened on `origin`:
+ * PUBLIC_BASE_URL's (`baseUrl`) on the production address and on a local
+ * server; on another address (a preview, the .pages.dev one) that address
+ * itself, as the configuration check expects, but only with a test key: a live
+ * store's webhook belongs to production, so Create is refused there.
+ * Answers { url, source: 'production' | 'local' | 'preview', refused: '' | why }.
+ */
+export function setupTarget({ origin = '', baseUrl = '', mode = 'live' } = {}) {
+  const base = String(baseUrl || '').replace(/\/+$/, '');
+  const production = { url: `${base}/api/creem/webhook`, source: 'production', refused: '' };
+  let page = null;
+  try { page = new URL(String(origin)); } catch { return production; }
+  let baseOrigin = '';
+  try { baseOrigin = new URL(base).origin; } catch { baseOrigin = ''; }
+  if (page.origin === baseOrigin) return production;
+  const host = page.hostname.toLowerCase();
+  if (LOCAL_HOSTS.has(host) || host.endsWith('.localhost')) return { ...production, source: 'local' };
+  if (mode === 'test') return { url: `${page.origin}/api/creem/webhook`, source: 'preview', refused: '' };
+  return { ...production, refused: `This page is open on ${page.origin}, not on the production address ${base}: with a live key, set Creem up from ${base}/admin/configuration/.` };
+}
+
 /** Why Creem can't call this webhook URL: '' when it can (a public https address). */
 export function webhookUrlProblem(value) {
   try {
@@ -311,10 +335,10 @@ export function webhookUrlProblem(value) {
 }
 
 /** Decide the webhook from the store's endpoints (or why it can't be read). */
-function planWebhook({ url, events, hooks, hooksError, secretSet }) {
-  const view = { state: 'create', url, events: [...events], name: WEBHOOK_NAME, webhook: null, differences: [], duplicates: 0, others: [], reason: '', message: '', secret: { set: secretSet, matches: null } };
+function planWebhook({ url, source = 'production', events, hooks, hooksError, secretSet }) {
+  const view = { state: 'create', url, source, events: [...events], name: WEBHOOK_NAME, webhook: null, differences: [], duplicates: 0, others: [], reason: '', message: '', secret: { set: secretSet, matches: null } };
   const problem = webhookUrlProblem(url);
-  if (problem) return { ...view, state: 'blocked', reason: 'url', message: `Creem calls the webhook from the internet, so it needs a public https address; PUBLIC_BASE_URL gives ${url}.` };
+  if (problem) return { ...view, state: 'blocked', reason: 'url', message: `Creem calls the webhook from the internet, so it needs a public https address; ${source === 'preview' ? 'this page’s address' : 'PUBLIC_BASE_URL'} gives ${url}.` };
   if (hooksError) {
     const scope = hooksError.reason === 'key' || hooksError.status === 404;
     return {
@@ -348,10 +372,17 @@ async function secretMatches(ctx, hookId) {
   } catch { return null; }
 }
 
-/** The .env lines for the products (ids are not secrets), and CREEM_TEST_MODE=1 in test mode. */
-export function envBlock(products, mode) {
+/**
+ * Whether the .env lines need CREEM_TEST_MODE=1: only in test mode with a key
+ * that isn't creem_test_… (a creem_test_ key means test mode by itself; any
+ * other key is in test mode only because CREEM_TEST_MODE is on already).
+ */
+export const needsTestModeLine = (mode, apiKey = '') => mode === 'test' && !String(apiKey ?? '').trim().startsWith('creem_test_');
+
+/** The .env lines for the products (ids are not secrets), and CREEM_TEST_MODE=1 when needsTestModeLine. */
+export function envBlock(products, mode, apiKey = '') {
   const lines = products.filter(slot => slot.id).map(slot => `${slot.env}=${slot.id}`);
-  if (mode === 'test') lines.push('CREEM_TEST_MODE=1');
+  if (needsTestModeLine(mode, apiKey)) lines.push('CREEM_TEST_MODE=1');
   return lines.length ? `${lines.join('\n')}\n` : '';
 }
 
@@ -363,7 +394,10 @@ function summary(ctx, products, webhook) {
     products: products.map(({ seen: _seen, ...slot }) => slot),
     webhook,
     create,
-    env: envBlock(products, ctx.mode),
+    // Why Create is refused here ('' when it isn't): a live key on a page that isn't on the production address.
+    refused: ctx.refused,
+    env: envBlock(products, ctx.mode, ctx.apiKey),
+    testModeLine: needsTestModeLine(ctx.mode, ctx.apiKey),
     envChanges: products.filter(slot => slot.id && slot.id !== slot.envId).map(slot => slot.env),
     envComplete: products.every(slot => slot.id)
   };
@@ -379,6 +413,8 @@ function context(options = {}) {
     timeoutMs: Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : SETUP_TIMEOUT_MS,
     now: typeof options.now === 'function' ? () => new Date(options.now()) : () => new Date(),
     url: String(options.webhookUrl ?? ''),
+    urlSource: ['local', 'preview'].includes(options.webhookUrlSource) ? options.webhookUrlSource : 'production',
+    refused: String(options.refused ?? ''),
     events: Array.isArray(options.events) && options.events.length ? options.events.map(String) : [...WEBHOOK_EVENTS],
     secrets: [apiKey, webhookSecret]
   };
@@ -394,7 +430,7 @@ async function planWith(ctx, envProducts) {
   ]);
   const products = slots.map((slot, index) => planSlot(slot, current[index], catalogue, ctx.mode));
   const hooksError = hooks instanceof Error ? hooks : null;
-  const webhook = planWebhook({ url: ctx.url, events: ctx.events, hooks: hooksError ? [] : hooks, hooksError, secretSet: !!ctx.webhookSecret });
+  const webhook = planWebhook({ url: ctx.url, source: ctx.urlSource, events: ctx.events, hooks: hooksError ? [] : hooks, hooksError, secretSet: !!ctx.webhookSecret });
   if (webhook.webhook && ctx.webhookSecret) webhook.secret.matches = await secretMatches(ctx, webhook.webhook.id);
   return { products, webhook };
 }
@@ -402,7 +438,8 @@ async function planWith(ctx, envProducts) {
 /**
  * Read-only: what exists in Creem and what Create would make.
  * options: { apiKey, mode: 'test' | 'live', fetch, products: { plus: { EUR, USD }, gift: { EUR, USD } } (env ids),
- *   webhookUrl, webhookSecret, events, timeoutMs, now }
+ *   webhookUrl, webhookUrlSource ('production', 'local' or 'preview', see setupTarget), refused (why Create is
+ *   refused, see setupTarget), webhookSecret, events, timeoutMs, now }
  */
 export async function planCreemSetup(options) {
   const ctx = context(options);
@@ -410,10 +447,18 @@ export async function planCreemSetup(options) {
   return summary(ctx, products, webhook);
 }
 
+/**
+ * The Idempotency-Key of a product request, derived from the mode and the
+ * product's marker (dp-setup-test-plus-eur-…), its price, the UTC day and the
+ * count of earlier copies in the store: two workers that read the same store on
+ * the same day send the same key, so Creem answers the product already made;
+ * once an earlier copy was archived, the key changes and a new one is made.
+ */
+export const productIdempotencyKey = (mode, slot, price, day, seen = 0) => `${productMarker(slot).replace(':', `-${mode}-`)}-${price}-${day}-${seen || 0}`;
+
 async function createProduct(ctx, slot, day) {
   const expected = expectedProduct(slot.item, slot.currency);
-  // Same key for the same product on the same day (a double click, a retry); a new one once an earlier copy was archived.
-  const key = `dp-setup-${ctx.mode}-${slot.slot}-${expected.price}-${day}-${slot.seen || 0}`;
+  const key = productIdempotencyKey(ctx.mode, slot.slot, expected.price, day, slot.seen);
   const answer = await creemCall(ctx, 'POST', '/v1/products', { body: expected, headers: { 'Idempotency-Key': key } });
   if (!answer.ok) throw failure(ctx, answer.status, answer.data, `creating ${expected.name} (${slot.currency})`);
   const product = readProduct(answer.data);
@@ -451,19 +496,26 @@ export async function applyCreemSetup(options, { create = [] } = {}) {
       Object.assign(slot, { state: 'created', source: 'new', id: outcome.value.id, product: publicProduct(outcome.value), differences: productDifferences(outcome.value, slot, ctx.mode) });
       created.push({ slot: slot.slot, id: outcome.value.id });
     } else {
-      Object.assign(slot, { state: 'failed', error: scrubText(outcome.reason?.message || 'Not created.', ctx.secrets) });
+      // Our own words (CreemSetupError), Creem's already scrubbed: a thrown bug says nothing.
+      Object.assign(slot, { state: 'failed', error: outcome.reason instanceof CreemSetupError ? outcome.reason.message : 'Not created.' });
       failures.push({ slot: slot.slot, reason: outcome.reason?.reason || 'creem', error: slot.error });
     }
   });
   let webhookSecret = '';
   if (webhook.state === 'create' && wanted.has('webhook')) {
     try {
-      const result = await createWebhook(ctx);
-      Object.assign(webhook, { state: 'created', webhook: result.hook, secret: { set: !!ctx.webhookSecret, matches: null, created: !!result.secret } });
-      webhookSecret = result.secret;
-      created.push({ slot: 'webhook', id: result.hook.id });
+      // Read again right before creating: another Create (a second tab, another worker) may have made it meanwhile.
+      const hooks = (await listAll(ctx, '/v1/webhooks', 'listing your webhooks')).map(readWebhook).filter(Boolean);
+      const again = planWebhook({ url: ctx.url, source: ctx.urlSource, events: ctx.events, hooks, hooksError: null, secretSet: !!ctx.webhookSecret });
+      if (again.state !== 'create') Object.assign(webhook, again);
+      else {
+        const result = await createWebhook(ctx);
+        Object.assign(webhook, { state: 'created', webhook: result.hook, secret: { set: !!ctx.webhookSecret, matches: null, created: !!result.secret } });
+        webhookSecret = result.secret;
+        created.push({ slot: 'webhook', id: result.hook.id });
+      }
     } catch (error) {
-      Object.assign(webhook, { state: 'failed', message: scrubText(error?.message || 'Not created.', ctx.secrets) });
+      Object.assign(webhook, { state: 'failed', message: error instanceof CreemSetupError ? error.message : 'Not created.' });
       failures.push({ slot: 'webhook', reason: error?.reason || 'creem', error: webhook.message });
     }
   }
@@ -471,43 +523,32 @@ export async function applyCreemSetup(options, { create = [] } = {}) {
   return { ...summary(ctx, products, webhook), created, failures, already, ...(webhookSecret ? { webhookSecret } : {}) };
 }
 
-/** At most `limit` calls per `windowMs`: answers 0 when allowed, else the seconds to wait. */
-export function createRateLimiter({ limit, windowMs, now = () => Date.now() }) {
-  let hits = [];
-  return () => {
-    const time = now();
-    hits = hits.filter(hit => time - hit < windowMs);
-    if (hits.length >= limit) return Math.max(1, Math.ceil((windowMs - (time - hits[0])) / 1000));
-    hits.push(time);
-    return 0;
-  };
-}
-
 // Never 401 (the dashboard would sign the owner out) nor 503 (it reads as “the API is not set up”).
 const HTTP_STATUS = { 'no-key': 409, key: 502, refused: 502, creem: 502, answer: 502, busy: 502, timeout: 504, network: 504 };
-export const SETUP_LIMITS = Object.freeze({ plan: { limit: 20, windowMs: 10 * 60 * 1000 }, apply: { limit: 6, windowMs: 10 * 60 * 1000 } });
+export const SETUP_LIMITS = Object.freeze({ plan: ADMIN_LIMITS.plan, apply: ADMIN_LIMITS.apply });
+const RUNNING = 'creem-setup-apply';
 
 /**
  * The admin routes, behind the owner's sign-in (checked by the caller):
  *   POST admin/creem/setup/plan                                   → the plan
  *   POST admin/creem/setup/apply { confirm: true, mode, create }  → the plan after creating
- * `getOptions()` gives planCreemSetup's options; `readBody()` the parsed JSON body.
- * Answers { status, body, headers } or null for another path. Rate-limited per worker
- * instance (the WAF is the real guard); one Create at a time.
+ * `getOptions(request)` gives planCreemSetup's options; `readBody()` the parsed JSON body.
+ * Answers { status, body, headers } or null for another path. `limits`: the worker
+ * isolate's own (server/admin-limits.js), shared by every request it answers —
+ * SETUP_LIMITS per 10 minutes, and one Create at a time.
  */
-export function createCreemSetupRoute(getOptions, { now = () => Date.now() } = {}) {
-  const limits = Object.fromEntries(Object.entries(SETUP_LIMITS).map(([name, value]) => [name, createRateLimiter({ ...value, now })]));
-  let running = false;
+export function createCreemSetupRoute(getOptions, { limits = sharedAdminLimits } = {}) {
   return async function creemSetupRoute(request, path, readBody) {
     const match = SETUP_ROUTE_RE.exec(path);
     if (!match) return null;
     const action = match[1];
     if (request.method !== 'POST') return { status: 405, body: { error: 'Method not allowed' } };
     const wait = limits[action]();
-    if (wait) return { status: 429, body: { error: `Too many setup requests. Try again in ${Math.ceil(wait / 60)} min.`, reason: 'rate', retryAfter: wait }, headers: { 'retry-after': String(wait) } };
-    const options = getOptions();
-    const secrets = [String(options.apiKey ?? '').trim(), String(options.webhookSecret ?? '').trim()];
-    const answer = (status, body) => ({ status, body: scrubAnswer(body, secrets, new Set(['webhookSecret'])) });
+    if (wait) return { status: 429, body: { error: `Too many setup requests in a short time. Try again in ${waitWords(wait)}.`, reason: 'rate', retryAfter: wait }, headers: { 'retry-after': String(wait) } };
+    const options = getOptions(request);
+    const secrets = [options.apiKey, options.webhookSecret];
+    // The one secret an answer carries on purpose is the new webhook's, in webhookSecret: it is hidden everywhere else.
+    const answer = (status, body) => ({ status, body: scrubAnswer(body, [...secrets, body?.webhookSecret], new Set(['webhookSecret'])) });
     try {
       if (action === 'plan') return answer(200, await planCreemSetup(options));
       const body = await readBody();
@@ -515,12 +556,13 @@ export function createCreemSetupRoute(getOptions, { now = () => Date.now() } = {
       if (!String(options.apiKey ?? '').trim()) throw new CreemSetupError('no-key', 'Set the secret CREEM_API_KEY first (Creem → Developers → API keys), then redeploy.');
       if (body?.confirm !== true) return answer(400, { error: 'Nothing was created: confirm first.', reason: 'confirm' });
       if (body?.mode !== mode) return answer(409, { error: `Nothing was created: CREEM_API_KEY is in ${mode} mode now. Check the plan again.`, reason: 'mode', mode });
-      if (running) return answer(409, { error: 'A setup is already running. Wait a moment, then check again.', reason: 'running' });
-      running = true;
+      if (options.refused) return answer(409, { error: `Nothing was created. ${options.refused}`, reason: 'origin' });
+      if (limits.busy.has(RUNNING)) return answer(409, { error: 'Nothing was created: a setup is already running. Wait a moment, then check again.', reason: 'running' });
+      limits.busy.add(RUNNING);
       try {
         return answer(200, await applyCreemSetup(options, { create: body.create }));
       } finally {
-        running = false;
+        limits.busy.delete(RUNNING);
       }
     } catch (error) {
       if (error instanceof CreemSetupError) return answer(HTTP_STATUS[error.reason] || 502, { error: error.message, reason: error.reason });

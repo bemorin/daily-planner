@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createCheckLimiter, createConfigCheckRoute, describeShape, migrationSchema, parseRuntimeConfig, runConfigChecks, tokenStrength } from '../server/admin-config.js';
+import { canAddColumn, createConfigCheckRoute, describeShape, migrationSchema, parseRuntimeConfig, runConfigChecks, tableColumns, tokenStrength } from '../server/admin-config.js';
+import { createRateLimiter } from '../server/admin-limits.js';
 import { CONFIG_VARIABLES, configVariable, MIGRATIONS } from '../server/config-inventory.js';
 import { createMemoryStore, createPlannerApi } from '../server/planner-api.js';
 import { generatePlusKeyPair, importVerifyKey } from '../server/licenses.js';
@@ -159,6 +160,10 @@ test('Creem: a live key sent to the test API by CREEM_TEST_MODE is named, and a 
   assert.equal(preview.items.CREEM_API_KEY.state, 'ok', 'a preview may use test keys');
   assert.equal(preview.items.CREEM_WEBHOOK_SECRET.state, 'ok', 'its webhook points at the preview address');
   assert.match(preview.result.notes.join(' '), /another address than the production one/);
+  // CREEM_TEST_MODE with a creem_test_ key: fine, and said to be unneeded (the setup assistant leaves it out of its lines).
+  const both = await check({ env: goodEnv({ CREEM_API_KEY: testKey, CREEM_TEST_MODE: '1' }), origin: 'https://abc123.daily-planner.pages.dev' });
+  assert.equal(both.items.CREEM_TEST_MODE.state, 'ok');
+  assert.equal(both.items.CREEM_TEST_MODE.summary, 'On: every Creem call goes to the test API. Not needed: a creem_test_ key already means test mode.');
 });
 
 test('Creem: a missing product, a wrong price, currency, billing or tax, an archived product and a repeated id are problems', async () => {
@@ -234,10 +239,11 @@ test('Resend: a sending-only key is valid; an invalid or inactive key is a probl
   assert.equal(restricted.items.EMAIL_FROM.state, 'untested');
   assert.match(restricted.items.EMAIL_FROM.summary, /Send me a test email/);
 
-  for (const [status, name, message] of [[400, 'validation_error', 'API key is invalid'], [401, 'validation_error', 'API key is invalid'], [403, 'restricted_api_key', 'API key is not active']]) {
+  // Resend's own words only after a 400: after a 401 or a 403 they may repeat the key, so the summary uses ours.
+  for (const [status, name, message, said] of [[400, 'validation_error', 'API key is invalid', ': “API key is invalid”'], [401, 'validation_error', 'API key is invalid', ': the key is unknown or was deleted'], [403, 'restricted_api_key', 'API key is not active', ': the key is not allowed to read this account, or is not active']]) {
     const { items } = await check({ routes: { domains: json(status, { name, message }) } });
     assert.equal(items.RESEND_API_KEY.state, 'problem', `${status} ${name}`);
-    assert.match(items.RESEND_API_KEY.summary, new RegExp(`Resend refused it \\(HTTP ${status}: “${message}”\\)`));
+    assert.equal(items.RESEND_API_KEY.summary, `Resend refused it (HTTP ${status}${said}).`);
     assert.equal(items.EMAIL_FROM.state, 'untested');
   }
   const pending = await check({ routes: { domains: json(200, { data: [{ name: 'example.com', status: 'pending' }] }) } });
@@ -302,7 +308,10 @@ test('build variables: compared with the value the deployed runtime-config.js wa
 test('sign-in settings and addresses: by their shape', async () => {
   const { items } = await check({ env: goodEnv({ ADMIN_TOKEN: 'dev', ADMIN_TOTP_SECRET: 'not base32!', PUBLIC_BASE_URL: 'http://planner.example', ALLOWED_ORIGINS: 'https://ok.example, https://bad.example/' }) });
   assert.equal(items.ADMIN_TOKEN.state, 'problem');
-  assert.equal(items.ADMIN_TOKEN.shape, '3 characters: letters, about 14 bits');
+  assert.equal(items.ADMIN_TOKEN.shape, '3 characters, weak', 'its length and a verdict, never what it is made of');
+  assert.match(items.ADMIN_TOKEN.summary, /^Weak: easy to guess\./);
+  assert.equal(describeShape(configVariable('ADMIN_TOKEN'), SECRETS.ADMIN_TOKEN), '48 characters, strong');
+  assert.equal(describeShape(configVariable('ADMIN_TOKEN'), '1'.repeat(36)), '36 characters, weak', 'long but predictable');
   assert.equal(items.ADMIN_TOKEN.generate, 'token');
   assert.equal(items.ADMIN_TOTP_SECRET.state, 'problem');
   assert.equal(items.PUBLIC_BASE_URL.state, 'problem');
@@ -317,10 +326,14 @@ test('D1: the database answers, and every table, column and index of the migrati
   const refunds = missing.items['migration:0005_refunds.sql'];
   assert.equal(refunds.state, 'problem');
   assert.equal(refunds.summary, 'Not fully applied. Missing: table refunds; column orders.mode; index refunds_created.');
-  assert.equal(refunds.fix.copy[0].text, MIGRATIONS.find(migration => migration.file === '0005_refunds.sql').sql, 'the SQL to paste, the whole file');
-  assert.equal(refunds.fix.copy[1].text, 'ALTER TABLE orders ADD COLUMN mode TEXT NOT NULL DEFAULT \'\';');
-  assert.equal(refunds.fix.copy[2].text, 'npx wrangler d1 execute daily-planner --remote --file=migrations/0005_refunds.sql');
+  // In the order to run them: the column first (the file skips a table that exists), then the whole file.
+  assert.deepEqual(refunds.fix.copy.map(entry => entry.label), ['Missing column', 'SQL of 0005_refunds.sql', 'Or from a terminal']);
+  assert.equal(refunds.fix.copy[0].text, 'ALTER TABLE orders ADD COLUMN mode TEXT NOT NULL DEFAULT \'\';');
+  assert.equal(refunds.fix.copy[1].text, MIGRATIONS.find(migration => migration.file === '0005_refunds.sql').sql, 'the SQL to paste, the whole file');
+  assert.equal(refunds.fix.copy[2].text, 'npx wrangler d1 execute daily-planner --remote --command="ALTER TABLE orders ADD COLUMN mode TEXT NOT NULL DEFAULT \'\';"\nnpx wrangler d1 execute daily-planner --remote --file=migrations/0005_refunds.sql');
   assert.match(refunds.fix.steps[0], /Storage & Databases → D1 SQLite Database → daily-planner → Console/);
+  assert.match(refunds.fix.steps[1], /^First run the ALTER TABLE line below/);
+  assert.match(refunds.fix.steps[2], /^Then paste the SQL of migrations\/0005_refunds\.sql/);
   assert.equal(missing.items['migration:0007_partner_commissions.sql'].summary, 'Not fully applied. Missing: index partner_payouts_paid.');
   assert.equal(missing.items['migration:0001_planner_api.sql'].state, 'ok');
 
@@ -328,6 +341,11 @@ test('D1: the database answers, and every table, column and index of the migrati
   assert.equal(failing.items.DB.state, 'problem');
   assert.match(failing.items.DB.summary, /^The database answered with an error: D1_ERROR/);
   assert.equal(failing.items['migration:0001_planner_api.sql'].state, 'untested');
+  // No answer in time says nothing about the binding: not tested, and no “add the binding” fix.
+  const slow = await check({ timeoutMs: 40, env: goodEnv({ DB: { prepare: () => ({ first: () => new Promise(() => {}), all: () => new Promise(() => {}) }) } }) });
+  assert.equal(slow.items.DB.state, 'untested');
+  assert.equal(slow.items.DB.summary, 'Not tested: the database didn’t answer within 1 second. Check again in a minute.');
+  assert.equal(slow.items.DB.fix, null);
 
   const local = await check({ env: goodEnv({ DB: undefined }), origin: 'http://localhost:8080' });
   assert.equal(local.items.DB.state, 'untested', 'the dev server has no D1');
@@ -379,7 +397,7 @@ test('the route: owner sign-in required, POST only, rate-limited, and wired into
   assert.ok(!JSON.stringify(body).includes(SECRETS.ADMIN_TOKEN));
 
   let time = 0;
-  const route = createConfigCheckRoute(() => ({ env: {}, fetch }), { limiter: createCheckLimiter({ limit: 2, windowMs: 60000, now: () => time }) });
+  const route = createConfigCheckRoute(() => ({ env: {}, fetch }), { limiter: createRateLimiter({ limit: 2, windowMs: 60000, now: () => time }) });
   const request = new Request(`${ORIGIN}/api/admin/config/check`, { method: 'POST' });
   assert.equal((await route(request, 'admin/config/check')).status, 200);
   assert.equal((await route(request, 'admin/config/check')).status, 200);
@@ -413,6 +431,8 @@ test('the page: “Fix first” puts required settings first; the summary has th
   assert.match(text, /No value of any setting is included/);
   assert.ok(!text.includes('CREATE TABLE') && !text.includes('/api/creem/webhook\n'), 'the copy lines of the fixes are left out');
   assert.equal(totalsText({ ok: 1, problem: 2, untested: 0 }), '1 OK, 2 problems');
+  assert.match(summaryText({ ...result, durationMs: 40 }), /, in under 0\.1 s\.\n/, 'never “in 0.0 s”');
+  assert.match(summaryText({ ...result, durationMs: 1430 }), /, in 1\.4 s\.\n/);
 });
 
 test('the page generates values in the browser: letters and digits, base32, a working Plus key pair', async () => {

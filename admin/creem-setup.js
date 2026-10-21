@@ -1,7 +1,10 @@
 // Creem setup assistant (1.31), mounted by the admin Configuration page:
-//   import('./creem-setup.js').then(({ mountCreemSetup }) => mountCreemSetup(container, { call }))
+//   import('./creem-setup.js').then(({ mountCreemSetup }) => mountCreemSetup(container, { call, onUnauthorized }))
 // `call(path, init)` is the page's authenticated fetch (it may throw, like
-// admin.js's call(), or answer a Response). It shows what exists in Creem and
+// admin.js's call(), or answer a Response); `onUnauthorized()` signs the page
+// out when the session has ended (a 401), as the page's own calls do. When the
+// answer to Create never arrives (the connection dropped), the page says that
+// something may have been created and asks for Check again. It shows what exists in Creem and
 // what would be created (POST admin/creem/setup/plan), creates what is missing
 // on an explicit click (admin/creem/setup/apply; live mode asks for a
 // confirmation first), then gives the .env lines to paste into the host. A
@@ -133,21 +136,32 @@ async function copyText(text, button) {
   button.dataset.timer = String(setTimeout(() => { button.textContent = button.dataset.label; }, 1600));
 }
 
-/** A Response's JSON or a thrown error, as { data } or { error: { message, reason, status } }. */
+const SESSION_ENDED = 'Your session has ended. Sign in again, then check again.';
+
+/**
+ * A Response's JSON or a thrown error, as { data } or { error: { message, reason, status } }. Reasons of
+ * this page: 'session' (401), 'lost' (the answer never arrived, or arrived cut off: what the server did is
+ * unknown), 'server' (a server failure without our own words); the others are the server's.
+ */
 async function request(call, path, body) {
   let response;
   try {
     response = await call(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}) });
   } catch (error) {
-    if (error?.kind === 'unauthorized') return { error: { reason: 'session', message: 'Your session has ended. Sign in again, then check again.' } };
-    if (error?.kind === 'offline') return { error: { reason: 'offline', message: 'The API could not be reached. Check your connection, then try again.' } };
-    return { error: { reason: 'failed', message: error?.message || 'Something went wrong. Try again.' } };
+    if (error?.kind === 'unauthorized') return { error: { reason: 'session', status: 401, message: SESSION_ENDED } };
+    // fetch's TypeError (“Failed to fetch”), an abort, a dropped connection: never shown as such.
+    return { error: { reason: 'lost', message: 'The answer didn’t arrive: the connection dropped or the API couldn’t be reached.' } };
   }
   const data = await response.json().catch(() => null);
   if (response.ok && data) return { data };
-  if (response.status === 401) return { error: { reason: 'session', message: 'Your session has ended. Sign in again, then check again.' } };
+  if (response.status === 401) return { error: { reason: 'session', status: 401, message: SESSION_ENDED } };
+  if (response.ok) return { error: { reason: 'lost', status: response.status, message: 'The answer arrived cut off.' } };
+  if (response.status >= 500 && !data?.reason) return { error: { reason: 'server', status: response.status, message: `The server had a problem (HTTP ${response.status}).` } };
   return { error: { reason: data?.reason || 'failed', status: response.status, message: data?.error || `The API answered HTTP ${response.status}.` } };
 }
+
+/** After a Create whose answer is unknown: what may have happened, and what to do. */
+const unknownOutcome = error => `${error.reason === 'server' ? `The server had a problem while creating (HTTP ${error.status})` : 'The answer to Create didn’t arrive'}, so this page can’t tell what was made: something may have been created. Select Check again to see what Creem has now. If the webhook was created, its signing secret can’t be shown here any more: copy it from Creem → Developers → Webhooks (or rotate it there) into CREEM_WEBHOOK_SECRET, as a Secret, then redeploy.`;
 
 // “Tax included” → “included”, “One-time” → “one-time”: the label already says what it is.
 const diffValue = (entry, value) => {
@@ -246,10 +260,17 @@ function productRow(slot, mode) {
   </li>`;
 }
 
+// Which address the webhook is registered at, and why that one.
+const SOURCE_NOTES = {
+  production: 'The production address (PUBLIC_BASE_URL).',
+  local: 'PUBLIC_BASE_URL’s address: this is a local server.',
+  preview: 'This page’s own address: a preview with a test key gets its own webhook.'
+};
+
 function webhookRow(hook, secretShown) {
   return `<li class="cs-row${rowTone(hook.state) ? ` is-${rowTone(hook.state)}` : ''}">
     <div class="cs-name"><b>Webhook</b>${code('CREEM_WEBHOOK_SECRET')}</div>
-    <div class="cs-code"><span class="cs-label">From the code</span><span>${code(hook.url)}</span><p class="cs-small">${(hook.events || []).map(code).join(', ')}</p></div>
+    <div class="cs-code"><span class="cs-label">From the code</span><span>${code(hook.url)}</span><p class="cs-small">${esc(SOURCE_NOTES[hook.source] || SOURCE_NOTES.production)}</p><p class="cs-small">${(hook.events || []).map(code).join(', ')}</p></div>
     <div class="cs-creem"><span class="cs-label">In Creem</span>${webhookCreemCell(hook, secretShown)}</div>
     <div class="cs-state">${pill(hook.state)}</div>
   </li>`;
@@ -274,17 +295,22 @@ function envHtml(plan, changes, fresh) {
     ? `Set ${listText(changes.map(code))} (highlighted); the other lines are already right.`
     : 'Your variables already name these products: nothing to change.';
   const intro = fresh ? 'Paste these lines into your host’s environment variables' : 'The variables for these products. Paste them into your host’s environment variables';
-  return `<p>${intro} (Cloudflare Pages → Settings → Variables and Secrets), each as <b>Text</b>, then redeploy. Product ids aren’t secrets. ${changed}</p>
+  // CREEM_TEST_MODE=1 is listed only when it is what puts this key in test mode.
+  const testMode = plan.testModeLine
+    ? ` ${code('CREEM_TEST_MODE=1')} is what sends this key to Creem’s test API (a ${code('creem_test_')} key wouldn’t need it): delete it when you switch to the live key.`
+    : plan.mode === 'test' ? ` No ${code('CREEM_TEST_MODE')}: a ${code('creem_test_')} key already means test mode.` : '';
+  return `<p>${intro} (Cloudflare Pages → Settings → Variables and Secrets), each as <b>Text</b>, then redeploy. Product ids aren’t secrets. ${changed}${testMode}</p>
     <pre class="cs-env" tabindex="0" aria-label=".env lines">${body}</pre>
     <div class="cs-row-actions"><button class="secondary-button" type="button" data-cs-copy-env>Copy</button></div>`;
 }
 
 /**
- * Mount the assistant in `container`. Options: `call` (required), `base` (the API path,
- * default 'admin/creem/setup'), `headingLevel` (2). Checks Creem at once. Answers
+ * Mount the assistant in `container`. Options: `call` (required), `onUnauthorized` (signs the
+ * page out after a 401; without it the assistant says the session has ended), `base` (the API
+ * path, default 'admin/creem/setup'), `headingLevel` (2). Checks Creem at once. Answers
  * { refresh, destroy }.
  */
-export function mountCreemSetup(container, { call, base = 'admin/creem/setup', headingLevel = 2 } = {}) {
+export function mountCreemSetup(container, { call, onUnauthorized = null, base = 'admin/creem/setup', headingLevel = 2 } = {}) {
   if (!container || typeof call !== 'function') throw new Error('mountCreemSetup needs a container and call(path, init).');
   const doc = container.ownerDocument || document;
   ensureStyle(doc);
@@ -296,7 +322,7 @@ export function mountCreemSetup(container, { call, base = 'admin/creem/setup', h
   section.innerHTML = `
     <header class="creem-setup__head">
       <div class="creem-setup__title"><h${level} id="creem-setup-title">Set up Creem products</h${level}><span class="creem-setup__mode" data-cs-mode hidden></span></div>
-      <p class="creem-setup__lede">Creates the four products and the webhook the site needs, from the prices in the code. It shows what exists first, never edits or deletes anything in Creem, and a second run creates nothing twice.</p>
+      <p class="creem-setup__lede">Creates the four products and the webhook the site needs, from the prices in the code. It shows what exists first, never edits or deletes anything in Creem, and running it again creates nothing twice.</p>
     </header>
     <p class="creem-setup__status" data-cs-status role="status" aria-live="polite">Checking Creem…</p>
     <p class="creem-setup__error" data-cs-error role="alert" hidden></p>
@@ -315,7 +341,8 @@ export function mountCreemSetup(container, { call, base = 'admin/creem/setup', h
   container.append(section);
 
   const $ = selector => section.querySelector(selector);
-  const state = { plan: null, busy: false, fresh: false, secretShown: false };
+  // `stale`: the last Create's answer never arrived, so the plan on screen may be out of date.
+  const state = { plan: null, busy: false, fresh: false, secretShown: false, stale: false, signedOut: false };
   const createButton = $('[data-cs-create]');
   const checkButton = $('[data-cs-check]');
   const liveBox = $('[data-cs-live]');
@@ -330,15 +357,18 @@ export function mountCreemSetup(container, { call, base = 'admin/creem/setup', h
     const plan = state.plan;
     const todo = plan?.create?.length || 0;
     const live = plan?.mode === 'live';
-    $('[data-cs-confirm]').hidden = !(live && todo);
+    $('[data-cs-confirm]').hidden = !(live && todo) || !!plan?.refused || state.stale;
     createButton.hidden = !plan;
-    createButton.disabled = state.busy || !todo || (live && !liveBox.checked);
-    checkButton.disabled = state.busy;
+    createButton.disabled = state.busy || state.stale || state.signedOut || !!plan?.refused || !todo || (live && !liveBox.checked);
+    checkButton.disabled = state.busy || state.signedOut;
     const hint = $('[data-cs-hint]');
     if (!plan) { hint.textContent = ''; return; }
+    if (state.stale) { hint.textContent = 'Check again first: the last Create may have made something.'; return; }
+    if (plan.refused) { hint.textContent = plan.refused; return; }
     const differs = plan.products.some(slot => slot.state === 'differs') || plan.webhook.state === 'differs';
     const left = differs ? ' What differs is left as it is.' : '';
-    if (todo) hint.textContent = `Creates ${createWords(plan)} in your ${plan.mode} store.${left}`;
+    const where = plan.create.includes('webhook') ? ` The webhook goes to ${plan.webhook.url}.` : '';
+    if (todo) hint.textContent = `Creates ${createWords(plan)} in your ${plan.mode} store.${where}${left}`;
     else hint.textContent = differs ? 'Nothing to create. Fix what differs in Creem, then check again.' : 'Nothing to create: everything the site needs is in Creem.';
   }
 
@@ -376,8 +406,17 @@ export function mountCreemSetup(container, { call, base = 'admin/creem/setup', h
     return `Checked at ${time} · ${ready} of ${plan.products.length} products ready · webhook ${hook}.`;
   }
 
+  /** The session has ended: the page signs out (onUnauthorized), or the assistant says so and stops. */
+  function sessionEnded() {
+    state.signedOut = true;
+    setStatus('');
+    if (typeof onUnauthorized === 'function') { onUnauthorized(); return; }
+    setError(SESSION_ENDED);
+    updateActions();
+  }
+
   async function refresh() {
-    if (state.busy) return;
+    if (state.busy || state.signedOut) return;
     state.busy = true;
     state.fresh = false;
     setError('');
@@ -386,12 +425,14 @@ export function mountCreemSetup(container, { call, base = 'admin/creem/setup', h
     const { data, error } = await request(call, `${base}/plan`, {});
     state.busy = false;
     if (error) {
+      if (error.reason === 'session') { sessionEnded(); return; }
       setStatus('');
-      setError(`Couldn’t check Creem. ${error.message}`);
+      setError(`Couldn’t check Creem. ${error.reason === 'lost' ? 'The API couldn’t be reached. Check the connection, then try again.' : error.reason === 'server' ? `${error.message} Try again in a minute.` : error.message}`);
       if (error.reason === 'no-key') state.plan = null;
       render();
       return;
     }
+    state.stale = false;
     state.plan = data;
     if (data.mode !== 'live') liveBox.checked = false;
     setStatus(checkedText(data));
@@ -425,9 +466,15 @@ export function mountCreemSetup(container, { call, base = 'admin/creem/setup', h
     createButton.textContent = 'Create the missing products';
     section.removeAttribute('aria-busy');
     if (error) {
+      if (error.reason === 'session') { sessionEnded(); return; }
       setStatus('');
-      setError(error.reason === 'mode' ? error.message : `Nothing was created. ${error.message}`);
+      if (['lost', 'server'].includes(error.reason)) {
+        // What the server did is unknown: say so, and ask for a fresh plan before another Create.
+        state.stale = true;
+        setError(unknownOutcome(error));
+      } else setError(/^Nothing was created/.test(error.message) ? error.message : `Nothing was created. ${error.message}`);
       updateActions();
+      checkButton.focus();
       return;
     }
     state.plan = data;

@@ -23,6 +23,12 @@ const API = (() => {
 const SIGNED_OUT = 'Your session has ended. Please sign in again.';
 const OFFLINE = 'The API couldn’t be reached. Check the connection, then try again.';
 
+/** A failed answer in words: the server's own message, or plain words for a server failure without one. */
+function failureText(response, body, what) {
+  if (response.status >= 500 && (!body?.error || body.error === 'Server error')) return `The server had a problem with ${what} (HTTP ${response.status}). Nothing was changed: try again in a minute.`;
+  return body?.error || `${what.charAt(0).toUpperCase()}${what.slice(1)} failed (HTTP ${response.status}).`;
+}
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 const slug = value => String(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -281,7 +287,7 @@ function render(result) {
   const local = Number.isNaN(date.getTime()) ? '' : date.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const status = $('[data-cfg-status]');
   const ms = Math.max(0, Number(result.durationMs) || 0);
-  const took = ms < 1000 ? 'in less than a second' : `in ${(ms / 1000).toFixed(1)} seconds`;
+  const took = ms < 100 ? 'in under 0.1 seconds' : ms < 1000 ? 'in less than a second' : `in ${(ms / 1000).toFixed(1)} seconds`;
   status.textContent = `Last checked ${local} (${utcStamp(result.checkedAt)}), ${took}. Check again after each change on Cloudflare, once the new deployment is live.`;
   renderTally(result);
   renderFirst(result);
@@ -315,7 +321,7 @@ async function runCheck() {
     if (response.status === 401) { signOut(SIGNED_OUT); return; }
     const body = await response.json().catch(() => null);
     if (!response.ok || !Array.isArray(body?.items)) {
-      const message = response.status === 404 ? 'This API has no configuration check yet: deploy 1.31 or later, then try again.' : body?.error || `The check failed (HTTP ${response.status}).`;
+      const message = response.status === 404 ? 'This API has no configuration check yet: deploy 1.31 or later, then try again.' : failureText(response, body, 'the check');
       setResult(message, true);
       return;
     }
@@ -356,19 +362,17 @@ async function copyText(text, button) {
   return copied;
 }
 
+// Its own route (POST admin/email/test): one short email to OWNER_EMAIL, rate-limited, never the waitlist's.
 async function sendTestEmail(button) {
   button.disabled = true;
   setResult('Sending a test email…');
   try {
-    const response = await call('admin/waitlist/announce', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ test: true, subject: 'Configuration check', text: 'This test email was sent from the configuration page of Daily Planner.\n\nIf you can read it, Resend, EMAIL_FROM and OWNER_EMAIL work together.' })
-    });
+    const response = await call('admin/email/test', { method: 'POST' });
     if (response.status === 401) { signOut(SIGNED_OUT); return; }
     const body = await response.json().catch(() => null);
     if (response.ok) setResult('Test email sent to OWNER_EMAIL. If it hasn’t arrived in a few minutes, look in spam, then in Resend → Emails.');
-    else setResult(body?.error || `The test email wasn’t sent (HTTP ${response.status}).`, true);
+    else if (response.status === 404) setResult('This API has no test email yet: deploy 1.31 or later, then try again.', true);
+    else setResult(failureText(response, body, 'the test email'), true);
   } catch (_) {
     setResult(OFFLINE, true);
   } finally {
@@ -406,7 +410,8 @@ async function placeCreemSetup() {
   try {
     const module = await import('../creem-setup.js');
     if (creemMount !== mount || typeof module.mountCreemSetup !== 'function') return;
-    module.mountCreemSetup(mount, { call, headingLevel: 3 });
+    // A 401 from the assistant signs the page out, like the page's own calls.
+    module.mountCreemSetup(mount, { call, headingLevel: 3, onUnauthorized: () => signOut(SIGNED_OUT) });
     mount.hidden = false;
     $('[data-cfg-group="creem"]')?.append(mount);
   } catch (_) {

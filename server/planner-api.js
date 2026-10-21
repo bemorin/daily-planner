@@ -63,12 +63,14 @@
 // is also accepted as the Bearer value. See server/admin-auth.js.
 
 import { base32Decode, issueSession, looksLikeSession, timingSafeEqual, TOTP_MIN_SECRET_BYTES, verifySession, verifyTotp, verifyWaitlistRemoveToken, waitlistRemoveToken } from './admin-auth.js';
-import { announcementEmail, createResendMailer, DEFAULT_EMAIL_TIMEOUT_MS, EMAILS_PER_SEND, escapeHtml, htmlDocument, idempotencyKey, parseAddress, plusPurchaseEmail, RESEND_MIN_INTERVAL_MS, textToHtml } from './email.js';
+import { announcementEmail, createResendMailer, DEFAULT_EMAIL_TIMEOUT_MS, EMAILS_PER_SEND, escapeHtml, htmlDocument, idempotencyKey, ownerTestEmail, parseAddress, plusPurchaseEmail, RESEND_MIN_INTERVAL_MS, textToHtml } from './email.js';
 import { cleanOrg, DEFAULT_PUBLIC_BASE_URL, formatGiftCode, giftBuyerEmail, giftExpiry, giftLimit, giftManageUrl, giftStatus, giftUrl, licenseUrl, newGiftCode, normalizeBaseUrl, normalizeGift, normalizeGiftCode, publicGift, validateGiftFields } from './gifts.js';
 import { GIFT_REF_RE, giftManageKey, giftRef, importSigningKey, importVerifyKey, isoDay, LICENSE_ID_RE, LICENSE_TOKEN_MAX, newLicenseId, publicKeyFromSigningKey, signLicense, verifyLicense } from './licenses.js';
 import { affiliateCode, CHECKOUT_ID_RE, checkoutSeal, checkoutSealValid, createCheckout, CREEM_ITEMS, creemMode, fetchCheckout, fetchTransaction, parseCreemProducts, readCheckout, verifyWebhookSignature } from './creem.js';
-import { createCreemSetupRoute } from './creem-setup.js';
+import { createCreemSetupRoute, setupTarget } from './creem-setup.js';
 import { createConfigCheckRoute } from './admin-config.js';
+import { sharedAdminLimits, waitWords } from './admin-limits.js';
+import { scrubAnswer } from './secret-scrub.js';
 import { CREEM_REASONS, OWNER_SOURCE_PREFIX, readRefundEvent, readTransaction, REFUND_EVENTS, refundNoticeEmail, refundScope, refundWaitingEmail, REVOCATION_NOTE_MAX, revocationTarget, shownScope } from './refunds.js';
 import { normalizeCodeRejection, normalizePartnerSale, normalizePayout, PARTNER_SALES_LISTED, partnerSaleRow, partnerSummary, PAYOUT_NOTE_MAX, payoutCheck } from './partners.js';
 import { currencyForCountry, CURRENCIES, giftPlan, hasMemberPrice, isPersonalGift, isTeamGift, PARTNER_PROGRAM, PERSONAL_GIFTS, priceCents, TEAM_TIERS, validCurrency } from '../src/lib/pricing.js';
@@ -505,12 +507,14 @@ export const buyerCurrency = request => currencyForCountry(requestCountry(reques
  * @param {object} [options.configEnv] the deployment's variables, secrets and bindings (Pages: context.env), for
  *   the configuration checks (POST admin/config/check, server/admin-config.js); none without it
  * @param {typeof fetch} [options.configFetch] fetch used by those checks (tests and the dev server inject one)
+ * @param {object} [options.adminLimits] rate limits of the configuration check, the Creem setup assistant and the
+ *   test email (server/admin-limits.js): the worker isolate's own by default, shared by every request; tests pass theirs
  */
 export function createPlannerApi({
   store, adminToken = '', adminTotpSecret = '', allowedOrigins = '', now = () => new Date(), authFailureDelayMs = AUTH_FAILURE_DELAY_MS,
   resendApiKey = '', emailFrom = '', ownerEmail = '', emailDailyLimit = '', emailFetch, emailIntervalMs = RESEND_MIN_INTERVAL_MS, notifyTimeoutMs = NOTIFY_TIMEOUT_MS,
   publicBaseUrl = '', plusSigningKey = '', creemApiKey = '', creemWebhookSecret = '', creemTestMode = '', creemProducts = {}, creemFetch,
-  defer = null, warn = message => console.warn(message), configEnv = null, configFetch
+  defer = null, warn = message => console.warn(message), configEnv = null, configFetch, adminLimits = sharedAdminLimits
 }) {
   const origins = new Set(String(allowedOrigins || '').split(',').map(value => value.trim()).filter(Boolean));
   const totpEnabled = !!String(adminTotpSecret || '').trim();
@@ -1621,15 +1625,43 @@ export function createPlannerApi({
   }
 
   // Creem setup assistant (server/creem-setup.js, 1.31): POST admin/creem/setup/plan, then
-  // admin/creem/setup/apply { confirm: true, mode, create } makes only what is missing.
-  const creemSetupRoute = createCreemSetupRoute(() => ({
-    apiKey: creem.apiKey, mode: creem.mode, fetch: creem.fetch, products: creemProducts, webhookSecret,
-    webhookUrl: `${baseUrl()}/api/creem/webhook`, events: ['checkout.completed', ...Object.keys(REFUND_EVENTS)], now: () => now().getTime()
-  }), { now: () => now().getTime() });
+  // admin/creem/setup/apply { confirm: true, mode, create } makes only what is missing. The webhook goes to the
+  // address the page is open on when that is a preview with a test key, else to PUBLIC_BASE_URL (setupTarget).
+  const creemSetupRoute = createCreemSetupRoute(request => {
+    const target = setupTarget({ origin: new URL(request.url).origin, baseUrl: baseUrl(), mode: creem.mode });
+    return {
+      apiKey: creem.apiKey, mode: creem.mode, fetch: creem.fetch, products: creemProducts, webhookSecret,
+      webhookUrl: target.url, webhookUrlSource: target.source, refused: target.refused,
+      events: ['checkout.completed', ...Object.keys(REFUND_EVENTS)], now: () => now().getTime()
+    };
+  }, { limits: adminLimits });
 
   // Configuration checks (server/admin-config.js, 1.31): POST admin/config/check runs every check, read-only,
   // and answers states and shapes, never a secret's value.
-  const configCheckRoute = createConfigCheckRoute(() => ({ env: configEnv || {}, fetch: configFetch || globalThis.fetch?.bind(globalThis) }));
+  const configCheckRoute = createConfigCheckRoute(() => ({ env: configEnv || {}, fetch: configFetch || globalThis.fetch?.bind(globalThis) }), { limiter: adminLimits.check });
+
+  // Every secret this API holds, for the last scrub of an answer that carries a service's words (server/secret-scrub.js).
+  const apiSecrets = () => [adminToken, adminTotpSecret, resendApiKey, plusSigningKey, creemApiKey, creemWebhookSecret];
+
+  /**
+   * POST admin/email/test (1.31, the configuration page's “Send me a test email”): one short email to
+   * OWNER_EMAIL only. Rate-limited per worker isolate (server/admin-limits.js) and counted with the day's
+   * other emails (Resend counts them all); Resend's failure is scrubbed of every secret.
+   */
+  async function emailTest(request, cors) {
+    if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+    const wait = adminLimits.testEmail();
+    if (wait) return json(429, { error: `Too many test emails in a short time. Try again in ${waitWords(wait)}.`, retryAfter: wait }, { ...cors, 'retry-after': String(wait) });
+    if (!mailer.configured) return json(503, { error: 'Email is not set up. Add RESEND_API_KEY and EMAIL_FROM to this deployment, then redeploy.' }, cors);
+    if (!owner) return json(503, { error: 'OWNER_EMAIL is not set, so there is nowhere to send a test.' }, cors);
+    try {
+      await mailer.send({ ...ownerTestEmail({ sentAt: now() }), recipients: [owner] });
+    } catch (error) {
+      return json(502, scrubAnswer({ error: `The test email wasn’t sent. ${error?.message || 'Resend request failed'}.` }, apiSecrets()), cors);
+    }
+    await store.addEmailSends(today(), EMAIL_SENDS_EVENT, 1).catch(error => safeWarn(`Test email not counted: ${error?.message || error}`));
+    return json(200, { sent: 1 }, cors);
+  }
 
   async function admin(request, path, url, cors) {
     if (!adminToken) return json(503, { error: 'ADMIN_TOKEN is not configured.' }, cors);
@@ -1644,7 +1676,8 @@ export function createPlannerApi({
       const answer = await configCheckRoute(request, path);
       return json(answer.status, answer.body, { ...cors, ...(answer.headers || {}) });
     }
-    const days =Math.min(366, Math.max(1, Math.round(Number(url.searchParams.get('days')) || 90)));
+    if (path === 'admin/email/test') return emailTest(request, cors);
+    const days = Math.min(366, Math.max(1, Math.round(Number(url.searchParams.get('days')) || 90)));
     const sinceDay = dayKey(new Date(now().getTime() - days * 86400000));
     if (request.method === 'GET' && path === 'admin/summary') {
       const nowIso = now().toISOString();

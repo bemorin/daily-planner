@@ -24,8 +24,19 @@ function walk(dir) {
 
 /** process.env.X and process.env['X'] reads of a source. */
 const processEnvReads = source => new Set([...source.matchAll(/process\.env(?:\.([A-Za-z_][A-Za-z0-9_]*)|\[\s*['"]([^'"]+)['"]\s*\])/g)].map(match => match[1] || match[2]));
-/** env.X / env?.X reads (a Functions or Workers environment). */
-const envReads = source => new Set([...source.matchAll(/\benv\??\.([A-Z][A-Z0-9_]*)\b/g)].map(match => match[1]));
+const envNames = pattern => pattern.split(',').map(part => part.trim().replace(/^\.\.\./, '').split(/\s*[:=]\s*/)[0].trim()).filter(name => /^[A-Z][A-Z0-9_]*$/.test(name));
+/**
+ * The variables a source reads from a Functions or Workers environment: env.X, env?.X (context.env.X too),
+ * env['X'], env?.["X"], and destructuring: const { X } = env, const { X } = context.env, { env: { X } }.
+ */
+function envReads(source) {
+  const names = new Set();
+  for (const match of source.matchAll(/\benv\??\.([A-Z][A-Z0-9_]*)\b/g)) names.add(match[1]);
+  for (const match of source.matchAll(/\benv\s*(?:\?\.)?\[\s*(['"`])([A-Za-z_][A-Za-z0-9_]*)\1\s*\]/g)) names.add(match[2]);
+  for (const match of source.matchAll(/\{([^{}]*)\}\s*=\s*(?:[\w$]+\??\.)*env\b(?!\s*\??\.)/g)) for (const name of envNames(match[1])) names.add(name);
+  for (const match of source.matchAll(/\benv\s*:\s*\{([^{}]*)\}/g)) for (const name of envNames(match[1])) names.add(name);
+  return names;
+}
 
 test('every build variable scripts/build.mjs reads is listed, with the runtime-config key it fills, and the other way round', () => {
   const build = read('scripts/build.mjs');
@@ -64,6 +75,20 @@ test('every variable, secret and binding the Pages Function reads is listed, and
   }
   for (const entry of [...byWhere('runtime'), ...byWhere('binding')]) assert.ok(reads.has(entry.name), `${entry.name} is listed for the Functions but never read there`);
   assert.match(functions, /configEnv: env\b/, 'the configuration checks get the whole environment');
+  // A computed read (env[name]) would escape this test: the Function names every variable it reads.
+  assert.doesNotMatch(functions, /\benv\s*(?:\?\.)?\[\s*(?!['"`])/, 'the Function reads env[…] with a computed name');
+});
+
+test('every way of reading the environment is seen: dotted, bracketed, destructured', () => {
+  const reads = envReads([
+    'const a = env.ONE; const b = env?.TWO; void context.env.THREE;',
+    "const c = env['FOUR']; const d = env?.[\"FIVE\"]; const e = env[`SIX`];",
+    "const { SEVEN, EIGHT: eight, NINE = '' } = env;",
+    'const { TEN } = context.env; const { request, env: { ELEVEN } } = context;',
+    // Destructuring a binding reads the binding, not its fields.
+    'const { request, env } = context; const { prepare } = env.DB;'
+  ].join('\n'));
+  assert.deepEqual([...reads].sort(), ['DB', 'EIGHT', 'ELEVEN', 'FIVE', 'FOUR', 'NINE', 'ONE', 'SEVEN', 'SIX', 'TEN', 'THREE', 'TWO']);
 });
 
 test('the server never reads process.env, and reads only listed names from an environment', () => {
@@ -135,4 +160,17 @@ test('docs/configuration.md names every setting and every local-only variable', 
   const docs = read('docs/configuration.md');
   for (const entry of [...CONFIG_VARIABLES, ...LOCAL_VARIABLES]) assert.ok(docs.includes(`\`${entry.name}\``), `${entry.name} is in docs/configuration.md`);
   assert.match(read('docs/FEEDBACK_AND_WAITLIST.md'), /\(configuration\.md\)/, 'the setup guide links to it');
+  // Its table “Every setting” says what the inventory says: the level, and whether it is a secret.
+  const table = docs.split('## Every setting')[1].split('\n## ')[0];
+  const rows = new Map();
+  for (const line of table.split('\n').filter(row => /^\| `/.test(row))) {
+    const [names, level, secret] = line.split('|').slice(1).map(cell => cell.trim());
+    for (const [, name] of names.matchAll(/`([A-Z][A-Z0-9_]*)`/g)) rows.set(name, { level, secret });
+  }
+  for (const entry of CONFIG_VARIABLES) {
+    const row = rows.get(entry.name);
+    assert.ok(row, `${entry.name} has a row in the table of docs/configuration.md`);
+    assert.equal(row.level, entry.level, `${entry.name}: level in docs/configuration.md`);
+    if (entry.where !== 'binding') assert.equal(row.secret === 'yes', entry.secret, `${entry.name}: secret in docs/configuration.md`);
+  }
 });

@@ -17,14 +17,18 @@
 //   - everything else by its shape (token strength, base32, addresses, links,
 //     numbers) and the legal pages' own rules; build variables are compared
 //     with what the deployed runtime-config.js was built with.
-// Every call has a 5-second timeout and they run in parallel; none changes
+// Every call has a 5-second timeout and they run side by side (two at most
+// one after the other: the webhook's secret after the webhook list, the tables
+// after SELECT 1), so the whole check takes 10 seconds at most; none changes
 // anything. No value of a secret goes into the answer — only whether it is
 // set, its length and the shape recognised (“looks like a Creem live key
-// (creem_…)”) — and the answer is scrubbed of every secret before it leaves,
-// in case a service echoed one. Nothing is stored. `fetch` is injectable, so
-// tests never reach the network.
+// (creem_…)”). A service's own words are dropped after a 401 or a 403 and
+// scrubbed otherwise, and the whole answer is scrubbed again before it leaves
+// (server/secret-scrub.js). Nothing is stored. `fetch` is injectable, so tests
+// never reach the network.
 
 import { base32Decode, timingSafeEqual, TOTP_MIN_SECRET_BYTES } from './admin-auth.js';
+import { ADMIN_LIMITS, sharedAdminLimits, waitWords } from './admin-limits.js';
 import { CLOUDFLARE, CONFIG_GROUPS, CONFIG_VARIABLES, MIGRATIONS } from './config-inventory.js';
 import { creemApiBase, creemMode } from './creem.js';
 import { parseAddress } from './email.js';
@@ -33,10 +37,11 @@ import { base64Decode, importSigningKey, importVerifyKey, publicKeyFromSigningKe
 import { REFUND_EVENTS } from './refunds.js';
 import { formatMoney, PLUS_PRICE } from '../src/lib/pricing.js';
 import { emailAddress, legalEmail, legalValueProblem } from '../legal/legal-details.js';
+import { scrubAnswer, scrubUpstream, upstreamText } from './secret-scrub.js';
 
 export const CHECK_TIMEOUT_MS = 5000;
-/** Checks per worker instance: Cloudflare's rate limiting rule on /api/ is the real guard. */
-export const CHECK_LIMIT = Object.freeze({ limit: 10, windowMs: 10 * 60 * 1000 });
+/** Checks per 10 minutes and worker isolate (server/admin-limits.js): Cloudflare's rate limiting rule on /api/ is the real guard. */
+export const CHECK_LIMIT = ADMIN_LIMITS.check;
 export const RESEND_API_URL = 'https://api.resend.com';
 export const WEBHOOK_EVENTS = Object.freeze(['checkout.completed', ...Object.keys(REFUND_EVENTS)]);
 export const STATES = Object.freeze(['ok', 'problem', 'missing', 'optional-missing', 'untested']);
@@ -50,8 +55,6 @@ const FLAG_RE = /^(?:1|true|yes|on)$/i;
 const ADMIN_TOKEN_MIN = 32;
 const ADMIN_TOKEN_MIN_BITS = 128;
 const TOTP_GOOD_BYTES = 20;
-// Anything shaped like a key or a signing secret, hidden from every string of the answer.
-const TOKEN_RE = /\b(?:creem_test|creem|whsec|re)_[A-Za-z0-9_-]{8,}/g;
 const REDEPLOY = `Save, then redeploy: ${CLOUDFLARE.redeploy}.`;
 
 const plural = (count, word, many = `${word}s`) => `${count} ${count === 1 ? word : many}`;
@@ -82,16 +85,21 @@ function urlShape(text) {
   } catch { return 'not a web address'; }
 }
 
+/** Long and varied enough: at least ADMIN_TOKEN_MIN characters and about ADMIN_TOKEN_MIN_BITS bits. */
+const strongToken = text => {
+  const strength = tokenStrength(text);
+  return strength.length >= ADMIN_TOKEN_MIN && strength.bits >= ADMIN_TOKEN_MIN_BITS;
+};
+
 /** How a value looks, in words: its length and the form recognised. Never the value, nor any part of it. */
 export function describeShape(def, raw) {
   const text = String(raw ?? '').trim();
   if (!text) return '';
   const length = chars(text.length);
   switch (def?.format) {
-    case 'admin-token': {
-      const strength = tokenStrength(text);
-      return `${length}: ${strength.kinds}, about ${strength.bits} bits`;
-    }
+    case 'admin-token':
+      // Its length and a verdict only: which kinds of characters a secret uses is a part of it.
+      return `${length}, ${strongToken(text) ? 'strong' : 'weak'}`;
     case 'totp': {
       const bytes = base32Decode(text);
       return bytes ? `base32, ${length} (${bytes.length * 8} bits)` : `${length}, not base32 (A–Z and 2–7 only)`;
@@ -156,21 +164,70 @@ export function parseRuntimeConfig(text) {
   return values;
 }
 
-/** Tables (with their columns) and indexes a migration creates. */
+const TABLE_CONSTRAINT_RE = /^(?:PRIMARY\s+KEY|UNIQUE|FOREIGN\s+KEY|CHECK|CONSTRAINT)\b/i;
+
+/** Tables (with their columns and their own statement) and indexes (with theirs) a migration creates. */
 export function migrationSchema(sql) {
   const tables = [];
   const indexes = [];
   for (const match of String(sql).matchAll(/CREATE TABLE IF NOT EXISTS (\w+) \(([\s\S]*?)\n\);/g)) {
     const columns = match[2].split('\n').map(line => line.trim().replace(/,$/, ''))
-      .filter(line => line && !/^(?:PRIMARY KEY|UNIQUE|FOREIGN KEY|CHECK|CONSTRAINT)\b/i.test(line))
+      .filter(line => line && !TABLE_CONSTRAINT_RE.test(line))
       .map(line => ({ name: line.split(/\s+/)[0], definition: line }));
-    tables.push({ name: match[1], columns });
+    tables.push({ name: match[1], columns, body: match[2], sql: match[0] });
   }
-  for (const match of String(sql).matchAll(/CREATE INDEX IF NOT EXISTS (\w+) ON (\w+)/g)) indexes.push({ name: match[1], table: match[2] });
+  for (const match of String(sql).matchAll(/CREATE INDEX IF NOT EXISTS (\w+) ON (\w+)[^;]*;/g)) indexes.push({ name: match[1], table: match[2], sql: match[0] });
   return { tables, indexes };
 }
 
-const hasColumn = (createSql, column) => new RegExp(`(?:^|[\\s(,])["\`[]?${column}["\`\\]]?\\s`, 'i').test(String(createSql ?? ''));
+/**
+ * The column names of a CREATE TABLE statement as sqlite_master keeps it: the
+ * first word of each column definition (quotes removed), never a type or a
+ * constraint, so a column `text` isn't found in `name TEXT`.
+ */
+export function tableColumns(createSql) {
+  const sql = String(createSql ?? '').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/--[^\n]*/g, ' ');
+  const open = sql.indexOf('(');
+  const close = sql.lastIndexOf(')');
+  if (open < 0 || close <= open) return [];
+  const parts = [];
+  let depth = 0;
+  let quote = '';
+  let current = '';
+  for (const character of sql.slice(open + 1, close)) {
+    if (quote) {
+      if (character === quote) quote = '';
+    } else if (`'"\``.includes(character)) quote = character;
+    else if (character === '[') quote = ']';
+    else if (character === '(') depth += 1;
+    else if (character === ')') depth -= 1;
+    else if (character === ',' && depth === 0) { parts.push(current); current = ''; continue; }
+    current += character;
+  }
+  parts.push(current);
+  return parts.map(part => part.trim()).filter(part => part && !TABLE_CONSTRAINT_RE.test(part)).map(part => {
+    const match = /^(?:"((?:[^"]|"")+)"|`((?:[^`]|``)+)`|\[([^\]]+)\]|'((?:[^']|'')+)'|([^\s(]+))/.exec(part);
+    return match ? (match[1]?.replace(/""/g, '"') ?? match[2]?.replace(/``/g, '`') ?? match[3] ?? match[4]?.replace(/''/g, "'") ?? match[5]) : '';
+  }).filter(Boolean);
+}
+
+// Names compare as SQLite compares them (ASCII case-insensitive): `Mode` is the column `mode`.
+const hasColumn = (createSql, column) => tableColumns(createSql).some(name => name.toLowerCase() === String(column).toLowerCase());
+
+/**
+ * Whether SQLite's ALTER TABLE … ADD COLUMN accepts this column definition. It
+ * refuses a PRIMARY KEY or UNIQUE column, NOT NULL without a default (other
+ * than NULL), a default that isn't a constant (CURRENT_TIME…, an expression in
+ * parentheses) and a stored generated column.
+ */
+export function canAddColumn(definition) {
+  const text = String(definition ?? '').replace(/'(?:[^']|'')*'/g, "''");
+  if (/\bPRIMARY\s+KEY\b|\bUNIQUE\b/i.test(text)) return false;
+  if (/\bSTORED\b/i.test(text) && /\b(?:GENERATED|AS)\b/i.test(text)) return false;
+  const fallback = /\bDEFAULT\s+(\(|[^\s,]+)/i.exec(text)?.[1] || '';
+  if (fallback === '(' || /^CURRENT_(?:TIME|DATE|TIMESTAMP)$/i.test(fallback)) return false;
+  return !(/\bNOT\s+NULL\b/i.test(text) && (!fallback || /^NULL$/i.test(fallback)));
+}
 
 // ---- Fixes -----------------------------------------------------------------------
 
@@ -196,21 +253,71 @@ function variableFix(def, { edit = false, value = '', before = [], after = [], c
 
 const redeployFix = () => ({ steps: [`Redeploy: ${CLOUDFLARE.redeploy}. Nothing else to change.`], copy: [] });
 
-function migrationFix(migration, missingColumns = []) {
-  const alters = missingColumns.map(({ table, column }) => `ALTER TABLE ${table} ADD COLUMN ${column.definition};`);
-  return {
-    steps: [
-      `${CLOUDFLARE.d1Console}.`,
-      `Paste the SQL of migrations/${migration.file} (below: the whole file, safe to run again) and select Run.`,
-      ...(alters.length ? ['Running the file again doesn’t add a column to a table that exists already: also run the ALTER TABLE line below.'] : []),
-      'Then check again here.'
-    ],
-    copy: [
-      { label: `SQL of ${migration.file}`, text: migration.sql, kind: 'sql' },
-      ...(alters.length ? [{ label: 'Missing column', text: alters.join('\n'), kind: 'sql' }] : []),
-      { label: 'Or from a terminal', text: `npx wrangler d1 execute ${CLOUDFLARE.d1Name} --remote --file=migrations/${migration.file}` }
-    ]
-  };
+/**
+ * Why a column can't be added in place, in words: “a PRIMARY KEY”, “UNIQUE”,
+ * “NOT NULL without a default”, “a default that isn't a constant”.
+ */
+function notAddableWhy(definition) {
+  const text = String(definition).replace(/'(?:[^']|'')*'/g, "''");
+  const reasons = [
+    ...(/\bPRIMARY\s+KEY\b/i.test(text) ? ['a PRIMARY KEY'] : []),
+    ...(/\bUNIQUE\b/i.test(text) ? ['UNIQUE'] : []),
+    ...(/\bNOT\s+NULL\b/i.test(text) && !/\bDEFAULT\s+(?!NULL\b)\S/i.test(text) && !/\bINTEGER\s+PRIMARY\s+KEY\b/i.test(text) ? ['NOT NULL without a default'] : [])
+  ];
+  return reasons.length ? listed(reasons) : 'a default that isn’t a constant';
+}
+
+/**
+ * The fix of a migration not fully applied: the SQL to run in the D1 console,
+ * in the order to run it. A missing column SQLite can add in place gets its
+ * ALTER TABLE line, run first (the file skips a table that exists, and its
+ * indexes may need the column). A table missing a column SQLite can't add in
+ * place (canAddColumn) is rebuilt in two steps that never lose a row: copy
+ * every row into a complete new table (this fails, changing nothing, when rows
+ * exist and a NOT NULL column has no value for them), then, only if the copy
+ * worked, switch the tables, keeping the old one under another name. Then the
+ * whole file, safe to run again.
+ */
+function migrationFix(migration, missing = [], tableSql = new Map(), day = '') {
+  const schema = migrationSchema(migration.sql);
+  const rebuilt = [...new Set(missing.filter(entry => !canAddColumn(entry.column.definition)).map(entry => entry.table))];
+  const alters = missing.filter(entry => !rebuilt.includes(entry.table))
+    .map(({ table, column }) => `ALTER TABLE ${table} ADD COLUMN ${column.definition};`);
+  const steps = [`${CLOUDFLARE.d1Console}.`];
+  const copy = [];
+  if (alters.length) {
+    steps.push(`First run the ALTER TABLE ${alters.length === 1 ? 'line' : 'lines'} below (Missing column): running the file doesn’t add a column to a table that exists, and its indexes may need ${alters.length === 1 ? 'it' : 'them'}.`);
+    copy.push({ label: 'Missing column', text: alters.join('\n'), kind: 'sql' });
+  }
+  for (const name of rebuilt) {
+    const table = schema.tables.find(entry => entry.name === name);
+    const lacking = missing.filter(entry => entry.table === name).map(entry => entry.column);
+    const old = `${name}_before_${day || 'fix'}`;
+    const scratch = `${name}_rebuild`;
+    const have = new Set(tableColumns(tableSql.get(name)).map(column => column.toLowerCase()));
+    const common = table.columns.map(column => column.name).filter(column => have.has(column.toLowerCase())).join(', ');
+    const hard = lacking.filter(column => !canAddColumn(column.definition));
+    // Columns existing rows can't be given a value for: NOT NULL without a default (an INTEGER PRIMARY KEY numbers itself).
+    const noValue = lacking.filter(column => /\bNOT\s+NULL\b/i.test(column.definition) && !/\bDEFAULT\s+(?!NULL\b)\S/i.test(column.definition) && !/\bINTEGER\s+PRIMARY\s+KEY\b/i.test(column.definition));
+    steps.push(`${alters.length || rebuilt.indexOf(name) > 0 ? 'Then r' : 'First r'}ebuild ${name}, keeping its rows: SQLite can’t add ${listed(hard.map(column => `${column.name} (${notAddableWhy(column.definition)})`))} to a table that exists. Run “Rebuild ${name}, 1 of 2”: it copies every row into a complete new table, ${scratch}, and changes nothing else.`);
+    if (noValue.length) steps.push(`If ${name} has rows, that copy fails (“NOT NULL constraint failed”): its rows have no value for ${listed(noValue.map(column => column.name))}. Nothing has changed then: stop there and ask for help (Copy summary), and don’t run 2 of 2.`);
+    steps.push(`Only if 1 of 2 ran without an error, run “Rebuild ${name}, 2 of 2”: ${name} becomes the complete table, and the old one is kept as ${old} (delete it later with DROP TABLE ${old}; once this page says OK).`);
+    copy.push({
+      label: `Rebuild ${name}, 1 of 2`,
+      text: [`DROP TABLE IF EXISTS ${scratch};`, `CREATE TABLE ${scratch} (${table.body.replace(/\s*\n\s*/g, ' ').trim()});`, ...(common ? [`INSERT INTO ${scratch} (${common}) SELECT ${common} FROM ${name};`] : [])].join('\n'),
+      kind: 'sql'
+    });
+    copy.push({
+      label: `Rebuild ${name}, 2 of 2`,
+      text: [...schema.indexes.filter(index => index.table === name).map(index => `DROP INDEX IF EXISTS ${index.name};`), `ALTER TABLE ${name} RENAME TO ${old};`, `ALTER TABLE ${scratch} RENAME TO ${name};`].join('\n'),
+      kind: 'sql'
+    });
+  }
+  steps.push(`${copy.length ? 'Then paste' : 'Paste'} the SQL of migrations/${migration.file} (below: the whole file, safe to run again) and select Run.`, 'Then check again here.');
+  const terminal = [...alters.map(line => `npx wrangler d1 execute ${CLOUDFLARE.d1Name} --remote --command="${line}"`), `npx wrangler d1 execute ${CLOUDFLARE.d1Name} --remote --file=migrations/${migration.file}`];
+  copy.push({ label: `SQL of ${migration.file}`, text: migration.sql, kind: 'sql' });
+  if (!rebuilt.length) copy.push({ label: 'Or from a terminal', text: terminal.join('\n') });
+  return { steps, copy };
 }
 
 // ---- HTTP --------------------------------------------------------------------
@@ -242,9 +349,10 @@ function withTimeout(promise, ms) {
   ]).finally(() => clearTimeout(timer));
 }
 
-const upstreamMessage = data => {
-  const message = Array.isArray(data?.message) ? data.message.join(', ') : data?.message ?? data?.error ?? '';
-  return typeof message === 'string' ? clip(message) : '';
+/** A service's own words, only when they can't hold a secret (server/secret-scrub.js): none after a 401 or a 403. */
+const upstreamMessage = (ctx, answer) => {
+  const message = Array.isArray(answer.data?.message) ? answer.data.message.join(', ') : answer.data?.message ?? answer.data?.error ?? '';
+  return typeof message === 'string' ? upstreamText(answer.status, message, ctx.secrets, 160) : '';
 };
 
 /** Why a service gave no usable answer, in words. */
@@ -265,13 +373,12 @@ function patch(item, fields) {
 function checkSignIn(ctx, items) {
   const token = ctx.value('ADMIN_TOKEN');
   const tokenItem = items.get('ADMIN_TOKEN');
-  tokenItem.test = 'Its length and the kinds of characters it uses.';
+  tokenItem.test = 'Its length and how hard it is to guess (its value is never shown, nor what it is made of).';
   if (token) {
-    const strength = tokenStrength(token);
-    if (strength.length < ADMIN_TOKEN_MIN || strength.bits < ADMIN_TOKEN_MIN_BITS) {
+    if (!strongToken(token)) {
       patch(tokenItem, {
         state: 'problem',
-        summary: `Too short to be safe: use at least ${ADMIN_TOKEN_MIN} random letters and digits (about ${ADMIN_TOKEN_MIN_BITS} bits or more).`,
+        summary: `Weak: easy to guess. Use at least ${ADMIN_TOKEN_MIN} random letters and digits (Generate a value below).`,
         fix: variableFix(configVariableOf('ADMIN_TOKEN'), { edit: true, value: 'a new token: Generate a value below.', after: ['Changing it signs every session out: sign in again with the new token.'] })
       });
     } else patch(tokenItem, { summary: 'Long and varied enough to resist guessing.' });
@@ -513,7 +620,8 @@ async function checkCreem(ctx, items) {
 
   if (flag) {
     if (isOn(flag) && liveLooking) patch(flagItem, { state: 'problem', summary: 'On, but CREEM_API_KEY looks like a live key, and Creem’s test API refuses live keys.', fix: { steps: [`${CLOUDFLARE.variables} → Production → delete CREEM_TEST_MODE (a creem_test_ key already means test mode).`, REDEPLOY], copy: [{ label: 'Variable name', text: 'CREEM_TEST_MODE' }] } });
-    else patch(flagItem, { summary: isOn(flag) ? 'On: every Creem call goes to the test API.' : 'Set, but not 1: read as off.' });
+    else if (isOn(flag)) patch(flagItem, { summary: key.startsWith('creem_test_') ? 'On: every Creem call goes to the test API. Not needed: a creem_test_ key already means test mode.' : 'On: every Creem call goes to the test API.' });
+    else patch(flagItem, { summary: 'Set, but not 1: read as off.' });
   }
 
   // Product ids: their form, and no id used twice, before asking Creem.
@@ -673,8 +781,10 @@ async function checkResend(ctx, items) {
     patch(keyItem, { summary: 'Valid, with sending access only: Resend answered that this key may only send emails, which is all the API needs.' });
     if (sender) patch(fromItem, { state: 'untested', summary: 'A sending-only key can’t read domains, so its domain wasn’t looked up: Send me a test email checks the whole path.' });
   } else if ([400, 401, 403].includes(answer.status)) {
-    const said = upstreamMessage(answer.data);
-    patch(keyItem, { state: 'problem', summary: `Resend refused it (HTTP ${answer.status}${said ? `: “${said}”` : ''}).`, fix: variableFix(configVariableOf('RESEND_API_KEY'), { edit: true, value: 'a new key from Resend → API Keys → Create API key (Sending access).' }) });
+    // After a 401 or a 403 only our own words: Resend's may repeat a part of the key.
+    const said = upstreamMessage(ctx, answer);
+    const why = answer.status === 400 ? (said ? `: “${said}”` : '') : answer.status === 401 ? ': the key is unknown or was deleted' : ': the key is not allowed to read this account, or is not active';
+    patch(keyItem, { state: 'problem', summary: `Resend refused it (HTTP ${answer.status}${why}).`, fix: variableFix(configVariableOf('RESEND_API_KEY'), { edit: true, value: 'a new key from Resend → API Keys → Create API key (Sending access).' }) });
     if (sender) patch(fromItem, { state: 'untested', summary: 'Not checked: Resend refused RESEND_API_KEY.' });
   } else {
     patch(keyItem, { state: 'untested', summary: noAnswer('Resend', answer, seconds) });
@@ -699,8 +809,10 @@ async function checkDatabase(ctx, items) {
   try {
     await withTimeout(db.prepare('SELECT 1 AS one').first(), ctx.timeoutMs);
   } catch (error) {
-    patch(dbItem, { state: 'problem', summary: error?.timeout ? `The database didn’t answer within ${plural(timeoutSeconds(ctx), 'second')}.` : `The database answered with an error: ${clip(error?.message) || 'unknown error'}.`, fix: variableFix(configVariableOf('DB')) });
-    untested('Not checked: the database didn’t answer.');
+    // No answer in time says nothing about the binding: not tested. An error does: it is bound to no usable database.
+    if (error?.timeout) patch(dbItem, { state: 'untested', summary: `Not tested: the database didn’t answer within ${plural(timeoutSeconds(ctx), 'second')}. Check again in a minute.`, fix: null });
+    else patch(dbItem, { state: 'problem', summary: `The database answered with an error: ${scrubUpstream(error?.message, ctx.secrets, 160) || 'unknown error'}.`, fix: variableFix(configVariableOf('DB')) });
+    untested(error?.timeout ? 'Not checked: the database didn’t answer in time.' : 'Not checked: the database didn’t answer.');
     return;
   }
   patch(dbItem, { state: 'ok', summary: 'Answers: a simple read (SELECT 1) worked.', fix: null });
@@ -708,7 +820,7 @@ async function checkDatabase(ctx, items) {
   try {
     rows = (await withTimeout(db.prepare("SELECT type, name, tbl_name AS tableName, sql FROM sqlite_master WHERE type IN ('table', 'index')").all(), ctx.timeoutMs))?.results || [];
   } catch (error) {
-    untested(`Not checked: the list of tables couldn’t be read (${error?.timeout ? 'no answer in time' : clip(error?.message, 80) || 'error'}).`);
+    untested(`Not checked: the list of tables couldn’t be read (${error?.timeout ? 'no answer in time' : scrubUpstream(error?.message, ctx.secrets, 80) || 'error'}).`);
     return;
   }
   const tables = new Map(rows.filter(row => row?.type === 'table').map(row => [String(row.name), String(row.sql ?? '')]));
@@ -725,7 +837,7 @@ async function checkDatabase(ctx, items) {
       ...(missingColumns.length ? [`${missingColumns.length === 1 ? 'column' : 'columns'} ${listed(missingColumns.map(entry => `${entry.table}.${entry.column.name}`))}`] : []),
       ...(missingIndexes.length ? [`${missingIndexes.length === 1 ? 'index' : 'indexes'} ${listed(missingIndexes)}`] : [])
     ];
-    if (parts.length) patch(item, { state: 'problem', summary: `Not fully applied. Missing: ${parts.join('; ')}.`, fix: migrationFix(migration, missingColumns) });
+    if (parts.length) patch(item, { state: 'problem', summary: `Not fully applied. Missing: ${parts.join('; ')}.`, fix: migrationFix(migration, missingColumns, tables, ctx.day) });
     else patch(item, { state: 'ok', summary: `Applied: ${plural(schema.tables.length, 'table')} and ${plural(schema.indexes.length, 'index', 'indexes')}, every column in place.` });
   });
 }
@@ -777,19 +889,6 @@ function migrationItem(migration) {
   };
 }
 
-/** Every string of `value` with the secrets (and anything shaped like a key) replaced by “[hidden]”. */
-export function scrubSecrets(value, secrets) {
-  const list = [...new Set(secrets.map(secret => String(secret ?? '').trim()).filter(secret => secret.length >= 6))].sort((a, b) => b.length - a.length);
-  const clean = text => list.reduce((out, secret) => out.split(secret).join('[hidden]'), text).replace(TOKEN_RE, '[hidden]');
-  const walk = entry => {
-    if (typeof entry === 'string') return clean(entry);
-    if (Array.isArray(entry)) return entry.map(walk);
-    if (entry && typeof entry === 'object') return Object.fromEntries(Object.entries(entry).map(([key, inner]) => [key, walk(inner)]));
-    return entry;
-  };
-  return walk(value);
-}
-
 async function readBuiltConfig(ctx) {
   const url = `${ctx.origin || ctx.base}/runtime-config.js`;
   const assets = ctx.env?.ASSETS;
@@ -823,7 +922,9 @@ export async function runConfigChecks({ env = {}, fetch: fetchImpl = globalThis.
     local: LOCAL_HOSTS.has(hostOf(pageOrigin)),
     production: !!pageOrigin && pageOrigin === originOf(base),
     built: null,
-    secrets: []
+    // Every configured secret, then the signing secrets read from Creem: what upstream text is scrubbed of.
+    secrets: CONFIG_VARIABLES.filter(def => def.secret).map(def => value(def.name)),
+    day: new Date(now()).toISOString().slice(0, 10).replaceAll('-', '')
   };
 
   const items = new Map();
@@ -864,36 +965,22 @@ export async function runConfigChecks({ env = {}, fetch: fetchImpl = globalThis.
     counts,
     notes
   };
-  const secrets = [...CONFIG_VARIABLES.filter(def => def.secret).map(def => value(def.name)), ...ctx.secrets];
-  return scrubSecrets(answer, secrets);
+  return scrubAnswer(answer, ctx.secrets);
 }
-
-/** At most `limit` calls per `windowMs`: answers 0 when allowed, else the seconds to wait. */
-export function createCheckLimiter({ limit = CHECK_LIMIT.limit, windowMs = CHECK_LIMIT.windowMs, now = () => Date.now() } = {}) {
-  let hits = [];
-  return () => {
-    const time = now();
-    hits = hits.filter(hit => time - hit < windowMs);
-    if (hits.length >= limit) return Math.max(1, Math.ceil((windowMs - (time - hits[0])) / 1000));
-    hits.push(time);
-    return 0;
-  };
-}
-
-// Shared by every request this worker instance answers (the Pages Function makes a new API per request).
-const sharedLimiter = createCheckLimiter();
 
 /**
  * POST admin/config/check, behind the owner's sign-in (checked by the caller).
  * `getOptions()` gives runConfigChecks' options; the page's origin comes from
- * the request. Answers { status, body, headers? }, or null for another path.
+ * the request. `limiter`: the worker isolate's own (server/admin-limits.js),
+ * shared by every request it answers. Answers { status, body, headers? }, or
+ * null for another path.
  */
-export function createConfigCheckRoute(getOptions, { limiter = sharedLimiter } = {}) {
+export function createConfigCheckRoute(getOptions, { limiter = sharedAdminLimits.check } = {}) {
   return async function configCheckRoute(request, path) {
     if (path !== 'admin/config/check') return null;
     if (request.method !== 'POST') return { status: 405, body: { error: 'Method not allowed' } };
     const wait = limiter();
-    if (wait) return { status: 429, body: { error: `Too many checks in a short time. Check again in ${wait < 60 ? plural(wait, 'second') : plural(Math.ceil(wait / 60), 'minute')}.`, retryAfter: wait }, headers: { 'retry-after': String(wait) } };
+    if (wait) return { status: 429, body: { error: `Too many checks in a short time. Check again in ${waitWords(wait)}.`, retryAfter: wait }, headers: { 'retry-after': String(wait) } };
     return { status: 200, body: await runConfigChecks({ ...getOptions(), origin: new URL(request.url).origin }) };
   };
 }

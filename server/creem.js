@@ -33,6 +33,7 @@
 
 import { timingSafeEqual } from './admin-auth.js';
 import { CURRENCIES, giftPlan, isPersonalGift } from '../src/lib/pricing.js';
+import { upstreamText } from './secret-scrub.js';
 
 export const CREEM_API_URL = 'https://api.creem.io';
 export const CREEM_TEST_API_URL = 'https://test-api.creem.io';
@@ -96,11 +97,13 @@ export function affiliateCode(value) {
   return AFFILIATE_CODE_RE.test(code) ? code : '';
 }
 
-async function describeFailure(response) {
+/** A failed answer of Creem, in words; its own text never after a 401 or a 403, and scrubbed of the key otherwise. */
+async function describeFailure(response, apiKey) {
   const body = await response.json().catch(() => null);
+  if (response.status === 401 || response.status === 403) return `Creem answered HTTP ${response.status}: it refused CREEM_API_KEY`;
   const message = Array.isArray(body?.message) ? body.message.join(', ') : body?.message ?? body?.error ?? '';
-  const detail = typeof message === 'string' && message ? `: ${message.slice(0, 200)}` : '';
-  return `Creem answered HTTP ${response.status}${detail}`;
+  const detail = upstreamText(response.status, typeof message === 'string' ? message : '', [apiKey]);
+  return `Creem answered HTTP ${response.status}${detail ? `: ${detail}` : ''}`;
 }
 
 async function creemRequest({ fetch: fetchImpl, url, init, timeoutMs }) {
@@ -128,7 +131,7 @@ export async function createCheckout({ apiKey, mode = 'live', body, fetch: fetch
     timeoutMs
   });
   if (!response.ok) {
-    const failure = new Error(await describeFailure(response));
+    const failure = new Error(await describeFailure(response, apiKey));
     failure.status = response.status;
     throw failure;
   }
@@ -149,7 +152,7 @@ export async function fetchCheckout({ apiKey, mode = 'live', checkoutId, fetch: 
     timeoutMs
   });
   if (response.status === 404 || response.status === 400) return null;
-  if (!response.ok) throw new Error(await describeFailure(response));
+  if (!response.ok) throw new Error(await describeFailure(response, apiKey));
   const checkout = await response.json().catch(() => null);
   return checkout && typeof checkout === 'object' ? checkout : null;
 }
@@ -167,7 +170,7 @@ export async function fetchTransaction({ apiKey, mode = 'live', transactionId, f
     timeoutMs
   });
   if (response.status === 404 || response.status === 400) return null;
-  if (!response.ok) throw new Error(await describeFailure(response));
+  if (!response.ok) throw new Error(await describeFailure(response, apiKey));
   const transaction = await response.json().catch(() => null);
   return transaction && typeof transaction === 'object' && !Array.isArray(transaction) ? transaction : null;
 }

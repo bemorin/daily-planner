@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMemoryStore, createPlannerApi } from '../server/planner-api.js';
 import {
-  applyCreemSetup, createRateLimiter, envBlock, expectedProduct, markerOf, planCreemSetup, productMarker, SETUP_LIMITS, SETUP_SLOTS, TAX_CATEGORY, WEBHOOK_EVENTS, webhookUrlProblem
+  applyCreemSetup, createCreemSetupRoute, envBlock, expectedProduct, markerOf, needsTestModeLine, planCreemSetup, productIdempotencyKey, productMarker, SETUP_LIMITS, SETUP_SLOTS, setupTarget, TAX_CATEGORY, WEBHOOK_EVENTS, webhookUrlProblem
 } from '../server/creem-setup.js';
+import { createAdminLimits, createRateLimiter } from '../server/admin-limits.js';
 import { PLUS_PRICE, TEAM_TIERS } from '../src/lib/pricing.js';
 
 const API_KEY = 'creem_test_setupkey0123456789abcdef';
@@ -102,7 +103,8 @@ test('plan with nothing in Creem: four products and the webhook to create, read-
   assert.equal(plan.webhook.state, 'create');
   assert.deepEqual(plan.create, ALL);
   assert.equal(plan.envComplete, false);
-  assert.equal(plan.env, 'CREEM_TEST_MODE=1\n');
+  assert.equal(plan.env, '', 'a creem_test_ key needs no CREEM_TEST_MODE line');
+  assert.equal(plan.testModeLine, false);
   assert.equal(creem.posts().length, 0, 'planning never creates anything');
   assert.ok(creem.calls.every(call => call.url.startsWith('https://test-api.creem.io/v1/')), 'a test key uses the test API');
   assert.ok(creem.calls.every(call => call.headers['x-api-key'] === API_KEY));
@@ -116,7 +118,7 @@ test('plan with everything in place: nothing to create, the webhook secret only 
   assert.deepEqual(plan.webhook.secret, { set: true, matches: true });
   assert.deepEqual(plan.create, []);
   assert.deepEqual(plan.envChanges, []);
-  assert.equal(plan.env, 'CREEM_PLUS_EUR=prod_plus_eur\nCREEM_PLUS_USD=prod_plus_usd\nCREEM_GIFT_EUR=prod_gift_eur\nCREEM_GIFT_USD=prod_gift_usd\nCREEM_TEST_MODE=1\n');
+  assert.equal(plan.env, 'CREEM_PLUS_EUR=prod_plus_eur\nCREEM_PLUS_USD=prod_plus_usd\nCREEM_GIFT_EUR=prod_gift_eur\nCREEM_GIFT_USD=prod_gift_usd\n');
   assert.ok(!JSON.stringify(plan).includes(HOOK_SECRET));
   const wrong = await planCreemSetup(options(creem, { products: ALL_IDS, webhookSecret: 'whsec_another_one_0000' }));
   assert.equal(wrong.webhook.secret.matches, false);
@@ -179,7 +181,7 @@ test('apply creates only what is missing and asked for, then a second apply crea
   assert.deepEqual(first.products.map(slot => slot.state), ['ok', 'ok', 'created', 'created']);
   assert.equal(first.webhook.state, 'created');
   assert.equal(first.webhookSecret, NEW_SECRET);
-  assert.equal(first.env, 'CREEM_PLUS_EUR=prod_plus_eur\nCREEM_PLUS_USD=prod_plus_usd\nCREEM_GIFT_EUR=prod_new1\nCREEM_GIFT_USD=prod_new2\nCREEM_TEST_MODE=1\n');
+  assert.equal(first.env, 'CREEM_PLUS_EUR=prod_plus_eur\nCREEM_PLUS_USD=prod_plus_usd\nCREEM_GIFT_EUR=prod_new1\nCREEM_GIFT_USD=prod_new2\n');
   assert.deepEqual(first.envChanges, ['CREEM_GIFT_EUR', 'CREEM_GIFT_USD']);
   // The owner hasn't pasted the new ids yet: the products are found by their marker, the webhook by its URL.
   const second = await applyCreemSetup(options(creem, { products: env }), { create: ALL });
@@ -265,11 +267,13 @@ test('Creem refusing the key, timing out or failing gives a clear error', async 
   assert.ok(result.failures.every(entry => !entry.error.includes(API_KEY)), 'an echoed key is hidden');
 });
 
-test('envBlock lists the ids it has, and CREEM_TEST_MODE=1 only in test mode', () => {
+test('envBlock lists the ids it has, and CREEM_TEST_MODE=1 only when it is what makes the key a test key', () => {
   const slots = [{ env: 'CREEM_PLUS_EUR', id: 'prod_a' }, { env: 'CREEM_PLUS_USD', id: '' }];
-  assert.equal(envBlock(slots, 'live'), 'CREEM_PLUS_EUR=prod_a\n');
-  assert.equal(envBlock(slots, 'test'), 'CREEM_PLUS_EUR=prod_a\nCREEM_TEST_MODE=1\n');
-  assert.equal(envBlock([], 'live'), '');
+  assert.equal(envBlock(slots, 'live', LIVE_KEY), 'CREEM_PLUS_EUR=prod_a\n');
+  assert.equal(envBlock(slots, 'test', API_KEY), 'CREEM_PLUS_EUR=prod_a\n', 'a creem_test_ key is in test mode by itself');
+  assert.equal(envBlock(slots, 'test', 'creem_0123456789abcdef'), 'CREEM_PLUS_EUR=prod_a\nCREEM_TEST_MODE=1\n', 'another key is in test mode only through CREEM_TEST_MODE');
+  assert.equal(envBlock([], 'live', LIVE_KEY), '');
+  assert.deepEqual([needsTestModeLine('test', API_KEY), needsTestModeLine('test', 'creem_x'), needsTestModeLine('live', 'creem_x')], [false, true, false]);
 });
 
 test('the rate limiter answers the seconds to wait', () => {
@@ -284,16 +288,18 @@ test('the rate limiter answers the seconds to wait', () => {
 
 // ---- Routes ------------------------------------------------------------------
 
-function setup({ creem = fakeCreem(), ...extra } = {}) {
+function setup({ creem = fakeCreem(), origin = 'https://planner.bemorin.com', ...extra } = {}) {
   const warnings = [];
   const clock = { now: START };
   const api = createPlannerApi({
     store: createMemoryStore(), adminToken: 'secret', authFailureDelayMs: 0, now: () => new Date(clock.now),
     creemApiKey: API_KEY, creemWebhookSecret: WEBHOOK_SECRET, creemProducts: {}, creemFetch: creem.fetch, publicBaseUrl: 'https://planner.bemorin.com',
     warn: message => warnings.push(message),
+    // Each test its own limits (the isolate's are shared by every request: see the test of the Pages Function).
+    adminLimits: createAdminLimits({ now: () => clock.now }),
     ...extra
   });
-  const post = (action, body, token = 'secret') => api(new Request(`https://planner.bemorin.com/api/admin/creem/setup/${action}`, {
+  const post = (action, body, token = 'secret') => api(new Request(`${origin}/api/admin/creem/setup/${action}`, {
     method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body ?? {})
   }));
   return { api, creem, warnings, clock, post };
@@ -351,8 +357,8 @@ test('no secret in any answer or log: only the creation answer carries the new w
   answers.push(await failed.text());
   for (const text of answers) for (const secret of [API_KEY, WEBHOOK_SECRET, NEW_SECRET]) assert.ok(!text.includes(secret), `${secret} in ${text.slice(0, 80)}`);
   for (const secret of [API_KEY, WEBHOOK_SECRET, NEW_SECRET]) assert.ok(!JSON.stringify([...warnings, ...refused.warnings]).includes(secret));
-  assert.match(answers.at(-1), /Creem refused CREEM_API_KEY/);
-  assert.match(answers.at(-1), /\[hidden\]/, 'Creem’s echo of the key is hidden');
+  assert.match(answers.at(-1), /Creem refused CREEM_API_KEY while listing your products \(HTTP 403\)\. /);
+  assert.ok(!answers.at(-1).includes('Invalid API key'), 'after a 403, nothing of Creem’s own text');
   assert.ok(!applyText.includes(API_KEY) && !applyText.includes(WEBHOOK_SECRET));
 });
 
@@ -377,4 +383,140 @@ test('the setup routes are rate-limited, and one apply runs at a time', async ()
   assert.equal((await post('apply', { confirm: true, mode: 'test', create: [] })).status, 200);
   for (let index = 0; index < SETUP_LIMITS.plan.limit; index += 1) assert.equal((await post('plan')).status, 200);
   assert.equal((await post('plan')).status, 429);
+});
+
+// ---- 1.31 review: limits across requests, overlapping Creates, the webhook's address, partial echoes ----------
+
+test('in production the limits and the one-Create-at-a-time guard hold across requests (the Function builds an API per request)', async () => {
+  const { onRequest } = await import('../functions/api/[[path]].js');
+  const base = fakeCreem();
+  const realFetch = globalThis.fetch;
+  // Creem answers after a moment, as over the network.
+  globalThis.fetch = async (url, init) => { await new Promise(resolve => { setTimeout(resolve, 15); }); return base.fetch(url, init); };
+  try {
+    const env = {
+      DB: { prepare: () => ({ first: async () => null, all: async () => ({ results: [] }), bind() { return this; }, run: async () => ({}) }) },
+      ADMIN_TOKEN: 'a-long-enough-admin-token-for-these-tests-0123456789', CREEM_API_KEY: API_KEY, PUBLIC_BASE_URL: 'https://planner.example.com',
+      ASSETS: { fetch: async () => new Response('') }
+    };
+    const call = (action, body) => onRequest({
+      request: new Request(`https://planner.example.com/api/admin/creem/setup/${action}`, { method: 'POST', headers: { authorization: `Bearer ${env.ADMIN_TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify(body || {}) }),
+      env, waitUntil() {}
+    });
+    const create = { confirm: true, mode: 'test', create: ALL };
+    const answers = await Promise.all([call('apply', create), call('apply', create)]);
+    const bodies = await Promise.all(answers.map(answer => answer.json()));
+    assert.deepEqual(answers.map(answer => answer.status), [200, 409]);
+    assert.equal(bodies[1].reason, 'running');
+    assert.match(bodies[1].error, /^Nothing was created: a setup is already running/);
+    assert.equal(bodies[0].created.length, 5);
+    assert.deepEqual([base.products.length, base.webhooks.length], [4, 1], 'nothing made twice');
+    const plans = [];
+    for (let index = 0; index <= SETUP_LIMITS.plan.limit; index += 1) plans.push((await call('plan')).status);
+    assert.deepEqual(plans, [...Array(SETUP_LIMITS.plan.limit).fill(200), 429], 'one window for every request of the isolate');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test('two Creates on two workers at once: Creem’s Idempotency-Key answers the same products', async () => {
+  const creem = fakeCreem();
+  const slow = { fetch: async (url, init) => { await new Promise(resolve => { setTimeout(resolve, 10); }); return creem.fetch(url, init); } };
+  const [first, second] = await Promise.all([applyCreemSetup(options(slow), { create: ALL.filter(slot => slot !== 'webhook') }), applyCreemSetup(options(slow), { create: ALL.filter(slot => slot !== 'webhook') })]);
+  assert.equal(creem.posts().length, 8, 'both asked');
+  assert.equal(creem.products.length, 4, 'four products in Creem, not eight');
+  assert.deepEqual(first.created.map(entry => entry.id), second.created.map(entry => entry.id));
+  assert.equal(productIdempotencyKey('test', 'plus-eur', 2900, '20261021', 0), 'dp-setup-test-plus-eur-2900-20261021-0');
+  assert.equal(productIdempotencyKey('live', 'gift-usd', 19900, '20261021', 2), 'dp-setup-live-gift-usd-19900-20261021-2');
+});
+
+test('the webhook list is read again right before the webhook is created: one made meanwhile is found, not made twice', async () => {
+  const creem = fakeCreem();
+  const racing = {
+    fetch: async (url, init = {}) => {
+      // Another tab's Create makes the webhook while this one creates the products.
+      if ((init.method || 'GET') === 'POST' && new URL(url).pathname === '/v1/products' && !creem.webhooks.length) creem.webhooks.push(hook({ id: 'wh_other', secret: HOOK_SECRET }));
+      return creem.fetch(url, init);
+    }
+  };
+  const result = await applyCreemSetup(options(racing), { create: ALL });
+  assert.equal(creem.webhooks.length, 1);
+  assert.ok(!creem.posts().some(call => call.path === '/v1/webhooks'), 'no second webhook');
+  assert.equal(result.webhook.state, 'ok');
+  assert.equal(result.webhook.webhook.id, 'wh_other');
+  assert.ok(result.already.includes('webhook'));
+  assert.equal('webhookSecret' in result, false);
+  assert.equal(creem.calls.filter(call => call.method === 'GET' && call.path === '/v1/webhooks').length, 2, 'listed for the plan, then again right before');
+});
+
+test('the webhook’s address: production, a local server, or a preview’s own with a test key; a live key is refused off production', async () => {
+  const base = 'https://planner.bemorin.com';
+  assert.deepEqual(setupTarget({ origin: base, baseUrl: base, mode: 'live' }), { url: `${base}/api/creem/webhook`, source: 'production', refused: '' });
+  assert.deepEqual(setupTarget({ origin: 'http://localhost:8395', baseUrl: 'https://tunnel.example', mode: 'test' }), { url: 'https://tunnel.example/api/creem/webhook', source: 'local', refused: '' });
+  assert.deepEqual(setupTarget({ origin: 'https://abc123.daily-planner.pages.dev', baseUrl: base, mode: 'test' }), { url: 'https://abc123.daily-planner.pages.dev/api/creem/webhook', source: 'preview', refused: '' });
+  const live = setupTarget({ origin: 'https://abc123.daily-planner.pages.dev', baseUrl: base, mode: 'live' });
+  assert.equal(live.url, `${base}/api/creem/webhook`);
+  assert.match(live.refused, /^This page is open on https:\/\/abc123\.daily-planner\.pages\.dev, not on the production address https:\/\/planner\.bemorin\.com: with a live key, set Creem up from https:\/\/planner\.bemorin\.com\/admin\/configuration\/\.$/);
+
+  // Through the API: a preview with a test key plans (and makes) its own webhook.
+  const preview = setup({ origin: 'https://abc123.daily-planner.pages.dev' });
+  const plan = await read(await preview.post('plan'));
+  assert.deepEqual([plan.body.webhook.url, plan.body.webhook.source, plan.body.refused], ['https://abc123.daily-planner.pages.dev/api/creem/webhook', 'preview', '']);
+  const made = await read(await preview.post('apply', { confirm: true, mode: 'test', create: ['webhook'] }));
+  assert.equal(preview.creem.webhooks[0].url, 'https://abc123.daily-planner.pages.dev/api/creem/webhook');
+  assert.equal(made.body.created[0].slot, 'webhook');
+  // A live key there: the plan reads, Create is refused and nothing is made.
+  const liveThere = setup({ origin: 'https://abc123.daily-planner.pages.dev', creemApiKey: LIVE_KEY });
+  const livePlan = await read(await liveThere.post('plan'));
+  assert.equal(livePlan.status, 200);
+  assert.match(livePlan.body.refused, /not on the production address/);
+  const refused = await read(await liveThere.post('apply', { confirm: true, mode: 'live', create: ALL }));
+  assert.deepEqual([refused.status, refused.body.reason], [409, 'origin']);
+  assert.match(refused.body.error, /^Nothing was created\. This page is open on/);
+  assert.equal(liveThere.creem.posts().length, 0);
+});
+
+test('Creem’s answers never bring back a part of the key: none of its text after a 403, a scrubbed one otherwise', async () => {
+  const key = 'creem_live_ABCDEFGHIJKLMNOPQRSTUV';
+  const body = key.slice('creem_live_'.length);
+  const echoes = {
+    'ending in 4': `API key ending in ${key.slice(-4)} is invalid`,
+    masked: `Invalid key ${key.slice(0, 8)}****${key.slice(-6)}`,
+    'prefix only': `Invalid API key ${key.slice(0, 15)}…`,
+    'middle fragment': `bad key fragment ${key.slice(14, 26)}`,
+    'URL-encoded': `key=${[...key].map(character => `%${character.charCodeAt(0).toString(16)}`).join('')}`,
+    'JSON-escaped': `key ${[...key].map(character => `\\u00${character.charCodeAt(0).toString(16)}`).join('')}`
+  };
+  const leaks = text => { const found = []; for (let start = 0; start + 4 <= body.length; start += 1) if (text.includes(body.slice(start, start + 4))) found.push(body.slice(start, start + 4)); return found; };
+  for (const [name, message] of Object.entries(echoes)) {
+    for (const status of [403, 422]) {
+      const fetch = async (url, init = {}) => {
+        const path = new URL(url).pathname;
+        if (status === 403 || ((init.method || 'GET') === 'POST' && path === '/v1/products')) return json(status, { status, error: 'Refused', message: [message] });
+        if (path === '/v1/products/search' || path === '/v1/webhooks') return json(200, { items: [], pagination: { total_pages: 1 } });
+        return json(404, {});
+      };
+      const route = createCreemSetupRoute(() => ({ apiKey: key, mode: 'live', fetch, products: {}, webhookSecret: WEBHOOK_SECRET, webhookUrl: URL_OK }), { limits: createAdminLimits() });
+      const answer = await route(new Request('https://planner.bemorin.com/api/admin/creem/setup/apply', { method: 'POST' }), 'admin/creem/setup/apply', async () => ({ confirm: true, mode: 'live', create: ['plus-eur'] }));
+      const text = JSON.stringify(answer.body);
+      assert.deepEqual(leaks(text), [], `${name}, HTTP ${status}: ${text.slice(0, 300)}`);
+      if (status === 403) {
+        assert.equal(answer.status, 502);
+        assert.ok(!text.includes('Invalid') && !text.includes('fragment') && !text.includes('key='), `${name}: nothing of Creem’s words after a 403`);
+      } else {
+        assert.equal(answer.status, 200);
+        assert.match(answer.body.failures[0].error, /^Creem refused creating Daily Planner Plus \(EUR\) \(HTTP 422(?:: .*)?\)\.$/, name);
+      }
+    }
+  }
+});
+
+test('a Creem answer cut off by the timeout is a timeout, said in plain words', async () => {
+  const stalled = {
+    fetch: async (url, init) => ({
+      status: 200, ok: true,
+      json: () => new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))))
+    })
+  };
+  await assert.rejects(planCreemSetup(options(stalled, { timeoutMs: 1000 })), error => error.reason === 'timeout' && error.message === 'Creem didn’t answer within 1 second. Try again.');
 });

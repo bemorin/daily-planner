@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { createMemoryStore, createPlannerApi, DEFAULT_EMAIL_DAILY_LIMIT, EMAIL_SENDS_EVENT, parseDailyLimit, teamRequestEmail } from '../server/planner-api.js';
 import { createD1Store } from '../server/d1-store.js';
 import { waitlistRemoveToken } from '../server/admin-auth.js';
-import { announcementEmail, buildResendMessages, createResendMailer, EMAILS_PER_SEND, escapeHtml, formatAddress, MAX_BATCHES_PER_SEND, ONE_EMAIL_FOOTER, parseAddress, plusPurchaseEmail, RESEND_BATCH_URL, RESEND_EMAILS_URL, RESEND_MAX_BATCH, textToHtml } from '../server/email.js';
+import { announcementEmail, buildResendMessages, createResendMailer, EMAILS_PER_SEND, escapeHtml, formatAddress, MAX_BATCHES_PER_SEND, ONE_EMAIL_FOOTER, ownerTestEmail, parseAddress, plusPurchaseEmail, RESEND_BATCH_URL, RESEND_EMAILS_URL, RESEND_MAX_BATCH, textToHtml } from '../server/email.js';
+import { ADMIN_LIMITS, createAdminLimits } from '../server/admin-limits.js';
 
 const START = Date.parse('2026-10-09T08:00:00Z');
 const post = (path, body, token) => new Request(`https://planner.test/api/${path}`, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
@@ -143,8 +144,20 @@ test('the mailer posts to Resend with a Bearer key, /emails for one and /emails/
   const started = Date.now();
   await assert.rejects(hanging.send({ subject: 's', html: 'h', recipients: [{ email: 'x@y.co' }] }, { timeoutMs: 40 }), /did not answer/);
   assert.ok(Date.now() - started < 1000);
+  // After a 401 or a 403, Resend's own words are left out (they may repeat the key); otherwise they are scrubbed of it.
   const refused = createResendMailer({ apiKey: 'k', from: 'a@b.co', fetch: fakeResend({ fail: () => 401 }).fetch });
-  await assert.rejects(refused.send({ subject: 's', html: 'h', recipients: [{ email: 'x@y.co' }] }), /Resend answered HTTP 401: Refused/);
+  await assert.rejects(refused.send({ subject: 's', html: 'h', recipients: [{ email: 'x@y.co' }] }), error => error.message === 'Resend refused RESEND_API_KEY (HTTP 401)');
+  const forbidden = createResendMailer({ apiKey: 'k', from: 'a@b.co', fetch: fakeResend({ fail: () => 403 }).fetch });
+  await assert.rejects(forbidden.send({ subject: 's', text: 't', recipients: [{ email: 'x@y.co' }] }), error => /^Resend refused to send \(HTTP 403\): check that the domain of EMAIL_FROM is verified/.test(error.message) && !error.message.includes('Refused (403)'));
+  const key = 're_Zyxwvutsrqponmlkjihgfedcba12';
+  const echoing = createResendMailer({ apiKey: key, from: 'a@b.co', fetch: async () => new Response(JSON.stringify({ name: 'validation_error', message: `Invalid key ${key.slice(0, 8)}****${key.slice(-6)} (ending in ${key.slice(-4)})` }), { status: 422 }) });
+  await assert.rejects(echoing.send({ subject: 's', text: 't', recipients: [{ email: 'x@y.co' }] }), error => {
+    assert.match(error.message, /^Resend answered HTTP 422: Invalid key \[hidden\] \(ending in \[hidden\]\)$/);
+    for (let start = 3; start + 4 <= key.length; start += 1) assert.ok(!error.message.includes(key.slice(start, start + 4)), key.slice(start, start + 4));
+    return true;
+  });
+  const offline = createResendMailer({ apiKey: 'k', from: 'a@b.co', fetch: async () => { throw new TypeError('fetch failed'); } });
+  await assert.rejects(offline.send({ subject: 's', text: 't', recipients: [{ email: 'x@y.co' }] }), /^Error: Resend couldn’t be reached$/);
 });
 
 test('requests are spaced out for Resend’s rate limit, and a 429 is retried once', async () => {
@@ -297,6 +310,72 @@ test('announcements are owner-only and validated', async () => {
   assert.equal((await api(post('admin/waitlist/announce', { ...announcement, text: '' }, 'secret'))).status, 400);
   assert.equal((await api(post('admin/waitlist/announce', { ...announcement, text: 't'.repeat(8001) }, 'secret'))).status, 400);
   assert.equal(resend.calls.length, 0);
+});
+
+test('the configuration page’s test email: its own short email, to OWNER_EMAIL only, owner-only and POST only', async () => {
+  const { api, store, resend, clock } = setup({ adminLimits: createAdminLimits() });
+  await join(api, 2, clock);
+  assert.equal((await api(post('admin/email/test', {}))).status, 401);
+  assert.equal((await api(post('admin/email/test', {}, 'wrong'))).status, 401);
+  assert.equal((await api(get('admin/email/test', 'secret'))).status, 405);
+  assert.equal(resend.calls.length, 0);
+  const response = await api(post('admin/email/test', {}, 'secret'));
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { sent: 1 });
+  assert.deepEqual(resend.recipients(), ['owner@bemorin.example']);
+  const [message] = resend.messages();
+  assert.equal(message.subject, 'Daily Planner: test email');
+  assert.match(message.text, /^This test email was sent from the configuration page of Daily Planner at 2026-10-09 08:00 UTC\./);
+  assert.ok(!message.text.includes(ONE_EMAIL_FOOTER) && !/list/i.test(message.text), 'nothing about the waitlist');
+  assert.equal(store.data.waitlist.length, 2, 'nobody is removed from the waitlist');
+  assert.equal(await store.emailSendsOn('2026-10-09', EMAIL_SENDS_EVENT), 1, 'counted with the day’s emails, as Resend counts it');
+  assert.deepEqual(ownerTestEmail({ sentAt: new Date('2026-10-21T15:32:10Z') }).text.split('\n')[0], 'This test email was sent from the configuration page of Daily Planner at 2026-10-21 15:32 UTC.');
+
+  const unconfigured = setup({ resendApiKey: '', adminLimits: createAdminLimits() });
+  const off = await unconfigured.api(post('admin/email/test', {}, 'secret'));
+  assert.equal(off.status, 503);
+  assert.match((await off.json()).error, /RESEND_API_KEY/);
+  const noOwner = setup({ ownerEmail: '', adminLimits: createAdminLimits() });
+  assert.match((await (await noOwner.api(post('admin/email/test', {}, 'secret'))).json()).error, /OWNER_EMAIL/);
+});
+
+test('the test email is rate-limited per worker isolate, and Resend’s failure never shows a part of a secret', async () => {
+  const clock = { now: START };
+  const { api } = setup({ clock, adminLimits: createAdminLimits({ now: () => clock.now }) });
+  for (let index = 0; index < ADMIN_LIMITS.testEmail.limit; index += 1) assert.equal((await api(post('admin/email/test', {}, 'secret'))).status, 200);
+  const limited = await api(post('admin/email/test', {}, 'secret'));
+  assert.equal(limited.status, 429);
+  assert.ok(Number(limited.headers.get('retry-after')) > 0);
+  assert.match((await limited.json()).error, /^Too many test emails in a short time\. Try again in 10 minutes\.$/);
+  clock.now += ADMIN_LIMITS.testEmail.windowMs + 1;
+  assert.equal((await api(post('admin/email/test', {}, 'secret'))).status, 200);
+
+  // The isolate's own limits are shared by every API it builds (the Pages Function builds one per request).
+  const statuses = [];
+  for (let index = 0; index <= ADMIN_LIMITS.testEmail.limit; index += 1) statuses.push((await setup().api(post('admin/email/test', {}, 'secret'))).status);
+  assert.deepEqual(statuses, [...Array(ADMIN_LIMITS.testEmail.limit).fill(200), 429]);
+
+  const key = 're_Zyxwvutsrqponmlkjihgfedcba12';
+  const answer = (status, message) => async () => new Response(JSON.stringify({ statusCode: status, name: 'error', message }), { status, headers: { 'content-type': 'application/json' } });
+  const cases = [
+    [401, `API key ending in ${key.slice(-4)} is invalid`],
+    [403, `Invalid key ${key.slice(0, 8)}****${key.slice(-6)}`],
+    [422, `API key ending in ${key.slice(-4)} is invalid`],
+    [422, `Invalid key ${key.slice(0, 8)}****${key.slice(-6)}`],
+    [422, `Invalid key ${key.slice(0, 12)}`],
+    [422, `bad key fragment ${key.slice(6, 20)}`],
+    [422, `key=${encodeURIComponent(key).replace(/[A-Za-z0-9]/g, character => `%${character.charCodeAt(0).toString(16)}`)}`],
+    [422, `key ${[...key].map(character => `\\u00${character.charCodeAt(0).toString(16)}`).join('')}`]
+  ];
+  for (const [status, message] of cases) {
+    const { api: failing } = setup({ resendApiKey: key, emailFetch: answer(status, message), adminLimits: createAdminLimits() });
+    const response = await failing(post('admin/email/test', {}, 'secret'));
+    assert.equal(response.status, 502);
+    const { error } = await response.json();
+    assert.match(error, /^The test email wasn’t sent\. Resend (?:refused|answered HTTP)/, error);
+    for (let start = 3; start + 4 <= key.length; start += 1) assert.ok(!error.includes(key.slice(start, start + 4)), `${status} “${message}”: ${error}`);
+    if (status === 401 || status === 403) assert.ok(!error.includes('Invalid') && !error.includes('ending in'), 'nothing of Resend’s own text after a 401 or a 403');
+  }
 });
 
 test('a test announcement goes only to the owner and deletes nobody', async () => {
