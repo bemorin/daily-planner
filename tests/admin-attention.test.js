@@ -163,6 +163,21 @@ test('team requests from the last 14 days wait for a reply, oldest first', () =>
   assert.deepEqual(build(calm({ teamRequestsUnavailable: true, teamRequests: [{ id: 9, company: 'X', createdAt: ago(HOUR) }] })).map(item => item.text), ['Database: migration 0002_team_requests.sql not applied']);
 });
 
+test('a question waits for a reply too: who asked and the start of the question, never “a team” or “0 people”', () => {
+  const long = `Can I ${'really '.repeat(20)}pay by invoice?`;
+  const items = build(calm({
+    teamRequests: [
+      { id: 5, company: '', kind: 'question', teamSize: 0, timing: '', name: 'Ann', email: 'ann@example.com', message: 'Can I pay\nby invoice?', createdAt: ago(HOUR) },
+      { id: 4, company: '', kind: 'question', teamSize: 0, timing: '', name: '', email: 'bo@example.com', message: long, createdAt: ago(2 * HOUR) }
+    ]
+  }));
+  assert.deepEqual(texts(items), ['Question from bo@example.com waiting for a reply', 'Question from Ann waiting for a reply']);
+  assert.equal(items[1].detail, '“Can I pay by invoice?”');
+  assert.ok(items[0].detail.length <= 82 && items[0].detail.endsWith('…”'), items[0].detail);
+  assert.ok(items.every(item => item.section === 'teams' && !/people|a team/.test(`${item.text} ${item.detail}`)));
+  assert.equal(ATTENTION_SECTIONS.teams, 'Requests and questions');
+});
+
 test('Setup: test mode, legal pages, two-factor and a stale page each get a line, in the card’s order', () => {
   const summary = calm({ version: '1.27.0' });
   summary.setup.payments.mode = 'test';
@@ -193,6 +208,10 @@ test('Setup: a legal value the pages can’t use is not ready, with the same che
     'Legal pages: DAILY_PLANNER_PRIVACY_EMAIL is set, but not used (not a plain email address)',
     'Legal pages: DAILY_PLANNER_LEGAL_PHONE is set, but not used (not a phone number)'
   ]);
+  assert.equal(legal({ LEGAL_PHONE: '+33199001234' }).state, 'ok', 'the phone as the owner types it: E.164');
+  assert.deepEqual(legal({ LEGAL_PHONE: '+330199001234' }).problems, [
+    'Legal pages: DAILY_PLANNER_LEGAL_PHONE is set, but not used (not a phone number: after +33, the 9 digits of the number, without its leading 0)'
+  ], 'a French number with its 0 says what to change');
   assert.deepEqual(legal({ SUPPORT_EMAIL: 'me@example.com?bcc=x@example.com', LEGAL_ADDRESS: '  ' }).problems, [
     'Legal pages: postal address missing',
     'Legal pages: DAILY_PLANNER_SUPPORT_EMAIL is set, but not used (not a plain email address)'
@@ -206,6 +225,9 @@ test('the Setup card says “set, but not used” with the legal pages’ own ch
   const variables = /const LEGAL_VARIABLES = \[([\s\S]*?)\n\];/.exec(source)?.[1] || '';
   assert.match(variables, /\['LEGAL_PHONE', 'recommended \(French law asks an individual publisher for one\)/);
   assert.doesNotMatch(variables, /\['LEGAL_PHONE', 'optional/);
+  // How to write the phone number (E.164, no spaces), and how the page shows it.
+  assert.match(variables, /\['LEGAL_PHONE', '[^']*international form, <code>\+33<\/code> then the number without its 0, with no spaces \(e\.g\. <code>\+33199001234<\/code>\)[^']*<code>\+33 1 99 00 12 34<\/code>/);
+  assert.match(source, /key === 'LEGAL_PHONE' \? `set, shown as \$\{esc\(legalDetails\(APP_CONFIG\)\.phone\)\}`/, 'Setup shows how the number reads');
   assert.match(variables, /\['SUPPORT_EMAIL', '[^']*“Support” line of the welcome and Teams pages’ footer/);
 });
 

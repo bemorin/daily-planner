@@ -12,7 +12,8 @@
 // - Waitlist: the email someone typed, with explicit consent. Deletable.
 // - Feedback: what someone chose to send; email only if they added one.
 // - Team kit requests: the work email, company, team size, plan, currency and
-//   kind of request someone typed, with explicit consent, and the partner code
+//   kind of request someone typed (a question: only the email, name and
+//   question), with explicit consent, and the partner code
 //   remembered on that browser (?ref= link), if any, so a team order by
 //   invoice can earn that partner 10% (migration 0007). Deletable.
 // - Email (optional, Resend, see server/email.js): the owner is notified of
@@ -337,11 +338,13 @@ export function validateFeedback(body, now = new Date()) {
   };
 }
 
-/** Validate a team kit request. Returns { entry }, { error } or { spam }. */
-export function validateTeamRequest(body, now = new Date()) {
-  if (body?.website) return { spam: true };
-  const email = clip(body?.email, 254).toLowerCase();
-  if (!EMAIL_RE.test(email)) return { error: 'Please enter a valid work email address.' };
+/**
+ * The team fields of a request (company, team size, timing). A question
+ * (kind 'question', the “Ask a question” form) has none: it is stored with
+ * '' / 0 / '' (the 0002 columns are NOT NULL), whatever an older page sent.
+ */
+function teamFields(body, question) {
+  if (question) return { fields: { company: '', teamSize: 0, timing: '' } };
   const company = clip(body?.company, 200);
   if (!company) return { error: 'Please enter your company or organisation.' };
   if (company.length > 120) return { error: 'Please keep the company name under 120 characters.' };
@@ -350,22 +353,38 @@ export function validateTeamRequest(body, now = new Date()) {
   if (!Number.isInteger(teamSize) || teamSize < TEAM_SIZE_MIN || teamSize > TEAM_SIZE_MAX) return { error: 'Please enter a team size between 2 and 100,000 people.' };
   const timing = String(body?.timing ?? '');
   if (!TEAM_TIMINGS.has(timing)) return { error: 'Please choose when your team would like to start.' };
+  return { fields: { company, teamSize, timing } };
+}
+
+/**
+ * Validate a team kit request, or a question. Returns { entry }, { error } or
+ * { spam }. An invoice, a quote or a talk names the company, the team size
+ * and the timing; a question needs none of them (no plan or currency either),
+ * but its message is the question, so it can't be empty.
+ */
+export function validateTeamRequest(body, now = new Date()) {
+  if (body?.website) return { spam: true };
+  const kind = TEAM_REQUEST_KINDS.has(body?.kind) ? body.kind : 'quote';
+  const question = kind === 'question';
+  const email = clip(body?.email, 254).toLowerCase();
+  if (!EMAIL_RE.test(email)) return { error: question ? 'Please enter a valid email address.' : 'Please enter a valid work email address.' };
+  const team = teamFields(body, question);
+  if (team.error) return { error: team.error };
   const name = clip(body?.name, 200);
   if (name.length > 80) return { error: 'Please keep your name under 80 characters.' };
   const message = clip(body?.message, 2000);
   if (message.length > 1000) return { error: 'Please keep the message under 1,000 characters.' };
-  if (body?.consent !== true) return { error: 'Please confirm that we may email you about the team kit.' };
+  if (question && !message) return { error: 'Please write your question.' };
+  if (body?.consent !== true) return { error: question ? 'Please confirm that we may email you about your question.' : 'Please confirm that we may email you about the team kit.' };
   const version = VERSION_RE.test(String(body?.version || '')) ? String(body.version) : '';
   return {
     entry: {
       email,
       name,
-      company,
-      teamSize,
-      timing,
-      plan: TEAM_PLANS.has(body?.plan) ? body.plan : '',
-      currency: TEAM_CURRENCIES.has(body?.currency) ? body.currency : '',
-      kind: TEAM_REQUEST_KINDS.has(body?.kind) ? body.kind : 'quote',
+      ...team.fields,
+      plan: !question && TEAM_PLANS.has(body?.plan) ? body.plan : '',
+      currency: !question && TEAM_CURRENCIES.has(body?.currency) ? body.currency : '',
+      kind,
       message,
       locale: clip(body?.locale, 35),
       appVersion: version,
@@ -397,30 +416,45 @@ export function parseDailyLimit(value) {
   return Number.isFinite(limit) && limit >= 0 ? Math.floor(limit) : DEFAULT_EMAIL_DAILY_LIMIT;
 }
 
-/** The owner's notification for a stored team kit request. Every value is escaped. */
+/**
+ * A question (the “Ask a question” form) carries no team: no company, no
+ * number of people. Older rows may still have them, and then read like a request.
+ */
+export const isPlainQuestion = entry => entry?.kind === 'question' && !String(entry.company || '').trim() && !(Number(entry.teamSize) > 0);
+
+/**
+ * The owner's notification for a stored team kit request, or a question
+ * (who asked and the question, without the team's lines). Every value is escaped.
+ */
 export function teamRequestEmail(entry, dashboardUrl = '') {
+  const question = isPlainQuestion(entry);
   const people = Number(entry.teamSize).toLocaleString('en-US');
-  const fields = [
+  const team = question ? [] : [
     ['Company', entry.company],
     ['People', people],
     ['Plan', TEAM_PLAN_LABELS[entry.plan] || '—'],
-    ['Currency', entry.currency || '—'],
+    ['Currency', entry.currency || '—']
+  ];
+  const fields = [
+    ...team,
     ['Request', TEAM_KIND_LABELS[entry.kind] || entry.kind || '—'],
-    ['Timing', TEAM_TIMING_LABELS[entry.timing] || entry.timing],
+    ...(question ? [] : [['Timing', TEAM_TIMING_LABELS[entry.timing] || entry.timing]]),
     ['Name', entry.name || '—'],
     ['Email', entry.email],
     ['Source', entry.source || '—'],
     ['Locale', entry.locale || '—'],
     ...(entry.ref ? [['Partner', teamRequestPartnerLine(entry.ref)]] : [])
   ];
+  const lead = question ? 'Someone asked a question.' : 'A team asked for the team kit.';
+  const heading = question ? 'Question' : 'Message';
   const cell = 'padding:4px 16px 4px 0;vertical-align:top';
   const table = `<table style="border-collapse:collapse">${fields.map(([label, value]) => `<tr><td style="${cell};color:#706a62">${escapeHtml(label)}</td><td style="${cell}"><b>${escapeHtml(value)}</b></td></tr>`).join('')}</table>`;
-  const message = entry.message ? `<p style="color:#706a62;margin-top:20px">Message</p>\n${textToHtml(entry.message)}` : '<p style="color:#706a62;margin-top:20px">No message.</p>';
+  const message = entry.message ? `<p style="color:#706a62;margin-top:20px">${heading}</p>\n${textToHtml(entry.message)}` : '<p style="color:#706a62;margin-top:20px">No message.</p>';
   const reply = `<p style="margin-top:20px">Reply to this email to answer ${escapeHtml(entry.name || entry.email)}.${dashboardUrl ? ` All requests: <a href="${escapeHtml(dashboardUrl)}">${escapeHtml(dashboardUrl)}</a>` : ''}</p>`;
   return {
-    subject: oneLine(`Team kit request: ${entry.company} (${people} people)`),
-    html: htmlDocument(`<p>A team asked for the team kit.</p>\n${table}\n${message}\n${reply}`),
-    text: `A team asked for the team kit.\n\n${fields.map(([label, value]) => `${label}: ${oneLine(value)}`).join('\n')}\n\n${entry.message ? `Message:\n${entry.message}` : 'No message.'}\n\nReply to this email to answer ${oneLine(entry.name || entry.email)}.${dashboardUrl ? `\nAll requests: ${dashboardUrl}` : ''}\n`,
+    subject: oneLine(question ? `Question from ${entry.name || entry.email}` : `Team kit request: ${entry.company} (${people} people)`),
+    html: htmlDocument(`<p>${lead}</p>\n${table}\n${message}\n${reply}`),
+    text: `${lead}\n\n${fields.map(([label, value]) => `${label}: ${oneLine(value)}`).join('\n')}\n\n${entry.message ? `${heading}:\n${entry.message}` : 'No message.'}\n\nReply to this email to answer ${oneLine(entry.name || entry.email)}.${dashboardUrl ? `\nAll requests: ${dashboardUrl}` : ''}\n`,
     replyTo: { email: entry.email }
   };
 }

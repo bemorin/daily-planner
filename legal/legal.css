@@ -299,6 +299,9 @@ code { padding: .1em .35em; border-radius: 5px; background: var(--soft); font-fa
 
 .lg-dl dd { margin: 0; overflow-wrap: anywhere; }
 
+/* A phone number stays on one line: its groups are part of how it reads. */
+.lg-dl a[href^="tel:"] { white-space: nowrap; }
+
 /* The label column fits “Director of publication” on one line. */
 @media (min-width: 560px) {
   .lg-dl__row { grid-template-columns: 11rem minmax(0, 1fr); align-items: baseline; }

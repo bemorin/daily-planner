@@ -841,6 +841,9 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .request { margin-top: clamp(28px, 4vw, 40px); }
 
+/* Focused only on the way to its title (request-form.js), never shown. */
+.request:focus { outline: 0; }
+
 .team-form { display: grid; gap: 18px; }
 
 .team-form__head { display: grid; gap: 6px; }
@@ -850,6 +853,14 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 .team-form__head h2:focus { outline: 0; }
 
 .team-form__head p:last-child { max-width: 40em; color: var(--band-muted); }
+
+/* The head's versions (invoice, quote, question …) share one cell: it keeps
+   the tallest one's height, so the choice below never moves (request-form.js). */
+.team-form__heads { display: grid; }
+
+.team-form__heads > .team-form__head { grid-area: 1 / 1; align-self: start; }
+
+.team-form__ghost { visibility: hidden; }
 
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 
@@ -903,6 +914,9 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 }
 
 .field textarea { min-height: 96px; resize: vertical; line-height: 1.5; }
+
+/* A question: its box is the form's main field. */
+.team-form[data-kind="question"] .field textarea { min-height: 144px; }
 
 .field input::placeholder,
 .field textarea::placeholder { color: color-mix(in srgb, var(--band-muted) 75%, transparent); }

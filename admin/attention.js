@@ -25,7 +25,7 @@ const DAY = 24 * HOUR;
 /** The cards an item can point to, with the name its “Go to” link uses. */
 export const ATTENTION_SECTIONS = Object.freeze({
   refunds: 'Refunds',
-  teams: 'Team kit requests',
+  teams: 'Requests and questions',
   partners: 'Partners',
   setup: 'Setup',
   gifts: 'Team gifts',
@@ -270,15 +270,29 @@ function partnerItems(summary, now, { money }) {
 
 // ---- Team requests, gifts, reviews ---------------------------------------------
 
+// The start of a question, on one line, for the item's detail.
+const QUESTION_EXCERPT = 80;
+const excerpt = text => {
+  const line = String(text || '').replace(/\s+/g, ' ').trim();
+  return line.length > QUESTION_EXCERPT ? `${line.slice(0, QUESTION_EXCERPT - 1).trimEnd()}…` : line;
+};
+
 function teamItems(summary, now, { number }) {
   if (summary.teamRequestsUnavailable) return [];
   const rows = Array.isArray(summary.teamRequests) ? summary.teamRequests : [];
   return rows.filter(row => within(row.createdAt, now, TEAM_REPLY_DAYS)).map(row => {
     const size = Number(row.teamSize) || 0;
+    const company = String(row.company || '').trim();
     const who = String(row.name || '').trim() || String(row.email || '').trim();
+    const base = { kind: 'team', key: `team:${row.id}`, section: 'teams', rows: [`team:${row.id}`], icon: 'team', at: row.createdAt, when: 'since' };
+    // A question (the “Ask a question” form) has no team: who asked, and the start of the question.
+    if (row.kind === 'question' && !company && !size) {
+      const words = excerpt(row.message);
+      return { ...base, text: `Question from ${who || 'someone'} waiting for a reply`, detail: words ? `“${words}”` : '' };
+    }
     return {
-      kind: 'team', key: `team:${row.id}`, section: 'teams', rows: [`team:${row.id}`], icon: 'team', at: row.createdAt, when: 'since',
-      text: `${TEAM_NOUNS[row.kind] || 'Team request'} from ${String(row.company || '').trim() || 'a team'} waiting for a reply`,
+      ...base,
+      text: `${TEAM_NOUNS[row.kind] || 'Team request'} from ${company || 'a team'} waiting for a reply`,
       detail: [size ? `${number(size)} ${size === 1 ? 'person' : 'people'}` : '', who].filter(Boolean).join(' · ')
     };
   });

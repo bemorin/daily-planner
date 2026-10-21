@@ -62,7 +62,7 @@
 // dashboard Setup): DAILY_PLANNER_SUPPORT_EMAIL, DAILY_PLANNER_PRIVACY_EMAIL,
 // DAILY_PLANNER_LEGAL_PHONE, DAILY_PLANNER_LEGAL_ADDRESS,
 // DAILY_PLANNER_LEGAL_REGISTRATION and DAILY_PLANNER_AFFILIATE_URL, e.g.
-//   DAILY_PLANNER_SUPPORT_EMAIL=support@example.com DAILY_PLANNER_LEGAL_PHONE="+33 1 99 00 12 34" node scripts/serve.mjs --api
+//   DAILY_PLANNER_SUPPORT_EMAIL=support@example.com DAILY_PLANNER_LEGAL_PHONE=+33199001234 node scripts/serve.mjs --api
 // Unset, they stay blank. (PLANNER_API_URL and PLUS_PUBLIC_KEY come from --api,
 // above.) With --dist, runtime-config.js is served as the build wrote it.
 //

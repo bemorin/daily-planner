@@ -76,6 +76,8 @@ test('the privacy page renders every counted moment from the code, in both lists
   assert.equal(legal.eventsHtml([['x', 'clicked <b>“Go”</b> & left']]), '<li>clicked &lt;b&gt;“Go”&lt;/b&gt; &amp; left</li>', 'descriptions are escaped');
 });
 
+// The ranges kept for fiction (ARCEP 01 99 00, NANP 555-01xx, Ofcom 020 7946 0xxx): the only phone numbers examples may use.
+const FICTION = /^(?:3319900\d{4}|1\d{3}55501\d{2}|442079460\d{3})$/;
 const FORM_PHRASE = root => `use the <a href="${root}welcome/teams/?ask=question#request">“Ask a question” form</a>`;
 const labels = (details, page) => legal.detailRows(details, '../', page).map(([label]) => label);
 
@@ -138,13 +140,15 @@ test('support and privacy addresses: privacy questions go to the privacy one, th
   assert.equal(legal.contactEmail(only, 'privacy'), 'privacy@example.com');
 });
 
-// Phone numbers in tests are from ARCEP's range for fiction (01 99 00 xx xx), never a real line.
+// Phone numbers in tests are from the ranges kept for fiction (ARCEP: 01 99 00 xx xx;
+// the US and Canada: 555-0100 to 555-0199; Ofcom: 020 7946 0xxx, 0121 496 0xxx, 07700 900xxx …),
+// or made of zeros, never a real line.
 test('a phone number becomes a Phone row of the legal notice, as a tel: link; anything else is left out', () => {
   const details = legal.legalDetails({ SUPPORT_EMAIL: 'support@example.com', LEGAL_PHONE: ' +33 (0)1 99-00.12.34 ', LEGAL_ADDRESS: '1 rue Exemple', LEGAL_REGISTRATION: 'SIRET 1' });
-  assert.equal(details.phone, '+33 (0)1 99-00.12.34');
+  assert.equal(details.phone, '+33 1 99 00 12 34', 'written the French way, whatever the typing');
   assert.deepEqual(labels(details, 'notice'), ['Publisher', 'Address', 'Registration', 'Email', 'Phone', 'Director of publication'], 'the order the legal notice reads');
   assert.deepEqual(labels(details, 'privacy'), ['Data controller', 'Address', 'Registration', 'Email'], 'the privacy policy shows no phone');
-  assert.match(legal.detailsHtml(legal.detailRows(details)), /<dt>Phone<\/dt><dd><a href="tel:\+33199001234">\+33 \(0\)1 99-00\.12\.34<\/a><\/dd>/);
+  assert.match(legal.detailsHtml(legal.detailRows(details)), /<dt>Phone<\/dt><dd><a href="tel:\+33199001234">\+33 1 99 00 12 34<\/a><\/dd>/);
   assert.equal(legal.telHref('01 99 00 12 34'), 'tel:0199001234');
   assert.equal(legal.telHref('+1 (650) 319-8930'), 'tel:+16503198930');
   for (const bad of ['12345', 'call me', '+33 1 99 00 12 34 ext. 2', '+33 1 99 00 12 34 (office)', '01 99 00 12 34<script>', '+33 1+99 00 12 34', '1'.repeat(21), '01 99 00\n12 34 <b>']) {
@@ -160,6 +164,101 @@ test('the national “(0)” is dropped only from an international number', () =
   assert.equal(legal.telHref('(01) 99 00 12 34'), 'tel:0199001234');
   assert.equal(legal.telHref(' +44 (0)20 7946 0000 '), 'tel:+442079460000');
   assert.equal(legal.phoneHtml('(0)1 99 00 12 34'), '<a href="tel:0199001234">(0)1 99 00 12 34</a>');
+});
+
+test('an international number is shown the way its country writes it, after the country code; the tel: link is its digits', () => {
+  const shown = value => legal.legalPhone(value);
+  // France, as the owner types it (E.164: +33, then the number without its 0) or with spaces, dots, dashes and “(0)”.
+  for (const typed of ['+33199001234', '+33 1 99 00 12 34', '+33 (0)1 99 00 12 34', '+33.1.99.00.12.34', '+33-199-001-234', ' +33 1 9900 1234 ']) {
+    assert.equal(shown(typed), '+33 1 99 00 12 34', typed);
+    assert.equal(legal.telHref(shown(typed)), 'tel:+33199001234', typed);
+  }
+  const cases = [
+    // The US and Canada: area code, exchange, line.
+    ['+15145550123', '+1 514 555 0123'],
+    ['+1 (514) 555-0123', '+1 514 555 0123'],
+    // The United Kingdom: London, a mobile, a 01x1 city, another 01 area, a freephone number.
+    ['+442079460000', '+44 20 7946 0000'],
+    ['+44 (0)20 7946 0000', '+44 20 7946 0000'],
+    ['+447700900123', '+44 7700 900123'],
+    ['+441214960000', '+44 121 496 0000'],
+    ['+441632960000', '+44 1632 960000'],
+    ['+448081570000', '+44 808 157 0000'],
+    // Belgium: Brussels, another area, a mobile, a freephone number.
+    ['+3220000000', '+32 2 000 00 00'],
+    ['+3210000000', '+32 10 00 00 00'],
+    ['+32470000000', '+32 470 00 00 00'],
+    ['+3280000000', '+32 800 00 000'],
+    // Switzerland: Zurich, a freephone number.
+    ['+41440000000', '+41 44 000 00 00'],
+    ['+41800000000', '+41 800 000 000'],
+    // Germany: the area code, then the number in one block (Berlin, Cologne, a mobile, Heidelberg).
+    ['+493023125000', '+49 30 23125000'],
+    ['+492214710000', '+49 221 4710000'],
+    ['+4915100000000', '+49 151 00000000'],
+    ['+49 (0)6221 000000', '+49 6221 000000']
+  ];
+  for (const [typed, expected] of cases) {
+    assert.equal(shown(typed), expected, typed);
+    assert.equal(legal.telHref(shown(typed)), `tel:+${typed.replace(/\(0\)/g, '').replace(/\D/g, '')}`, `${typed}: the tel: link`);
+  }
+});
+
+test('another country: groups of three and two digits, or the spaces it was typed with; a national number as typed', () => {
+  assert.equal(legal.formatPhone('+351210000000'), '+351 210 000 000', 'Portugal, 9 digits');
+  assert.equal(legal.formatPhone('+351 210000000'), '+351 210 000 000', 'a space after the code only');
+  assert.equal(legal.formatPhone('+351 21 000 0000'), '+351 21 000 0000', 'typed with its own spaces: kept');
+  assert.equal(legal.formatPhone('+3906000000000'), '+39 060 000 000 00', 'Italy keeps its 0; 11 digits: 3 3 3 2');
+  assert.equal(legal.formatPhone('+31200000000'), '+31 200 000 000');
+  assert.equal(legal.formatPhone('+3520000000'), '+352 000 00 00', 'never a group of one: 7 digits are 3 2 2');
+  assert.equal(legal.legalPhone('+7 495 000 00 00'), '+7 495 000 00 00', 'Russia (+7): as typed');
+  assert.equal(legal.telHref(legal.legalPhone('+7 495 000 00 00')), 'tel:+74950000000');
+  // Without +: as typed, on one line, and dialled with its 0.
+  assert.equal(legal.legalPhone('01 99 00 12 34'), '01 99 00 12 34');
+  assert.equal(legal.legalPhone('0199001234'), '0199001234');
+  assert.equal(legal.telHref(legal.legalPhone('01 99 00 12 34')), 'tel:0199001234');
+  // The country code an international number starts with (ITU-T E.164).
+  assert.deepEqual(['15145550123', '74950000000', '33199001234', '442079460000', '351210000000', '3520000000', '8613800000000', '85200000000'].map(legal.callingCode), ['1', '7', '33', '44', '351', '352', '86', '852']);
+});
+
+test('a number for a country the pages know must have its digits after the code; others are checked loosely', () => {
+  const problem = value => legal.legalValueProblem('LEGAL_PHONE', value);
+  for (const [typed, words] of [
+    ['+330199001234', 'not a phone number: after +33, the 9 digits of the number, without its leading 0'],
+    ['+33 01 99 00 12 34', 'not a phone number: after +33, the 9 digits of the number, without its leading 0'],
+    ['+3319900123', 'not a phone number: after +33, the 9 digits of the number, without its leading 0'],
+    ['+331990012345', 'not a phone number: after +33, the 9 digits of the number, without its leading 0'],
+    ['+1514555012', 'not a phone number: after +1, the 10 digits of the number'],
+    ['+1 1514 555 0123', 'not a phone number: after +1, the 10 digits of the number'],
+    ['+4420794600', 'not a phone number: after +44, the 9 or 10 digits of the number, without its leading 0'],
+    ['+44 020 7946 0000', 'not a phone number: after +44, the 9 or 10 digits of the number, without its leading 0'],
+    ['+321000000', 'not a phone number: after +32, the 8 or 9 digits of the number, without its leading 0'],
+    ['+4144000000', 'not a phone number: after +41, the 9 digits of the number, without its leading 0'],
+    ['+49 030 23125000', 'not a phone number: after +49, the 5 to 13 digits of the number, without its leading 0'],
+    ['+3512100000000000', 'not a phone number: at most 15 digits after the +'],
+    ['+352 12', 'not a phone number'],
+    ['+33 1 99 00 12 34 (office)', 'not a phone number']
+  ]) {
+    assert.equal(problem(typed), words, typed);
+    assert.equal(legal.legalPhone(typed), '', `${typed} is left out`);
+  }
+  // Whatever it accepts, the pages show; a national number is checked as before.
+  for (const typed of ['+33199001234', '+15145550123', '+442079460000', '+3220000000', '+41440000000', '+493023125000', '+351210000000', '01 99 00 12 34', '(0)1 99 00 12 34']) {
+    assert.equal(problem(typed), '', typed);
+    assert.notEqual(legal.legalPhone(typed), '', typed);
+  }
+});
+
+test('legal.js and the build show the same formatted number', async () => {
+  const config = { LEGAL_PHONE: '+33199001234' };
+  const node = () => ({ innerHTML: '', textContent: '', hidden: undefined, dataset: {} });
+  const notice = node();
+  const doc = { body: { dataset: { root: '../' } }, querySelectorAll: selector => (selector === '[data-legal-details="notice"]' ? [notice] : []), querySelector: () => null };
+  legal.applyLegal(doc, { config });
+  const row = '<div class="lg-dl__row"><dt>Phone</dt><dd><a href="tel:+33199001234">+33 1 99 00 12 34</a></dd></div>';
+  assert.ok(notice.innerHTML.includes(row), notice.innerHTML);
+  assert.ok(legal.staticLegalHtml(await read('legal/index.html'), config).includes(row), 'the no-JavaScript page');
+  assert.match(await read('legal/legal.css'), /\.lg-dl a\[href\^="tel:"\] \{ white-space: nowrap; \}/, 'never cut across two lines');
 });
 
 test('legalValueProblem says why a set value is left out, with the same checks as the pages', () => {
@@ -272,7 +371,7 @@ test('the build writes the configured details into the static pages, as legal.js
   assert.match(notice, /<dt>Address<\/dt><dd>12 rue de l’Exemple &lt;b&gt; 75011 Paris<\/dd>/, 'escaped, on one line');
   assert.match(notice, /<dt>Registration<\/dt><dd>SIRET 123 &amp; co<\/dd>/);
   assert.match(notice, /<dt>Email<\/dt><dd><a href="mailto:support@example\.com">support@example\.com<\/a><\/dd>/);
-  assert.match(notice, /<dt>Phone<\/dt><dd><a href="tel:\+33199001234">\+33 \(0\)1 99 00 12 34<\/a><\/dd>/);
+  assert.match(notice, /<dt>Phone<\/dt><dd><a href="tel:\+33199001234">\+33 1 99 00 12 34<\/a><\/dd>/);
   assert.doesNotMatch(notice, /<b>/, 'nothing from the configuration is read as markup');
   const privacy = legal.staticLegalHtml(await read('legal/privacy/index.html'), sample);
   assert.match(privacy, /To use any of these rights, <span data-legal-contact="privacy">email <a href="mailto:privacy@example\.com">/);
@@ -295,9 +394,9 @@ test('no personal email address or phone number is written in legal/', async () 
     const source = await read(file);
     assert.doesNotMatch(source, /[A-Za-z0-9._%+-]+@(?!example\.com)[A-Za-z0-9-]+\.[A-Za-z.]{2,}/, `${file} contains an email address`);
     assert.doesNotMatch(source, /@gmail\.com|@bemorin\.com/i, file);
-    // The only phone number is Cloudflare’s, the host’s public switchboard.
-    const phones = [...source.matchAll(/\+\d[\d ()-]{7,}\d/g)].map(match => match[0]);
-    assert.ok(phones.every(phone => phone.replace(/\D/g, '') === '16503198930'), `${file}: ${phones}`);
+    // The only phone number is Cloudflare’s, the host’s public switchboard; examples in comments are kept for fiction.
+    const phones = [...source.matchAll(/\+\d[\d ()-]{7,}\d/g)].map(match => match[0].replace(/\D/g, ''));
+    assert.ok(phones.every(phone => phone === '16503198930' || FICTION.test(phone)), `${file}: ${phones}`);
   }
 });
 

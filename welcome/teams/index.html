@@ -202,8 +202,8 @@
 
         <div class="band request" id="request" data-form-panel data-reveal>
           <form class="team-form" data-team-form novalidate aria-labelledby="request-title">
-            <div class="team-form__head">
-              <p class="band__kicker"><svg class="i"><use href="#i-mail"/></svg>Invoice, quote or question</p>
+            <div class="team-form__head" data-form-head>
+              <p class="band__kicker"><svg class="i"><use href="#i-mail"/></svg><span data-form-kicker>Invoice, quote or question</span></p>
               <h2 id="request-title" tabindex="-1" data-form-title>Get it by invoice</h2>
               <p data-form-intro>Tell us where to send the invoice. You’ll get it by email, then the gift link once it’s paid.</p>
             </div>
@@ -215,10 +215,10 @@
             </fieldset>
             <p class="kind-note" data-kind-note role="status" hidden></p>
             <div class="fields">
-              <label class="field"><span>Work email</span><input type="email" name="email" autocomplete="email" required maxlength="254" placeholder="you@company.com" aria-describedby="err-email"><small class="field__err" id="err-email"></small></label>
+              <label class="field"><span data-email-label>Work email</span><input type="email" name="email" autocomplete="email" required maxlength="254" placeholder="you@company.com" aria-describedby="err-email"><small class="field__err" id="err-email"></small></label>
               <label class="field"><span>Your name</span><input type="text" name="name" autocomplete="name" required maxlength="80" aria-describedby="err-name"><small class="field__err" id="err-name"></small></label>
-              <label class="field"><span>Company</span><input type="text" name="company" autocomplete="organization" required maxlength="120" aria-describedby="err-company"><small class="field__err" id="err-company"></small></label>
-              <div class="field">
+              <label class="field" data-team-field><span>Company</span><input type="text" name="company" autocomplete="organization" required maxlength="120" aria-describedby="err-company"><small class="field__err" id="err-company"></small></label>
+              <div class="field" data-team-field>
                 <span id="plan-label">Plan</span>
                 <div class="lb" data-listbox="plan">
                   <input type="hidden" name="plan" value="up-to-50">
@@ -226,12 +226,12 @@
                 </div>
                 <small class="field__err" id="err-plan"></small>
               </div>
-              <div class="field">
+              <div class="field" data-team-field>
                 <label for="team-size">Number of people</label>
                 <input type="number" id="team-size" name="teamSize" inputmode="numeric" required min="2" max="100000" step="1" placeholder="e.g. 40" aria-describedby="err-teamSize">
                 <small class="field__err" id="err-teamSize"></small>
               </div>
-              <div class="field">
+              <div class="field" data-team-field>
                 <span id="timing-label">When to send it</span>
                 <div class="lb" data-listbox="timing">
                   <input type="hidden" name="timing" value="december-2026">
@@ -244,7 +244,7 @@
             <p class="form-error" data-form-error role="alert" hidden></p>
             <div class="team-form__foot">
               <div class="team-form__fine">
-                <label class="consent" data-consent-row><input type="checkbox" name="consent" required aria-describedby="err-consent"><span>You may email me about this request.</span></label>
+                <label class="consent" data-consent-row><input type="checkbox" name="consent" required aria-describedby="err-consent"><span data-consent-label>You may email me about this request.</span></label>
                 <small class="field__err field__err--consent" id="err-consent"></small>
                 <p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request. <a href="#privacy" data-privacy-open="requests">How requests are handled</a></p>
                 <p class="form-off" data-form-off hidden>Requests open when this site’s API is switched on.</p>
@@ -431,7 +431,7 @@
           <span class="pv__icon" aria-hidden="true"><svg class="i"><use href="#i-mail"/></svg></span>
           <div class="pv__body">
             <h3 id="pv-requests" tabindex="-1">Requests</h3>
-            <p>The request form on the Teams page sends what you type — your email, name, company, the kind of request, plan, number of people, currency, timing and message. It’s stored only to reply to you, with your browser’s language, the page version and where the form was opened, and deleted on request.</p>
+            <p>The request form on the Teams page sends what you type — your email, name, company, the kind of request, plan, number of people, currency, timing and message; for a question, only your email, name and question. It’s stored only to reply to you, with your browser’s language, the page version and where the form was opened, and deleted on request.</p>
             <p>If you came through a partner’s link, its code goes with the request too, so the partner can be credited for a team gift they introduced.</p>
           </div>
         </section>

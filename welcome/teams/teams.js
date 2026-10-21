@@ -104,6 +104,8 @@ if (arrived?.closest('main')) {
   html.style.scrollBehavior = 'auto';
   arrived.scrollIntoView({ block: 'start' });
   html.style.removeProperty('scroll-behavior');
+  // The request form (“Ask a question” from another page): its title takes the focus.
+  if (arrived.matches('[data-form-panel]')) form?.arrive();
 }
 
 html.classList.add('js-ready');

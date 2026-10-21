@@ -235,6 +235,35 @@ test('the team request notification text is escaped and labelled', () => {
   assert.ok(email.text.includes('No message.'));
 });
 
+test('a question’s notification says who asked and the question, without a team’s lines', () => {
+  const entry = { email: 'ann@example.com', name: 'Ann <b>', company: '', teamSize: 0, timing: '', plan: '', currency: '', kind: 'question', message: 'Can I pay\nby invoice?', locale: 'fr-FR', source: 'teams' };
+  const email = teamRequestEmail(entry, 'https://planner.test/admin/');
+  assert.equal(email.subject, 'Question from Ann <b>');
+  assert.deepEqual(email.replyTo, { email: 'ann@example.com' });
+  assert.ok(email.text.startsWith('Someone asked a question.\n\nRequest: Question\nName: Ann <b>\nEmail: ann@example.com\nSource: teams\nLocale: fr-FR\n\nQuestion:\nCan I pay\nby invoice?\n'), email.text);
+  for (const line of ['Company', 'People', 'Plan', 'Currency', 'Timing', 'team kit']) {
+    assert.ok(!email.text.includes(line), `no ${line} line`);
+    assert.ok(!email.html.includes(`>${line}<`), `no ${line} row`);
+  }
+  assert.ok(email.html.includes('Ann &lt;b&gt;'), 'escaped');
+  assert.ok(!email.html.includes('Ann <b>'));
+  // Without a name, the subject names the address.
+  assert.equal(teamRequestEmail({ ...entry, name: '' }).subject, 'Question from ann@example.com');
+  // A question from an older page, with a team, still reads like a team request.
+  assert.match(teamRequestEmail({ ...entry, company: 'Globex', teamSize: 12, timing: 'later' }).subject, /^Team kit request: Globex \(12 people\)$/);
+});
+
+test('a question is emailed to the owner too, and an invoice still names its team', async () => {
+  const deferred = [];
+  const { api, resend } = setup({ defer: promise => deferred.push(promise) });
+  assert.equal((await api(post('teams', { email: 'ann@example.com', name: 'Ann', message: 'Is there a family plan?', consent: true, kind: 'question' }))).status, 201);
+  assert.equal((await api(post('teams', team({ kind: 'invoice', plan: 'up-to-50', currency: 'EUR' })))).status, 201);
+  await Promise.all(deferred);
+  assert.deepEqual(resend.calls.map(call => call.body.subject), ['Question from Ann', 'Team kit request: Acme (25 people)']);
+  assert.deepEqual(resend.calls.map(call => call.body.reply_to), ['ann@example.com', 'lead@acme.example']);
+  assert.ok(resend.calls[0].body.text.includes('Question:\nIs there a family plan?'));
+});
+
 test('announcements are refused clearly when email is not configured', async () => {
   const { api, store, resend } = setup({ resendApiKey: '' });
   await join(api, 2, { now: START });
