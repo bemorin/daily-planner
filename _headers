@@ -47,9 +47,13 @@
   Cache-Control: no-cache
 /admin/
   Cache-Control: no-cache
+/admin/configuration/
+  Cache-Control: no-cache
 /teams/
   Cache-Control: no-cache
 /partners/
+  Cache-Control: no-cache
+/contact/
   Cache-Control: no-cache
 /welcome/
   Cache-Control: no-cache

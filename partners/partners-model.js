@@ -6,13 +6,13 @@
  *
  * `url`: DAILY_PLANNER_AFFILIATE_URL, the Creem affiliate sign-up link (Creem →
  * Growth → Affiliate Hub). Only an https address counts; without one, the
- * button opens the question form on the Teams page, about the program.
+ * button opens the question form on the Contact page, about the program.
  */
 
 import { beforeTaxCents, commissionCents, formatMoney, PARTNER_PROGRAM, partnerRate, priceCents, TEAM_TIERS } from '../src/lib/pricing.js';
 
-/** The question form of the Teams page, about the partner program (from /partners/: ../teams/ is /teams/). */
-export const PARTNER_QUESTION_HREF = '../teams/?ask=question&topic=partners#request';
+/** The Contact page's question form, about the partner program (from /partners/: ../contact/ is /contact/). */
+export const PARTNER_QUESTION_HREF = '../contact/?topic=partners';
 /** The Teams page, for a partner bringing a company. */
 export const TEAMS_HREF = '../teams/';
 

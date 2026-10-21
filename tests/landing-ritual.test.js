@@ -42,7 +42,7 @@ test('the privacy dialog lists every moment the landing page counts, once each',
 });
 
 test('legal pages are linked on this site, in order, in the same tab', async () => {
-  const pages = [['welcome/index.html', '../legal/'], ['teams/index.html', '../legal/'], ['partners/index.html', '../legal/'], ['welcome/thanks/index.html', '../../legal/']];
+  const pages = [['welcome/index.html', '../legal/'], ['teams/index.html', '../legal/'], ['partners/index.html', '../legal/'], ['contact/index.html', '../legal/'], ['welcome/thanks/index.html', '../../legal/']];
   for (const [file, base] of pages) {
     const page = await read(file);
     assert.doesNotMatch(page, /bemorin\.com\/(?:privacy|terms|cookies)/, `${file}: no legal link to the old site`);

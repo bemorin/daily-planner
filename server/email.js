@@ -13,6 +13,10 @@
 //   plan: one call sends at most MAX_BATCHES_PER_SEND batch requests
 //   (EMAILS_PER_SEND emails); the dashboard simply sends again for the rest.
 // `fetch` and the pause are injectable so tests never reach the network.
+// Resend's own words in a failure never carry the key (server/secret-scrub.js):
+// none after a 401 or a 403, scrubbed otherwise.
+
+import { upstreamText } from './secret-scrub.js';
 
 export const RESEND_EMAILS_URL = 'https://api.resend.com/emails';
 export const RESEND_BATCH_URL = 'https://api.resend.com/emails/batch';
@@ -76,6 +80,21 @@ export function announcementEmail({ subject, text }) {
 }
 
 /**
+ * The configuration page's test email (POST /api/admin/email/test), to
+ * OWNER_EMAIL only: short, and nothing in it about any list.
+ */
+export function ownerTestEmail({ sentAt = new Date() } = {}) {
+  const date = new Date(sentAt);
+  const when = Number.isNaN(date.getTime()) ? '' : `${date.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+  const lines = [
+    `This test email was sent from the configuration page of Daily Planner${when ? ` at ${when}` : ''}.`,
+    'If you can read it, Resend, EMAIL_FROM and OWNER_EMAIL work together: owner notifications and buyers’ emails can be sent.',
+    'Nothing else was sent.'
+  ];
+  return { subject: 'Daily Planner: test email', html: htmlDocument(lines.map(line => `<p>${escapeHtml(line)}</p>`).join('\n')), text: `${lines.join('\n\n')}\n` };
+}
+
+/**
  * The one email sent after a Plus purchase (from the Creem webhook): the link that
  * activates Plus on each device. `url` is ${PUBLIC_BASE_URL}/?purchase=<checkout id>.
  */
@@ -131,9 +150,12 @@ export async function idempotencyKey(...parts) {
   return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function describeFailure(response) {
+/** A failed answer of Resend, in words. After a 401 or a 403 nothing of Resend's own text is kept (it may repeat the key). */
+async function describeFailure(response, secrets) {
   const body = await response.json().catch(() => null);
-  const detail = typeof body?.message === 'string' ? body.message.slice(0, 300) : '';
+  if (response.status === 401) return 'Resend refused RESEND_API_KEY (HTTP 401)';
+  if (response.status === 403) return 'Resend refused to send (HTTP 403): check that the domain of EMAIL_FROM is verified in Resend → Domains and that the key may send from it';
+  const detail = upstreamText(response.status, typeof body?.message === 'string' ? body.message : '', secrets, 300);
   return `Resend answered HTTP ${response.status}${detail ? `: ${detail}` : ''}`;
 }
 
@@ -176,7 +198,7 @@ export function createResendMailer({ apiKey = '', from = '', fetch: fetchImpl = 
       await sleep(Math.min(RETRY_AFTER_MAX_MS, Math.max(minIntervalMs, Number.isFinite(seconds) ? seconds * 1000 : 1000)));
       response = await postOnce(url, body, headers, timeoutMs);
     }
-    if (!response.ok) throw new Error(await describeFailure(response));
+    if (!response.ok) throw new Error(await describeFailure(response, [key]));
     return response.json().catch(() => ({}));
   }
 
@@ -206,7 +228,8 @@ export function createResendMailer({ apiKey = '', from = '', fetch: fetchImpl = 
           const requestKey = typeof idempotency === 'function' ? await idempotency(batch) : idempotency;
           await post(messages.length === 1 ? RESEND_EMAILS_URL : RESEND_BATCH_URL, messages.length === 1 ? messages[0] : messages, { timeoutMs, idempotency: requestKey });
         } catch (error) {
-          const failure = new Error(error?.name === 'AbortError' ? 'Resend did not answer in time' : String(error?.message || 'Resend request failed'));
+          // A network failure (fetch's TypeError) in plain words; our own messages as they are.
+          const failure = new Error(error?.name === 'AbortError' ? 'Resend did not answer in time' : error instanceof TypeError ? 'Resend couldn’t be reached' : String(error?.message || 'Resend request failed'));
           failure.sent = sent;
           throw failure;
         }

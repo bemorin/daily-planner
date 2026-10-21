@@ -22,8 +22,8 @@ const EMAIL_RE = /^[^\s@<>()[\]\\,;:"?&=%/#]{1,64}@[a-z0-9](?:[a-z0-9.-]{0,188}[
 const PHONE_RE = /^\+?[\d ().-]{6,32}$/;
 // An international number has at most 15 digits, country code included (ITU-T E.164).
 const E164_MAX = 15;
-// The question form lives on the Teams page (1.28), at /teams/ (1.30).
-const ASK_PATH = 'teams/?ask=question#request';
+// The question form: the Contact page, /contact/ (1.31; the Teams page's form before).
+const ASK_PATH = 'contact/';
 // The configuration keys that hold an email address.
 const EMAIL_KEYS = ['SUPPORT_EMAIL', 'PRIVACY_EMAIL'];
 
@@ -233,7 +233,7 @@ export function contactEmail(details, topic = 'support') {
   return (topic === 'privacy' && details?.privacyEmail) || details?.email || '';
 }
 
-/** Where to write without an address: the “Ask a question” form, on the Teams page. */
+/** Where to write without an address: the “Ask a question” form, on the Contact page. */
 export const askHref = (root = '../') => `${root}${ASK_PATH}`;
 
 const mailLink = email => `<a href="mailto:${esc(email)}">${esc(email)}</a>`;

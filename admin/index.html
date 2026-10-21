@@ -25,6 +25,7 @@
           <button class="select-trigger owner-select" type="button" id="owner-days" data-owner-days aria-haspopup="listbox" aria-expanded="false" aria-labelledby="owner-days-label owner-days"><span class="select-trigger__value">90 days</span><svg class="select-chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
         </div>
         <button class="secondary-button" type="button" data-owner-refresh>Refresh</button>
+        <a class="text-button owner-link-button" href="./configuration/">Configuration</a>
         <button class="text-button" type="button" data-owner-signout>Sign out</button>
       </div>
     </header>
@@ -129,7 +130,8 @@
           <div data-owner-license-list></div>
         </section>
         <section class="owner-card" aria-labelledby="owner-setup-title">
-          <header><h2 id="owner-setup-title">Setup</h2><p>What this deployment has configured. Secret values are never shown, only whether they are set.</p></header>
+          <header class="owner-card__head"><div><h2 id="owner-setup-title">Setup</h2><p>What this deployment has configured. Secret values are never shown, only whether they are set.</p></div>
+            <div class="owner-card__tools"><a class="secondary-button" href="./configuration/">Check every setting</a></div></header>
           <ul class="owner-setup" data-owner-setup></ul>
         </section>
       </div>

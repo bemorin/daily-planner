@@ -45,8 +45,9 @@ test('the Teams and partners pages live at /teams/ and /partners/; their old add
     ['/welcome/partners/partners.css', '/partners/partners.css']
   ];
   for (const [from, to] of cases) assert.deepEqual(follow(from), { status: 301, address: to }, from);
-  // The new pages, and the rest of /welcome/, are pages, not redirects.
-  for (const path of ['/teams/', '/teams/?ask=question', '/partners/', '/welcome/', '/welcome/?ask=question', '/welcome/thanks/', '/welcome/teams-model.js', '/welcome/landing.css', '/', '/legal/']) {
+  // The new pages, and the rest of /welcome/, are pages, not redirects (a question asked of /teams/ or /welcome/
+  // goes on to /contact/ in the page itself: tests/contact.test.js).
+  for (const path of ['/teams/', '/teams/?ask=question', '/partners/', '/contact/', '/contact/?topic=partners', '/welcome/', '/welcome/?ask=question', '/welcome/thanks/', '/welcome/teams-model.js', '/welcome/landing.css', '/', '/legal/']) {
     assert.equal(answer(path), null, path);
   }
 });
@@ -85,7 +86,7 @@ test('the dev server and the build apply the same file', () => {
   assert.match(serve, /import \{ parseRedirects, redirectFor \} from '\.\/redirects\.mjs';/);
   assert.match(serve, /const redirect = redirectFor\(redirects, url\.pathname, url\.search\);/);
   const build = read('scripts/build.mjs');
-  for (const folder of ['welcome', 'teams', 'partners', 'legal']) assert.match(build, new RegExp(`await copyTree\\('${folder}'\\);`), folder);
+  for (const folder of ['welcome', 'teams', 'partners', 'contact', 'legal']) assert.match(build, new RegExp(`await copyTree\\('${folder}'\\);`), folder);
   assert.match(build, /await copyFile\('_redirects'\);/);
 });
 
@@ -107,7 +108,7 @@ const localRefs = html => [...html.matchAll(/\s(?:href|src)="([^"]+)"/g)].map(ma
 
 test('every page around the move links only to files that exist', () => {
   const legal = ['legal/index.html', ...readdirSync(new URL('legal/', root), { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => `legal/${entry.name}/index.html`)];
-  for (const file of ['welcome/index.html', 'welcome/thanks/index.html', 'teams/index.html', 'partners/index.html', ...legal]) {
+  for (const file of ['welcome/index.html', 'welcome/thanks/index.html', 'teams/index.html', 'partners/index.html', 'contact/index.html', ...legal]) {
     const refs = localRefs(read(file));
     assert.ok(refs.length > 5, file);
     for (const ref of refs) {
@@ -122,13 +123,25 @@ test('every page around the move links only to files that exist', () => {
   assert.deepEqual([...new Set(pages)].sort(), ['./partners/', './teams/']);
   assert.doesNotMatch(planner, /welcome\/(?:teams|partners)/);
   // Links the scripts write: the legal pages’ question form, the partners page’s buttons.
-  for (const [folder, href] of [['legal/', askHref('../')], ['legal/terms/', askHref('../../')], ['partners/', PARTNER_QUESTION_HREF], ['partners/', TEAMS_HREF]]) {
-    assert.equal(resolveFrom(`${folder}index.html`, href), 'teams/', href);
+  for (const [folder, href, page] of [['legal/', askHref('../'), 'contact/'], ['legal/terms/', askHref('../../'), 'contact/'], ['partners/', PARTNER_QUESTION_HREF, 'contact/'], ['partners/', TEAMS_HREF, 'teams/']]) {
+    assert.equal(resolveFrom(`${folder}index.html`, href), page, href);
+    assert.ok(exists(page), page);
+  }
+  // Every “Ask a question” link of these pages goes to the Contact page (the Teams page's own buttons open its form in place).
+  for (const file of ['welcome/index.html', 'welcome/thanks/index.html', 'teams/index.html', 'partners/index.html', 'contact/index.html', ...legal]) {
+    const html = read(file);
+    const asks = [...html.matchAll(/<a ([^>]*)>(?:Ask a question|ask a question|“Ask a question” form)<\/a>/g)].map(match => /href="([^"]+)"/.exec(match[1])[1].replace(/&amp;/g, '&'));
+    assert.ok(asks.length > 0, file);
+    for (const href of asks) {
+      if (file === 'teams/index.html' && href === '#request') continue;
+      assert.equal(resolveFrom(file, href), 'contact/', `${file}: ${href}`);
+    }
+    assert.doesNotMatch(html, /href="[^"]*ask=question/, `${file}: no link to the old question form`);
   }
 });
 
 test('the moved pages’ scripts import files that exist', () => {
-  for (const file of ['teams/teams.js', 'partners/partners.js', 'partners/partners-model.js']) {
+  for (const file of ['teams/teams.js', 'partners/partners.js', 'partners/partners-model.js', 'contact/contact.js']) {
     const specifiers = [...read(file).matchAll(/^import [^;]*? from '([^']+)';/gm)].map(match => match[1]);
     assert.ok(specifiers.length > 0, file);
     for (const specifier of specifiers) assert.ok(exists(resolveFrom(file, specifier)), `${file}: ${specifier}`);
@@ -136,7 +149,7 @@ test('the moved pages’ scripts import files that exist', () => {
 });
 
 test('no file of the site points at the old addresses any more (only _redirects and _headers name them)', () => {
-  const files = ['index.html', 'src/features/plus-dialog.js', 'src/features/share-dialog.js', 'src/config.js', 'admin/admin.js', 'legal/legal-details.js', 'welcome/landing-settings.js', 'welcome/thanks/index.html', 'welcome/thanks/thanks.js', 'welcome/index.html', 'teams/index.html', 'partners/index.html', 'partners/partners-model.js'];
+  const files = ['index.html', 'src/features/plus-dialog.js', 'src/features/share-dialog.js', 'src/config.js', 'admin/admin.js', 'legal/legal-details.js', 'welcome/landing-settings.js', 'welcome/thanks/index.html', 'welcome/thanks/thanks.js', 'welcome/index.html', 'teams/index.html', 'partners/index.html', 'partners/partners-model.js', 'contact/index.html'];
   for (const file of files) {
     const text = read(file).replace(/^#.*$/gm, '');
     assert.doesNotMatch(text, /welcome\/(?:teams|partners)\b/, file);

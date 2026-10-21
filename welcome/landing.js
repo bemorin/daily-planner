@@ -11,7 +11,7 @@ import { createPaletteCard } from './palette-card.js';
 import { createPrivacyDialog } from './privacy-dialog.js';
 import { checkout, createSale, renderPriceLines, setupBuyButtons } from './sale.js';
 import { click, setupScenes } from './scenes.js';
-import { teamsAddress } from './teams-model.js';
+import { movedAddress } from './teams-model.js';
 
 /* ============================================================================
    LANDING (/welcome/): the planner, Plus and its prices for one person, and a
@@ -813,10 +813,11 @@ function start() {
 
 // A payment confirmation sent here instead of to the gift page.
 const params = new URLSearchParams(location.search);
-// The team gift moved to the Teams page (/teams/): its old addresses (?ask=…,
-// #request, #teams, #team-prices, #seats) lead there. The inline script in <head>
-// already did this before first paint; this is the fallback.
-const movedTo = teamsAddress({ path: location.pathname, search: location.search, hash: location.hash });
+// The team gift moved to the Teams page (/teams/) and the question form to the
+// Contact page (/contact/): their old addresses (?ask=question → /contact/;
+// another ?ask=…, #request, #teams, #team-prices, #seats → /teams/) lead there.
+// The inline script in <head> already did this before first paint; this is the fallback.
+const movedTo = movedAddress({ path: location.pathname, search: location.search, hash: location.hash });
 if (params.get('checkout_id') || params.get('session')) location.replace(`./thanks/${location.search}`);
 else if (movedTo) location.replace(movedTo);
 else start();

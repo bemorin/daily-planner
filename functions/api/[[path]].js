@@ -17,7 +17,9 @@
 // The checkout currency follows the buyer's country from Cloudflare
 // (request.cf.country): EUR in the euro area, USD elsewhere.
 // Refunds and revoked licences need migrations/0005_refunds.sql in the D1 database.
-// Setup guide: docs/FEEDBACK_AND_WAITLIST.md
+// Setup guide: docs/FEEDBACK_AND_WAITLIST.md. Every setting is listed in
+// server/config-inventory.js and checked on /admin/configuration/ (the whole
+// `env` goes to those checks, which never answer a secret's value).
 
 import { createPlannerApi } from '../../server/planner-api.js';
 import { createD1Store } from '../../server/d1-store.js';
@@ -44,7 +46,10 @@ export async function onRequest(context) {
     creemTestMode: env.CREEM_TEST_MODE || '',
     creemProducts: creemProductsFromEnv(env),
     // Owner notifications and gift emails finish after the response has been sent.
-    defer: promise => context.waitUntil(promise)
+    defer: promise => context.waitUntil(promise),
+    // The configuration checks (POST /api/admin/config/check) read the variables, secrets and bindings
+    // themselves (DB, and ASSETS for the deployed runtime-config.js).
+    configEnv: env
   });
   return handle(request);
 }

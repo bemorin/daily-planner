@@ -45,8 +45,8 @@ function walk(dir) {
 }
 
 const rules = parseHeaders(read('_headers'));
-// What the build publishes (scripts/build.mjs): the root files, admin/, welcome/, teams/, partners/, legal/ and src/.
-const published = ['index.html', 'app.js', 'sw.js', 'runtime-config.js', 'styles.css', ...['admin/', 'welcome/', 'teams/', 'partners/', 'legal/', 'src/'].flatMap(walk)];
+// What the build publishes (scripts/build.mjs): the root files, admin/, welcome/, teams/, partners/, contact/, legal/ and src/.
+const published = ['index.html', 'app.js', 'sw.js', 'runtime-config.js', 'styles.css', ...['admin/', 'welcome/', 'teams/', 'partners/', 'contact/', 'legal/', 'src/'].flatMap(walk)];
 
 // The old addresses of the Teams and partners pages: redirects (_redirects) that are never kept (no-store)…
 const MOVED = ['/welcome/teams', '/welcome/teams/*', '/welcome/partners', '/welcome/partners/*'];
@@ -70,7 +70,9 @@ test('_headers is valid: one Cache-Control per rule, within Pages limits', () =>
 
 test('every page, script and stylesheet revalidates on each visit, matched by exactly one rule', () => {
   const pages = published.filter(path => path.endsWith('index.html')).map(path => `/${path.slice(0, -'index.html'.length)}`);
-  assert.ok(['/', '/admin/', '/welcome/', '/welcome/thanks/', '/teams/', '/partners/', '/legal/privacy/'].every(page => pages.includes(page)), pages.join(' '));
+  assert.ok(['/', '/admin/', '/welcome/', '/welcome/thanks/', '/teams/', '/partners/', '/contact/', '/legal/privacy/'].every(page => pages.includes(page)), pages.join(' '));
+  // The owner's configuration page (1.31) is covered before it lands, so the two can ship in either order.
+  assert.equal(headersFor(rules, '/admin/configuration/').headers['cache-control'], 'no-cache');
   const files = published.filter(path => /\.(?:html|js|css)$/.test(path)).map(path => `/${path}`);
   assert.ok(files.includes('/admin/admin.js') && files.includes('/admin/admin.css') && files.includes('/src/features/year-plan.js'));
   for (const path of [...pages, ...files]) {
@@ -104,7 +106,7 @@ test('the other old addresses are redirects never kept, without the slow cache c
     assert.equal(headers['clear-site-data'], undefined, path);
   }
   // The new pages, the rest of /welcome/ and the planner are left alone.
-  for (const path of ['/teams/', '/partners/', '/welcome/', '/welcome/thanks/', '/welcome/teams-model.js', '/', '/index.html', '/sw.js']) {
+  for (const path of ['/teams/', '/partners/', '/contact/', '/welcome/', '/welcome/thanks/', '/welcome/teams-model.js', '/', '/index.html', '/sw.js']) {
     assert.equal(headersFor(rules, path).headers['clear-site-data'], undefined, path);
   }
 });

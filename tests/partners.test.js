@@ -856,8 +856,8 @@ test('a team request keeps the partner code it came with, and the owner sees it 
     assert.equal('ref' in entry, false, `${String(ref)}: left out`);
   }
   assert.equal(validateTeamRequest(teamBody({ ref: ' CAMILLE ' }), now).entry.ref, 'CAMILLE');
-  // The Teams page says where a request comes from; anything else reads as the welcome page.
-  assert.deepEqual(['teams', 'app', 'landing', 'elsewhere', undefined].map(source => validateTeamRequest(teamBody({ source }), now).entry.source), ['teams', 'app', 'landing', 'landing', 'landing']);
+  // The Teams and Contact pages say where a request comes from; anything else reads as the welcome page.
+  assert.deepEqual(['teams', 'app', 'contact', 'landing', 'elsewhere', undefined].map(source => validateTeamRequest(teamBody({ source }), now).entry.source), ['teams', 'app', 'contact', 'landing', 'landing', 'landing']);
   // Nothing checks the code (anyone can type one in a link): the owner is told to check it before paying.
   assert.equal(teamRequestPartnerLine('COACH_ANNA'), 'COACH_ANNA — 10% if this becomes an order. Check that COACH_ANNA is a partner in Creem → Affiliate Hub before paying.');
   assert.equal(teamRequestPartnerLine(''), '');

@@ -928,7 +928,7 @@ body.has-modal { overflow: hidden; }
 
 .bemorin-footer__links { grid-column: 3; justify-self: end; display: flex; gap: .3rem; }
 
-.bemorin-footer__links a { padding: .25rem .3rem; border-radius: .35rem; color: var(--faint); font-size: .58rem; letter-spacing: .06em; text-decoration: none; text-transform: uppercase; }
+.bemorin-footer__links a { white-space: nowrap; padding: .25rem .3rem; border-radius: .35rem; color: var(--faint); font-size: .58rem; letter-spacing: .06em; text-decoration: none; text-transform: uppercase; }
 
 .bemorin-footer__links a:hover { color: var(--ink); background: var(--soft); }
 

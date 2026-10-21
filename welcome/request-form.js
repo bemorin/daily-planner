@@ -9,22 +9,26 @@ import { createListbox } from './listbox.js';
 import { EMAIL_RE, configText, el, emailAddress, qs, qsa } from './page-kit.js';
 import { EASE_OUT, reduceQuery } from './page-motion.js';
 import { createStepper } from './stepper.js';
-import { KINDS, PARTNER_QUESTION, PEOPLE_RANGE, TIMING_LABELS, emailField, isTeamKind, requestCopy, requestEmail, requestFromAddress, requestPayload } from './teams-model.js';
+import { CONTACT_TOPICS, KINDS, PEOPLE_RANGE, TIMING_LABELS, emailField, isTeamKind, requestCopy, requestEmail, requestFromAddress, requestPayload } from './teams-model.js';
 
 /* ============================================================================
-   The request form “Invoice, quote or question” (#request, on the Teams page):
-   an invoice for a team gift, a quote — or a question, anyone's, about the
-   planner, Plus, a purchase, the partner program (?ask=question&topic=partners)
-   or the team gift. A question is the plain form: email, name, the question;
-   the team's fields (company, plan, number of people, timing) are hidden.
+   The request form, on two pages:
+   - the Teams page (#request), “Invoice, quote or question”: an invoice for
+     a team gift, a quote, or a question about the team gift. A question is
+     the plain form: email, name, the question; the team's fields (company,
+     plan, number of people, timing) are hidden. Links on the page open it
+     with the right kind: `[data-request="invoice|quote|question|talk"]` (and
+     `data-plan`); from other pages, `?ask=invoice|quote&plan=…#request`.
+   - the Contact page (/contact/, `questionsOnly`): the question form alone,
+     anyone's, about anything, or about the partner program
+     (?topic=partners): no kinds to choose, no team fields; the page's own
+     title and intro head it (CONTACT_TOPICS).
 
-   Links anywhere open it with the right kind: `[data-request="invoice|quote|
-   question|talk"]` (and `data-plan`) on this page, `?ask=…&plan=…` from other
-   pages (/teams/?ask=question#request). Sent to the owner API
-   (POST /api/teams), with the partner code this browser remembers (`ref`),
-   so a team gift a partner introduced can earn them their share. Without the
-   API, it becomes an email to LANDING.contactEmail, else to SUPPORT_EMAIL;
-   without either, it stays visible but cannot be sent.
+   Sent to the owner API (POST /api/teams), with the partner code this
+   browser remembers (`ref`), so a team gift a partner introduced can earn
+   them their share. Without the API, it becomes an email to
+   LANDING.contactEmail, else to SUPPORT_EMAIL; without either, it stays
+   visible but cannot be sent.
    ============================================================================ */
 
 const PLANNER_API_URL = typeof config.PLANNER_API_URL === 'string' ? config.PLANNER_API_URL : '';
@@ -71,7 +75,7 @@ function setError(field, message) {
 function validate(form, values, requestMode) {
   const count = Number(values.teamSize);
   const asking = values.kind === 'question' || values.kind === 'talk';
-  // A question has no team fields: they are hidden, and never block it.
+  // A question has no team fields: they are hidden (or absent), and never block it.
   const team = isTeamKind(values.kind);
   const email = emailField(values.kind);
   const checks = [
@@ -94,8 +98,8 @@ function validate(form, values, requestMode) {
   return first;
 }
 
-async function sendRequest(values, currency) {
-  const payload = requestPayload(values, { currency, version: APP_VERSION, locale: navigator.language || '', ref: referralCode() });
+async function sendRequest(values, { currency, source }) {
+  const payload = requestPayload(values, { currency, version: APP_VERSION, locale: navigator.language || '', ref: referralCode(), source });
   try {
     const response = await fetch(`${PLANNER_API_URL}/teams`, {
       method: 'POST',
@@ -111,32 +115,38 @@ async function sendRequest(values, currency) {
 }
 
 /**
- * Wires the form. Returns { open({ kind, plan }), renderPlanOptions() }, or
- * null when the page has no form.
+ * Wires the form. Returns { open({ kind, plan }), arrive(), renderPlanOptions() },
+ * or null when the page has no form.
  *
  * @param {object} options
- * @param {{ currency: string, money: (value: number) => string }} options.sale
- * @param {(name: string) => void} options.track
+ * @param {{ currency: string, money: (value: number) => string } | null} [options.sale] the Teams page's prices (none on the Contact page)
+ * @param {(name: string) => void} [options.track]
  * @param {{ contactEmail: string, replyDelay: string, talk: { enabled: boolean } }} options.settings
+ * @param {boolean} [options.questionsOnly] the Contact page: a question only, headed by the page's own title
+ * @param {'general' | 'partners'} [options.topic] what the question is about (CONTACT_TOPICS), with questionsOnly
+ * @param {string} [options.source] the page, as the request names it (CONTACT_SOURCE on the Contact page)
  */
-export function createRequestForm({ sale, track = () => {}, settings }) {
+export function createRequestForm({ sale = null, track = () => {}, settings, questionsOnly = false, topic = 'general', source = 'teams' }) {
   const panel = qs('[data-form-panel]');
   const form = qs('[data-team-form]');
   if (!panel || !form) return null;
 
-  const talkOn = !!settings.talk?.enabled;
+  const talkOn = !questionsOnly && !!settings.talk?.enabled;
   // Without the API: an email to the contact address, else to the site's
   // SUPPORT_EMAIL, either typed plain, “<…>” or “Name <…>”.
   const contactEmail = emailAddress(settings.contactEmail || configText('SUPPORT_EMAIL'));
   const requestMode = plannerApiEnabled() ? 'api' : (EMAIL_RE.test(contactEmail) ? 'mailto' : 'off');
-  const request = { kind: 'invoice', topic: '', opened: false, quoted: false };
+  const request = { kind: questionsOnly ? 'question' : 'invoice', opened: false, quoted: false };
+  const contactCopy = Object.hasOwn(CONTACT_TOPICS, topic) ? CONTACT_TOPICS[topic] : CONTACT_TOPICS.general;
   const smoothBehavior = () => (reduceQuery.matches ? 'auto' : 'smooth');
 
   const field = name => qs(`[name="${name}"]`, form);
-  const head = qs('[data-form-head]', form);
-  const kicker = qs('[data-form-kicker]', form);
-  const title = qs('[data-form-title]', form);
-  const intro = qs('[data-form-intro]', form);
+  // The head: above the choice of kind, in the panel (the Teams page), or
+  // the page's own title and intro (the Contact page).
+  const head = qs('[data-form-head]', panel);
+  const kicker = qs('[data-form-kicker]', panel);
+  const title = qs('[data-form-title]', panel);
+  const intro = qs('[data-form-intro]', panel);
   const emailLabel = qs('[data-email-label]', form);
   const consentLabel = qs('[data-consent-label]', form);
   // The team gift's own fields (company, plan, number of people, timing): not part of a question.
@@ -152,11 +162,13 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
   const again = qs('[data-form-again]', panel);
   const size = field('teamSize');
 
-  // Arriving at #request from another page (“Ask a question”), the browser
-  // focuses the link's target, or nothing at all when it can't take the
-  // focus: the panel takes it, and hands it to the title, as open() does.
-  panel.tabIndex = -1;
-  panel.addEventListener('focus', event => { if (event.target === panel) title.focus({ preventScroll: true }); });
+  if (!questionsOnly) {
+    // Arriving at #request from another page (“Get it by invoice”), the browser
+    // focuses the link's target, or nothing at all when it can't take the
+    // focus: the panel takes it, and hands it to the title, as open() does.
+    panel.tabIndex = -1;
+    panel.addEventListener('focus', event => { if (event.target === panel) title.focus({ preventScroll: true }); });
+  }
 
   if (talkOn && kindGroup && !qs('input[value="talk"]', kindGroup)) {
     kindGroup.append(el('label', {}, el('input', { type: 'radio', name: 'kind', value: 'talk' }), el('span', {}, KINDS.talk.label)));
@@ -167,11 +179,14 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
     return { value: row.plan, label: tierLabel(row), hint: price == null ? 'On quote' : sale.money(price) };
   });
 
-  // The app's own dropdowns and number stepper, instead of the browser's.
-  const plan = createListbox(qs('[data-listbox="plan"]', form), { options: planOptions(), value: defaultPlan(), onChange: chosen => planChosen(chosen) });
-  createListbox(qs('[data-listbox="timing"]', form), { options: Object.entries(TIMING_LABELS).map(([value, label]) => ({ value, label })), value: 'december-2026' });
-  const people = createStepper(size, { min: PEOPLE_MIN, max: PEOPLE_MAX, quick: PEOPLE_CHOICES, noun: 'people', onChange: count => peopleChanged(count) });
+  // The app's own dropdowns and number stepper, instead of the browser's
+  // (the Teams page only: a question has neither).
+  const plan = questionsOnly ? null : createListbox(qs('[data-listbox="plan"]', form), { options: planOptions(), value: defaultPlan(), onChange: chosen => planChosen(chosen) });
+  if (!questionsOnly) createListbox(qs('[data-listbox="timing"]', form), { options: Object.entries(TIMING_LABELS).map(([value, label]) => ({ value, label })), value: 'december-2026' });
+  const people = questionsOnly ? null : createStepper(size, { min: PEOPLE_MIN, max: PEOPLE_MAX, quick: PEOPLE_CHOICES, noun: 'people', onChange: count => peopleChanged(count) });
 
+  const mailtoLine = qs('[data-mailto-line]', form);
+  if (mailtoLine) mailtoLine.hidden = requestMode !== 'mailto';
   if (requestMode === 'api') {
     qs('[data-privacy-line]', form).hidden = false;
   } else {
@@ -199,7 +214,7 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
 
   function setPlan(value, prefill) {
     const row = planRow(value);
-    if (!row) return;
+    if (!row || !plan) return;
     plan.setValue(value);
     if (prefill) fillPeople(row);
   }
@@ -211,7 +226,7 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
   }
 
   function peopleChanged(count) {
-    if (count == null || count < PEOPLE_MIN) return;
+    if (!plan || count == null || count < PEOPLE_MIN) return;
     const next = planForPeople(count);
     if (next && next !== plan.value) plan.setValue(next);
     applyKind();
@@ -219,6 +234,7 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
 
   // An invoice needs a price; a tier without one is quoted.
   function matchKindToPlan() {
+    if (!plan) return;
     const priced = tierPrice(planRow(plan.value), sale.currency) != null;
     request.quoted = request.kind === 'invoice' && !priced;
     if (request.quoted) setKind('quote', false);
@@ -234,7 +250,7 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
   }
 
   function setKind(kind, apply = true) {
-    request.kind = KINDS[kind] && (kind !== 'talk' || talkOn) ? kind : 'invoice';
+    request.kind = questionsOnly ? 'question' : (KINDS[kind] && (kind !== 'talk' || talkOn) ? kind : 'invoice');
     qsa('input[name="kind"]', form).forEach(input => { input.checked = input.value === request.kind; });
     if (apply) applyKind();
   }
@@ -245,10 +261,9 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
    * pointer. Each version is an invisible copy in the same grid cell
    * (aria-hidden, visibility: hidden: no one reads or finds them).
    */
-  function sizeHead(topic) {
+  function sizeHead() {
     if (!head) return;
-    const kinds = Object.keys(KINDS).filter(kind => kind !== 'talk' || talkOn);
-    const versions = [...kinds.map(kind => requestCopy(kind)), ...(topic === 'partners' ? [requestCopy('question', topic)] : [])];
+    const versions = Object.keys(KINDS).filter(kind => kind !== 'talk' || talkOn).map(kind => requestCopy(kind));
     const stack = el('div', { class: 'team-form__heads' });
     head.before(stack);
     stack.append(head, ...versions.map(copy => {
@@ -271,20 +286,23 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
 
   function applyKind() {
     matchKindToPlan();
-    const copy = requestCopy(request.kind, request.topic);
+    const copy = questionsOnly ? { ...KINDS.question, ...contactCopy } : requestCopy(request.kind);
     const team = isTeamKind(request.kind);
     form.dataset.kind = team ? 'team' : 'question';
     if (kicker) kicker.textContent = copy.kicker;
-    title.textContent = copy.title;
-    intro.textContent = requestMode === 'mailto' ? MAILTO_INTRO : copy.intro;
+    if (title) title.textContent = copy.title;
+    // The Contact page keeps its intro: the form says it becomes an email ([data-mailto-line]).
+    if (intro) intro.textContent = requestMode === 'mailto' && !questionsOnly ? MAILTO_INTRO : copy.intro;
     // Below the choice, so the buttons never move under the pointer.
-    kindNote.textContent = request.quoted ? `${tierLabel(planRow(plan.value))}: it starts with a quote, and the invoice follows.` : '';
-    kindNote.hidden = !request.quoted;
-    submit.textContent = requestMode === 'mailto' ? 'Write the request email' : copy.submit;
+    if (kindNote) {
+      kindNote.textContent = request.quoted ? `${tierLabel(planRow(plan.value))}: it starts with a quote, and the invoice follows.` : '';
+      kindNote.hidden = !request.quoted;
+    }
+    submit.textContent = requestMode === 'mailto' ? (questionsOnly ? 'Write the email' : 'Write the request email') : copy.submit;
     // A question is anyone's: an email (not a work one), a name and the question.
     teamFields.forEach(node => { node.hidden = !team; });
-    field('company').required = team;
-    size.required = team;
+    if (field('company')) field('company').required = team;
+    if (size) size.required = team;
     const email = emailField(request.kind);
     if (emailLabel) emailLabel.textContent = email.label;
     field('email').placeholder = email.placeholder;
@@ -307,12 +325,10 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
   }
 
   function open({ kind, plan: chosen }) {
-    // Any other request from the page's own links is no longer about the partner program.
-    request.topic = '';
     showForm();
     setKind(kind || request.kind, false);
     if (chosen) setPlan(chosen, true);
-    else if (!size.value) setPlan(plan.value || defaultPlan(), true);
+    else if (size && !size.value) setPlan(plan?.value || defaultPlan(), true);
     applyKind();
     noteOpened();
     panel.scrollIntoView({ block: 'start', behavior: smoothBehavior() });
@@ -337,7 +353,7 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
   });
 
   // Typing: the plan follows as soon as the number makes sense.
-  size.addEventListener('input', () => {
+  size?.addEventListener('input', () => {
     const typed = size.value.trim();
     if (/^\d+$/.test(typed) && Number(typed) >= PEOPLE_MIN) peopleChanged(Math.min(Number(typed), PEOPLE_MAX));
   });
@@ -349,50 +365,53 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
     if (event.target.getAttribute('aria-invalid') === 'true') setError(event.target, '');
   });
 
-  qs('[data-form-again]', panel)?.addEventListener('click', () => {
-    field('message').value = '';
+  again?.addEventListener('click', () => {
+    // Another one: the same email and name, a new question (or request).
+    field('message').value = questionsOnly ? contactCopy.message : '';
     updateCount();
     showForm();
-    title.focus({ preventScroll: true });
+    if (questionsOnly) field('message').focus();
+    else title.focus({ preventScroll: true });
   });
 
-  // Arriving from a link such as …/teams/?ask=quote&plan=over-1000#request.
-  const asked = requestFromAddress(location.search, { talk: talkOn });
-  sizeHead(asked.topic);
-  setPlan(asked.plan || defaultPlan(), true);
-  setKind(asked.kind || 'invoice');
-  // “Become a partner” on the partners page, before the Creem sign-up link is set: a question about the program.
-  if (asked.topic === 'partners') {
-    request.topic = 'partners';
-    if (!field('message').value) field('message').value = PARTNER_QUESTION.message;
+  if (questionsOnly) {
+    // The Contact page: the question, about anything or about the partner
+    // program (“Partner program: ” starts it).
+    if (contactCopy.message && !field('message').value) field('message').value = contactCopy.message;
     updateCount();
     applyKind();
+  } else {
+    // Arriving from a link such as …/teams/?ask=quote&plan=over-1000#request.
+    const asked = requestFromAddress(location.search, { talk: talkOn });
+    sizeHead();
+    setPlan(asked.plan || defaultPlan(), true);
+    setKind(asked.kind || 'invoice');
   }
 
   form.addEventListener('submit', async event => {
     event.preventDefault();
     if (requestMode === 'off') return;
     errorBox.hidden = true;
-    peopleChanged(people.value);
+    peopleChanged(people?.value);
     applyKind();
     const values = readForm(form, request.kind);
     const invalid = validate(form, values, requestMode);
     if (invalid) { invalid.focus(); return; }
 
     if (requestMode === 'mailto') {
-      const tier = planRow(values.plan);
+      const tier = isTeamKind(values.kind) ? planRow(values.plan) : null;
       const price = tier ? tierPrice(tier, sale.currency) : null;
       const planWords = tier ? `Team gift, ${tierLabel(tier).toLowerCase()} (${price == null ? 'on quote' : sale.money(price)})` : '';
       const { subject, lines } = requestEmail(values, { plan: planWords, timing: TIMING_LABELS[values.timing], ref: referralCode() });
       location.href = `mailto:${contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\r\n'))}`;
-      showDone(`Your email app should open with the request, ready to send. If it doesn’t, write to ${contactEmail}.`);
+      showDone(`Your email app should open with the ${questionsOnly ? 'question' : 'request'}, ready to send. If it doesn’t, write to ${contactEmail}.`);
       return;
     }
 
     submit.disabled = true;
     const label = submit.textContent;
     submit.textContent = 'Sending…';
-    const result = await sendRequest(values, sale.currency);
+    const result = await sendRequest(values, { currency: sale?.currency || '', source });
     submit.disabled = false;
     submit.textContent = label;
     if (result.ok) {
@@ -416,11 +435,11 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
   return {
     open,
     /**
-     * Arriving at #request from a link on another page (…/teams/?ask=question#request,
+     * Arriving at #request from a link on another page (…/teams/?ask=invoice#request,
      * the page already scrolled to it): the title takes the focus, as with open().
      */
     arrive: () => title.focus({ preventScroll: true }),
     /** The plan dropdown's prices follow the currency. */
-    renderPlanOptions: () => plan.setOptions(planOptions(), defaultPlan())
+    renderPlanOptions: () => plan?.setOptions(planOptions(), defaultPlan())
   };
 }

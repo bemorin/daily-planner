@@ -40,11 +40,11 @@ export const LEGAL_ADDRESS = runtimeValue('LEGAL_ADDRESS');
 export const LEGAL_REGISTRATION = runtimeValue('LEGAL_REGISTRATION');
 // Partners (/partners/): the Creem affiliate sign-up link (Creem → Growth
 // → Affiliate Hub) behind “Become a partner”. Blank: the button opens the
-// question form on the Teams page. The program's terms (rates, days, minimum)
+// question form of the Contact page (/contact/?topic=partners). The program's terms (rates, days, minimum)
 // are PARTNER_PROGRAM in src/lib/pricing.js.
 export const AFFILIATE_URL = /^https:\/\/[^\s"'<>]+$/.test(runtimeValue('AFFILIATE_URL')) ? runtimeValue('AFFILIATE_URL') : '';
 // Kept in step with package.json by scripts/check.mjs; feedback is grouped by it.
-export const APP_VERSION = '1.30.0';
+export const APP_VERSION = '1.31.0';
 // Public/project links are deployment configuration, not repository defaults.
 
 

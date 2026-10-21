@@ -18,7 +18,7 @@ const DASH = '—';
 export const TIMING_LABELS = Object.freeze({ 'december-2026': 'December 2026', 'january-2027': 'January 2027', 'q1-2027': 'Q1 2027', later: 'Later' });
 export const PLAN_LABELS = Object.freeze({ 'up-to-10': 'Up to 10 people', 'up-to-50': 'Up to 50 people', 'up-to-100': 'Up to 100 people', 'up-to-500': 'Up to 500 people', 'up-to-1000': 'Up to 1,000 people', 'over-1000': 'Over 1,000 people' });
 export const KIND_LABELS = Object.freeze({ invoice: 'Invoice', quote: 'Quote', talk: 'Talk', question: 'Question' });
-export const REQUEST_SOURCES = Object.freeze({ landing: 'Welcome page', teams: 'Teams page', app: 'Planner' });
+export const REQUEST_SOURCES = Object.freeze({ landing: 'Welcome page', teams: 'Teams page', app: 'Planner', contact: 'Contact page' });
 
 /** A question with no team: no company, no number of people (as server/planner-api.js stores one). */
 export const isPlainQuestion = row => row?.kind === 'question' && !String(row.company || '').trim() && !(Number(row.teamSize) > 0);

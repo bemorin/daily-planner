@@ -52,6 +52,10 @@
 // [&plan=gift-1][&currency=EUR][&ref=CODE][&member=1] makes a paid checkout
 // whose metadata is only what was given — no seal, no request id — and answers
 // its id, to see that the API never takes its partner code or member flag.
+// The setup assistant (admin, Configuration) reads and creates products and
+// webhooks in a pretend store: FAKE_CREEM_CATALOG=partial (default: Plus in EUR
+// and USD only), empty, differs (Plus USD at $25, tax added on top) or full. Its
+// webhook needs a public https PUBLIC_BASE_URL, as with Creem.
 // Without --fake-creem the CREEM_* variables are used, as in production.
 // Links in emails and checkout returns point at this server unless
 // PUBLIC_BASE_URL is set.
@@ -90,6 +94,8 @@ import { randomBytes } from 'node:crypto';
 import { createMemoryStore, createPlannerApi } from '../server/planner-api.js';
 import { generatePlusKeyPair, importSigningKey, publicKeyFromSigningKey, signLicense } from '../server/licenses.js';
 import { checkoutSeal, creemMode, creemProductsFromEnv, webhookSignature } from '../server/creem.js';
+import { CONFIG_VARIABLES } from '../server/config-inventory.js';
+import { expectedProduct } from '../server/creem-setup.js';
 import { beforeTaxCents, priceCents } from '../src/lib/pricing.js';
 import { parseRedirects, redirectFor } from './redirects.mjs';
 
@@ -193,8 +199,60 @@ function fakeCheckoutEntity(id, fake, status = 'completed') {
   };
 }
 
+// The pretend store the setup assistant reads and adds to (FAKE_CREEM_CATALOG, see the header).
+const fakeStore = { products: [], webhooks: [], keys: new Map(), ready: false };
+const fakeProduct = (id, item, currency, extra = {}) => ({ object: 'product', mode: 'test', status: 'active', billing_period: 'once', created_at: '2026-10-01T09:00:00.000Z', ...expectedProduct(item, currency), ...extra, id });
+const fakeHookSecret = () => (process.env.CREEM_WEBHOOK_SECRET || FAKE_WEBHOOK_SECRET).trim();
+
+async function fakeSetupFetch(target, init) {
+  const scenario = process.env.FAKE_CREEM_CATALOG || 'partial';
+  if (!fakeStore.ready) {
+    fakeStore.ready = true;
+    if (scenario !== 'empty') fakeStore.products.push(fakeProduct(FAKE_PRODUCTS.plus.EUR, 'plus', 'EUR'), fakeProduct(FAKE_PRODUCTS.plus.USD, 'plus', 'USD', scenario === 'differs' ? { price: 2500, tax_mode: 'exclusive' } : {}));
+    if (scenario === 'full') {
+      fakeStore.products.push(fakeProduct(FAKE_PRODUCTS.gift.EUR, 'gift', 'EUR'), fakeProduct(FAKE_PRODUCTS.gift.USD, 'gift', 'USD'));
+      fakeStore.webhooks.push({ id: 'wh_fake_1', object: 'webhook', mode: 'test', name: 'Daily Planner', url: `${devBaseUrl()}/api/creem/webhook`, delivery_mode: 'http', status: 'enabled', events: ['checkout.completed', 'refund.created', 'dispute.created'], secret: fakeHookSecret() });
+    }
+  }
+  const method = String(init.method || 'GET').toUpperCase();
+  const path = target.pathname;
+  const list = items => fakeJson(200, { items, pagination: { total_records: items.length, total_pages: 1, current_page: 1, next_page: null, prev_page: null } });
+  const productId = /^\/v1\/products\/([^/]+)$/.exec(path)?.[1];
+  const secretOf = /^\/v1\/webhooks\/([^/]+)\/secret$/.exec(path)?.[1];
+  if (method === 'GET' && path === '/v1/products/search') return list(fakeStore.products);
+  if (method === 'GET' && productId) {
+    const product = fakeStore.products.find(entry => entry.id === productId);
+    return product ? fakeJson(200, product) : fakeJson(404, { message: ['Product not found'] });
+  }
+  if (method === 'POST' && path === '/v1/products') {
+    const key = init.headers?.['Idempotency-Key'] || '';
+    if (key && fakeStore.keys.has(key)) return fakeJson(200, fakeStore.keys.get(key));
+    const body = JSON.parse(init.body || '{}');
+    const product = { object: 'product', mode: 'test', status: 'active', billing_period: 'once', ...body, id: `prod_fake_${randomBytes(6).toString('hex')}`, created_at: new Date().toISOString() };
+    fakeStore.products.push(product);
+    if (key) fakeStore.keys.set(key, product);
+    console.log(`  [fake creem] created product ${product.id}: ${body.name}, ${(body.price / 100).toFixed(2)} ${body.currency}`);
+    return fakeJson(200, product);
+  }
+  if (method === 'GET' && path === '/v1/webhooks') return list(fakeStore.webhooks.map(({ secret: _secret, ...hook }) => hook));
+  if (method === 'POST' && path === '/v1/webhooks') {
+    const body = JSON.parse(init.body || '{}');
+    const hook = { id: `wh_fake_${randomBytes(6).toString('hex')}`, object: 'webhook', mode: 'test', status: 'enabled', delivery_mode: 'http', ...body, secret: fakeHookSecret() };
+    fakeStore.webhooks.push(hook);
+    console.log(`  [fake creem] created webhook ${hook.id} → ${hook.url} (its secret is not printed)`);
+    return fakeJson(200, hook);
+  }
+  if (method === 'GET' && secretOf) {
+    const hook = fakeStore.webhooks.find(entry => entry.id === secretOf);
+    return hook ? fakeJson(200, { secret: hook.secret }) : fakeJson(404, { message: ['Webhook not found'] });
+  }
+  return null;
+}
+
 async function fakeCreemFetch(url, init = {}) {
   const target = new URL(url);
+  const setup = await fakeSetupFetch(target, init);
+  if (setup) return setup;
   if (target.pathname === '/v1/transactions') {
     const transaction = fakeTransactions.get(target.searchParams.get('transaction_id') || '');
     console.log(`  [fake creem] read transaction ${target.searchParams.get('transaction_id')}`);
@@ -367,10 +425,36 @@ if (withApi) {
       }, 120);
     }
   });
-  plannerApi = createPlannerApi({
-    store, adminToken, adminTotpSecret, ...emailOptions(), ...creemOptions(), ...await plusOptions(),
-    publicBaseUrl: devBaseUrl
-  });
+  const options = { ...emailOptions(), ...creemOptions(), ...await plusOptions() };
+  plannerApi = createPlannerApi({ store, adminToken, adminTotpSecret, ...options, publicBaseUrl: devBaseUrl, ...configCheckOptions(options) });
+}
+
+// The configuration page (/admin/configuration/, POST /api/admin/config/check) checks what this server really
+// uses, under the production names: the secrets in effect (the pretend ones with --fake-email and
+// --fake-creem, whose stand-ins answer its read-only calls), the build variables of the served
+// runtime-config.js, and that file itself (ASSETS, as on Cloudflare). There is no D1 here: the page says so.
+function configCheckOptions(options) {
+  const products = options.creemProducts || {};
+  const env = {
+    ...Object.fromEntries(CONFIG_VARIABLES.map(def => [def.name, process.env[def.name] || ''])),
+    ADMIN_TOKEN: adminToken, ADMIN_TOTP_SECRET: adminTotpSecret,
+    RESEND_API_KEY: options.resendApiKey, EMAIL_FROM: options.emailFrom, OWNER_EMAIL: options.ownerEmail, EMAIL_DAILY_LIMIT: options.emailDailyLimit,
+    CREEM_API_KEY: options.creemApiKey, CREEM_WEBHOOK_SECRET: options.creemWebhookSecret, CREEM_TEST_MODE: options.creemTestMode,
+    CREEM_PLUS_EUR: products.plus?.EUR || '', CREEM_PLUS_USD: products.plus?.USD || '', CREEM_GIFT_EUR: products.gift?.EUR || '', CREEM_GIFT_USD: products.gift?.USD || '',
+    PLUS_SIGNING_KEY: options.plusSigningKey, DAILY_PLANNER_PLUS_PUBLIC_KEY: plusPublicKey, DAILY_PLANNER_API_URL: '/api',
+    ASSETS: { fetch: async () => new Response(devRuntimeConfig(await fs.readFile(join(root, 'runtime-config.js'), 'utf8')), { headers: { 'content-type': 'text/javascript; charset=utf-8' } }) }
+  };
+  const senderDomain = (/@([A-Za-z0-9.-]+)>?\s*$/.exec(options.emailFrom || '')?.[1] || '').toLowerCase();
+  async function configFetch(url, init = {}) {
+    const target = new URL(url);
+    if (fakeCreem && /(?:^|\.)creem\.io$/.test(target.hostname)) return fakeCreemFetch(url, init);
+    // The pretend Resend has one domain, verified: the sender's.
+    if (fakeEmail && target.hostname === 'api.resend.com' && target.pathname === '/domains') {
+      return fakeJson(200, { object: 'list', has_more: false, data: [{ id: 'fake-domain', name: senderDomain, status: 'verified', region: 'eu-west-1', capabilities: { sending: 'enabled', receiving: 'disabled' } }] });
+    }
+    return fetch(url, init);
+  }
+  return { configEnv: env, configFetch };
 }
 
 async function devLicense(request, response) {

@@ -105,11 +105,11 @@ test('config: the partner link must be https; the commission is no longer a buil
   }
 });
 
-test('the partners page: Become a partner goes to Creem, or to the question form on the Teams page while no link is set', () => {
+test('the partners page: Become a partner goes to Creem, or to the Contact page’s question form while no link is set', () => {
   assert.deepEqual(model.partnerPage({ url: 'https://affiliates.example.com/x' }), { href: 'https://affiliates.example.com/x', external: true });
   const blank = model.partnerPage({});
   assert.equal(blank.href, model.PARTNER_QUESTION_HREF);
-  assert.equal(blank.href, '../teams/?ask=question&topic=partners#request');
+  assert.equal(blank.href, '../contact/?topic=partners');
   assert.equal(blank.external, false);
   assert.equal(model.TEAMS_HREF, '../teams/');
   for (const url of ['http://affiliates.example.com', 'javascript:alert(1)', 'https://a b', ' ', null]) assert.equal(model.partnerPage({ url }).external, false, String(url));
@@ -210,7 +210,7 @@ test('the landing page: Partners in the menu and the footer, the launch price wh
   const script = await read('welcome/landing.js');
   assert.match(script, /savedPlusToken\(\)/, 'the licence is read from the planner’s settings');
   assert.match(script, /license: personal && member\.active \? member\.token : ''/, 'and sent with a personal gift only');
-  assert.match(await read('welcome/teams-model.js'), /query\.get\('topic'\) === 'partners'/, 'the question form knows the partner program');
+  assert.match(await read('welcome/teams-model.js'), /export const contactTopic = search => \(params\(search\)\.get\('topic'\) === 'partners' \? 'partners' : 'general'\);/, 'the question form knows the partner program');
 });
 
 test('the partners page: landing style and motion, every section, the rules, the FAQ, and the counts it may send', async () => {
@@ -254,9 +254,12 @@ test('the partners page: landing style and motion, every section, the rules, the
   assert.match(page, /don’t count/, 'own purchases');
   assert.match(page, /href="\.\.\/legal\/terms\/#partners"/);
   assert.doesNotMatch(page, /60 days/);
-  // Every way in to a question goes to the Teams page's form, about the program.
+  // Every way in to a question goes to the Contact page's form, about the program; the footer's to the general one.
   assert.equal((page.match(/data-partner-cta/g) || []).length, 3);
-  assert.equal((page.match(/href="\.\.\/teams\/\?ask=question&amp;topic=partners#request" data-partner-cta>Become a partner</g) || []).length, 3, 'works without JavaScript too');
+  assert.equal((page.match(/href="\.\.\/contact\/\?topic=partners" data-partner-cta>Become a partner</g) || []).length, 3, 'works without JavaScript too');
+  assert.match(page, /Something else\? <a href="\.\.\/contact\/\?topic=partners">Ask a question<\/a> about the partner program\./);
+  assert.match(/<nav class="foot__links"[\s\S]*?<\/nav>/.exec(page)[0], /<a href="\.\.\/contact\/">Ask a question<\/a>/);
+  assert.doesNotMatch(page, /teams\/\?ask=|#request/, 'nothing left pointing at the Teams page’s form');
   assert.doesNotMatch(page, /href="\.\.\/(?:welcome\/)?\?ask=|href="\.\.\/(?:welcome\/)?#request/, 'nothing left pointing at the landing page’s old form');
   const legal = /<nav class="foot__legal"[\s\S]*?<\/nav>/.exec(page)[0];
   assert.deepEqual([...legal.matchAll(/href="([^"]+)"/g)].map(match => match[1]), ['../legal/privacy/', '../legal/terms/', '../legal/cookies/', '../legal/']);
