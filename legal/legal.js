@@ -1,69 +1,27 @@
-import { LEGAL_ADDRESS, LEGAL_REGISTRATION, SUPPORT_EMAIL } from '../src/config.js';
+import { LEGAL_ADDRESS, LEGAL_PHONE, LEGAL_REGISTRATION, PRIVACY_EMAIL, SUPPORT_EMAIL } from '../src/config.js';
 import { COUNTED_EVENTS, LANDING_EVENTS, plannerApiEnabled, setUsageCountsEnabled, usageCountsEnabled } from '../src/lib/planner-api.js';
 import { CURRENCIES, LAUNCH, PARTNER_PROGRAM, PERSONAL_GIFTS, PLUS_FEATURES, PLUS_PRICE, TEAM_TIERS, formatMoney, memberGiftPrice } from '../src/lib/pricing.js';
+import { contactPhrase, detailRows, detailsHtml, esc, legalDetails } from './legal-details.js';
 
 /**
  * Legal pages (legal/, legal/privacy/, legal/terms/, legal/cookies/).
  *
  * The pages are plain HTML that reads well without JavaScript. This module
  * fills in what depends on the deployment or on the code, so it can never
- * drift: the publisher's details (SUPPORT_EMAIL, LEGAL_ADDRESS,
- * LEGAL_REGISTRATION from runtime-config.js, each left out when blank), the
- * moments the site counts (COUNTED_EVENTS and LANDING_EVENTS), the prices,
+ * drift: the publisher's details (SUPPORT_EMAIL, PRIVACY_EMAIL, LEGAL_PHONE,
+ * LEGAL_ADDRESS, LEGAL_REGISTRATION from runtime-config.js, each left out
+ * when blank or invalid, see legal-details.js; the build writes them into
+ * the pages of dist/ too, for readers without JavaScript), who answers what
+ * (contactEmail), the moments the site counts (COUNTED_EVENTS and LANDING_EVENTS), the prices,
  * the Plus features and the partner program's terms (src/lib/pricing.js). It makes no network request. It also
  * marks, in “On this page”, the section being read.
  *
  * The pure helpers below are unit-tested (tests/legal.test.js).
  */
 
-export const PUBLISHER = 'Ben Morin, an individual based in France';
-// Plain addresses only: nothing that could add ?subject= or ?bcc= to a mailto: link.
-const EMAIL_RE = /^[^\s@<>()[\]\\,;:"?&=%/#]{1,64}@[a-z0-9](?:[a-z0-9.-]{0,188}[a-z0-9])?\.[a-z]{2,24}$/i;
-// The question form lives on the Teams page (1.28).
-const ASK_PATH = 'welcome/teams/?ask=question#request';
-
-export const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
-const oneLine = value => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
-
-/** The publisher's details from a runtime configuration; blank or invalid values become ''. */
-export function legalDetails(config = {}) {
-  const text = key => (typeof config?.[key] === 'string' ? config[key].trim() : '');
-  const email = text('SUPPORT_EMAIL');
-  return {
-    email: EMAIL_RE.test(email) ? email : '',
-    address: oneLine(text('LEGAL_ADDRESS')),
-    registration: oneLine(text('LEGAL_REGISTRATION'))
-  };
-}
-
-/** Where to write without a support address: the “Ask a question” form, on the Teams page. */
-export const askHref = (root = '../') => `${root}${ASK_PATH}`;
-
-/** How to reach us, as the value of a “Contact” row: the address, or the question form. */
-export function contactHtml(details, root = '../') {
-  return details.email
-    ? `<a href="mailto:${esc(details.email)}">${esc(details.email)}</a>`
-    : `the <a href="${esc(askHref(root))}">“Ask a question” form</a>`;
-}
-
-/** How to reach us inside a sentence (“To use these rights, …”): “email …” or “use the … form”. */
-export function contactPhrase(details, root = '../') {
-  return details.email
-    ? `email <a href="mailto:${esc(details.email)}">${esc(details.email)}</a>`
-    : `use the <a href="${esc(askHref(root))}">“Ask a question” form</a>`;
-}
-
-/** The publisher block: name, then address and registration only when they are set, then the contact. */
-export function detailRows(details, root = '../') {
-  return [
-    ['Publisher', esc(PUBLISHER)],
-    details.address ? ['Address', esc(details.address)] : null,
-    details.registration ? ['Registration', esc(details.registration)] : null,
-    ['Contact', contactHtml(details, root)]
-  ].filter(Boolean);
-}
-
-export const detailsHtml = rows => rows.map(([label, value]) => `<div class="lg-dl__row"><dt>${esc(label)}</dt><dd>${value}</dd></div>`).join('');
+// The publisher's details (checked, then written as rows and links) are
+// shared with the build and the owner dashboard: legal-details.js.
+export { DIRECTOR, PUBLISHER, askHref, contactEmail, contactHtml, contactPhrase, detailRows, detailsHtml, esc, legalDetails, legalEmail, legalPhone, legalValueProblem, phoneHtml, staticLegalHtml, telHref } from './legal-details.js';
 
 /** One list item per counted moment, in the words the planner’s Privacy notice uses. */
 export const eventsHtml = (events = COUNTED_EVENTS) => events.map(([, words]) => `<li>${esc(words)}</li>`).join('');
@@ -252,10 +210,11 @@ function setupContents(doc) {
 }
 
 /** Fills the page from the configuration. `root` is the site root, relative to the page. */
-export function applyLegal(doc, { config = { SUPPORT_EMAIL, LEGAL_ADDRESS, LEGAL_REGISTRATION }, root = doc.body?.dataset.root || '../' } = {}) {
+export function applyLegal(doc, { config = { SUPPORT_EMAIL, PRIVACY_EMAIL, LEGAL_PHONE, LEGAL_ADDRESS, LEGAL_REGISTRATION }, root = doc.body?.dataset.root || '../' } = {}) {
   const details = legalDetails(config);
-  fill(doc, '[data-legal-details]', detailsHtml(detailRows(details, root)));
-  fill(doc, '[data-legal-contact]', contactPhrase(details, root));
+  // data-legal-details="notice" | "privacy"; data-legal-contact="support" | "privacy" (see detailRows and contactEmail).
+  ['notice', 'privacy'].forEach(page => fill(doc, `[data-legal-details="${page}"]`, detailsHtml(detailRows(details, root, page))));
+  ['support', 'privacy'].forEach(topic => fill(doc, `[data-legal-contact="${topic}"]`, contactPhrase(details, root, topic)));
   fill(doc, '[data-legal-events="planner"]', eventsHtml(COUNTED_EVENTS));
   fill(doc, '[data-legal-events="landing"]', eventsHtml(LANDING_EVENTS));
   fill(doc, '[data-legal-prices]', pricesHtml());

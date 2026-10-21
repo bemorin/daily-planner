@@ -10,6 +10,8 @@ globalThis.__DAILY_PLANNER_CONFIG__ = Object.freeze({
   PLANNER_API_URL: '',
   PLUS_PUBLIC_KEY: '',
   SUPPORT_EMAIL: '',
+  PRIVACY_EMAIL: '',
+  LEGAL_PHONE: '',
   LEGAL_ADDRESS: '',
   LEGAL_REGISTRATION: '',
   AFFILIATE_URL: ''

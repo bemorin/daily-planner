@@ -115,10 +115,15 @@
 
 * { box-sizing: border-box; }
 
-/* The planner's scrollbar (styles/core.css): no arrows, no track, a light thumb. */
-
-html,
-* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+/* The planner's scrollbar (styles/core.css): thin, no arrows, no track, a light
+   thumb that darkens under the pointer, in both themes. Chromium and Safari
+   draw it from the ::-webkit-scrollbar parts below, which Chromium ignores as
+   soon as the standard properties are set (and then draws its own arrows on
+   the page's scrollbar), so those are for the other browsers only. */
+@supports not selector(::-webkit-scrollbar) {
+  html,
+  * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+}
 
 *::-webkit-scrollbar { width: 7px; height: 7px; }
 
@@ -392,17 +397,19 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 }
 
 /* The hero needs no script to arrive: its copy rises line by line and the
-   replica follows on first paint, already on its first frame. */
+   replica and its switch follow on first paint, already on the first frame.
+   The caption is simply there: painted at once, it is the page's Largest
+   Contentful Paint, and the turns only change its text (hero-views.js). */
 @media screen and (prefers-reduced-motion: no-preference) {
   .hero__copy h1 span,
   .hero__copy > :not(h1),
-  .hero__visual { animation: rise-in 820ms cubic-bezier(.22, 1, .36, 1) both; }
+  .hero__visual > :not(.hero-captions) { animation: rise-in 820ms cubic-bezier(.22, 1, .36, 1) both; }
   .hero__copy h1 span:nth-child(2) { animation-delay: 70ms; }
   .hero__copy h1 span:nth-child(3) { animation-delay: 140ms; }
   .hero__copy .lead { animation-delay: 240ms; }
   .hero__copy .cta-row { animation-delay: 320ms; }
   .hero__copy .devices { animation-delay: 390ms; }
-  .hero__visual { animation-duration: 1000ms; animation-delay: 180ms; }
+  .hero__visual > :not(.hero-captions) { animation-duration: 1000ms; animation-delay: 180ms; }
 }
 
 @keyframes rise-in {
@@ -489,7 +496,178 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .devices b { display: block; color: var(--ink); font-size: 1rem; font-weight: 680; letter-spacing: -.01em; }
 
-.hero__visual { margin: 0; }
+.hero__visual { margin: 0; container: hero-visual / inline-size; }
+
+/* Your day, then your year: the Day view and Horizon share one box (the taller
+   sets its height) and take turns (hero-views.js). The one coming in fades in
+   over the one going out, whose window stays put underneath, so the window
+   seems to stay and only its content changes. Without the script, the choice
+   under the replica still switches them (CSS only). */
+.hero-stage { display: grid; }
+
+/* Each view stacks on its own, so nothing of the one going out (its line for
+   now, its floating card) can show over the one coming in. */
+.hero-view { z-index: 0; grid-area: 1 / 1; min-width: 0; display: flex; flex-direction: column; }
+
+.hero-view > .rp { flex: 1 1 auto; display: flex; flex-direction: column; }
+
+.hero-view .rp-window { flex: 1 1 auto; }
+
+.hero-view--year,
+.hero-captions [data-hero-caption="year"] { visibility: hidden; }
+
+.hero__visual:not(.is-live):has([data-hero-choice][value="year"]:checked) :is(.hero-view--day, [data-hero-caption="day"]) { visibility: hidden; }
+
+.hero__visual:not(.is-live):has([data-hero-choice][value="year"]:checked) :is(.hero-view--year, [data-hero-caption="year"]) { visibility: visible; }
+
+.hero__visual:not(.is-live):has([data-hero-choice][value="year"]:checked) .hero-switch__thumb { transform: translateX(100%); }
+
+.hero__visual.is-live .hero-view { visibility: hidden; }
+
+.hero__visual.is-live .hero-view.is-leaving { visibility: visible; }
+
+.hero__visual.is-live .hero-view.is-shown { z-index: 1; visibility: visible; }
+
+.hero__visual.is-live[data-view="year"] .hero-switch__thumb { transform: translateX(100%); }
+
+/* A hidden view goes back to its first frame at once, with no transition
+   running unseen (hero-views.js adds the class for that moment). */
+.motion-ok .hero__visual.is-live .hero-view.is-resetting *,
+.motion-ok .hero__visual.is-live .hero-view.is-resetting *::before,
+.motion-ok .hero__visual.is-live .hero-view.is-resetting *::after { transition: none; }
+
+/* Going out: its content and floating card fade first, its window stays.
+   Coming in: no shadow of its own until the window underneath is gone, so the
+   shadow never doubles; then its content fades in and settles. */
+.hero-view.is-leaving :is(.rp-window > :not(.rp-bar), .rp-pop, .rp-cursor) { opacity: 0; }
+
+.motion-ok .hero-view.is-leaving :is(.rp-window > :not(.rp-bar), .rp-cursor) { transition: opacity 220ms ease; }
+
+.hero-view.is-entering .rp-window { box-shadow: none; }
+
+.motion-ok .hero-view.is-entering { animation: hero-view-in 520ms cubic-bezier(.4, 0, .2, 1) 140ms both; }
+
+.motion-ok .hero-view.is-entering :is(.rp-day, .rp-hz) { animation: hero-content-in 760ms cubic-bezier(.22, 1, .36, 1) 140ms both; }
+
+@keyframes hero-view-in {
+  from { opacity: 0; }
+}
+
+@keyframes hero-content-in {
+  from { transform: translateY(.7em); }
+}
+
+/* What the replica shows: the app's Day · Week · Horizon switch, with a thin
+   line filling under the current choice until the next one; and a pause. */
+.hero-switch { position: relative; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 20px; }
+
+/* Wide enough, it rises into the room the Day view keeps under its window for
+   its floating card, and sits beside that card. */
+@container hero-visual (min-width: 520px) {
+  .hero-switch { margin-top: calc(18px - 3.6 * clamp(9.5px, 2.15cqi, 13.5px)); }
+}
+
+.hero-switch__views {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.hero-switch__thumb {
+  position: absolute;
+  z-index: 0;
+  left: 3px;
+  top: 3px;
+  bottom: 3px;
+  width: calc(50% - 3px);
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-strong);
+  box-shadow: 0 1px 2px rgba(28, 25, 21, .08), inset 0 0 0 1px var(--line);
+  pointer-events: none;
+}
+
+.hero-switch__fill { position: absolute; left: 18px; right: 18px; bottom: 4px; height: 2px; border-radius: 2px; background: var(--paint); opacity: 0; transform: scaleX(0); transform-origin: left center; }
+
+.hero__visual.is-turning .hero-switch__fill { opacity: 1; }
+
+.hero-switch__view {
+  position: relative;
+  z-index: 1;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 16px 0 12px;
+  border-radius: 999px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: .84rem;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  white-space: nowrap;
+}
+
+.hero-switch__view input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; border-radius: inherit; opacity: 0; cursor: pointer; }
+
+.hero-switch__view svg.i { width: 16px; height: 16px; stroke-width: 1.6; }
+
+.hero-switch__view:hover,
+.hero-switch__view:has(input:checked) { color: var(--ink); }
+
+.hero-switch__view:has(input:focus-visible) { outline: 2.5px solid var(--focus); outline-offset: 2px; }
+
+/* Shown from first paint when motion is welcome (`js-anim`), and while it is (`is-moving`). */
+.hero-switch__pause {
+  display: none;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.js-anim .hero-switch__pause,
+.hero__visual.is-moving .hero-switch__pause { display: grid; }
+
+.hero__visual.is-live:not(.is-moving) .hero-switch__pause { display: none; }
+
+.hero-switch__pause:hover { border-color: var(--line-strong); color: var(--ink); }
+
+.hero-switch__pause:focus-visible { border-radius: 999px; }
+
+.hero-switch__pause svg.i { width: 16px; height: 16px; }
+
+.hero-switch__icon-pause { stroke-width: 2.4; }
+
+.hero-switch svg.hero-switch__icon-play { fill: currentColor; stroke-width: 1.2; }
+
+.hero-switch__icon-play,
+.hero__visual.is-paused .hero-switch__icon-pause { display: none; }
+
+.hero__visual.is-paused .hero-switch__icon-play { display: block; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-switch__thumb { transition: transform 360ms cubic-bezier(.22, 1, .36, 1); }
+  .hero-switch__fill { transition: opacity 240ms ease; }
+  .hero-switch__view { transition: color 160ms ease; }
+  .hero-switch__pause { transition: border-color 160ms ease, color 160ms ease; }
+}
+
+.hero-captions { display: grid; margin-top: 14px; }
+
+/* The captions share a cell, which keeps the taller one's height. With the
+   script, the first one shows each view's caption in turn (hero-views.js). */
+.hero-captions > span { grid-area: 1 / 1; }
 
 @media (min-width: 560px) {
   .hero__copy h1 span { display: block; }
@@ -2531,6 +2709,229 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
   .rp-modal__title,
   .rp-mc--date { display: none; }
   .rp-modal .rp-eyebrow { margin-bottom: .1em; }
+}
+
+/* Hero: Horizon --------------------------------------------------------------- */
+
+/* The same window, Horizon open in it (styles/horizon.css): the section rail,
+   the year at a glance, the Misogi and the mini-adventures. The scene fills
+   the year in, lands a key date on the map, ticks a mini-adventure as lived,
+   then the last Misogi milestone. Same box as the Day view, whose card hangs
+   below its window: wide enough, the switch rises into that room beside the
+   card (.hero-switch), so Horizon keeps it free; narrower, its window fills
+   the whole box, with no empty band above the switch. */
+.rp--horizon { padding: 0 0 3.6em; }
+
+@container hero-visual (max-width: 519.98px) {
+  .rp--horizon { padding-bottom: 0; }
+  /* The room it gains goes half to the year at a glance (around its content), half to the two tiles. */
+  .rp--horizon .rp-hz-map { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: center; }
+  /* Going out, its window is taller than the Day's: once the Day view is in
+     over it, the part still showing below fades out too. */
+  .hero-view.is-leaving .rp--horizon .rp-window { opacity: 0; }
+  .motion-ok .hero-view.is-leaving .rp--horizon .rp-window { transition: opacity 220ms ease 660ms; }
+}
+
+.rp--horizon .rp-window { display: flex; flex-direction: column; }
+
+.rp-hz-year { width: 11.5em; display: grid; gap: .4em; margin-right: .5em; }
+
+.rp-hz-year small { color: var(--faint); font-size: .6em; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.rp-hz-meter { display: block; height: .45em; overflow: hidden; border-radius: 999px; background: var(--soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 55%, transparent); }
+
+.rp-hz-meter i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--k, var(--accent)) 55%, transparent), var(--k, var(--accent))); transform: scaleX(calc(var(--w) / 100)); transform-origin: left center; }
+
+.rp-hz-add { display: inline-flex; align-items: center; gap: .3em; padding: .55em 1em .55em .75em; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: .72em; font-weight: 650; white-space: nowrap; }
+
+.rp .rp-hz-add svg.i { width: 1.4em; height: 1.4em; stroke-width: 2; }
+
+.rp-hz { flex: 1 1 auto; display: grid; grid-template-columns: 12.8em minmax(0, 1fr); gap: 1.1em; padding: 1em 1.3em 1.3em; }
+
+/* The section rail: Overview is open. */
+.rp-hz-nav { display: grid; align-content: start; gap: .2em; padding-right: .9em; border-right: 1px solid var(--line); }
+
+.rp-hz-sec { display: grid; grid-template-columns: 2em minmax(0, 1fr) auto; align-items: center; gap: .55em; padding: .5em .5em; border-radius: .75em; color: var(--muted); }
+
+.rp-hz-sec > i { width: 2em; height: 2em; display: grid; place-items: center; border-radius: .55em; background: color-mix(in srgb, var(--soft) 85%, transparent); }
+
+.rp .rp-hz-sec > i svg.i { width: 1.15em; height: 1.15em; }
+
+.rp-hz-sec > span { min-width: 0; display: grid; gap: .1em; }
+
+.rp-hz-sec b,
+.rp-hz-sec small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+.rp-hz-sec b { font-size: .76em; font-weight: 650; letter-spacing: -.01em; }
+
+.rp-hz-sec small { color: var(--faint); font-size: .6em; font-variant-numeric: tabular-nums; }
+
+.rp-hz-sec.is-on { background: var(--surface-strong); box-shadow: 0 1px 2px rgba(25, 22, 17, .05), 0 .5em 1.4em rgba(25, 22, 17, .06), inset 0 0 0 1px var(--line); color: var(--ink); }
+
+.rp-hz-sec.is-on > i { background: color-mix(in srgb, var(--k) 13%, var(--surface-strong)); color: var(--k); }
+
+.rp-hz-sec.is-on small { color: var(--muted); }
+
+.rp-ring { width: 1.3em; height: 1.3em; overflow: visible; transform: rotate(-90deg); }
+
+.rp-ring circle { fill: none; stroke-width: 2.6; }
+
+.rp-ring circle:first-child { stroke: color-mix(in srgb, var(--line) 85%, transparent); }
+
+.rp-ring circle + circle { stroke: var(--k); stroke-linecap: round; stroke-dasharray: 100px 200px; stroke-dashoffset: calc(100px - var(--p, 0) * 1px); }
+
+.rp--horizon:not(.s-in) .rp-ring circle + circle { opacity: 0; }
+
+.rp--horizon.s-in .rp-ring { --p: var(--p0); }
+
+.rp--horizon.s-step .rp-hz-sec--step .rp-ring { --p: var(--p1); }
+
+/* The year at a glance (the ribbon of the Horizon section, tighter). */
+.rp-hz-main { min-width: 0; display: flex; flex-direction: column; gap: .8em; }
+
+.rp-hz-map { padding: .85em 1em .3em; border: 1px solid var(--line); border-radius: 1em; background: var(--surface-strong); }
+
+.rp-hz-map .rp-eyebrow { margin-bottom: .2em; }
+
+.rp-hz-map__title { display: block; margin-bottom: .8em; font-size: .9em; font-weight: 700; letter-spacing: -.025em; line-height: 1.2; }
+
+.rp--horizon .rp-rib { --lw: 5.1em; gap: .32em; padding-bottom: 1.7em; }
+
+.rp--horizon .rp-rib__lane { grid-template-columns: var(--lw) minmax(0, 1fr); }
+
+.rp--horizon .rp-rib__months span { padding-left: .3em; font-size: .56em; }
+
+.rp--horizon .rp-rib__label { margin: 0; font-size: .64em; }
+
+.rp--horizon .rp-rib__track { height: 1.85em; border-radius: .6em; }
+
+.rp--horizon .rp-rib__quarters span { height: 2.6em; gap: .4em; padding: 0 .55em; font-size: .64em; }
+
+/* Only this quarter's habit is named, clear of the line for today. */
+.rp--horizon .rp-rib__quarters span:not(.is-now) em { display: none; }
+
+.rp--horizon .rp-rib__quarters span.is-now { padding-left: 1.05em; }
+
+.rp--horizon .rp-rib__today { top: 1.2em; }
+
+.rp--horizon .rp-rib__today span { font-size: .56em; }
+
+.rp--horizon .m { z-index: 1; }
+
+/* The key date the scene adds, named beside it. */
+.rp-hz-flag { position: absolute; z-index: 2; top: 50%; right: calc(100% - var(--x) * 1% + 1.3em); padding: .15em .6em; border-radius: 999px; background: var(--surface-strong); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--keydate) 40%, var(--line)); color: var(--keydate); font-size: .58em; font-weight: 700; white-space: nowrap; transform: translateY(-50%); }
+
+/* Two tiles: the Misogi, then the mini-adventures. */
+.rp-hz-cards { flex: 1 1 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8em; }
+
+.rp-hz-card { min-width: 0; display: flex; flex-direction: column; gap: .42em; padding: .8em .9em .8em; border: 1px solid var(--line); border-radius: 1em; background: var(--surface-strong); }
+
+.rp-hz-card__head { display: flex; align-items: center; gap: .55em; margin-bottom: .1em; }
+
+.rp-hz-card__head i { width: 1.75em; height: 1.75em; display: grid; place-items: center; border-radius: .5em; background: color-mix(in srgb, var(--k) 12%, var(--surface-strong)); color: var(--k); }
+
+.rp .rp-hz-card__head i svg.i { width: 1.05em; height: 1.05em; }
+
+.rp-hz-card__head b { color: var(--k); font-size: .6em; font-weight: 720; letter-spacing: .08em; text-transform: uppercase; }
+
+.rp .rp-hz-card__head > svg.i { width: 1em; height: 1em; margin-left: auto; color: var(--faint); }
+
+.rp-hz-card__title { overflow: hidden; font-size: .9em; font-weight: 680; letter-spacing: -.02em; line-height: 1.25; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+
+.rp-hz-card__meta { overflow: hidden; margin-top: -.25em; color: var(--muted); font-size: .64em; white-space: nowrap; text-overflow: ellipsis; }
+
+.rp-hz-card__meter { display: flex; align-items: center; gap: .6em; min-height: 1.1em; }
+
+.rp-hz-card__meter .rp-hz-meter { flex: 1 1 auto; }
+
+.rp-hz-card__meter small { color: var(--muted); font-size: .62em; font-weight: 650; font-variant-numeric: tabular-nums; }
+
+.rp-hz-dots { display: flex; align-items: center; gap: .3em; min-height: 1.1em; }
+
+.rp-hz-dots i { width: 1.55em; height: .45em; border-radius: 999px; background: var(--soft); box-shadow: inset 0 0 0 1px var(--line); }
+
+.rp-hz-dots .is-idea { background: color-mix(in srgb, var(--k) 28%, var(--surface-strong)); box-shadow: none; }
+
+.rp-hz-dots .is-planned { background: var(--k); box-shadow: none; }
+
+.rp-hz-dots .is-done,
+.rp--horizon.s-lived .rp-hz-dot--lived { background: color-mix(in srgb, var(--k) 60%, var(--ink)); }
+
+.rp-hz-item { margin-top: auto; display: flex; align-items: center; gap: .55em; min-height: 2.5em; padding: .4em .6em; border-radius: .65em; background: var(--surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--line) 82%, transparent); font-size: .78em; font-weight: 600; }
+
+.rp-hz-item .rp-check { width: 1.3em; height: 1.3em; border-radius: .38em; }
+
+.rp-hz-item .rp-txt { flex: 1 1 auto; }
+
+.rp-hz-item em { color: var(--faint); font-size: .84em; font-style: normal; white-space: nowrap; }
+
+/* Ticked: the mini-adventure lived, then the last milestone. */
+.rp--horizon.s-lived .rp-hz-item--lived .rp-check,
+.rp--horizon.s-step .rp-hz-item--step .rp-check { background: var(--ink); box-shadow: none; }
+
+.rp--horizon.s-lived .rp-hz-item--lived .rp-check svg.i,
+.rp--horizon.s-step .rp-hz-item--step .rp-check svg.i { opacity: 1; transform: none; }
+
+.rp--horizon.s-lived .rp-hz-item--lived .rp-txt,
+.rp--horizon.s-step .rp-hz-item--step .rp-txt { color: var(--muted); text-decoration-color: color-mix(in srgb, var(--muted) 70%, transparent); }
+
+.rp--horizon.s-step .rp-hz-meter--step i { transform: scaleX(calc(var(--w1) / 100)); }
+
+.rp--horizon.s-lived .m--lived,
+.rp--horizon.s-step .m--step { background: color-mix(in srgb, var(--k) 30%, var(--surface-strong)); box-shadow: inset 0 0 0 .12em var(--k), 0 0 0 .16em var(--surface-strong); }
+
+/* Before the scene: the year still to fill in, the key date not added, nothing ticked. */
+/* The lanes are uncovered from January on (a cover, not a clip, so the
+   markers and the key date's name stay above the line for today). */
+.rp--horizon .rp-rib__track::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; background: var(--surface-strong); transform: scaleX(0); transform-origin: right center; }
+
+.rp--horizon:not(.s-in) .rp-rib__track::after { transform: none; }
+
+.rp--horizon .rp-rib__quarters span { clip-path: inset(0 0 0 0 round .6em); }
+
+.rp--horizon:not(.s-in) .rp-rib__quarters span { clip-path: inset(0 100% 0 0 round .6em); }
+
+.rp--horizon:not(.s-in) .m { opacity: 0; scale: .2; }
+
+.rp--horizon:not(.s-in) .rp-rib__today { opacity: 0; transform: translateY(-.8em); }
+
+.rp--horizon:not(.s-in) .rp-hz-year .rp-hz-meter i { transform: scaleX(0); }
+
+.rp--horizon:not(.s-key) .m--new { opacity: 0; translate: 0 -1.6em; }
+
+.rp--horizon:not(.s-key) .rp-hz-flag { opacity: 0; translate: .8em 0; }
+
+.rp--horizon.s-add .rp-hz-add { background: color-mix(in srgb, var(--ink) 80%, var(--paper)); box-shadow: 0 0 0 .3em color-mix(in srgb, var(--paint) 22%, transparent); transform: scale(.93); }
+
+.motion-ok .rp--horizon .rp-rib__track::after { transition: transform 1100ms cubic-bezier(.22, 1, .36, 1); }
+
+.motion-ok .rp--horizon .rp-rib__quarters span { transition: clip-path 500ms cubic-bezier(.22, 1, .36, 1) calc(400ms + var(--i) * 140ms); }
+
+.motion-ok .rp--horizon .m { transition: opacity 260ms ease calc(450ms + var(--i) * 110ms), scale 520ms cubic-bezier(.34, 1.56, .64, 1) calc(450ms + var(--i) * 110ms), background-color 320ms ease, box-shadow 320ms ease; }
+
+.motion-ok .rp--horizon.s-in .m--new { transition: opacity 240ms ease, translate 620ms cubic-bezier(.34, 1.45, .64, 1), scale 520ms cubic-bezier(.34, 1.56, .64, 1); }
+
+.motion-ok .rp--horizon .rp-hz-flag { transition: opacity 320ms ease 260ms, translate 520ms cubic-bezier(.22, 1, .36, 1) 260ms; }
+
+.motion-ok .rp--horizon .rp-rib__today { transition: opacity 360ms ease 1300ms, transform 600ms cubic-bezier(.22, 1, .36, 1) 1300ms; }
+
+.motion-ok .rp--horizon .rp-hz-meter i { transition: transform 1100ms cubic-bezier(.22, 1, .36, 1) 150ms; }
+
+.motion-ok .rp--horizon .rp-hz-meter--step i { transition: transform 900ms cubic-bezier(.22, 1, .36, 1) 250ms; }
+
+.motion-ok .rp--horizon .rp-ring circle + circle { transition: stroke-dashoffset 900ms cubic-bezier(.22, 1, .36, 1) 300ms, opacity 200ms ease 300ms; }
+
+.motion-ok .rp--horizon .rp-hz-dot--lived { transition: background-color 360ms ease 200ms; }
+
+.motion-ok .rp-hz-add { transition: transform 160ms cubic-bezier(.22, 1, .36, 1), background-color 160ms ease, box-shadow 220ms ease; }
+
+@container (max-width: 520px) {
+  .rp--horizon .rp-top { margin-inline: 1em; }
+  .rp--horizon .rp-hz-year { width: 8.4em; margin-right: .2em; }
+  .rp--horizon .rp-hz { grid-template-columns: minmax(0, 1fr); padding-inline: 1em; }
+  .rp--horizon .rp-hz-nav { display: none; }
+  .rp--horizon .rp-rib { --lw: 4.6em; }
+  .rp--horizon .rp-rib__months b { display: none; }
 }
 
 /* Close day ------------------------------------------------------------------- */

@@ -9,6 +9,8 @@
 import { compareVersions } from './version.js';
 import { payoutCheckWords } from './partners-view.js';
 import { PARTNER_PROGRAM, teamTier } from '../src/lib/pricing.js';
+// The legal pages' own checks, so Setup never calls ready a value the pages leave out.
+import { legalDetails, legalValueProblem } from '../legal/legal-details.js';
 
 /** Nothing records a reply or a decision, so these stay listed for a while after they arrive. */
 export const TEAM_REPLY_DAYS = 14;
@@ -115,7 +117,9 @@ const within = (iso, now, days) => {
 
 const PAYMENT_ITEMS = ['plus', 'gift'];
 const PAYMENT_CURRENCIES = ['EUR', 'USD'];
-const LEGAL_FIELDS = [['SUPPORT_EMAIL', 'contact address'], ['LEGAL_ADDRESS', 'postal address']];
+// What the legal pages need (a usable value: legal-details.js), and the values they leave out when they aren't usable.
+const LEGAL_FIELDS = [['email', 'SUPPORT_EMAIL', 'contact address'], ['address', 'LEGAL_ADDRESS', 'postal address']];
+const LEGAL_CHECKED = ['SUPPORT_EMAIL', 'PRIVACY_EMAIL', 'LEGAL_PHONE'];
 const MIGRATIONS = [['teamRequestsUnavailable', '0002_team_requests.sql'], ['plusUnavailable', '0003_plus.sql'], ['reviewsUnavailable', '0004_creem_reviews.sql'], ['refundsUnavailable', '0005_refunds.sql'], ['partnersUnavailable', '0006_partners.sql'], ['partnerCommissionsUnavailable', '0007_partner_commissions.sql']];
 const listed = words => (words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}` : words[0] || '');
 
@@ -162,8 +166,15 @@ export function setupChecks(summary, { config = {}, pageVersion = '' } = {}) {
   add('links', 'ok');
   // Partners: “Become a partner” needs the Creem affiliate sign-up link (a build variable).
   add('partners', /^https:\/\/\S+$/.test(String(config.AFFILIATE_URL || '').trim()) ? 'ok' : 'warn', ['Partners: the Creem sign-up link isn’t set']);
-  const legalMissing = LEGAL_FIELDS.filter(([key]) => !String(config[key] || '').trim()).map(([, label]) => label);
-  add('legal', legalMissing.length ? 'warn' : 'ok', [`Legal pages: ${listed(legalMissing)} missing`]);
+  // Legal pages: a blank contact or postal address is missing; a value set but not usable (“ben at example dot com”) is left out of the pages.
+  const legal = legalDetails(config);
+  const legalMissing = LEGAL_FIELDS.filter(([field, key]) => !legal[field] && !legalValueProblem(key, config[key])).map(([, , label]) => label);
+  const legalUnused = LEGAL_CHECKED.map(key => [key, legalValueProblem(key, config[key])]).filter(([, problem]) => problem);
+  const legalProblems = [
+    ...(legalMissing.length ? [`Legal pages: ${listed(legalMissing)} missing`] : []),
+    ...legalUnused.map(([key, problem]) => `Legal pages: DAILY_PLANNER_${key} is set, but not used (${problem})`)
+  ];
+  add('legal', legalProblems.length ? 'warn' : 'ok', legalProblems);
 
   const migrations = MIGRATIONS.filter(([flag]) => summary[flag]).map(([, file]) => file);
   const missingText = file => (file === '0007_partner_commissions.sql' ? `Database: run migrations/${file} to track team commissions` : `Database: migration ${file} not applied`);

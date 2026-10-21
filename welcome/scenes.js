@@ -12,6 +12,10 @@ import { qs, qsa } from './page-kit.js';
    Without motion (reduced motion, or the page gave up waiting), every replica
    simply shows its final frame; `motion-ok` on <html> turns on the CSS
    transitions only once the scenes are armed.
+
+   A replica with `data-scene-driven` doesn't play by scrolling: its page
+   drives it through the returned `scene(name)` (restart, stop, finish, arm),
+   as the hero does with its two views (hero-views.js).
    ============================================================================ */
 
 const html = document.documentElement;
@@ -102,14 +106,14 @@ function createScene(root, scripts) {
     playing = false;
   }
 
-  function run() {
+  function run(once = false) {
     clear();
     state = 'running';
     script.run(api);
-    if (script.loop) {
+    if (script.loop && !once) {
       later(script.length, () => {
         reset();
-        later(900, run);
+        later(900, () => run());
       });
     } else {
       later(script.length || 6000, () => { state = 'final'; });
@@ -145,17 +149,33 @@ function createScene(root, scripts) {
       playing = false;
       clear();
       root.classList.remove('is-playing');
+    },
+    // Driven scenes: from the first frame, once, ending on the final frame. A
+    // scene caught mid-way goes back to its first frame and waits a moment.
+    restart() {
+      clear();
+      playing = true;
+      root.classList.add('is-playing');
+      if (state === 'reset') {
+        run(true);
+        return;
+      }
+      reset();
+      later(900, () => run(true));
     }
   };
 }
 
 /**
  * Arms every `[data-scene]` of the page that has a script, plays each while
- * it is on screen, and shows final frames when motion is off or turns off.
+ * it is on screen (driven ones excepted), and shows final frames when motion
+ * is off or turns off. Returns { scene(name) }: a scene's controls, or null.
  */
 export function setupScenes({ scripts = {}, motionOn = false, motionHooks = [] } = {}) {
   const scenes = qsa('[data-scene]').map(root => createScene(root, scripts)).filter(Boolean);
-  if (!scenes.length) return;
+  const found = { scene: name => scenes.find(scene => scene.root.dataset.scene === name) || null };
+  if (!scenes.length) return found;
+  const watched = scenes.filter(scene => !scene.root.hasAttribute('data-scene-driven'));
   const visible = new Set();
   let observer = null;
 
@@ -166,7 +186,7 @@ export function setupScenes({ scripts = {}, motionOn = false, motionHooks = [] }
     html.classList.add('motion-ok');
     observer = new IntersectionObserver(entries => {
       entries.forEach(entry => {
-        const scene = scenes.find(item => item.root === entry.target);
+        const scene = watched.find(item => item.root === entry.target);
         if (!scene) return;
         if (entry.isIntersecting) {
           visible.add(scene);
@@ -178,7 +198,7 @@ export function setupScenes({ scripts = {}, motionOn = false, motionHooks = [] }
         }
       });
     }, { threshold: 0.3 });
-    scenes.forEach(scene => observer.observe(scene.root));
+    watched.forEach(scene => observer.observe(scene.root));
   };
 
   const disable = () => {
@@ -198,4 +218,6 @@ export function setupScenes({ scripts = {}, motionOn = false, motionHooks = [] }
     if (!observer) return;
     visible.forEach(scene => { if (document.hidden) scene.stop(); else scene.play(); });
   });
+
+  return found;
 }

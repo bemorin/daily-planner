@@ -2,6 +2,14 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.29.0 — 2026-10-21
+
+- **Welcome page hero**: the Day replica now alternates with a Horizon replica (the year at a glance, the Misogi, mini-adventures; a key date lands on the map, an adventure is ticked, the Misogi reaches its last milestone) in the same window, with a “Your day · Your year” switch whose line fills until the next view, and a pause button. Pointing at the replica or focusing the switch waits; a hidden tab or a hero out of view stops the scene. Reduced motion or no JavaScript: no rotation, the switch shows each view's final frame.
+- Insights: the outline of a hovered or focused mark (heatmap cells, week rows, columns, bars, stacks, streaks, year-over-year rows) sits above its neighbours on every side; marks reached with the arrow keys scroll fully into view.
+- Legal pages: new build variables `DAILY_PLANNER_PRIVACY_EMAIL` (privacy questions and rights, else the support address) and `DAILY_PLANNER_LEGAL_PHONE` (recommended: a Phone row in the legal notice); every address is a real `mailto:`/`tel:` link; the director of publication is a row of the publisher table; the cookies page has a Questions section; the build writes the configured details into the legal pages, so they show without JavaScript; the terms say plainly that a full refund or a dispute earns nothing and a partial refund of a team gift lowers its commission in proportion. Dated 21 October 2026. Owner dashboard Setup flags a value that is set but not used (not a plain email address, not a phone number).
+- Thin scrollbars without arrows in Chrome and Edge everywhere — the planner, its modals (the thumb now darkens on hover), the floating window, the dashboard, the welcome, Teams, Partners and legal pages: the standard `scrollbar-width`/`scrollbar-color` now apply only where `::-webkit-scrollbar` is unsupported, since Chromium drops the custom parts when they are set.
+- Hero details: the caption shows from first paint (the welcome page's largest paint is back under half a second on a computer), a paused hero stays paused when reduced motion is turned off, and Horizon fills the window on narrow screens. The dev server reads the legal and partner variables from `DAILY_PLANNER_*`.
+
 ## 1.28.0 — 2026-10-20
 
 - **Teams page** (`/welcome/teams/`, short link `/teams`): the team gift, how seats work, team prices and checkout, the “Invoice, quote or question” form and a Teams FAQ moved off the welcome page, which now ends Pricing with a banner to it. Old links (`/welcome/?ask=…#request`, `#teams`, `#team-prices`, `#seats`) lead to the same place on the Teams page; every “Ask a question” link points there. A request sends the visitor's partner code, if any, and the owner sees it.

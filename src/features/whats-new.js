@@ -6,10 +6,10 @@
  * (1.22.1, 1.22.2…) keep the same note and are never asked about again.
  */
 export const WHATS_NEW = Object.freeze({
-  version: '1.28',
+  version: '1.29',
   items: Object.freeze([
-    'Anyone can be a partner, with or without Plus: earn a 25% commission on every Plus purchase made through your link. See Partners in How it works.',
-    'Insights: the details you see when you point at a chart stay inside its card, on a computer and on a phone.',
-    'Team gifts have their own page, with prices, the request form and answers to the questions companies ask.'
+    'Insights: the outline of the day or bar you point at now shows on every side, above its neighbours.',
+    'The welcome page shows the planner two ways, your day and your year in Horizon, with a switch to pause or choose.',
+    'Thin scrollbars without arrows everywhere in Chrome and Edge, and clearer contacts on the legal pages.'
   ])
 });

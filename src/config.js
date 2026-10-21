@@ -20,10 +20,16 @@ export const PLANNER_API_URL = runtimeValue('PLANNER_API_URL').replace(/\/+$/, '
 // (base64 SPKI, ECDSA P-256). Blank in public source: Plus can't be activated
 // here. Buying goes through the owner API (GET/POST /api/checkout).
 export const PLUS_PUBLIC_KEY = runtimeValue('PLUS_PUBLIC_KEY').replace(/\s+/g, '');
-// Legal pages (legal/): the publisher's contact address, postal address and
-// registration (e.g. SIRET or VAT number). Blank details are left out of the
-// pages; without SUPPORT_EMAIL they point to the “Ask a question” form.
+// Legal pages (legal/): the publisher's contact address, the address for
+// privacy questions, phone number, postal address and registration (e.g.
+// SIRET or VAT number). Blank details are left out of the pages; without
+// SUPPORT_EMAIL they point to the “Ask a question” form, and privacy
+// questions go to PRIVACY_EMAIL, else SUPPORT_EMAIL, else the form.
+// legal/legal.js checks each one before showing it (a plain address, a phone
+// number of digits, spaces and + ( ) - . only).
 export const SUPPORT_EMAIL = runtimeValue('SUPPORT_EMAIL');
+export const PRIVACY_EMAIL = runtimeValue('PRIVACY_EMAIL');
+export const LEGAL_PHONE = runtimeValue('LEGAL_PHONE');
 export const LEGAL_ADDRESS = runtimeValue('LEGAL_ADDRESS');
 export const LEGAL_REGISTRATION = runtimeValue('LEGAL_REGISTRATION');
 // Partners (welcome/partners/): the Creem affiliate sign-up link (Creem → Growth
@@ -32,7 +38,7 @@ export const LEGAL_REGISTRATION = runtimeValue('LEGAL_REGISTRATION');
 // are PARTNER_PROGRAM in src/lib/pricing.js.
 export const AFFILIATE_URL = /^https:\/\/[^\s"'<>]+$/.test(runtimeValue('AFFILIATE_URL')) ? runtimeValue('AFFILIATE_URL') : '';
 // Kept in step with package.json by scripts/check.mjs; feedback is grouped by it.
-export const APP_VERSION = '1.28.0';
+export const APP_VERSION = '1.29.0';
 // Public/project links are deployment configuration, not repository defaults.
 
 

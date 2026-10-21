@@ -237,7 +237,7 @@ test('the partners page: landing style and motion, every section, the rules, the
   assert.match(page, /<aside class="pt-company"[\s\S]*?Bringing a company\?[\s\S]*?href="\.\.\/teams\/"/);
   assert.match(page, /planner\.bemorin\.com\/welcome\/\?ref=<b>CODE<\/b>/);
   assert.match(page, /1st and the 15th/);
-  for (const rule of ['of Plus and personal gifts', 'of a team gift you introduced', 'Your link counts for <span data-cookie-days>30</span> days</h3>', 'Refunds earn nothing', 'Team gifts by bank transfer', 'Open to anyone', 'Fair play']) assert.ok(page.includes(rule), rule);
+  for (const rule of ['of Plus and personal gifts', 'of a team gift you introduced', 'Your link counts for <span data-cookie-days>30</span> days</h3>', 'Full refunds and disputes earn nothing', 'Team gifts by bank transfer', 'Open to anyone', 'Fair play']) assert.ok(page.includes(rule), rule);
   // Only what Creem documents is said of Creem: it never sees a click (partners share our own ?ref= link), and its
   // commission is calculated under its own terms — the 14-day rule and “before tax” are ours, for team gifts.
   assert.doesNotMatch(page, /click/i);
@@ -248,7 +248,9 @@ test('the partners page: landing style and motion, every section, the rules, the
   // A company's invoice request counts when it carries the code: the page says to send them with the link.
   assert.match(page, /they ask for it on that page: having come through your link, their request carries your code\./);
   assert.doesNotMatch(page, /name you in their message/);
-  assert.match(page, /no refund and no dispute/);
+  assert.match(page, /without a full refund or a dispute\. If only part of a team gift is refunded, its commission is on the part kept\.<\/p>/);
+  assert.match(page, /refund period is over\. If only part of a team gift is refunded, its commission is on the part kept\.<\/p>/, 'the FAQ says the same');
+  assert.doesNotMatch(page, /<h3>Refunds earn nothing<\/h3>|If only part of the price is refunded|a partial refund lowers it/, 'the partial-refund rule is about team gifts only');
   assert.match(page, /don’t count/, 'own purchases');
   assert.match(page, /href="\.\.\/\.\.\/legal\/terms\/#partners"/);
   assert.doesNotMatch(page, /60 days/);
