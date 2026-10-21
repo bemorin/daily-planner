@@ -56,10 +56,15 @@
 
 /* The planner's scrollbar (styles/core.css): thin, no arrows, no track, a
    light thumb that darkens on hover. The thumb follows --line, so it is dark
-   in the dark theme. */
+   in the dark theme. Chromium draws it from the ::-webkit-scrollbar parts
+   below, which it ignores as soon as the standard scrollbar-width /
+   scrollbar-color are set (native arrows come back), so those are for the
+   other browsers only — the same rule as welcome/landing.css. */
 
-html,
-* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+@supports not selector(::-webkit-scrollbar) {
+  html,
+  * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+}
 
 *::-webkit-scrollbar { width: 7px; height: 7px; }
 

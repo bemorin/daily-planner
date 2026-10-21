@@ -115,10 +115,15 @@
 
 * { box-sizing: border-box; }
 
-/* The planner's scrollbar (styles/core.css): no arrows, no track, a light thumb. */
-
-html,
-* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+/* The planner's scrollbar (styles/core.css): thin, no arrows, no track, a light
+   thumb that darkens under the pointer, in both themes. Chromium and Safari
+   draw it from the ::-webkit-scrollbar parts below, which Chromium ignores as
+   soon as the standard properties are set (and then draws its own arrows on
+   the page's scrollbar), so those are for the other browsers only. */
+@supports not selector(::-webkit-scrollbar) {
+  html,
+  * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+}
 
 *::-webkit-scrollbar { width: 7px; height: 7px; }
 
@@ -638,7 +643,7 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .hero-switch__icon-pause { stroke-width: 2.4; }
 
-.hero-switch__icon-play { fill: currentColor; stroke-width: 1.2; }
+.hero-switch svg.hero-switch__icon-play { fill: currentColor; stroke-width: 1.2; }
 
 .hero-switch__icon-play,
 .hero__visual.is-paused .hero-switch__icon-pause { display: none; }
