@@ -17,6 +17,8 @@
   --tint: #f0ece4;
   --accent: #8b6b4f;
   --focus: #8b5a3c;
+  --scrollbar-thumb: color-mix(in srgb, var(--line) 82%, var(--paper));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--line-strong) 72%, var(--paper));
   --gutter: 16px;
   --top-h: 60px;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -51,6 +53,34 @@
 }
 
 * { box-sizing: border-box; }
+
+/* The planner's scrollbar (styles/core.css): thin, no arrows, no track, a
+   light thumb that darkens on hover. The thumb follows --line, so it is dark
+   in the dark theme. */
+
+html,
+* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+
+*::-webkit-scrollbar { width: 7px; height: 7px; }
+
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track-piece,
+*::-webkit-scrollbar-corner { background: transparent; }
+
+*::-webkit-scrollbar-thumb {
+  min-height: 2.5rem;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
 
 html { scroll-padding-top: calc(var(--top-h) + 16px); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 
@@ -264,8 +294,9 @@ code { padding: .1em .35em; border-radius: 5px; background: var(--soft); font-fa
 
 .lg-dl dd { margin: 0; overflow-wrap: anywhere; }
 
+/* The label column fits “Director of publication” on one line. */
 @media (min-width: 560px) {
-  .lg-dl__row { grid-template-columns: 9.5rem minmax(0, 1fr); align-items: baseline; }
+  .lg-dl__row { grid-template-columns: 11rem minmax(0, 1fr); align-items: baseline; }
 }
 
 /* Tables: stacked into labelled cards on narrow screens */

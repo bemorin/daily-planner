@@ -1,4 +1,4 @@
-import { LEGAL_ADDRESS, LEGAL_REGISTRATION, SUPPORT_EMAIL } from '../src/config.js';
+import { LEGAL_ADDRESS, LEGAL_PHONE, LEGAL_REGISTRATION, PRIVACY_EMAIL, SUPPORT_EMAIL } from '../src/config.js';
 import { COUNTED_EVENTS, LANDING_EVENTS, plannerApiEnabled, setUsageCountsEnabled, usageCountsEnabled } from '../src/lib/planner-api.js';
 import { CURRENCIES, LAUNCH, PARTNER_PROGRAM, PERSONAL_GIFTS, PLUS_FEATURES, PLUS_PRICE, TEAM_TIERS, formatMoney, memberGiftPrice } from '../src/lib/pricing.js';
 
@@ -7,9 +7,10 @@ import { CURRENCIES, LAUNCH, PARTNER_PROGRAM, PERSONAL_GIFTS, PLUS_FEATURES, PLU
  *
  * The pages are plain HTML that reads well without JavaScript. This module
  * fills in what depends on the deployment or on the code, so it can never
- * drift: the publisher's details (SUPPORT_EMAIL, LEGAL_ADDRESS,
- * LEGAL_REGISTRATION from runtime-config.js, each left out when blank), the
- * moments the site counts (COUNTED_EVENTS and LANDING_EVENTS), the prices,
+ * drift: the publisher's details (SUPPORT_EMAIL, PRIVACY_EMAIL, LEGAL_PHONE,
+ * LEGAL_ADDRESS, LEGAL_REGISTRATION from runtime-config.js, each left out
+ * when blank or invalid), who answers what (contactEmail), the moments the
+ * site counts (COUNTED_EVENTS and LANDING_EVENTS), the prices,
  * the Plus features and the partner program's terms (src/lib/pricing.js). It makes no network request. It also
  * marks, in “On this page”, the section being read.
  *
@@ -17,49 +18,86 @@ import { CURRENCIES, LAUNCH, PARTNER_PROGRAM, PERSONAL_GIFTS, PLUS_FEATURES, PLU
  */
 
 export const PUBLISHER = 'Ben Morin, an individual based in France';
+// The legal notice's director of publication (LCEN art. 6 III): the publisher himself.
+export const DIRECTOR = 'Ben Morin';
 // Plain addresses only: nothing that could add ?subject= or ?bcc= to a mailto: link.
 const EMAIL_RE = /^[^\s@<>()[\]\\,;:"?&=%/#]{1,64}@[a-z0-9](?:[a-z0-9.-]{0,188}[a-z0-9])?\.[a-z]{2,24}$/i;
+// A phone number as people write it: digits, spaces and + ( ) - . only, with 6 to 20 digits.
+const PHONE_RE = /^\+?[\d ().-]{6,32}$/;
 // The question form lives on the Teams page (1.28).
 const ASK_PATH = 'welcome/teams/?ask=question#request';
 
 export const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 const oneLine = value => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
 
+/** A phone number from the configuration, on one line, or '' when it isn't one. */
+export function legalPhone(value) {
+  const phone = oneLine(value);
+  const digits = phone.replace(/\D/g, '').length;
+  return PHONE_RE.test(phone) && digits >= 6 && digits <= 20 ? phone : '';
+}
+
 /** The publisher's details from a runtime configuration; blank or invalid values become ''. */
 export function legalDetails(config = {}) {
   const text = key => (typeof config?.[key] === 'string' ? config[key].trim() : '');
-  const email = text('SUPPORT_EMAIL');
+  const email = key => (EMAIL_RE.test(text(key)) ? text(key) : '');
   return {
-    email: EMAIL_RE.test(email) ? email : '',
+    email: email('SUPPORT_EMAIL'),
+    privacyEmail: email('PRIVACY_EMAIL'),
+    phone: legalPhone(text('LEGAL_PHONE')),
     address: oneLine(text('LEGAL_ADDRESS')),
     registration: oneLine(text('LEGAL_REGISTRATION'))
   };
 }
 
-/** Where to write without a support address: the “Ask a question” form, on the Teams page. */
+/**
+ * The address that answers a topic: 'privacy' (the privacy policy, the
+ * cookies page) goes to PRIVACY_EMAIL, else SUPPORT_EMAIL; anything else
+ * (the terms, the legal notice) to SUPPORT_EMAIL. '' means the question form.
+ */
+export function contactEmail(details, topic = 'support') {
+  return (topic === 'privacy' && details?.privacyEmail) || details?.email || '';
+}
+
+/** Where to write without an address: the “Ask a question” form, on the Teams page. */
 export const askHref = (root = '../') => `${root}${ASK_PATH}`;
 
-/** How to reach us, as the value of a “Contact” row: the address, or the question form. */
-export function contactHtml(details, root = '../') {
-  return details.email
-    ? `<a href="mailto:${esc(details.email)}">${esc(details.email)}</a>`
-    : `the <a href="${esc(askHref(root))}">“Ask a question” form</a>`;
+const mailLink = email => `<a href="mailto:${esc(email)}">${esc(email)}</a>`;
+const formLink = root => `<a href="${esc(askHref(root))}">“Ask a question” form</a>`;
+
+/** How to reach us about a topic, as the value of a row: the address, or the question form. */
+export function contactHtml(details, root = '../', topic = 'support') {
+  const email = contactEmail(details, topic);
+  return email ? mailLink(email) : `the ${formLink(root)}`;
 }
 
 /** How to reach us inside a sentence (“To use these rights, …”): “email …” or “use the … form”. */
-export function contactPhrase(details, root = '../') {
-  return details.email
-    ? `email <a href="mailto:${esc(details.email)}">${esc(details.email)}</a>`
-    : `use the <a href="${esc(askHref(root))}">“Ask a question” form</a>`;
+export function contactPhrase(details, root = '../', topic = 'support') {
+  const email = contactEmail(details, topic);
+  return email ? `email ${mailLink(email)}` : `use the ${formLink(root)}`;
 }
 
-/** The publisher block: name, then address and registration only when they are set, then the contact. */
-export function detailRows(details, root = '../') {
+/** A phone number as a tel: link: the digits and a leading +, without the national “(0)” of “+33 (0)6 …”. */
+export const telHref = phone => `tel:${String(phone).replace(/\(0\)/g, '').replace(/(?!^\+)\D/g, '')}`;
+export const phoneHtml = phone => `<a href="${esc(telHref(phone))}">${esc(phone)}</a>`;
+
+/**
+ * The publisher block. The legal notice (`page` 'notice'): Publisher,
+ * Address and Registration when set, Email (SUPPORT_EMAIL, or Contact: the
+ * form), Phone when set, Director of publication. The privacy policy
+ * ('privacy'): the data controller, Address and Registration when set, and
+ * where to write about privacy (PRIVACY_EMAIL, else SUPPORT_EMAIL, else the form).
+ */
+export function detailRows(details, root = '../', page = 'notice') {
+  const privacy = page === 'privacy';
+  const topic = privacy ? 'privacy' : 'support';
   return [
-    ['Publisher', esc(PUBLISHER)],
+    [privacy ? 'Data controller' : 'Publisher', esc(PUBLISHER)],
     details.address ? ['Address', esc(details.address)] : null,
     details.registration ? ['Registration', esc(details.registration)] : null,
-    ['Contact', contactHtml(details, root)]
+    [contactEmail(details, topic) ? 'Email' : 'Contact', contactHtml(details, root, topic)],
+    !privacy && details.phone ? ['Phone', phoneHtml(details.phone)] : null,
+    privacy ? null : ['Director of publication', esc(DIRECTOR)]
   ].filter(Boolean);
 }
 
@@ -252,10 +290,11 @@ function setupContents(doc) {
 }
 
 /** Fills the page from the configuration. `root` is the site root, relative to the page. */
-export function applyLegal(doc, { config = { SUPPORT_EMAIL, LEGAL_ADDRESS, LEGAL_REGISTRATION }, root = doc.body?.dataset.root || '../' } = {}) {
+export function applyLegal(doc, { config = { SUPPORT_EMAIL, PRIVACY_EMAIL, LEGAL_PHONE, LEGAL_ADDRESS, LEGAL_REGISTRATION }, root = doc.body?.dataset.root || '../' } = {}) {
   const details = legalDetails(config);
-  fill(doc, '[data-legal-details]', detailsHtml(detailRows(details, root)));
-  fill(doc, '[data-legal-contact]', contactPhrase(details, root));
+  // data-legal-details="notice" | "privacy"; data-legal-contact="support" | "privacy" (see detailRows and contactEmail).
+  ['notice', 'privacy'].forEach(page => fill(doc, `[data-legal-details="${page}"]`, detailsHtml(detailRows(details, root, page))));
+  ['support', 'privacy'].forEach(topic => fill(doc, `[data-legal-contact="${topic}"]`, contactPhrase(details, root, topic)));
   fill(doc, '[data-legal-events="planner"]', eventsHtml(COUNTED_EVENTS));
   fill(doc, '[data-legal-events="landing"]', eventsHtml(LANDING_EVENTS));
   fill(doc, '[data-legal-prices]', pricesHtml());

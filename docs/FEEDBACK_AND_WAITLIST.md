@@ -193,14 +193,16 @@ All of this is in the Cloudflare dashboard, under **Workers & Pages → your Pag
 | `EMAIL_DAILY_LIMIT` | Text | optional, default `100` | Resend plan |
 | `PUBLIC_BASE_URL` | Text | optional, default `https://planner.bemorin.com` | your address |
 | `CREEM_TEST_MODE` | Text | optional: `1` forces Creem's test mode (not needed with a `creem_test_` key) | — |
-| `DAILY_PLANNER_SUPPORT_EMAIL` | Text | the contact address shown on the legal pages (an address on your own domain) | your choice (see [Legal pages](#legal-pages)) |
+| `DAILY_PLANNER_SUPPORT_EMAIL` | Text | the contact address shown on the legal pages and in the welcome pages' footer, e.g. `support@yourdomain.com` (an address on your own domain) | your choice (see [Legal pages](#legal-pages)) |
+| `DAILY_PLANNER_PRIVACY_EMAIL` | Text | optional: the address for privacy questions, e.g. `privacy@yourdomain.com` (privacy policy and cookies page; blank: the support address) | your choice |
+| `DAILY_PLANNER_LEGAL_PHONE` | Text | optional: a phone number for the legal notice, e.g. `+33 6 12 34 56 78` (digits, spaces and `+ ( ) - .` only) | your phone |
 | `DAILY_PLANNER_LEGAL_ADDRESS` | Text | the postal address shown in the legal notice | your address |
 | `DAILY_PLANNER_LEGAL_REGISTRATION` | Text | optional: SIRET and/or VAT number, e.g. `SIRET 123 456 789 00012` | your registration |
 | `DAILY_PLANNER_AFFILIATE_URL` | Text | the sign-up link of your affiliate program (`https://…`), behind **Become a partner** | Creem → Growth → Affiliate Hub |
 
 Nothing to set for the currency: Cloudflare tells the API each buyer's country.
 
-**Redeploy after every change** — **Deployments → the latest production deployment → ⋯ → Retry deployment**. Saved values are not used until the next deployment, and the `DAILY_PLANNER_…` ones (the API URL, the Plus public key, the three legal details and the partner sign-up link) are read while the site is built.
+**Redeploy after every change** — **Deployments → the latest production deployment → ⋯ → Retry deployment**. Saved values are not used until the next deployment, and the `DAILY_PLANNER_…` ones (the API URL, the Plus public key, the five legal details and the partner sign-up link) are read while the site is built.
 
 Then open `https://planner.bemorin.com/admin/`: the **Setup** card lists anything still missing, and never shows a secret.
 
@@ -217,13 +219,17 @@ The site carries its own legal pages, linked from the planner's footer, the land
 
 The short links come from `_redirects` (Cloudflare Pages reads it from the build output; the dev server applies it too), so old links to `bemorin.com/privacy`, `/terms` and `/cookies` land on the right page through the bemorin.com → planner redirect.
 
-Three build variables fill in the publisher's details. Add them in **Settings → Variables and Secrets** as *Text* for **Production** (table above), then **redeploy**: they are read while the site is built.
+Five build variables fill in the publisher's details. Add them in **Settings → Variables and Secrets** as *Text* for **Production** (table above), then **redeploy**: they are read while the site is built.
 
-- `DAILY_PLANNER_SUPPORT_EMAIL` — the contact address. Without it, every "contact us" points to the landing page's "Ask a question" form.
-- `DAILY_PLANNER_LEGAL_ADDRESS` — your postal address, shown in the legal notice and the privacy policy.
-- `DAILY_PLANNER_LEGAL_REGISTRATION` — optional: SIRET and/or VAT number.
+| Variable | What it fills | When blank |
+| --- | --- | --- |
+| `DAILY_PLANNER_SUPPORT_EMAIL` | The **Email** row of the legal notice; "To ask" (refunds) and **Contact** in the terms; the "Support" line in the welcome pages' footer. Also privacy questions when `DAILY_PLANNER_PRIVACY_EMAIL` is blank. | Those places point to the "Ask a question" form on the Teams page. |
+| `DAILY_PLANNER_PRIVACY_EMAIL` | Optional. In the privacy policy, the data controller's **Email** row and "To use any of these rights, email …"; on the cookies page, **Questions**. | The support address, else the form. |
+| `DAILY_PLANNER_LEGAL_PHONE` | Optional. A **Phone** row in the legal notice (a `tel:` link). French law (LCEN, article 6 III) asks an individual publisher for an address and a phone number. | No phone row. |
+| `DAILY_PLANNER_LEGAL_ADDRESS` | The **Address** row of the legal notice and of the privacy policy. | No address row. |
+| `DAILY_PLANNER_LEGAL_REGISTRATION` | Optional. A **Registration** row (SIRET and/or VAT number) in the legal notice and the privacy policy. | No registration row. |
 
-A blank value is simply left out; nothing personal is ever written in the repository. The dashboard's **Setup** card says which ones are missing and lists the three addresses Creem asks for during its store review: the terms (`https://planner.bemorin.com/legal/terms/`), the privacy policy (`https://planner.bemorin.com/legal/privacy/`) and the website (`https://planner.bemorin.com/welcome/`).
+Each address must be a plain address (shown as a `mailto:` link); a value that isn't one, or a phone number with other characters, is left out like a blank one. The legal notice's table reads: Publisher, Address, Registration, Email (or Contact: the form), Phone, Director of publication. Without JavaScript the pages show the form; the script puts the configured details in. A blank value is simply left out; nothing personal is ever written in the repository. The dashboard's **Setup** card says which ones are missing and what each one fills, and lists the three addresses Creem asks for during its store review: the terms (`https://planner.bemorin.com/legal/terms/`), the privacy policy (`https://planner.bemorin.com/legal/privacy/`) and the website (`https://planner.bemorin.com/welcome/`).
 
 The pages render the counted moments (`COUNTED_EVENTS`, `LANDING_EVENTS`), the prices and the Plus features from the code itself, so they can't drift. Edit the wording in `legal/*/index.html`, change the "Last updated" date at the top of the page, and have the text checked by a lawyer before relying on it.
 

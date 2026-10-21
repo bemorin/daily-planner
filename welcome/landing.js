@@ -4,6 +4,7 @@ import { savedPlusToken, verifyPlusToken, writePlusCheck } from '../src/lib/plus
 import { animate } from '../src/vendor/motion.js';
 import { countedMoments, monthWeeks, personalOffer, ritualYear, statusTone, upcomingSentence } from './landing-model.js';
 import { LANDING } from './landing-settings.js';
+import { setupHeroViews } from './hero-views.js';
 import { CHECK_ICON, el, qs, qsa, renderFooter, setupTopBar } from './page-kit.js';
 import { EASE_OUT, followMotion, motionWanted, reduceQuery, setupFaq, setupReveal } from './page-motion.js';
 import { createPaletteCard } from './palette-card.js';
@@ -635,6 +636,24 @@ const SCRIPTS = {
       t.count(qs('[data-count]', t.root), 11700, 300);
     }
   },
+  // The hero's second view, Horizon: the year fills in, a key date lands on
+  // the map, a mini-adventure is ticked as lived, then the last milestone of
+  // the Misogi, whose bar fills.
+  horizon: {
+    length: 8200,
+    run(t) {
+      const counts = step => qsa(`[data-at="${step}"]`, t.root);
+      t.add('s-in', 150);
+      t.add('s-add', 2700);
+      t.remove('s-add', 2960);
+      t.add('s-key', 2960);
+      counts('key').forEach(node => t.count(node, 3300, 120));
+      t.add('s-lived', 4900);
+      counts('lived').forEach(node => t.count(node, 5000, 120));
+      t.add('s-step', 6800);
+      counts('step').forEach(node => t.count(node, 6950, 120));
+    }
+  },
   close: {
     length: 13000,
     loop: true,
@@ -781,7 +800,8 @@ function start() {
   });
   setupChrome();
   setupViewCounts();
-  setupScenes({ scripts: SCRIPTS, motionOn, motionHooks });
+  const scenes = setupScenes({ scripts: SCRIPTS, motionOn, motionHooks });
+  setupHeroViews(qs('[data-hero-views]'), { scene: scenes.scene, motionOn, motionHooks });
   createPaletteCard(qs('[data-palette-card]'), { motion: () => motionOn });
   setupReveal({ motionOn, motionHooks });
   setupFaq();

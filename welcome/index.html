@@ -118,6 +118,10 @@
     <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M16.5 3 20 6.5 16.5 10"/><path d="M4 11.5V10a3.5 3.5 0 0 1 3.5-3.5H20"/><path d="M7.5 21 4 17.5 7.5 14"/><path d="M20 12.5V14a3.5 3.5 0 0 1-3.5 3.5H4"/></symbol>
     <symbol id="i-history" viewBox="0 0 24 24"><path d="M4.6 12.8A7.5 7.5 0 1 0 6.9 6.6"/><path d="M5.8 3.8v3.6h3.6"/><path d="M12 8.2v4l2.7 1.7"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></symbol>
+    <symbol id="i-day" viewBox="0 0 24 24"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M10.5 13 12 11.5V17"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.4-7.5-10.1A4.4 4.4 0 0 1 12 7.2a4.4 4.4 0 0 1 7.5 2.7C19.5 15.6 12 20 12 20Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6.5v11M15 6.5v11"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8.5 6.2v11.6a.6.6 0 0 0 .9.5l9.1-5.8a.6.6 0 0 0 0-1L9.4 5.7a.6.6 0 0 0-.9.5Z"/></symbol>
   </svg>
 
   <a class="skip" href="#main">Skip to content</a>
@@ -161,68 +165,144 @@
           </div>
         </div>
 
-        <figure class="hero__visual">
-          <div class="rp-scale">
-            <div class="rp rp--day s-mit s-block s-closed" data-scene="day" data-final="s-mit s-block s-closed" data-first-frame aria-hidden="true">
-              <div class="rp-window">
-                <div class="rp-bar"><i></i><i></i><i></i><span>planner.bemorin.com</span></div>
-                <div class="rp-top">
-                  <span class="rp-iconbtn"><svg class="i"><use href="#i-week"/></svg></span>
-                  <span class="rp-date"><small>Friday</small><b>October 9, 2026</b></span>
-                  <span class="rp-nav"><svg class="i"><use href="#i-left"/></svg><b>Now</b><svg class="i"><use href="#i-right"/></svg></span>
-                  <span class="rp-tools"><svg class="i"><use href="#i-search"/></svg><svg class="i"><use href="#i-journal"/></svg><svg class="i"><use href="#i-compass"/></svg></span>
-                </div>
-                <div class="rp-day">
-                  <div class="rp-plan">
-                    <p class="rp-h">Keep in mind</p>
-                    <p class="rp-focus"><span data-type data-speed="44">Protect the morning for deep work</span><em>e.g. Don’t let urgency drive the decision</em></p>
-                    <p class="rp-h">Most important outcome</p>
-                    <div class="rp-row rp-row--mit rp-tick"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Send the proposal to Claire</span></div>
-                    <p class="rp-h">Other important outcomes</p>
-                    <div class="rp-row"><span class="rp-check"></span><span class="rp-txt">Draft the offsite agenda</span></div>
-                    <div class="rp-row is-done"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Review the hiring brief</span></div>
-                    <p class="rp-h rp-optional">Tasks</p>
-                    <div class="rp-row rp-row--task rp-optional is-done"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Call the bank</span></div>
-                    <div class="rp-row rp-row--task rp-optional"><span class="rp-check"></span><span class="rp-txt">Reorganise the shared drive</span></div>
+        <figure class="hero__visual" data-hero-views>
+          <div class="rp-scale hero-stage">
+            <div class="hero-view hero-view--day is-shown" data-hero-view="day">
+              <div class="rp rp--day s-mit s-block s-closed" data-scene="day" data-final="s-mit s-block s-closed" data-scene-driven data-first-frame aria-hidden="true">
+                <div class="rp-window">
+                  <div class="rp-bar"><i></i><i></i><i></i><span>planner.bemorin.com</span></div>
+                  <div class="rp-top">
+                    <span class="rp-iconbtn"><svg class="i"><use href="#i-week"/></svg></span>
+                    <span class="rp-date"><small>Friday</small><b>October 9, 2026</b></span>
+                    <span class="rp-nav"><svg class="i"><use href="#i-left"/></svg><b>Now</b><svg class="i"><use href="#i-right"/></svg></span>
+                    <span class="rp-tools"><svg class="i"><use href="#i-search"/></svg><svg class="i"><use href="#i-journal"/></svg><svg class="i"><use href="#i-compass"/></svg></span>
                   </div>
-                  <div class="rp-sched">
-                    <div class="rp-sched__head"><b>Schedule</b><span class="rp-closebtn"><svg class="i"><use href="#i-sunset"/></svg>Close day</span></div>
-                    <div class="rp-hours" style="--n:8">
-                      <span style="--h:0"><b>08:00</b></span><span style="--h:1"><b>09:00</b></span><span style="--h:2"><b>10:00</b></span><span style="--h:3"><b>11:00</b></span><span style="--h:4"><b>12:00</b></span><span style="--h:5"><b>13:00</b></span><span style="--h:6"><b>14:00</b></span><span style="--h:7"><b>15:00</b></span><span style="--h:8"><b>16:00</b></span>
-                      <div class="rp-block rp-block--new" style="--s:1;--d:1.5;--c:var(--c-deep)"><b>Proposal — final pass</b><small>Deep work · 1h 30m</small></div>
-                      <div class="rp-block rp-block--short" style="--s:3;--d:.5;--c:var(--c-admin)"><b>Team standup</b><small>11:00–11:30</small></div>
-                      <div class="rp-block rp-block--short" style="--s:4.5;--d:.75;--c:var(--c-health)"><b>Run</b><small>Health · 45m</small></div>
-                      <div class="rp-block" style="--s:6;--d:1.5;--c:var(--c-deep)"><b>Offsite agenda</b><small>Deep work · 1h 30m</small></div>
-                      <div class="rp-now" style="--s:7.6"><span>15:36</span></div>
+                  <div class="rp-day">
+                    <div class="rp-plan">
+                      <p class="rp-h">Keep in mind</p>
+                      <p class="rp-focus"><span data-type data-speed="44">Protect the morning for deep work</span><em>e.g. Don’t let urgency drive the decision</em></p>
+                      <p class="rp-h">Most important outcome</p>
+                      <div class="rp-row rp-row--mit rp-tick"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Send the proposal to Claire</span></div>
+                      <p class="rp-h">Other important outcomes</p>
+                      <div class="rp-row"><span class="rp-check"></span><span class="rp-txt">Draft the offsite agenda</span></div>
+                      <div class="rp-row is-done"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Review the hiring brief</span></div>
+                      <p class="rp-h rp-optional">Tasks</p>
+                      <div class="rp-row rp-row--task rp-optional is-done"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Call the bank</span></div>
+                      <div class="rp-row rp-row--task rp-optional"><span class="rp-check"></span><span class="rp-txt">Reorganise the shared drive</span></div>
+                    </div>
+                    <div class="rp-sched">
+                      <div class="rp-sched__head"><b>Schedule</b><span class="rp-closebtn"><svg class="i"><use href="#i-sunset"/></svg>Close day</span></div>
+                      <div class="rp-hours" style="--n:8">
+                        <span style="--h:0"><b>08:00</b></span><span style="--h:1"><b>09:00</b></span><span style="--h:2"><b>10:00</b></span><span style="--h:3"><b>11:00</b></span><span style="--h:4"><b>12:00</b></span><span style="--h:5"><b>13:00</b></span><span style="--h:6"><b>14:00</b></span><span style="--h:7"><b>15:00</b></span><span style="--h:8"><b>16:00</b></span>
+                        <div class="rp-block rp-block--new" style="--s:1;--d:1.5;--c:var(--c-deep)"><b>Proposal — final pass</b><small>Deep work · 1h 30m</small></div>
+                        <div class="rp-block rp-block--short" style="--s:3;--d:.5;--c:var(--c-admin)"><b>Team standup</b><small>11:00–11:30</small></div>
+                        <div class="rp-block rp-block--short" style="--s:4.5;--d:.75;--c:var(--c-health)"><b>Run</b><small>Health · 45m</small></div>
+                        <div class="rp-block" style="--s:6;--d:1.5;--c:var(--c-deep)"><b>Offsite agenda</b><small>Deep work · 1h 30m</small></div>
+                        <div class="rp-now" style="--s:7.6"><span>15:36</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="rp-scrim"></div>
+                  <div class="rp-modal">
+                    <p class="rp-eyebrow">Close day</p>
+                    <p class="rp-modal__title">Close the day without losing unfinished work.</p>
+                    <div class="rp-modal__sum">
+                      <span><small>Done</small><b>3</b></span>
+                      <span><small>Still open</small><b>2</b></span>
+                      <span class="rp-modal__to"><small>Carry to</small><b>Mon, Oct 12</b></span>
+                    </div>
+                    <div class="rp-mis">
+                      <div class="rp-mi rp-mi--save"><span class="rp-mi__body"><b>Draft the offsite agenda</b><small>Other outcome</small></span><span class="rp-mi__chips"><span class="rp-mc rp-mc--date">Mon, Oct 12</span><span class="rp-mc rp-mc--save">Save</span><span class="rp-mc rp-mc--forget">Forget</span></span></div>
+                      <div class="rp-mi rp-mi--forget"><span class="rp-mi__body"><b>Reorganise the shared drive</b><small>Task</small></span><span class="rp-mi__chips"><span class="rp-mc rp-mc--date">Mon, Oct 12</span><span class="rp-mc rp-mc--save">Save</span><span class="rp-mc rp-mc--forget">Forget</span></span></div>
+                    </div>
+                    <span class="rp-modal__field"><small>What made today worth remembering?</small><em class="rp-field"><span data-type data-speed="42">Proposal sent before lunch</span></em></span>
+                    <div class="rp-modal__actions"><span>Cancel</span><span class="rp-primary">Close day</span></div>
+                  </div>
+                </div>
+                <span class="rp-cursor"><i class="rp-cursor__ripple"></i><svg class="rp-cursor__arrow" viewBox="0 0 24 24"><path d="M4.5 2.5v16.6l4.3-4.2 2.9 6.6 3-1.3-2.9-6.5h6.1Z"/></svg></span>
+                <div class="rp-pop rp-pop--closed">
+                  <div class="rp-pop__head"><span>October, painted</span><b><svg class="i"><use href="#i-flame"/></svg><span><span data-count="20" data-from="19">20</span>-day streak</span></b></div>
+                  <div class="rp-month" data-month></div>
+                  <p class="rp-pop__foot"><svg class="i"><use href="#i-trophy"/></svg>Trophy unlocked: <b>A month, unbroken</b></p>
+                </div>
+              </div>
+            </div>
+            <div class="hero-view hero-view--year" data-hero-view="year">
+              <div class="rp rp--horizon s-in s-key s-lived s-step" data-scene="horizon" data-final="s-in s-key s-lived s-step" data-scene-driven aria-hidden="true">
+                <div class="rp-window">
+                  <div class="rp-bar"><i></i><i></i><i></i><span>planner.bemorin.com</span></div>
+                  <div class="rp-top">
+                    <span class="rp-iconbtn"><svg class="i"><use href="#i-compass"/></svg></span>
+                    <span class="rp-date"><small>Horizon</small><b>2026</b></span>
+                    <span class="rp-hz-year"><span class="rp-hz-meter"><i style="--w:77"></i></span><small>Day 282 · 83 days left</small></span>
+                    <span class="rp-hz-add"><svg class="i"><use href="#i-plus"/></svg>Add</span>
+                  </div>
+                  <div class="rp-hz">
+                    <div class="rp-hz-nav">
+                      <span class="rp-hz-sec is-on" style="--k:var(--accent)"><i><svg class="i"><use href="#i-compass"/></svg></i><span><b>Overview</b><small>77% of the year</small></span><svg class="rp-ring" viewBox="0 0 20 20" style="--p0:77"><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="7" pathLength="100"/></svg></span>
+                      <span class="rp-hz-sec rp-hz-sec--step" style="--k:var(--misogi)"><i><svg class="i"><use href="#i-mountain"/></svg></i><span><b>Misogi</b><small><span data-count="3" data-from="2" data-at="step">3</span>/3 milestones</small></span><svg class="rp-ring" viewBox="0 0 20 20" style="--p0:67;--p1:100"><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="7" pathLength="100"/></svg></span>
+                      <span class="rp-hz-sec" style="--k:var(--adventure)"><i><svg class="i"><use href="#i-flag"/></svg></i><span><b>Mini-adventures</b><small>5 of 6 planned</small></span><svg class="rp-ring" viewBox="0 0 20 20" style="--p0:83"><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="7" pathLength="100"/></svg></span>
+                      <span class="rp-hz-sec" style="--k:var(--accent)"><i><svg class="i"><use href="#i-heart"/></svg></i><span><b>Commitments</b><small>3 of 3 written</small></span><svg class="rp-ring" viewBox="0 0 20 20" style="--p0:100"><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="7" pathLength="100"/></svg></span>
+                      <span class="rp-hz-sec" style="--k:var(--habit)"><i><svg class="i"><use href="#i-repeat"/></svg></i><span><b>Winning habits</b><small>Q4 · 78% kept</small></span><svg class="rp-ring" viewBox="0 0 20 20" style="--p0:100"><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="7" pathLength="100"/></svg></span>
+                      <span class="rp-hz-sec" style="--k:var(--keydate)"><i><svg class="i"><use href="#i-cal"/></svg></i><span><b>Year map</b><small><span data-count="9" data-from="8" data-at="key">9</span> dates</small></span></span>
+                      <span class="rp-hz-sec" style="--k:var(--accent)"><i><svg class="i"><use href="#i-trophy"/></svg></i><span><b>Progress</b><small>20-day streak</small></span><svg class="rp-ring" viewBox="0 0 20 20" style="--p0:60"><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="7" pathLength="100"/></svg></span>
+                    </div>
+                    <div class="rp-hz-main">
+                      <div class="rp-hz-map">
+                        <span class="rp-eyebrow">Year at a glance</span>
+                        <b class="rp-hz-map__title">Everything that gives the year its shape.</b>
+                        <div class="rp-rib">
+                          <div class="rp-rib__months"><span></span><span>J<b>an</b></span><span>F<b>eb</b></span><span>M<b>ar</b></span><span>A<b>pr</b></span><span>M<b>ay</b></span><span>J<b>un</b></span><span>J<b>ul</b></span><span>A<b>ug</b></span><span>S<b>ep</b></span><span class="is-now">O<b>ct</b></span><span>N<b>ov</b></span><span>D<b>ec</b></span></div>
+                          <div class="rp-rib__lane"><span class="rp-rib__label">Misogi</span><span class="rp-rib__track">
+                            <i class="m m--dia is-done" style="--x:29.3;--k:var(--milestone);--i:1"></i><i class="m m--dia is-done" style="--x:46.6;--k:var(--milestone);--i:2"></i><i class="m m--dia m--step" style="--x:73.7;--k:var(--milestone);--i:3"></i><i class="m m--dot m--big" style="--x:81.4;--k:var(--misogi);--i:4"></i>
+                          </span></div>
+                          <div class="rp-rib__lane"><span class="rp-rib__label">Adventures</span><span class="rp-rib__track">
+                            <i class="m m--dot is-done" style="--x:19.7;--k:var(--adventure);--i:1"></i><i class="m m--dot is-done" style="--x:42.7;--k:var(--adventure);--i:2"></i><i class="m m--dot is-done" style="--x:54.2;--k:var(--adventure);--i:3"></i><i class="m m--dot m--lived" style="--x:75.3;--k:var(--adventure);--i:4"></i><i class="m m--dot" style="--x:88.8;--k:var(--adventure);--i:5"></i>
+                          </span></div>
+                          <div class="rp-rib__lane"><span class="rp-rib__label">Key dates</span><span class="rp-rib__track">
+                            <i class="m m--dot" style="--x:10.1;--k:var(--keydate);--i:0"></i><i class="m m--dot" style="--x:38.9;--k:var(--keydate);--i:2"></i><i class="m m--band" style="--x:58.6;--w:5.2;--k:var(--keydate);--i:3"></i><i class="m m--dot m--new" style="--x:86.8;--k:var(--keydate);--i:5"></i><i class="m m--band" style="--x:97.8;--w:2;--k:var(--keydate);--i:6"></i>
+                            <span class="rp-hz-flag" style="--x:86.8">Mum’s 70th</span>
+                          </span></div>
+                          <div class="rp-rib__lane"><span class="rp-rib__label">Habits</span><span class="rp-rib__quarters">
+                            <span style="--i:0"><b>Q1</b><em>Walk after lunch</em></span><span style="--i:1"><b>Q2</b><em>No phone in the bedroom</em></span><span style="--i:2"><b>Q3</b><em>Write three lines</em></span><span class="is-now" style="--i:3"><b>Q4</b><em>Daily stretch</em></span>
+                          </span></div>
+                          <div class="rp-rib__today" style="--x:77"><span>Today</span></div>
+                        </div>
+                      </div>
+                      <div class="rp-hz-cards">
+                        <div class="rp-hz-card" style="--k:var(--misogi)">
+                          <span class="rp-hz-card__head"><i><svg class="i"><use href="#i-mountain"/></svg></i><b>Misogi</b><svg class="i"><use href="#i-arrow"/></svg></span>
+                          <b class="rp-hz-card__title">Run my first marathon</b>
+                          <small class="rp-hz-card__meta">Oct 25 · in 16 days</small>
+                          <span class="rp-hz-card__meter"><span class="rp-hz-meter rp-hz-meter--step"><i style="--w:67;--w1:100"></i></span><small><span data-count="3" data-from="2" data-at="step">3</span>/3</small></span>
+                          <span class="rp-hz-item rp-hz-item--step"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">32 km long run</span><em>Sep 27</em></span>
+                        </div>
+                        <div class="rp-hz-card" style="--k:var(--adventure)">
+                          <span class="rp-hz-card__head"><i><svg class="i"><use href="#i-flag"/></svg></i><b>Mini-adventures</b><svg class="i"><use href="#i-arrow"/></svg></span>
+                          <b class="rp-hz-card__title"><span data-count="4" data-from="3" data-at="lived">4</span> of 6 lived</b>
+                          <small class="rp-hz-card__meta">Next: cook for twelve, Nov 21</small>
+                          <span class="rp-hz-dots"><i class="is-done"></i><i class="is-done"></i><i class="is-done"></i><i class="is-planned rp-hz-dot--lived"></i><i class="is-planned"></i><i class="is-idea"></i></span>
+                          <span class="rp-hz-item rp-hz-item--lived"><span class="rp-check"><svg class="i"><use href="#i-check"/></svg></span><span class="rp-txt">Weekend in Lisbon</span><em>Oct 3–4</em></span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <div class="rp-scrim"></div>
-                <div class="rp-modal">
-                  <p class="rp-eyebrow">Close day</p>
-                  <p class="rp-modal__title">Close the day without losing unfinished work.</p>
-                  <div class="rp-modal__sum">
-                    <span><small>Done</small><b>3</b></span>
-                    <span><small>Still open</small><b>2</b></span>
-                    <span class="rp-modal__to"><small>Carry to</small><b>Mon, Oct 12</b></span>
-                  </div>
-                  <div class="rp-mis">
-                    <div class="rp-mi rp-mi--save"><span class="rp-mi__body"><b>Draft the offsite agenda</b><small>Other outcome</small></span><span class="rp-mi__chips"><span class="rp-mc rp-mc--date">Mon, Oct 12</span><span class="rp-mc rp-mc--save">Save</span><span class="rp-mc rp-mc--forget">Forget</span></span></div>
-                    <div class="rp-mi rp-mi--forget"><span class="rp-mi__body"><b>Reorganise the shared drive</b><small>Task</small></span><span class="rp-mi__chips"><span class="rp-mc rp-mc--date">Mon, Oct 12</span><span class="rp-mc rp-mc--save">Save</span><span class="rp-mc rp-mc--forget">Forget</span></span></div>
-                  </div>
-                  <span class="rp-modal__field"><small>What made today worth remembering?</small><em class="rp-field"><span data-type data-speed="42">Proposal sent before lunch</span></em></span>
-                  <div class="rp-modal__actions"><span>Cancel</span><span class="rp-primary">Close day</span></div>
-                </div>
-              </div>
-              <span class="rp-cursor"><i class="rp-cursor__ripple"></i><svg class="rp-cursor__arrow" viewBox="0 0 24 24"><path d="M4.5 2.5v16.6l4.3-4.2 2.9 6.6 3-1.3-2.9-6.5h6.1Z"/></svg></span>
-              <div class="rp-pop rp-pop--closed">
-                <div class="rp-pop__head"><span>October, painted</span><b><svg class="i"><use href="#i-flame"/></svg><span><span data-count="20" data-from="19">20</span>-day streak</span></b></div>
-                <div class="rp-month" data-month></div>
-                <p class="rp-pop__foot"><svg class="i"><use href="#i-trophy"/></svg>Trophy unlocked: <b>A month, unbroken</b></p>
               </div>
             </div>
           </div>
-          <figcaption>A day in the planner: one thing to keep in mind, one main outcome, a schedule. Closing the day paints a square of your year.</figcaption>
+          <div class="hero-switch">
+            <div class="hero-switch__views" role="radiogroup" aria-label="What the planner shows">
+              <span class="hero-switch__thumb" aria-hidden="true"><i class="hero-switch__fill" data-hero-fill></i></span>
+              <label class="hero-switch__view"><input type="radio" name="hero-view" value="day" checked autocomplete="off" data-hero-choice><svg class="i" aria-hidden="true"><use href="#i-day"/></svg><span>Your day</span></label>
+              <label class="hero-switch__view"><input type="radio" name="hero-view" value="year" autocomplete="off" data-hero-choice><svg class="i" aria-hidden="true"><use href="#i-compass"/></svg><span>Your year</span></label>
+            </div>
+            <button class="hero-switch__pause" type="button" data-hero-pause><svg class="i hero-switch__icon-pause" aria-hidden="true"><use href="#i-pause"/></svg><svg class="i hero-switch__icon-play" aria-hidden="true"><use href="#i-play"/></svg><span class="sr-only" data-hero-pause-label>Pause the animation</span></button>
+          </div>
+          <figcaption class="hero-captions">
+            <span data-hero-caption="day">A day in the planner: one thing to keep in mind, one main outcome, a schedule. Closing the day paints a square of your year.</span>
+            <span data-hero-caption="year">Horizon, the year in the planner: one big challenge, six mini-adventures, a habit per quarter and the dates that matter, on one map.</span>
+          </figcaption>
         </figure>
       </div>
     </section>

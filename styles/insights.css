@@ -174,8 +174,15 @@
 .ins-table .is-num { text-align: right; font-variant-numeric: tabular-nums; }
 .ins-table tr:last-child > * { border-bottom: 0; }
 
-/* Marks respond to hover and focus without restyling their whole chart. */
-[data-ins-chart] [data-tip] { cursor: default; }
+/* Marks respond to hover and focus without restyling their whole chart. Marks
+   paint one after the other (grid and flex items, or positioned), so the mark
+   being read is lifted above its neighbours: its ring shows on all four sides
+   instead of passing under the next mark to the right and the row below. Each
+   chart is its own stacking context, so the lift stays inside it (the outcomes'
+   average line still runs over the bars). */
+[data-ins-chart] { isolation: isolate; }
+[data-ins-chart] [data-tip] { cursor: default; scroll-margin: 8px; }
+[data-ins-chart] [data-tip]:is(.is-hot, :focus-visible) { z-index: 1; }
 [data-ins-chart] [data-tip]:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
 /* Days that work: two thin bars per weekday, values at the tip */

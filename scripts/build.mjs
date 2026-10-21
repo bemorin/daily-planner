@@ -49,6 +49,8 @@ const deploymentConfig = {
   PLUS_PUBLIC_KEY: process.env.DAILY_PLANNER_PLUS_PUBLIC_KEY || '',
   // Legal pages: blank details are left out (see legal/legal.js).
   SUPPORT_EMAIL: process.env.DAILY_PLANNER_SUPPORT_EMAIL || '',
+  PRIVACY_EMAIL: process.env.DAILY_PLANNER_PRIVACY_EMAIL || '',
+  LEGAL_PHONE: process.env.DAILY_PLANNER_LEGAL_PHONE || '',
   LEGAL_ADDRESS: process.env.DAILY_PLANNER_LEGAL_ADDRESS || '',
   LEGAL_REGISTRATION: process.env.DAILY_PLANNER_LEGAL_REGISTRATION || '',
   // Partners page: the Creem affiliate sign-up link behind “Become a partner”.

@@ -1241,22 +1241,34 @@ function partnersItem(summary, base = 'https://planner.bemorin.com') {
   return { key: 'partners', title: 'Partners', html: `${link}${creem}${page}` };
 }
 
-// Legal pages (legal/): their contact and address come from build variables.
-// Creem's store review asks for the terms, the privacy policy and the website.
+// Legal pages (legal/): their contact details and address come from build
+// variables (LEGAL_VARIABLES: what each one fills). Creem's store review asks
+// for the terms, the privacy policy and the website.
+const LEGAL_VARIABLES = [
+  ['SUPPORT_EMAIL', 'the contact address, in the legal notice and the terms, and for privacy questions unless <code>DAILY_PLANNER_PRIVACY_EMAIL</code> is set. Blank: the “Ask a question” form.'],
+  ['PRIVACY_EMAIL', 'optional, the address for privacy questions, in the privacy policy (data controller, your rights) and the cookies page.'],
+  ['LEGAL_PHONE', 'optional, a phone number in the legal notice, which French law asks of an individual publisher. Digits, spaces and <code>+&nbsp;(&nbsp;)&nbsp;-&nbsp;.</code> only.'],
+  ['LEGAL_ADDRESS', 'the postal address, in the legal notice and the privacy policy.'],
+  ['LEGAL_REGISTRATION', 'optional, SIRET and/or VAT number, in the legal notice and the privacy policy.']
+];
+
 function legalItem(base = 'https://planner.bemorin.com') {
   const value = key => String(APP_CONFIG[key] || '').trim();
   const missing = [['SUPPORT_EMAIL', 'DAILY_PLANNER_SUPPORT_EMAIL', 'contact address'], ['LEGAL_ADDRESS', 'DAILY_PLANNER_LEGAL_ADDRESS', 'postal address']].filter(([key]) => !value(key));
   // The public site (PUBLIC_BASE_URL), not a preview deployment this page may be open on.
   const page = path => new URL(path, `${base.replace(/\/+$/, '')}/`).href;
   const urls = `<p>The addresses Creem asks for:</p>${copyRow('Terms', page('legal/terms/'))}${copyRow('Privacy', page('legal/privacy/'))}${copyRow('Website', page('welcome/'))}`;
-  const registration = value('LEGAL_REGISTRATION') ? '' : ' If you have a SIRET or VAT number, add it with <code>DAILY_PLANNER_LEGAL_REGISTRATION</code>.';
-  if (!missing.length) return { key: 'legal', title: 'Legal pages', html: `<p>The legal notice shows your contact (${esc(value('SUPPORT_EMAIL'))}) and postal address.${registration}</p>${urls}` };
+  const variables = LEGAL_VARIABLES.map(([key, what]) => `<p><code>DAILY_PLANNER_${key}</code> (${value(key) ? 'set' : 'blank'}): ${what}</p>`).join('');
+  if (!missing.length) {
+    const privacy = value('PRIVACY_EMAIL') ? `, privacy questions to ${esc(value('PRIVACY_EMAIL'))}` : '';
+    return { key: 'legal', title: 'Legal pages', html: `<p>The legal notice shows your contact (${esc(value('SUPPORT_EMAIL'))}${privacy}) and postal address. Build variables (type Text; redeploy after a change):</p>${variables}${urls}` };
+  }
   const names = missing.map(([, variable]) => `<code>${variable}</code>`).join(' and ');
   const what = missing.map(([, , label]) => label).join(' or ');
   return {
     key: 'legal',
     title: 'Legal pages',
-    html: `<p>Set the build variable${missing.length > 1 ? 's' : ''} ${names} (Settings → Variables and Secrets, type Text), then redeploy. Until then the legal pages show no ${what}${value('SUPPORT_EMAIL') ? '' : ' and point to the “Ask a question” form'}.${registration}</p>${urls}`
+    html: `<p>Set the build variable${missing.length > 1 ? 's' : ''} ${names} (Settings → Variables and Secrets, type Text), then redeploy. Until then the legal pages show no ${what}${value('SUPPORT_EMAIL') ? '' : ' and point to the “Ask a question” form'}. What each variable fills:</p>${variables}${urls}`
   };
 }
 

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 // config.js reads the runtime configuration when it loads: give it sample
 // legal details (with stray spaces) before anything imports it.
-globalThis.__DAILY_PLANNER_CONFIG__ = { SUPPORT_EMAIL: '  hello@example.com ', LEGAL_ADDRESS: ' 1 rue Exemple, 75000 Paris ', LEGAL_REGISTRATION: 'SIRET 000 000 000 00000' };
+globalThis.__DAILY_PLANNER_CONFIG__ = { SUPPORT_EMAIL: '  hello@example.com ', PRIVACY_EMAIL: ' privacy@example.com ', LEGAL_PHONE: ' +33 1 23 45 67 89 ', LEGAL_ADDRESS: ' 1 rue Exemple, 75000 Paris ', LEGAL_REGISTRATION: 'SIRET 000 000 000 00000' };
 
 const config = await import('../src/config.js');
 const api = await import('../src/lib/planner-api.js');
@@ -38,7 +38,7 @@ test('the four legal pages exist, and each footer links all four in order', asyn
   for (const [folder, file] of Object.entries(PAGES)) {
     const html = await read(file);
     assert.match(html, /^<!doctype html>/i, file);
-    assert.match(html, /Last updated: <time datetime="2026-10-20">20 October 2026<\/time>/, `${file} shows the date`);
+    assert.match(html, /Last updated: <time datetime="2026-10-21">21 October 2026<\/time>/, `${file} shows the date`);
     const legalLinks = hrefs(footerOf(html)).map(href => resolveHref(folder, href)).filter(path => path.startsWith('legal'));
     assert.deepEqual(legalLinks, ['legal/privacy/', 'legal/terms/', 'legal/cookies/', 'legal/'], `${file} footer: Privacy · Terms · Cookies · Legal notice`);
     assert.match(footerOf(html), /aria-current="page"/, `${file} marks itself in the footer`);
@@ -76,58 +76,149 @@ test('the privacy page renders every counted moment from the code, in both lists
   assert.equal(legal.eventsHtml([['x', 'clicked <b>“Go”</b> & left']]), '<li>clicked &lt;b&gt;“Go”&lt;/b&gt; &amp; left</li>', 'descriptions are escaped');
 });
 
-test('blank details are left out and contact falls back to the “Ask a question” form', () => {
+const FORM_PHRASE = root => `use the <a href="${root}welcome/teams/?ask=question#request">“Ask a question” form</a>`;
+const labels = (details, page) => legal.detailRows(details, '../', page).map(([label]) => label);
+
+test('blank details are left out and every contact falls back to the “Ask a question” form', () => {
   const blank = legal.legalDetails({});
-  assert.deepEqual(blank, { email: '', address: '', registration: '' });
-  assert.deepEqual(legal.detailRows(blank).map(([label]) => label), ['Publisher', 'Contact']);
+  assert.deepEqual(blank, { email: '', privacyEmail: '', phone: '', address: '', registration: '' });
+  assert.deepEqual(labels(blank, 'notice'), ['Publisher', 'Contact', 'Director of publication'], 'the director of publication is a row of the table');
+  assert.deepEqual(labels(blank, 'privacy'), ['Data controller', 'Contact']);
   const html = legal.detailsHtml(legal.detailRows(blank, '../../'));
   assert.match(html, /href="\.\.\/\.\.\/welcome\/teams\/\?ask=question#request"/);
   assert.doesNotMatch(html, /on the welcome page/, 'the form lives on the Teams page now');
-  assert.doesNotMatch(html, /Address|Registration|mailto:/);
-  assert.equal(legal.contactPhrase(blank, '../'), 'use the <a href="../welcome/teams/?ask=question#request">“Ask a question” form</a>');
+  assert.doesNotMatch(html, /Address|Registration|Phone|mailto:|tel:/);
+  assert.match(html, /<dt>Director of publication<\/dt><dd>Ben Morin<\/dd>/);
+  for (const topic of ['support', 'privacy']) {
+    assert.equal(legal.contactEmail(blank, topic), '');
+    assert.equal(legal.contactPhrase(blank, '../', topic), FORM_PHRASE('../'), topic);
+  }
   assert.equal(legal.askHref('../'), '../welcome/teams/?ask=question#request');
   for (const bad of ['not-an-email', 'a@b', 'me@example.com?bcc=x@evil.com', 'a b@example.com']) {
     assert.equal(legal.legalDetails({ SUPPORT_EMAIL: bad }).email, '', `${bad} is not used in a mailto: link`);
+    assert.equal(legal.legalDetails({ PRIVACY_EMAIL: bad }).privacyEmail, '', `${bad} is not used as the privacy address`);
   }
 });
 
-test('set details appear, trimmed and escaped, with the email as the contact', () => {
+test('set details appear, trimmed and escaped, with the support address as the email', () => {
   const details = legal.legalDetails({ SUPPORT_EMAIL: ' hello@example.com ', LEGAL_ADDRESS: '1 rue <Exemple>\n75000 Paris', LEGAL_REGISTRATION: ' SIRET 000 000 000 00000 ' });
-  assert.deepEqual(details, { email: 'hello@example.com', address: '1 rue <Exemple> 75000 Paris', registration: 'SIRET 000 000 000 00000' });
-  const rows = legal.detailRows(details);
-  assert.deepEqual(rows.map(([label]) => label), ['Publisher', 'Address', 'Registration', 'Contact']);
-  const html = legal.detailsHtml(rows);
+  assert.deepEqual(details, { email: 'hello@example.com', privacyEmail: '', phone: '', address: '1 rue <Exemple> 75000 Paris', registration: 'SIRET 000 000 000 00000' });
+  assert.deepEqual(labels(details, 'notice'), ['Publisher', 'Address', 'Registration', 'Email', 'Director of publication']);
+  assert.deepEqual(labels(details, 'privacy'), ['Data controller', 'Address', 'Registration', 'Email']);
+  const html = legal.detailsHtml(legal.detailRows(details));
   assert.match(html, /1 rue &lt;Exemple&gt; 75000 Paris/);
-  assert.match(html, /<a href="mailto:hello@example\.com">hello@example\.com<\/a>/);
+  assert.match(html, /<dt>Email<\/dt><dd><a href="mailto:hello@example\.com">hello@example\.com<\/a><\/dd>/);
   assert.equal(legal.contactPhrase(details), 'email <a href="mailto:hello@example.com">hello@example.com</a>');
+});
+
+test('support address only: the terms, the legal notice and privacy questions all use it', () => {
+  const details = legal.legalDetails({ SUPPORT_EMAIL: 'support@example.com' });
+  const mail = 'email <a href="mailto:support@example.com">support@example.com</a>';
+  assert.equal(legal.contactPhrase(details, '../', 'support'), mail);
+  assert.equal(legal.contactPhrase(details, '../', 'privacy'), mail, 'no privacy address: the support one');
+  assert.match(legal.detailsHtml(legal.detailRows(details, '../', 'privacy')), /<dt>Email<\/dt><dd><a href="mailto:support@example\.com">/);
+});
+
+test('support and privacy addresses: privacy questions go to the privacy one, the rest to support', () => {
+  const details = legal.legalDetails({ SUPPORT_EMAIL: 'support@example.com', PRIVACY_EMAIL: ' privacy@example.com ' });
+  assert.equal(details.privacyEmail, 'privacy@example.com');
+  assert.equal(legal.contactEmail(details, 'support'), 'support@example.com');
+  assert.equal(legal.contactEmail(details, 'privacy'), 'privacy@example.com');
+  assert.equal(legal.contactPhrase(details, '../', 'privacy'), 'email <a href="mailto:privacy@example.com">privacy@example.com</a>');
+  const notice = legal.detailsHtml(legal.detailRows(details, '../', 'notice'));
+  const privacy = legal.detailsHtml(legal.detailRows(details, '../', 'privacy'));
+  assert.match(notice, /mailto:support@example\.com/);
+  assert.doesNotMatch(notice, /privacy@/, 'the legal notice shows the support address');
+  assert.match(privacy, /mailto:privacy@example\.com/);
+  assert.doesNotMatch(privacy, /support@/, 'the controller’s contact is the privacy address');
+  // A privacy address alone: privacy questions go to it, everything else to the form.
+  const only = legal.legalDetails({ PRIVACY_EMAIL: 'privacy@example.com' });
+  assert.equal(legal.contactPhrase(only, '../', 'support'), FORM_PHRASE('../'));
+  assert.deepEqual(labels(only, 'notice'), ['Publisher', 'Contact', 'Director of publication']);
+  assert.equal(legal.contactEmail(only, 'privacy'), 'privacy@example.com');
+});
+
+test('a phone number becomes a Phone row of the legal notice, as a tel: link; anything else is left out', () => {
+  const details = legal.legalDetails({ SUPPORT_EMAIL: 'support@example.com', LEGAL_PHONE: ' +33 (0)6 12-34.56.78 ', LEGAL_ADDRESS: '1 rue Exemple', LEGAL_REGISTRATION: 'SIRET 1' });
+  assert.equal(details.phone, '+33 (0)6 12-34.56.78');
+  assert.deepEqual(labels(details, 'notice'), ['Publisher', 'Address', 'Registration', 'Email', 'Phone', 'Director of publication'], 'the order the legal notice reads');
+  assert.deepEqual(labels(details, 'privacy'), ['Data controller', 'Address', 'Registration', 'Email'], 'the privacy policy shows no phone');
+  assert.match(legal.detailsHtml(legal.detailRows(details)), /<dt>Phone<\/dt><dd><a href="tel:\+33612345678">\+33 \(0\)6 12-34\.56\.78<\/a><\/dd>/);
+  assert.equal(legal.telHref('06 12 34 56 78'), 'tel:0612345678');
+  assert.equal(legal.telHref('+1 (650) 319-8930'), 'tel:+16503198930');
+  for (const bad of ['12345', 'call me', '+33 6 12 34 56 78 ext. 2', '06 12 34 56 78<script>', '+33 6+12 34 56 78', '1'.repeat(21), '06 12 34\n56 78 <b>']) {
+    assert.equal(legal.legalPhone(bad), '', JSON.stringify(bad));
+  }
+  assert.equal(legal.legalPhone('06 12 34\n56 78'), '06 12 34 56 78', 'one line');
+  assert.deepEqual(labels(legal.legalDetails({ LEGAL_PHONE: 'call me' }), 'notice'), ['Publisher', 'Contact', 'Director of publication']);
 });
 
 test('applyLegal fills every placeholder from the configuration', () => {
   const nodes = {};
   const node = () => ({ innerHTML: '', textContent: '', hidden: undefined, dataset: {} });
-  const selectors = ['[data-legal-details]', '[data-legal-contact]', '[data-legal-events="planner"]', '[data-legal-events="landing"]', '[data-legal-prices]', '[data-legal-features]', '[data-legal-js]', '[data-legal-nojs]'];
+  const selectors = ['[data-legal-details="notice"]', '[data-legal-details="privacy"]', '[data-legal-contact="support"]', '[data-legal-contact="privacy"]', '[data-legal-events="planner"]', '[data-legal-events="landing"]', '[data-legal-prices]', '[data-legal-features]', '[data-legal-js]', '[data-legal-nojs]'];
   selectors.forEach(selector => { nodes[selector] = [node()]; });
   const doc = { body: { dataset: { root: '../../' } }, querySelectorAll: selector => nodes[selector] || [], querySelector: () => null };
   legal.applyLegal(doc, { config: {} });
-  assert.match(nodes['[data-legal-details]'][0].innerHTML, /welcome\/teams\/\?ask=question#request/);
-  assert.doesNotMatch(nodes['[data-legal-details]'][0].innerHTML, /Address/);
-  assert.match(nodes['[data-legal-contact]'][0].innerHTML, /^use the /);
+  assert.match(nodes['[data-legal-details="notice"]'][0].innerHTML, /welcome\/teams\/\?ask=question#request/);
+  assert.match(nodes['[data-legal-details="notice"]'][0].innerHTML, /Director of publication/);
+  assert.doesNotMatch(nodes['[data-legal-details="notice"]'][0].innerHTML, /Address/);
+  assert.match(nodes['[data-legal-details="privacy"]'][0].innerHTML, /Data controller/);
+  assert.match(nodes['[data-legal-contact="support"]'][0].innerHTML, /^use the /);
+  assert.match(nodes['[data-legal-contact="privacy"]'][0].innerHTML, /^use the /);
   assert.equal(nodes['[data-legal-events="planner"]'][0].innerHTML, legal.eventsHtml(api.COUNTED_EVENTS));
   assert.equal(nodes['[data-legal-events="landing"]'][0].innerHTML, legal.eventsHtml(api.LANDING_EVENTS));
   assert.equal(nodes['[data-legal-js]'][0].hidden, false);
   assert.equal(nodes['[data-legal-nojs]'][0].hidden, true);
   // The default configuration is the runtime one, read through src/config.js.
   legal.applyLegal(doc);
-  assert.match(nodes['[data-legal-details]'][0].innerHTML, /1 rue Exemple, 75000 Paris/);
-  assert.match(nodes['[data-legal-contact]'][0].innerHTML, /mailto:hello@example\.com/);
+  assert.match(nodes['[data-legal-details="notice"]'][0].innerHTML, /1 rue Exemple, 75000 Paris/);
+  assert.match(nodes['[data-legal-details="notice"]'][0].innerHTML, /mailto:hello@example\.com/);
+  assert.match(nodes['[data-legal-details="notice"]'][0].innerHTML, /tel:\+33123456789/);
+  assert.match(nodes['[data-legal-details="privacy"]'][0].innerHTML, /mailto:privacy@example\.com/);
+  assert.match(nodes['[data-legal-contact="support"]'][0].innerHTML, /mailto:hello@example\.com/);
+  assert.match(nodes['[data-legal-contact="privacy"]'][0].innerHTML, /mailto:privacy@example\.com/);
 });
 
-test('src/config.js exports the legal details, trimmed, and runtime-config.js keeps them blank', async () => {
+test('src/config.js exports the legal details, trimmed, and runtime-config.js and check.mjs keep them blank', async () => {
   assert.equal(config.SUPPORT_EMAIL, 'hello@example.com');
+  assert.equal(config.PRIVACY_EMAIL, 'privacy@example.com');
+  assert.equal(config.LEGAL_PHONE, '+33 1 23 45 67 89');
   assert.equal(config.LEGAL_ADDRESS, '1 rue Exemple, 75000 Paris');
   assert.equal(config.LEGAL_REGISTRATION, 'SIRET 000 000 000 00000');
   const runtime = await read('runtime-config.js');
-  for (const key of ['SUPPORT_EMAIL', 'LEGAL_ADDRESS', 'LEGAL_REGISTRATION']) assert.match(runtime, new RegExp(`\\n  ${key}: ''[,\\n]`), `${key} stays blank in the public source`);
+  const check = await read('scripts/check.mjs');
+  for (const key of ['SUPPORT_EMAIL', 'PRIVACY_EMAIL', 'LEGAL_PHONE', 'LEGAL_ADDRESS', 'LEGAL_REGISTRATION']) {
+    assert.match(runtime, new RegExp(`\\n  ${key}: ''[,\\n]`), `${key} stays blank in the public source`);
+    assert.match(check, new RegExp(`'${key}'`), `scripts/check.mjs checks ${key} stays blank`);
+  }
+});
+
+test('the static pages say what the script writes with nothing configured (no JavaScript: the form)', async () => {
+  const blank = legal.legalDetails({});
+  const squeeze = html => html.replace(/>\s+</g, '><').trim();
+  const found = { notice: 0, privacy: 0, support: 0, privacyContact: 0 };
+  for (const [folder, file] of Object.entries(PAGES)) {
+    const html = await read(file);
+    const root = folder === 'legal/' ? '../' : '../../';
+    for (const match of html.matchAll(/<dl class="lg-dl" data-legal-details="([a-z]+)">([\s\S]*?)<\/dl>/g)) {
+      assert.ok(['notice', 'privacy'].includes(match[1]), `${file}: ${match[1]}`);
+      assert.equal(squeeze(match[2]), legal.detailsHtml(legal.detailRows(blank, root, match[1])), `${file}: the ${match[1]} table`);
+      found[match[1]] += 1;
+    }
+    for (const match of html.matchAll(/<span data-legal-contact="([a-z]+)">([\s\S]*?)<\/span>/g)) {
+      assert.ok(['support', 'privacy'].includes(match[1]), `${file}: ${match[1]}`);
+      assert.equal(match[2], legal.contactPhrase(blank, root, match[1]), `${file}: a ${match[1]} contact`);
+      found[match[1] === 'privacy' ? 'privacyContact' : 'support'] += 1;
+    }
+    assert.doesNotMatch(html, /data-legal-(?:details|contact)(?!=")/, `${file}: every hook says which contact it is`);
+  }
+  assert.deepEqual(found, { notice: 1, privacy: 1, support: 2, privacyContact: 2 });
+  const notice = await read('legal/index.html');
+  assert.doesNotMatch(notice, /<p>Director of publication/, 'no loose paragraph under the table');
+  assert.match(await read('legal/privacy/index.html'), /To use any of these rights, <span data-legal-contact="privacy">/);
+  assert.match(await read('legal/cookies/index.html'), /<section id="questions"[\s\S]*data-legal-contact="privacy"/);
+  assert.equal((await read('legal/terms/index.html')).match(/data-legal-contact="support"/g).length, 2);
 });
 
 test('no personal email address or phone number is written in legal/', async () => {
@@ -141,13 +232,17 @@ test('no personal email address or phone number is written in legal/', async () 
   }
 });
 
-test('the build copies legal/ and _redirects, and reads the three legal build variables', async () => {
+test('the build copies legal/ and _redirects, and reads the five legal build variables, documented and listed in Setup', async () => {
   const build = await read('scripts/build.mjs');
   assert.match(build, /await copyTree\('legal'\);/);
   assert.match(build, /await copyFile\('_redirects'\);/);
-  assert.match(build, /SUPPORT_EMAIL: process\.env\.DAILY_PLANNER_SUPPORT_EMAIL \|\| ''/);
-  assert.match(build, /LEGAL_ADDRESS: process\.env\.DAILY_PLANNER_LEGAL_ADDRESS \|\| ''/);
-  assert.match(build, /LEGAL_REGISTRATION: process\.env\.DAILY_PLANNER_LEGAL_REGISTRATION \|\| ''/);
+  const docs = await read('docs/FEEDBACK_AND_WAITLIST.md');
+  const admin = await read('admin/admin.js');
+  for (const [key, variable] of [['SUPPORT_EMAIL', 'SUPPORT_EMAIL'], ['PRIVACY_EMAIL', 'PRIVACY_EMAIL'], ['LEGAL_PHONE', 'LEGAL_PHONE'], ['LEGAL_ADDRESS', 'LEGAL_ADDRESS'], ['LEGAL_REGISTRATION', 'LEGAL_REGISTRATION']]) {
+    assert.match(build, new RegExp(`${key}: process\\.env\\.DAILY_PLANNER_${variable} \\|\\| ''`), key);
+    assert.match(docs, new RegExp(`\\| \`DAILY_PLANNER_${variable}\` \\| Text \\|`), `docs: ${variable} in the variables table`);
+    assert.match(admin, new RegExp(`\\['${key}', '`), `admin Setup: ${key} in the Legal pages line`);
+  }
 });
 
 test('_redirects sends the short links to the legal pages', async () => {
@@ -245,7 +340,7 @@ test('the terms’ partner program: the rates, the days and the minimum come fro
   assert.doesNotMatch(words, /Plus Family bought through your link, on the price before tax/);
   assert.match(words, /10% of a team gift you introduced, on its price before tax: bought online through your link, or ordered by invoice or quote when the company’s request carries your code\. We pay this commission ourselves\./);
   assert.match(words, /A link counts for 30 days\./);
-  assert.match(words, /A refunded or disputed purchase earns nothing\. A team commission is earned once the gift’s 14-day refund period has passed with no refund and no dispute; after a partial refund, it is on what was kept\./);
+  assert.match(words, /A purchase refunded in full, or disputed, earns nothing\. A team commission is earned once the gift’s 14-day refund period has passed without a full refund or a dispute\. If only part of the price is refunded, the commission is on the part that was kept: for example, half the price refunded halves the commission\./);
   assert.match(words, /on the 1st and the 15th of each month, once your balance reaches €50 or \$50/);
   assert.match(words, /We pay team commissions by bank transfer within 30 days of being earned/);
   assert.match(words, /spam/);
@@ -281,7 +376,7 @@ test('every “Ask a question” link in legal/ goes to the Teams page’s form'
   for (const [folder, file] of Object.entries(PAGES)) {
     const html = await read(file);
     const asks = hrefs(html).filter(href => href.includes('ask='));
-    if (file !== 'legal/cookies/index.html') assert.ok(asks.length > 0, file);
+    assert.ok(asks.length > 0, file);
     for (const href of asks) assert.equal(resolveHref(folder, href) + href.slice(href.indexOf('?')), 'welcome/teams/?ask=question#request', `${file}: ${href}`);
   }
   assert.doesNotMatch(await read('legal/legal.js'), /'welcome\/\?ask=/);

@@ -248,7 +248,7 @@ test('the partners page: landing style and motion, every section, the rules, the
   // A company's invoice request counts when it carries the code: the page says to send them with the link.
   assert.match(page, /they ask for it on that page: having come through your link, their request carries your code\./);
   assert.doesNotMatch(page, /name you in their message/);
-  assert.match(page, /no refund and no dispute/);
+  assert.match(page, /without a full refund or a dispute; a partial refund lowers it in proportion/);
   assert.match(page, /don’t count/, 'own purchases');
   assert.match(page, /href="\.\.\/\.\.\/legal\/terms\/#partners"/);
   assert.doesNotMatch(page, /60 days/);

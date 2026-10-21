@@ -185,7 +185,7 @@ The in-app **How it works** modal contains the complete shortcut reference. Comm
 
 ## Legal pages
 
-`legal/` holds the legal notice (`/legal/`), the privacy policy (`/legal/privacy/`), the terms of use and sale (`/legal/terms/`) and the cookies page (`/legal/cookies/`); `_redirects` adds the short links `/privacy`, `/terms` and `/cookies`. The publisher's details come from three build variables — `DAILY_PLANNER_SUPPORT_EMAIL`, `DAILY_PLANNER_LEGAL_ADDRESS` and `DAILY_PLANNER_LEGAL_REGISTRATION` (Cloudflare Pages → Settings → Variables and Secrets, then redeploy) — and anything left blank is omitted. The counted moments, prices and Plus features are rendered from the code. See [Legal pages](./docs/FEEDBACK_AND_WAITLIST.md#legal-pages), including the addresses to give Creem.
+`legal/` holds the legal notice (`/legal/`), the privacy policy (`/legal/privacy/`), the terms of use and sale (`/legal/terms/`) and the cookies page (`/legal/cookies/`); `_redirects` adds the short links `/privacy`, `/terms` and `/cookies`. The publisher's details come from five build variables — `DAILY_PLANNER_SUPPORT_EMAIL`, `DAILY_PLANNER_PRIVACY_EMAIL`, `DAILY_PLANNER_LEGAL_ADDRESS`, `DAILY_PLANNER_LEGAL_PHONE` and `DAILY_PLANNER_LEGAL_REGISTRATION` (Cloudflare Pages → Settings → Variables and Secrets, then redeploy) — and anything left blank is omitted. The counted moments, prices and Plus features are rendered from the code. See [Legal pages](./docs/FEEDBACK_AND_WAITLIST.md#legal-pages), including the addresses to give Creem.
 
 ## Daily Planner Plus
 
