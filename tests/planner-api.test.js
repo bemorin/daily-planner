@@ -419,6 +419,49 @@ test('sign-in answers CORS headers for an allowed origin', async () => {
   assert.equal(elsewhere.headers.get('access-control-allow-origin'), null);
 });
 
+test('a question needs no team: no company, number of people or timing; an invoice, a quote or a talk still does', () => {
+  const now = new Date('2026-10-21T08:00:00Z');
+  const question = { email: ' Ann@Example.com ', name: 'Ann', message: 'Can I move my plans to a new laptop?', consent: true, website: '', version: '1.29.1', locale: 'fr-FR', source: 'teams', kind: 'question' };
+  assert.deepEqual(validateTeamRequest(question, now).entry, { email: 'ann@example.com', name: 'Ann', company: '', teamSize: 0, timing: '', plan: '', currency: '', kind: 'question', message: 'Can I move my plans to a new laptop?', locale: 'fr-FR', appVersion: '1.29.1', source: 'teams', createdAt: '2026-10-21T08:00:00.000Z' }, 'stored as \'\' / 0 / \'\' (the columns are NOT NULL)');
+  // An older page may still send the team's fields with a question: they are not kept, nor checked.
+  assert.deepEqual(validateTeamRequest({ ...question, company: 'Acme', teamSize: 1, timing: 'tomorrow', plan: 'up-to-50', currency: 'EUR' }, now).entry, validateTeamRequest(question, now).entry);
+  // Everything else is still checked.
+  for (const [label, overrides, words] of [
+    ['invalid email', { email: 'not-an-email' }, /valid email address/],
+    ['no question', { message: '   ' }, /write your question/],
+    ['question over 1000', { message: 'm'.repeat(1001) }, /1,000 characters/],
+    ['name over 80', { name: 'n'.repeat(81) }, /80 characters/],
+    ['no consent', { consent: undefined }, /email you about your question/]
+  ]) assert.match(validateTeamRequest({ ...question, ...overrides }, now).error || '', words, label);
+  assert.equal(validateTeamRequest({ ...question, website: 'bot' }, now).spam, true);
+  assert.doesNotMatch(validateTeamRequest({ ...question, email: 'nope' }, now).error, /work email/, 'any address, not a work one');
+  // A team request without its team's fields is refused, as before.
+  for (const kind of ['invoice', 'quote', 'talk', undefined]) {
+    for (const missing of ['company', 'teamSize', 'timing']) {
+      assert.ok(validateTeamRequest(team({ kind, [missing]: undefined }), now).error, `${kind} without ${missing}`);
+    }
+    assert.ok(validateTeamRequest(team({ kind, message: '' }), now).entry, `${kind}: the message stays optional`);
+  }
+  assert.match(validateTeamRequest(team({ kind: 'invoice', email: 'nope' }), now).error, /valid work email address/);
+});
+
+test('a question is stored, listed and exported without a team (memory and D1)', async t => {
+  const d1 = await openSqlite(t);
+  if (!d1) return;
+  for (const [label, store] of [['memory', createMemoryStore()], ['D1', createD1Store(d1)]]) {
+    const api = createPlannerApi({ store, adminToken: 'secret', now: fixedNow });
+    assert.equal((await api(post('teams', { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', consent: true, kind: 'question', source: 'teams', ref: 'COACH_ANNA' }))).status, 201, label);
+    const refused = await api(post('teams', { email: 'ann@example.com', name: 'Ann', message: '', consent: true, kind: 'question' }));
+    assert.equal(refused.status, 400, `${label}: a question without its question`);
+    assert.equal((await api(post('teams', { email: 'ann@example.com', name: 'Ann', consent: true, kind: 'invoice', message: 'Hi' }))).status, 400, `${label}: an invoice without its team`);
+    const { rows } = await (await api(get('admin/teams', 'secret'))).json();
+    assert.equal(rows.length, 1, label);
+    assert.deepEqual(['company', 'teamSize', 'timing', 'plan', 'currency', 'kind', 'message'].map(key => rows[0][key]), ['', 0, '', '', '', 'question', 'Partner program: who can join?'], label);
+    const summary = await (await api(get('admin/summary', 'secret'))).json();
+    assert.deepEqual(summary.teamRequestTotals, { count: 1, seats: 0 }, `${label}: no seats from a question`);
+  }
+});
+
 test('team requests accept a plan, a currency and a kind of request, strictly', () => {
   const plans = ['up-to-10', 'up-to-50', 'up-to-100', 'up-to-500', 'up-to-1000', 'over-1000'];
   for (const plan of plans) assert.equal(validateTeamRequest(team({ plan })).entry.plan, plan);

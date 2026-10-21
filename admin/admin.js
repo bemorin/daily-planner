@@ -12,7 +12,9 @@
 // (./attention.js) and marks the cards and rows it points to.
 
 import { ATTENTION_SECTIONS, attentionBySection, attentionNote, attentionWhen, buildAttention, setupChecks } from './attention.js';
-import { partnersCardHtml, payoutCheckWords, requestPartnerHtml } from './partners-view.js';
+import { partnersCardHtml, payoutCheckWords } from './partners-view.js';
+// The requests table: a question reads as one, without a team's details.
+import { teamRequestsTableHtml } from './requests-view.js';
 import { createTrendsView } from './trends-view.js';
 import { dayOf, normalizeSeries, seriesWindow } from './trends.js';
 // The landing page's stepper (− value +): no browser spin arrows on Seats.
@@ -38,10 +40,6 @@ const plural = (count, word) => `${word}${Number(count) === 1 ? '' : 's'}`;
 const when = iso => (iso ? new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '');
 const stars = rating => (rating ? `<span class="owner-stars" aria-label="${rating} out of 5">${'★'.repeat(rating)}<span>${'★'.repeat(5 - rating)}</span></span>` : '<span class="owner-stars"><span>No rating</span></span>');
 
-const TIMING_LABELS = { 'december-2026': 'December 2026', 'january-2027': 'January 2027', 'q1-2027': 'Q1 2027', later: 'Later' };
-const PLAN_LABELS = { 'up-to-10': 'Up to 10 people', 'up-to-50': 'Up to 50 people', 'up-to-100': 'Up to 100 people', 'up-to-500': 'Up to 500 people', 'up-to-1000': 'Up to 1,000 people', 'over-1000': 'Over 1,000 people' };
-const KIND_LABELS = { invoice: 'Invoice', quote: 'Quote', talk: 'Talk', question: 'Question' };
-const REQUEST_SOURCES = { landing: 'Welcome page', teams: 'Teams page', app: 'Planner' };
 const APP_CONFIG = globalThis.__DAILY_PLANNER_CONFIG__ || {};
 // A team order a partner introduced earns them this share (PARTNER_PROGRAM.teamRate, from the API's summary).
 let TEAM_RATE = 10;
@@ -58,9 +56,9 @@ const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', ma
 // This page's own release, kept in step with package.json and src/config.js
 // (tests/admin-version.test.js). Not imported: it must come from this very
 // file, so an old cached admin.js shows its old number.
-const APP_VERSION = '1.29.0';
+const APP_VERSION = '1.29.1';
 // What Reload fetches again past the browser cache before opening the page anew.
-const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/lib/pricing.js', '../legal/legal-details.js'];
+const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './requests-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/lib/pricing.js', '../legal/legal-details.js'];
 const RELOAD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/></svg>';
 
 class ApiError extends Error {
@@ -367,7 +365,7 @@ function renderKpis(summary, days) {
   $('[data-owner-kpis]').innerHTML = [
     ['Waitlist sign-ups', number(summary.waitlist.length), `${number(lastWeek)} in the last 7 days`],
     ['Still joined after seeing Drive', percent(joined, reachedEnd), `${number(joined)} of ${number(reachedEnd)} who finished the Drive guide · ${days} days`],
-    ['Team kit requests', number(teams.count), summary.teamRequestsUnavailable ? 'Table missing — apply migration 0002' : `${number(teams.seats)} ${plural(teams.seats, 'seat')} requested in total`],
+    ['Requests and questions', number(teams.count), summary.teamRequestsUnavailable ? 'Table missing — apply migration 0002' : `${number(teams.seats)} ${plural(teams.seats, 'seat')} requested in total`],
     ['Feedback received', number(feedbackTotal), latest ? `Latest version ${esc(latest.appVersion)}: ${number(latest.count)} ${plural(latest.count, 'response')}` : 'None yet'],
     ['Average rating, latest version', latest?.avgRating != null ? Number(latest.avgRating).toFixed(1) : '—', latest ? `${number(latest.rated)} ${plural(latest.rated, 'rating')} on ${esc(latest.appVersion)}` : 'No ratings yet']
   ].map(([label, value, note]) => `<div class="owner-kpi"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join('');
@@ -435,7 +433,7 @@ function renderTeams(summary) {
   const target = $('[data-owner-teams]');
   const caption = $('[data-owner-teams-caption]');
   if (summary.teamRequestsUnavailable) {
-    caption.textContent = 'Teams who asked for the team kit.';
+    caption.textContent = 'Team kit requests, and questions from the “Ask a question” form.';
     target.innerHTML = '<p class="owner-empty">The <code>team_requests</code> table does not exist yet. Apply <code>migrations/0002_team_requests.sql</code> to the D1 database (see <code>docs/FEEDBACK_AND_WAITLIST.md</code>).</p>';
     return;
   }
@@ -445,10 +443,10 @@ function renderTeams(summary) {
   const codeChecks = summary.partners?.codeChecks || {};
   caption.textContent = totals.count > rows.length
     ? `Latest ${number(rows.length)} of ${number(totals.count)} requests (export CSV for all). Reply by email; delete on request.`
-    : 'Teams who asked for the team kit. Reply by email; delete on request.';
+    : 'Team kit requests, and questions from the “Ask a question” form. Reply by email; delete on request.';
   target.innerHTML = rows.length
-    ? `<div class="owner-scroll"><table class="owner-table"><thead><tr><th>Date</th><th>Company</th><th class="num">Team size</th><th>Plan</th><th>Currency</th><th>Request</th><th>Timing</th><th>Name</th><th>Email</th><th>Message</th><th>Source</th><th></th></tr></thead><tbody>${rows.map(row => `<tr data-owner-attn="team:${Number(row.id)}"><td class="owner-nowrap">${esc(when(row.createdAt))}</td><td><b>${esc(row.company)}</b></td><td class="num">${number(row.teamSize)}</td><td class="owner-nowrap">${esc(PLAN_LABELS[row.plan] || row.plan || '—')}</td><td>${esc(row.currency || '—')}</td><td>${esc(KIND_LABELS[row.kind] || row.kind || '—')}</td><td class="owner-nowrap">${esc(TIMING_LABELS[row.timing] || row.timing)}</td><td>${esc(row.name || '—')}</td><td>${mailLink(row.email)}</td><td class="owner-message">${requestPartnerHtml(row.ref, codeChecks[row.ref] || '', TEAM_RATE)}${esc(row.message || '')}</td><td>${esc(REQUEST_SOURCES[row.source] || row.source || '')}</td><td><button class="text-button text-button--danger" type="button" data-owner-delete-team="${Number(row.id)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
-    : '<p class="owner-empty">No team kit requests yet.</p>';
+    ? teamRequestsTableHtml(rows, { codeChecks, teamRate: TEAM_RATE, when, number })
+    : '<p class="owner-empty">No requests or questions yet.</p>';
 }
 
 function renderVersions(summary) {
@@ -1251,16 +1249,17 @@ function partnersItem(summary, base = 'https://planner.bemorin.com') {
 const LEGAL_VARIABLES = [
   ['SUPPORT_EMAIL', 'the contact address, in the legal notice, the terms and the “Support” line of the welcome and Teams pages’ footer, and for privacy questions unless <code>DAILY_PLANNER_PRIVACY_EMAIL</code> is set. Blank: the “Ask a question” form, and no Support line.'],
   ['PRIVACY_EMAIL', 'optional, the address for privacy questions, in the privacy policy (data controller, your rights) and the cookies page.'],
-  ['LEGAL_PHONE', 'recommended (French law asks an individual publisher for one): a phone number, as a Phone row in the legal notice. Digits, spaces and <code>+&nbsp;(&nbsp;)&nbsp;.&nbsp;-</code> only.'],
+  ['LEGAL_PHONE', 'recommended (French law asks an individual publisher for one): your phone number in international form, <code>+33</code> then the number without its 0, with no spaces (e.g. <code>+33199001234</code>). The legal notice shows it as people of that country write it (<code>+33 1 99 00 12 34</code>) in a Phone row, as a link that dials it.'],
   ['LEGAL_ADDRESS', 'the postal address, in the legal notice and the privacy policy.'],
   ['LEGAL_REGISTRATION', 'optional, SIRET and/or VAT number, in the legal notice and the privacy policy.']
 ];
 
-/** A legal build variable's state in the Setup card: “set”, “blank”, or “set, but not used: …”. */
+/** A legal build variable's state in the Setup card: “set” (the phone: “set, shown as …”), “blank”, or “set, but not used: …”. */
 function legalVariableState(key) {
   const problem = legalValueProblem(key, APP_CONFIG[key]);
   if (problem) return `set, but not used: ${problem}`;
-  return String(APP_CONFIG[key] || '').trim() ? 'set' : 'blank';
+  if (!String(APP_CONFIG[key] || '').trim()) return 'blank';
+  return key === 'LEGAL_PHONE' ? `set, shown as ${esc(legalDetails(APP_CONFIG).phone)}` : 'set';
 }
 
 function legalItem(base = 'https://planner.bemorin.com') {

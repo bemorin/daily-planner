@@ -174,7 +174,10 @@ test('the dashboard renders the card from the view and marks commissions as paid
   assert.match(admin, /call\(`admin\/partners\/rejections\/\$\{encodeURIComponent\(code\)\}`, \{ method: 'DELETE' \}\)/);
   // After Mark as paid, Undo or Not a partner, focus stays on the row (its new first button), never on the page.
   assert.match(admin, /await load\(\);\n {2}showResult\('\[data-owner-payout-result\]', done\);\n {2}focusPartnerRow\(row\);/);
-  assert.match(admin, /requestPartnerHtml\(row\.ref, codeChecks\[row\.ref\] \|\| '', TEAM_RATE\)/, 'the request list shows the partner code and whether it is confirmed');
+  // The request list (admin/requests-view.js) shows the partner code and whether it is confirmed.
+  assert.match(admin, /teamRequestsTableHtml\(rows, \{ codeChecks, teamRate: TEAM_RATE, when, number \}\)/, 'the request list gets the checks and the team rate');
+  const requests = readFileSync(new URL('../admin/requests-view.js', import.meta.url), 'utf8');
+  assert.match(requests, /requestPartnerHtml\(row\.ref, codeChecks\[row\.ref\] \|\| '', teamRate\)/, 'the request list shows the partner code and whether it is confirmed');
   assert.doesNotMatch(admin, /AFFILIATE_COMMISSION/);
   // Setup says what to set in Creem, and that the variable is the sign-up link.
   const setup = /function partnersItem\(summary[\s\S]*?\n\}/.exec(admin)[0];

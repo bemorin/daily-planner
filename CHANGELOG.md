@@ -2,6 +2,11 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.29.1 — 2026-10-21
+
+- **Ask a question** is a plain contact form: email, name and the question (plus consent) — no company, plan, number of people or timing; the panel reads “Contact · Ask a question”, and links from other pages land on it focused. The API accepts a question without the team fields (invoice, quote and talk still require them); the owner email and the dashboard (“Requests and questions”, Needs your attention) show it as a question.
+- Legal notice: `DAILY_PLANNER_LEGAL_PHONE` is written as `+33…` (no leading 0, no spaces) and shown with the country's usual grouping (`+33 1 99 00 12 34`, `+1 514 555 0123`, UK, Belgium, Switzerland, Germany; other countries in groups), linked as `tel:+33…`; the dashboard's Setup shows how it will read. Legal variables are Text, not secrets.
+
 ## 1.29.0 — 2026-10-21
 
 - **Welcome page hero**: the Day replica now alternates with a Horizon replica (the year at a glance, the Misogi, mini-adventures; a key date lands on the map, an adventure is ticked, the Misogi reaches its last milestone) in the same window, with a “Your day · Your year” switch whose line fills until the next view, and a pause button. Pointing at the replica or focusing the switch waits; a hidden tab or a hero out of view stops the scene. Reduced motion or no JavaScript: no rotation, the switch shows each view's final frame.
