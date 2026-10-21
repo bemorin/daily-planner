@@ -503,7 +503,9 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
    under the replica still switches them (CSS only). */
 .hero-stage { display: grid; }
 
-.hero-view { grid-area: 1 / 1; min-width: 0; display: flex; flex-direction: column; }
+/* Each view stacks on its own, so nothing of the one going out (its line for
+   now, its floating card) can show over the one coming in. */
+.hero-view { z-index: 0; grid-area: 1 / 1; min-width: 0; display: flex; flex-direction: column; }
 
 .hero-view > .rp { flex: 1 1 auto; display: flex; flex-direction: column; }
 
@@ -531,15 +533,18 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .hero__visual.is-live[data-view="year"] .hero-switch__thumb { transform: translateX(100%); }
 
-/* Coming in: no shadow of its own until the window underneath is gone, so the
-   shadow never doubles; going out: its floating card fades first. */
+/* Going out: its content and floating card fade first, its window stays.
+   Coming in: no shadow of its own until the window underneath is gone, so the
+   shadow never doubles; then its content fades in and settles. */
+.hero-view.is-leaving :is(.rp-window > :not(.rp-bar), .rp-pop, .rp-cursor) { opacity: 0; }
+
+.motion-ok .hero-view.is-leaving :is(.rp-window > :not(.rp-bar), .rp-cursor) { transition: opacity 220ms ease; }
+
 .hero-view.is-entering .rp-window { box-shadow: none; }
 
-.hero-view.is-leaving .rp-pop { opacity: 0; }
+.motion-ok .hero-view.is-entering { animation: hero-view-in 520ms cubic-bezier(.4, 0, .2, 1) 140ms both; }
 
-.motion-ok .hero-view.is-entering { animation: hero-view-in 620ms cubic-bezier(.4, 0, .2, 1) both; }
-
-.motion-ok .hero-view.is-entering :is(.rp-top, .rp-day, .rp-hz) { animation: hero-content-in 760ms cubic-bezier(.22, 1, .36, 1) both; }
+.motion-ok .hero-view.is-entering :is(.rp-day, .rp-hz) { animation: hero-content-in 760ms cubic-bezier(.22, 1, .36, 1) 140ms both; }
 
 .motion-ok .hero__visual.is-live [data-hero-caption] { transition: opacity 420ms ease; }
 

@@ -2,9 +2,9 @@ import { LANDING_EVENTS, plannerApiEnabled, rememberReferral, setUsageCountsEnab
 import { LAUNCH, PARTNER_PROGRAM, PERSONAL_GIFTS, PLUS_FEATURES, PLUS_PRICE, PLUS_UPCOMING, isPersonalGift, memberGiftPrice, memberPriceNotice } from '../src/lib/pricing.js';
 import { savedPlusToken, verifyPlusToken, writePlusCheck } from '../src/lib/plus.js';
 import { animate } from '../src/vendor/motion.js';
+import { setupHeroViews } from './hero-views.js';
 import { countedMoments, monthWeeks, personalOffer, ritualYear, statusTone, upcomingSentence } from './landing-model.js';
 import { LANDING } from './landing-settings.js';
-import { setupHeroViews } from './hero-views.js';
 import { CHECK_ICON, el, qs, qsa, renderFooter, setupTopBar } from './page-kit.js';
 import { EASE_OUT, followMotion, motionWanted, reduceQuery, setupFaq, setupReveal } from './page-motion.js';
 import { createPaletteCard } from './palette-card.js';

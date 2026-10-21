@@ -19,7 +19,7 @@
 
 /** The views in order, the scene each plays and how long it stays (ms): its script, then a moment on its last frame. */
 export const HERO_VIEWS = Object.freeze([
-  Object.freeze({ id: 'day', scene: 'day', dwell: 13600 }),
+  Object.freeze({ id: 'day', scene: 'day', dwell: 14000 }),
   Object.freeze({ id: 'year', scene: 'horizon', dwell: 9800 })
 ]);
 
@@ -93,7 +93,9 @@ export function rotationStep(state, event = {}, views = HERO_VIEWS) {
   return next;
 }
 
-const SETTLE = 700;
+// How long a switch takes (landing.css: the view coming in waits 140 ms, then
+// fades in and its content settles over 760 ms); then the view going out hides.
+const SETTLE = 920;
 
 /**
  * Wires the figure (`[data-hero-views]`). `scene(name)` gives a driven
