@@ -35,7 +35,8 @@ test('old /welcome/ addresses of the team gift lead to the Teams page, query and
     ['/welcome/?ask=question&topic=partners#request', '/teams/?ask=question&topic=partners#request'],
     ['/welcome/?ask=quote&plan=over-1000', '/teams/?ask=quote&plan=over-1000'],
     ['/welcome/?ref=CAMILLE&ask=invoice#request', '/teams/?ref=CAMILLE&ask=invoice#request'],
-    ['/welcome/#teams', '/teams/#teams'],
+    ['/welcome/#teams', '/teams/'],
+    ['/welcome/?ref=CAMILLE#teams', '/teams/?ref=CAMILLE'],
     ['/welcome/#team-prices', '/teams/#team-prices'],
     ['/welcome/#seats', '/teams/#seats'],
     ['/welcome/index.html#request', '/teams/#request'],
@@ -331,6 +332,7 @@ test('the Teams page is /teams/; its old address redirects there (tests/redirect
   for (const line of ['/welcome/teams /teams/ 301', '/welcome/teams/* /teams/:splat 301']) assert.ok(lines.includes(line), line);
   assert.ok(!lines.some(line => /^\/teams\/?\s/.test(line)), '/teams/ is the page itself, not a short link any more');
   assert.match(await read('_headers'), /\n\/teams\/\n {2}Cache-Control: no-cache\n/);
-  assert.match(await read('_headers'), /\n\/welcome\/teams\/\*\n {2}Cache-Control: no-store\n {2}Clear-Site-Data: "cache"\n/, 'the old address’s redirect is never kept, and clears a kept one (tests/cache-headers.test.js)');
+  assert.match(await read('_headers'), /\n\/welcome\/teams\/\*\n {2}Cache-Control: no-store\n/, 'the old address’s redirect is never kept (tests/cache-headers.test.js)');
+  assert.match(await read('_headers'), /\n\/welcome\/teams\/\n {2}Clear-Site-Data: "cache"\n/, 'and the address 1.28 redirected to clears a kept one');
   assert.equal(TEAM_ROWS.length, TEAM_TIERS.length + 1);
 });

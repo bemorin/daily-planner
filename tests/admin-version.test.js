@@ -78,6 +78,10 @@ test('Reload fetches every file the dashboard loads', () => {
   ];
   assert.ok(loaded.includes('./charts.js') && loaded.includes('../welcome/stepper.js'), 'the scan sees the imports');
   assert.ok(loaded.includes('../legal/legal-details.js'), 'and the legal pages’ checks Setup uses');
+  // …and what those import in turn (legal/ is next to admin/, so the same relative paths).
+  const legalImports = [...read('legal/legal-details.js').matchAll(/\bfrom '(\.{1,2}\/[^']+)';/g)].map(match => match[1]);
+  assert.ok(legalImports.includes('../src/lib/text.js'), 'the email rule it shares with the planner');
+  loaded.push(...legalImports);
   for (const file of loaded) assert.ok(files.includes(file), `${file} is fetched again by Reload`);
   assert.ok(files.includes('./'), 'and the page itself');
 });

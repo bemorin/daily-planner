@@ -29,7 +29,8 @@
   <script>
     /* Before first paint. The team gift lives on the Teams page (/teams/,
        next to this folder): its old addresses here (?ask=…, #request,
-       #teams, #team-prices, #seats) go there, query and hash kept
+       #teams, #team-prices, #seats) go there, query and hash kept (#teams,
+       the whole team gift, opens the Teams page at the top)
        (teamsAddress in teams-model.js, which landing.js checks again).
        Then, when motion is welcome, replicas start on the first frame of their
        animation and sections below the fold wait to rise in. landing.js adds
@@ -40,7 +41,7 @@
       var ask = false;
       try { ask = new URLSearchParams(here.search).has('ask'); } catch (error) { ask = false; }
       if (ask || /^#(?:request|teams|team-prices|seats)$/.test(here.hash)) {
-        here.replace(here.pathname.replace(/\/(?:index\.html)?$/, '').replace(/\/[^/]*$/, '') + '/teams/' + here.search + here.hash);
+        here.replace(here.pathname.replace(/\/(?:index\.html)?$/, '').replace(/\/[^/]*$/, '') + '/teams/' + here.search + (here.hash === '#teams' ? '' : here.hash));
         return;
       }
       var root = document.documentElement;

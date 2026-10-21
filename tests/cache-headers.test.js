@@ -48,19 +48,24 @@ const rules = parseHeaders(read('_headers'));
 // What the build publishes (scripts/build.mjs): the root files, admin/, welcome/, teams/, partners/, legal/ and src/.
 const published = ['index.html', 'app.js', 'sw.js', 'runtime-config.js', 'styles.css', ...['admin/', 'welcome/', 'teams/', 'partners/', 'legal/', 'src/'].flatMap(walk)];
 
-// The old addresses of the Teams and partners pages: redirects (_redirects) that empty the HTTP cache (see _headers).
+// The old addresses of the Teams and partners pages: redirects (_redirects) that are never kept (no-store)…
 const MOVED = ['/welcome/teams', '/welcome/teams/*', '/welcome/partners', '/welcome/partners/*'];
+// …and the two exact addresses 1.28's /teams and /partners redirects went to, which also empty the HTTP cache (see _headers).
+const CLEARING = ['/welcome/teams/', '/welcome/partners/'];
 
 test('_headers is valid: one Cache-Control per rule, within Pages limits', () => {
   assert.ok(rules.length > 0 && rules.length <= 100, 'Pages reads at most 100 rules');
   for (const rule of rules) {
     assert.match(rule.pattern, /^\//, `${rule.pattern} is a path`);
     assert.ok((rule.pattern.match(/\*/g) || []).length <= 1, `${rule.pattern}: one splat at most`);
-    const expected = MOVED.includes(rule.pattern) ? [['cache-control', 'no-store'], ['clear-site-data', '"cache"']] : [['cache-control', 'no-cache']];
+    const expected = CLEARING.includes(rule.pattern) ? [['clear-site-data', '"cache"']]
+      : MOVED.includes(rule.pattern) ? [['cache-control', 'no-store']] : [['cache-control', 'no-cache']];
     assert.deepEqual(rule.headers, expected, rule.pattern);
   }
-  assert.deepEqual(rules.filter(rule => rule.headers.some(([name]) => name === 'clear-site-data')).map(rule => rule.pattern), MOVED);
+  assert.deepEqual(rules.filter(rule => rule.headers.some(([name]) => name === 'clear-site-data')).map(rule => rule.pattern), CLEARING);
   for (const line of read('_headers').split('\n')) assert.ok(line.length <= 2000, 'Pages reads lines of 2,000 characters at most');
+  // A dated reminder: Clear-Site-Data makes every visit to those addresses scan the browser's whole HTTP cache.
+  assert.match(read('_headers'), /remove the two Clear-Site-Data rules in a release after\s+(?:#\s*)?2027-01-31/);
 });
 
 test('every page, script and stylesheet revalidates on each visit, matched by exactly one rule', () => {
@@ -77,15 +82,28 @@ test('every page, script and stylesheet revalidates on each visit, matched by ex
 
 test('a browser that kept the old /teams → /welcome/teams/ redirect is not caught in a loop', () => {
   const redirects = parseRedirects(read('_redirects'));
-  for (const path of ['/welcome/teams', '/welcome/teams/', '/welcome/teams/index.html', '/welcome/teams/teams.js', '/welcome/partners', '/welcome/partners/', '/welcome/partners/partners.css']) {
-    // Each old address is a redirect to the new page…
-    assert.ok(redirectFor(redirects, path, ''), `${path} redirects`);
+  // 1.28's short links, /teams, /teams/, /partners and /partners/, all went to exactly these two addresses (and kept a query string).
+  for (const [path, search] of [['/welcome/teams/', ''], ['/welcome/teams/', '?ask=question'], ['/welcome/partners/', '']]) {
+    // Each one is a redirect to the new page…
+    assert.ok(redirectFor(redirects, path, search), `${path}${search} redirects`);
     // …that is never kept, and empties the HTTP cache, where 1.28's /teams/ → /welcome/teams/ may still be.
     const { headers } = headersFor(rules, path);
-    assert.match(headers['cache-control'], /(?:^|, )no-store$/, path);
+    assert.equal(headers['cache-control'], 'no-store', path);
     assert.equal(headers['clear-site-data'], '"cache"', `${path}: the HTTP cache only, never the planner's data ("storage")`);
   }
-  // Only those: the new pages, the rest of /welcome/ and the planner are left alone.
+});
+
+test('the other old addresses are redirects never kept, without the slow cache clearing', () => {
+  const redirects = parseRedirects(read('_redirects'));
+  for (const path of ['/welcome/teams', '/welcome/teams/index.html', '/welcome/teams/teams.js', '/welcome/teams/thanks/', '/welcome/partners', '/welcome/partners/index.html', '/welcome/partners/partners.css']) {
+    assert.ok(redirectFor(redirects, path, ''), `${path} redirects`);
+    // (/welcome/teams/index.html also matches /*.html: “no-cache, no-store”, and no-store wins.)
+    const { headers } = headersFor(rules, path);
+    assert.match(headers['cache-control'], /(?:^|, )no-store$/, path);
+    // Clear-Site-Data makes the browser scan its whole HTTP cache before it follows the redirect (half a second or more).
+    assert.equal(headers['clear-site-data'], undefined, path);
+  }
+  // The new pages, the rest of /welcome/ and the planner are left alone.
   for (const path of ['/teams/', '/partners/', '/welcome/', '/welcome/thanks/', '/welcome/teams-model.js', '/', '/index.html', '/sw.js']) {
     assert.equal(headersFor(rules, path).headers['clear-site-data'], undefined, path);
   }

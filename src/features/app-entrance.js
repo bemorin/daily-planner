@@ -6,7 +6,12 @@
  * `data-booting` before the first paint, and styles/entrance.css keeps the
  * planner transparent until this module releases it. Nobody sees an empty
  * skeleton jump into place, and should this module never run, the stylesheet
- * shows the planner on its own after FAILSAFE_MS.
+ * shows the planner on its own after FAILSAFE_MS. While it is out of sight,
+ * the planner ([data-app]) is also inert (index.html sets it as it is
+ * parsed): a Tab press or a click never lands on a control nobody can see,
+ * and screen readers find nothing yet. Releasing it lifts both on the same
+ * frame; index.html's own timer lifts inert after FAILSAFE_MS should this
+ * module never run.
  *
  * Then, once per browser session, the header settles and the day rises in
  * with a short stagger: Web Animations on opacity and transform only, done
@@ -24,7 +29,7 @@ export const ENTRANCE_SEEN_KEY = 'daily-planner-ui:entrance-seen';
 export const ENTRANCE_BUDGET_MS = 600;
 /** A planner first drawn later than this after navigation only fades in. */
 export const LATE_BOOT_MS = 1200;
-/** styles/entrance.css shows the planner by itself at this point (keep both in step). */
+/** styles/entrance.css shows the planner by itself at this point, and index.html lifts inert (keep the three in step). */
 export const FAILSAFE_MS = 2400;
 /** Links that open a dialog over the planner as it loads (src/features/plus-dialog.js handleLaunch). */
 export const LAUNCH_DIALOG_PARAMS = ['gift', 'purchase', 'license', 'checkout_id'];
@@ -149,7 +154,11 @@ function onScreen(el) {
 export function startAppEntrance({ dialog = false, doc = globalThis.document, storage = sessionStore() } = {}) {
   const root = doc?.documentElement;
   if (!root) return 'none';
-  const reveal = () => root.removeAttribute('data-booting');
+  // Shown and usable on the same frame: data-booting (the stylesheet) and inert (index.html) go together.
+  const reveal = () => {
+    root.removeAttribute('data-booting');
+    try { doc.querySelector('[data-app]')?.removeAttribute('inert'); } catch (_) {}
+  };
   try {
     const seen = readSeen(storage);
     markSeen(storage);

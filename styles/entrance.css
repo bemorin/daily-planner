@@ -4,7 +4,8 @@
    marks the document data-booting before the first paint and
    src/features/app-entrance.js releases it, playing the entrance once per
    session. If the script never gets there, the planner shows itself after
-   2.4 s (FAILSAFE_MS there). Screen only: nothing changes for print. */
+   2.4 s (FAILSAFE_MS there; index.html lifts the planner's inert then too).
+   Screen only: nothing changes for print. */
 
 @media screen {
   [data-booting] .planner {

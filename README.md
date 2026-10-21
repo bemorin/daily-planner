@@ -136,7 +136,7 @@ Daily Planner is a Progressive Web App on supported browsers. **More → Install
 
 The installed app uses the same local data and does not require an account.
 
-The production service worker caches the application shell so the planner can reopen offline after it has been loaded successfully.
+The production service worker caches the application shell so the planner can reopen offline after it has been loaded successfully. Offline, another page of the site that this device never kept (the welcome, Teams, partners or legal pages) shows a short “You’re offline” page with a link back to the planner.
 
 ## Storage and privacy
 
@@ -148,7 +148,7 @@ A deployment can optionally configure Google Drive personal sync. That path stor
 
 Before remote changes are applied, the browser attempts to keep a small rolling set of local recovery snapshots in IndexedDB. Those snapshots stay on that device. **Backup all data** remains the explicit portable backup/restore path.
 
-The app tests whether browser storage is writable and warns when local persistence is unavailable. See [`docs/PERSONAL_SYNC.md`](./docs/PERSONAL_SYNC.md) for the sync contract and deployment setup.
+The app tests whether browser storage is writable and warns when local persistence is unavailable. When the browser blocks storage for the site altogether (cookies and site data off), the planner still opens and works for that tab, on memory only, and says once that nothing will be kept (`src/state/browser-storage.js`). See [`docs/PERSONAL_SYNC.md`](./docs/PERSONAL_SYNC.md) for the sync contract and deployment setup.
 
 ## Import, export, and print
 

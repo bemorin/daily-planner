@@ -81,26 +81,92 @@ test('the stylesheet failsafe and the module agree on when the planner shows by 
   assert.match(read('styles.css'), /@import url\('\.\/styles\/entrance\.css'\);/);
 });
 
-test('the head script marks the document booting and applies a saved theme before the first paint', () => {
+/** The head script of index.html, run against a fake document: `saved` theme, and what happens as the page is parsed. */
+function runHeadScript(saved, { appParsed = true } = {}) {
   const html = read('index.html');
   const head = html.slice(0, html.indexOf('</head>'));
   const script = /<script>([^<]*data-booting[^<]*)<\/script>/.exec(head)?.[1];
   assert.ok(script, 'an inline script in <head> sets data-booting');
   assert.ok(head.indexOf('name="color-scheme"') < head.indexOf(script), 'the script comes after the colour metas it updates');
+  const attributes = new Map();
+  const element = () => {
+    const own = new Map();
+    return { own, setAttribute: (name, value) => own.set(name, String(value)), removeAttribute: name => own.delete(name), hasAttribute: name => own.has(name) };
+  };
+  const app = element();
+  let parsed = false;
+  const metas = [{ content: '#f6f3ed' }, { content: '#141311' }];
+  const scheme = { content: 'light dark' };
+  const documentElement = { dataset: {}, setAttribute: (name, value) => attributes.set(name, String(value)), removeAttribute: name => attributes.delete(name), hasAttribute: name => attributes.has(name) };
+  const document = { documentElement, querySelectorAll: () => metas, querySelector: selector => (selector === '[data-app]' ? (parsed ? app : null) : scheme) };
+  const observers = [];
+  class MutationObserver {
+    constructor(callback) { this.callback = callback; this.on = false; observers.push(this); }
+    observe(target, options) { this.on = target === documentElement && options.childList && options.subtree; }
+    disconnect() { this.on = false; }
+  }
+  const timers = [];
+  const localStorage = { getItem: () => saved };
+  vm.runInNewContext(script, { document, localStorage, MutationObserver, setTimeout: (callback, ms) => timers.push({ callback, ms }) });
+  // The parser inserts the head, then the planner: the observer is told each time.
+  const mutate = () => observers.filter(observer => observer.on).forEach(observer => observer.callback([], observer));
+  mutate();
+  const inertBeforeParse = app.hasAttribute('inert');
+  if (appParsed) { parsed = true; mutate(); }
+  return { attributes, app, observers, timers, inertBeforeParse, theme: documentElement.dataset.theme, metas: metas.map(meta => meta.content), scheme: scheme.content, documentElement };
+}
+
+test('the head script marks the document booting and applies a saved theme before the first paint', () => {
   const run = saved => {
-    const attributes = {};
-    const metas = [{ content: '#f6f3ed' }, { content: '#141311' }];
-    const scheme = { content: 'light dark' };
-    const documentElement = { dataset: {}, setAttribute: (name, value) => { attributes[name] = value; } };
-    const document = { documentElement, querySelectorAll: () => metas, querySelector: () => scheme };
-    const localStorage = { getItem: () => saved };
-    vm.runInNewContext(script, { document, localStorage });
-    return { attributes, theme: documentElement.dataset.theme, metas: metas.map(meta => meta.content), scheme: scheme.content };
+    const result = runHeadScript(saved);
+    return { attributes: Object.fromEntries(result.attributes), theme: result.theme, metas: result.metas, scheme: result.scheme };
   };
   assert.deepEqual(run(null), { attributes: { 'data-booting': '' }, theme: undefined, metas: ['#f6f3ed', '#141311'], scheme: 'light dark' }, 'following the system leaves the media-specific colours alone');
   assert.deepEqual(run('dark'), { attributes: { 'data-booting': '' }, theme: 'dark', metas: ['#141311', '#141311'], scheme: 'dark' });
   assert.deepEqual(run('light'), { attributes: { 'data-booting': '' }, theme: 'light', metas: ['#f6f3ed', '#f6f3ed'], scheme: 'light' });
   assert.equal(run('sepia').theme, undefined);
+});
+
+test('the planner is inert while it is out of sight, from the moment it is parsed', () => {
+  for (const saved of [null, 'dark']) {
+    const page = runHeadScript(saved);
+    assert.equal(page.inertBeforeParse, false);
+    assert.equal(page.app.hasAttribute('inert'), true, 'no focus, no clicks, nothing read out while it is transparent');
+    assert.ok(page.observers.every(observer => !observer.on), 'the observer stops once the planner is found');
+    // The entrance lifts it with data-booting, on the frame the planner shows.
+    const doc = { documentElement: page.documentElement, visibilityState: 'visible', querySelector: selector => (selector === '[data-app]' ? page.app : null), querySelectorAll: () => [] };
+    assert.equal(startAppEntrance({ doc, storage: memoryStorage({ [ENTRANCE_SEEN_KEY]: '1' }) }), 'none');
+    assert.equal(page.documentElement.hasAttribute('data-booting'), false);
+    assert.equal(page.app.hasAttribute('inert'), false, 'usable on the frame it is shown');
+    // The fallback timer, later, leaves it alone (a tour or a dialog may have made it inert since).
+    assert.equal(page.timers.length, 1);
+    page.app.setAttribute('inert', '');
+    page.timers[0].callback();
+    assert.equal(page.app.hasAttribute('inert'), true);
+  }
+});
+
+test('should app.js never show the planner, it becomes usable when the stylesheet shows it', () => {
+  const page = runHeadScript(null);
+  assert.deepEqual(page.timers.map(timer => timer.ms), [FAILSAFE_MS], 'the same 2.4 s as styles/entrance.css and FAILSAFE_MS');
+  page.timers[0].callback();
+  assert.equal(page.app.hasAttribute('inert'), false);
+  assert.equal(page.documentElement.hasAttribute('data-booting'), true, 'the stylesheet shows it (its failsafe animation)');
+  // A page without the planner: nothing to do, nothing thrown, and the observer stops.
+  const empty = runHeadScript(null, { appParsed: false });
+  assert.doesNotThrow(() => empty.timers[0].callback());
+  assert.ok(empty.observers.every(observer => !observer.on));
+});
+
+test('without MutationObserver the head script still marks the page and applies the theme', () => {
+  const html = read('index.html');
+  const script = /<script>([^<]*data-booting[^<]*)<\/script>/.exec(html.slice(0, html.indexOf('</head>')))[1];
+  const attributes = {};
+  const documentElement = { dataset: {}, setAttribute: (name, value) => { attributes[name] = value; }, hasAttribute: name => name in attributes };
+  const document = { documentElement, querySelectorAll: () => [], querySelector: () => ({ content: '' }) };
+  assert.doesNotThrow(() => vm.runInNewContext(script, { document, localStorage: { getItem: () => 'dark' }, setTimeout: () => 0 }));
+  assert.equal(documentElement.dataset.theme, 'dark');
+  assert.deepEqual(attributes, { 'data-booting': '' });
 });
 
 test('the planner is released at once when the entrance does not play, and the session remembers the first look', () => {
@@ -152,9 +218,8 @@ test('blocked storage (an opaque origin, cookies off) never stops the planner fr
   }
 });
 
-test('the installed app opens on the planner’s paper, light or dark', () => {
+test('the installed app opens on the planner’s paper', () => {
   const manifest = JSON.parse(read('manifest.webmanifest'));
   assert.equal(manifest.background_color, '#f6f3ed');
   assert.equal(manifest.theme_color, '#f6f3ed');
-  assert.deepEqual(manifest.user_preferences?.color_scheme?.dark, { background_color: '#151412', theme_color: '#141311' });
 });

@@ -17,13 +17,25 @@
 #
 # The old addresses of the Teams and partners pages (1.30) are redirects
 # (_redirects); Pages adds the headers of a matching rule to a redirect too.
-# Until 1.29, /teams and /partners redirected the other way, permanently, and
-# browsers keep a permanent redirect for good: someone who opened /teams then
-# would bounce between /teams/ and /welcome/teams/ for ever. Clear-Site-Data
-# "cache" empties this site's HTTP cache as the old address answers, so the
-# kept redirect is gone; it never touches the planner's data (localStorage,
-# IndexedDB, the offline copy: that would be "storage"). no-store: these
-# redirects are never kept either.
+# no-store: none of these redirects is ever kept by a browser.
+# Until 1.29, /teams and /partners redirected the other way, permanently, to
+# exactly /welcome/teams/ and /welcome/partners/, and browsers keep a
+# permanent redirect for good: someone who opened /teams then would bounce
+# between /teams/ and /welcome/teams/ for ever. Clear-Site-Data "cache" on
+# those two exact addresses empties this site's HTTP cache as they answer, so
+# the kept redirect is gone; it never touches the planner's data
+# (localStorage, IndexedDB, the offline copy: that would be "storage").
+# Only there (they take no-store from /welcome/teams/* and /welcome/partners/*:
+# different headers, nothing joined): the browser goes through its whole HTTP cache
+# first, half a second or more when it is large, and this site's files are
+# then downloaded again, so the other old addresses (/welcome/teams, deeper
+# links) only get no-store. Rules match the path, never the query, so
+# /welcome/teams/?ask=question pays it too; 1.28 kept the query, so
+# /teams/?ask=question went there and may be a kept redirect as well.
+# 2026-10-21: remove the two Clear-Site-Data rules in a release after
+# 2027-01-31. By then browsers have dropped those old redirects (or come
+# through here once and lost them), while each visit to an old address
+# would still pay for the scan.
 
 /*.html
   Cache-Control: no-cache
@@ -53,13 +65,13 @@
   Cache-Control: no-cache
 /welcome/teams
   Cache-Control: no-store
-  Clear-Site-Data: "cache"
 /welcome/teams/*
   Cache-Control: no-store
-  Clear-Site-Data: "cache"
 /welcome/partners
   Cache-Control: no-store
-  Clear-Site-Data: "cache"
 /welcome/partners/*
   Cache-Control: no-store
+/welcome/teams/
+  Clear-Site-Data: "cache"
+/welcome/partners/
   Clear-Site-Data: "cache"

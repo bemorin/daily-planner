@@ -10,6 +10,7 @@ globalThis.__DAILY_PLANNER_CONFIG__ = { SUPPORT_EMAIL: ' <support@example.com> '
 const config = await import('../src/config.js');
 const legal = await import('../legal/legal.js');
 const kit = await import('../welcome/page-kit.js');
+const text = await import('../src/lib/text.js');
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 
@@ -28,7 +29,9 @@ const REFUSED = [
   '<>', 'Support', '<support@example>', '<support@example.com', 'support@example.com>', 'Support support@example.com',
   '<support@example.com>?bcc=x@example.org', '<support@example.com?bcc=x@example.org>', 'support@example.com?subject=Hi',
   '<a@example.com> <b@example.com>', 'a@example.com, b@example.com', 'Support <<support@example.com>>',
-  'mailto:support@example.com', '<mailto:support@example.com>', '<a b@example.com>', 'ben at example dot com'
+  'mailto:support@example.com', '<mailto:support@example.com>', '<a b@example.com>', 'ben at example dot com',
+  // Two addresses, the second in brackets: never read as the second one alone.
+  'support@x.com, <other@y.com>', 'support@x.com <other@y.com>', 'Support; <other@y.com>', '"Support" x <other@y.com>'
 ];
 
 test('an email build variable may be typed “<address>” or “Name <address>”: the address is used', () => {
@@ -52,6 +55,12 @@ test('anything else that isn’t a plain address is still left out, and said so'
 });
 
 test('the planner, the welcome pages and the legal pages read an address the same way', () => {
+  // One function: src/lib/text.js, re-exported by src/config.js and legal/legal-details.js.
+  assert.equal(config.emailAddress, text.emailAddress);
+  assert.equal(legal.emailAddress, text.emailAddress);
+  assert.match(read('legal/legal-details.js'), /\nimport \{ emailAddress \} from '\.\.\/src\/lib\/text\.js';\n/);
+  assert.doesNotMatch(read('legal/legal-details.js'), /<\\s\*\(/, 'no second copy of the rule');
+  assert.doesNotMatch(read('src/config.js'), /<\\s\*\(/, 'no second copy of the rule');
   for (const typed of [...ACCEPTED.map(([value]) => value), ...REFUSED, '', '  ', undefined, null, 42]) {
     const expected = legal.emailAddress(typed);
     assert.equal(config.emailAddress(typed), expected, `src/config.js: ${typed}`);
@@ -100,6 +109,8 @@ test('the dashboard’s Setup says how it read an address typed with brackets', 
   assert.equal(state({ PRIVACY_EMAIL: ' <privacy@example.com> ' }, 'PRIVACY_EMAIL'), 'set, read as privacy@example.com');
   assert.equal(state({ SUPPORT_EMAIL: ' support@example.com ' }, 'SUPPORT_EMAIL'), 'set', 'spaces alone are nothing to mention');
   assert.equal(state({ SUPPORT_EMAIL: '<support@example.com>?bcc=x@example.org' }, 'SUPPORT_EMAIL'), 'set, but not used: not a plain email address');
+  assert.equal(state({ SUPPORT_EMAIL: 'support@x.com, <other@y.com>' }, 'SUPPORT_EMAIL'), 'set, but not used: not a plain email address');
+  assert.equal(state({ PRIVACY_EMAIL: 'support@x.com <other@y.com>' }, 'PRIVACY_EMAIL'), 'set, but not used: not a plain email address');
   assert.equal(state({}, 'SUPPORT_EMAIL'), 'blank');
   assert.equal(state({ LEGAL_PHONE: '+33199001234' }, 'LEGAL_PHONE'), 'set, shown as +33 1 99 00 12 34');
   assert.match(source, /import \{ legalDetails, legalEmail, legalValueProblem \} from '\.\.\/legal\/legal-details\.js';/);

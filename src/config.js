@@ -1,3 +1,5 @@
+import { emailAddress } from './lib/text.js';
+
 export const snap = 15;
 export const minTaskSlots = 3;
 export const scheduleTopPad = 14;
@@ -6,17 +8,9 @@ const runtimeConfig = globalThis.__DAILY_PLANNER_CONFIG__ && typeof globalThis._
   ? globalThis.__DAILY_PLANNER_CONFIG__
   : {};
 const runtimeValue = key => typeof runtimeConfig[key] === 'string' ? runtimeConfig[key].trim() : '';
-/**
- * The address in an email setting as it may be typed: “support@example.com”,
- * “<support@example.com>” or “Support <support@example.com>” (spaces around it
- * allowed) all give support@example.com. Anything else comes back trimmed, and
- * whoever shows it checks it is a plain address (legal/legal-details.js has the
- * same rule for the build and the dashboard).
- */
-export const emailAddress = value => {
-  const text = typeof value === 'string' ? value.trim() : '';
-  return /^[^<>]*<\s*([^<>]*?)\s*>$/.exec(text)?.[1] ?? text;
-};
+// The address in an email setting typed “<support@example.com>” or “Support
+// <support@example.com>” (src/lib/text.js, the one rule everywhere).
+export { emailAddress };
 
 export const PROJECT_GITHUB_URL = runtimeValue('PROJECT_GITHUB_URL');
 export const GITHUB_SPONSOR_URL = runtimeValue('GITHUB_SPONSOR_URL');
