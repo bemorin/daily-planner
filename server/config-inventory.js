@@ -3,9 +3,9 @@
 // server/admin-config.js) checks each one, and docs/configuration.md lists
 // them. tests/config-inventory.test.js reads the code and fails when a
 // variable is read that isn't listed here, or when one listed here is never read:
-//   - build variables: process.env.X in scripts/build.mjs, baked into the
-//     public runtime-config.js (`runtimeKey`);
-//   - Functions variables and secrets: env.X in functions/api/[[path]].js and
+//   - build variables: what scripts/build.mjs reads from its environment,
+//     baked into the public runtime-config.js (`runtimeKey`);
+//   - Functions variables and secrets: what functions/api/[[path]].js reads and
 //     the product ids of server/creem.js (ENV_NAMES);
 //   - the D1 binding `DB`.
 // One Cloudflare Pages project, one production deployment: preview
@@ -108,13 +108,13 @@ export const CONFIG_VARIABLES = Object.freeze([
 
   // ---- Legal pages -------------------------------------------------------------
   v({ name: 'DAILY_PLANNER_SUPPORT_EMAIL', where: 'build', runtimeKey: 'SUPPORT_EMAIL', group: 'legal', level: 'recommended', secret: false, type: 'Text', format: 'legal-email',
-    source: 'An address on your own domain, e.g. support@yourdomain.com.', unlocks: 'The contact address of the legal notice, the terms and the welcome pages’ footer (and privacy questions, without a privacy address).', blocks: 'Blank or not a plain address: those places point to the question form.' }),
+    source: 'An address on your own domain, e.g. support@yourdomain.com.', unlocks: 'The contact address of the legal notice, the terms and the welcome pages’ footer (and privacy questions, without a privacy address).', blocks: 'Without a plain address, the legal pages and the footers point to the question form instead of an email address.' }),
   v({ name: 'DAILY_PLANNER_PRIVACY_EMAIL', where: 'build', runtimeKey: 'PRIVACY_EMAIL', group: 'legal', level: 'optional', secret: false, type: 'Text', format: 'legal-email',
     source: 'An address for privacy questions, e.g. privacy@yourdomain.com.', unlocks: 'The privacy policy’s and the cookies page’s contact.', blocks: 'Blank: the support address is used.' }),
   v({ name: 'DAILY_PLANNER_LEGAL_PHONE', where: 'build', runtimeKey: 'LEGAL_PHONE', group: 'legal', level: 'recommended', secret: false, type: 'Text', format: 'phone',
-    source: 'Your number in international form: + and the country code, then the number without its leading 0, e.g. +33199001234.', unlocks: 'The Phone row of the legal notice (French law asks an individual publisher for one).', blocks: 'Blank or not a phone number: no Phone row.' }),
+    source: 'Your number in international form: + and the country code, then the number without its leading 0, e.g. +33199001234.', unlocks: 'The Phone row of the legal notice (French law asks an individual publisher for one).', blocks: 'Without it the legal notice has no Phone row, which French law asks an individual publisher for.' }),
   v({ name: 'DAILY_PLANNER_LEGAL_ADDRESS', where: 'build', runtimeKey: 'LEGAL_ADDRESS', group: 'legal', level: 'recommended', secret: false, type: 'Text', format: 'text',
-    source: 'Your postal address, on one line.', unlocks: 'The Address row of the legal notice and the privacy policy (French law asks for it).', blocks: 'Blank: no Address row.' }),
+    source: 'Your postal address, on one line.', unlocks: 'The Address row of the legal notice and the privacy policy (French law asks for it).', blocks: 'Without it the legal notice and the privacy policy have no Address row, which French law asks for.' }),
   v({ name: 'DAILY_PLANNER_LEGAL_REGISTRATION', where: 'build', runtimeKey: 'LEGAL_REGISTRATION', group: 'legal', level: 'optional', secret: false, type: 'Text', format: 'text',
     source: 'SIRET and/or VAT number, e.g. SIRET 123 456 789 00012.', unlocks: 'A Registration row in the legal notice and the privacy policy.', blocks: 'Blank: no Registration row.' })
 ]);
@@ -132,6 +132,7 @@ export const PLATFORM_BINDINGS = Object.freeze([
  */
 export const LOCAL_VARIABLES = Object.freeze([
   Object.freeze({ name: 'PORT', readBy: 'scripts/serve.mjs', use: 'The dev server’s port (8080 by default; --port wins).' }),
+  Object.freeze({ name: 'FAKE_CREEM_CATALOG', readBy: 'scripts/serve.mjs', use: 'With --fake-creem: what the pretend Creem store holds for the setup assistant (partial, empty, differs or full).' }),
   Object.freeze({ name: 'CHROME_BIN', readBy: 'scripts/smoke.mjs', use: 'The Chrome or Chromium the smoke test drives.' }),
   Object.freeze({ name: 'PROGRAMFILES', readBy: 'scripts/smoke.mjs', use: 'Windows: where the smoke test looks for Chrome.' }),
   Object.freeze({ name: 'PROGRAMFILES(X86)', readBy: 'scripts/smoke.mjs', use: 'Windows: where the smoke test looks for Chrome.' })

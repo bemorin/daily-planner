@@ -438,11 +438,11 @@ test('_redirects sends the short links to the legal pages', async () => {
   }
 });
 
-test('the planner footer links the legal pages in a new tab, in the agreed order', async () => {
+test('the planner footer links the legal pages and Contact in a new tab, in the agreed order', async () => {
   const html = await read('index.html');
   const block = /<div class="bemorin-footer__links">([\s\S]*?)<\/div>/.exec(html)?.[1] || '';
   const links = [...block.matchAll(/<a href="([^"]+)" target="_blank" rel="noopener">([^<]+)<\/a>/g)].map(match => [match[1], match[2]]);
-  assert.deepEqual(links, [['legal/privacy/', 'Privacy'], ['legal/terms/', 'Terms'], ['legal/cookies/', 'Cookies'], ['legal/', 'Legal notice']]);
+  assert.deepEqual(links, [['legal/privacy/', 'Privacy'], ['legal/terms/', 'Terms'], ['legal/cookies/', 'Cookies'], ['legal/', 'Legal notice'], ['contact/', 'Contact']]);
   assert.doesNotMatch(html, /bemorin\.com\/(?:privacy|terms|cookies)/);
 });
 

@@ -69,12 +69,10 @@ export const CONTACT_TOPICS = Object.freeze({
 
 /**
  * Where the Contact page's questions say they come from (`source`, POST
- * /api/teams). The server keeps 'landing', 'teams' and 'app'
- * (TEAM_SOURCES in server/planner-api.js) and stores anything else as
- * 'landing': until it accepts 'contact', a question from the Contact page is
- * sent as the Teams page's, which is where the question form was.
+ * /api/teams): 'contact', one of TEAM_SOURCES in server/planner-api.js (1.31;
+ * the server stores anything it doesn't know as 'landing').
  */
-export const CONTACT_SOURCE = 'teams';
+export const CONTACT_SOURCE = 'contact';
 
 const params = search => {
   try { return new URLSearchParams(search || ''); } catch (_) { return new URLSearchParams(); }

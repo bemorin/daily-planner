@@ -68,6 +68,7 @@ import { cleanOrg, DEFAULT_PUBLIC_BASE_URL, formatGiftCode, giftBuyerEmail, gift
 import { GIFT_REF_RE, giftManageKey, giftRef, importSigningKey, importVerifyKey, isoDay, LICENSE_ID_RE, LICENSE_TOKEN_MAX, newLicenseId, publicKeyFromSigningKey, signLicense, verifyLicense } from './licenses.js';
 import { affiliateCode, CHECKOUT_ID_RE, checkoutSeal, checkoutSealValid, createCheckout, CREEM_ITEMS, creemMode, fetchCheckout, fetchTransaction, parseCreemProducts, readCheckout, verifyWebhookSignature } from './creem.js';
 import { createCreemSetupRoute } from './creem-setup.js';
+import { createConfigCheckRoute } from './admin-config.js';
 import { CREEM_REASONS, OWNER_SOURCE_PREFIX, readRefundEvent, readTransaction, REFUND_EVENTS, refundNoticeEmail, refundScope, refundWaitingEmail, REVOCATION_NOTE_MAX, revocationTarget, shownScope } from './refunds.js';
 import { normalizeCodeRejection, normalizePartnerSale, normalizePayout, PARTNER_SALES_LISTED, partnerSaleRow, partnerSummary, PAYOUT_NOTE_MAX, payoutCheck } from './partners.js';
 import { currencyForCountry, CURRENCIES, giftPlan, hasMemberPrice, isPersonalGift, isTeamGift, PARTNER_PROGRAM, PERSONAL_GIFTS, priceCents, TEAM_TIERS, validCurrency } from '../src/lib/pricing.js';
@@ -135,8 +136,9 @@ export const EVENT_NAMES = new Set([
 export const FEEDBACK_KINDS = new Set(['idea', 'problem', 'praise', 'other']);
 export const DEVICE_KINDS = new Set(['iphone', 'ipad', 'android', 'mac', 'windows', 'linux', 'other']);
 export const TEAM_TIMINGS = new Set(['december-2026', 'january-2027', 'q1-2027', 'later']);
-// Where a request was sent from: the welcome page (and older Teams pages), the Teams page (1.28) or the planner.
-export const TEAM_SOURCES = new Set(['landing', 'teams', 'app']);
+// Where a request was sent from: the welcome page (and older Teams pages), the Teams page (1.28), the planner
+// or the Contact page (1.31).
+export const TEAM_SOURCES = new Set(['landing', 'teams', 'app', 'contact']);
 export const TEAM_PLAN_LABELS = Object.freeze({
   'up-to-10': 'Up to 10 people',
   'up-to-50': 'Up to 50 people',
@@ -500,12 +502,15 @@ export const buyerCurrency = request => currencyForCountry(requestCountry(reques
  * @param {(promise: Promise) => void} [options.defer] keeps background work alive after the
  *   response (Pages Functions: context.waitUntil); without it the work simply runs on
  * @param {(message: string) => void} [options.warn] where swallowed email and payment failures are reported
+ * @param {object} [options.configEnv] the deployment's variables, secrets and bindings (Pages: context.env), for
+ *   the configuration checks (POST admin/config/check, server/admin-config.js); none without it
+ * @param {typeof fetch} [options.configFetch] fetch used by those checks (tests and the dev server inject one)
  */
 export function createPlannerApi({
   store, adminToken = '', adminTotpSecret = '', allowedOrigins = '', now = () => new Date(), authFailureDelayMs = AUTH_FAILURE_DELAY_MS,
   resendApiKey = '', emailFrom = '', ownerEmail = '', emailDailyLimit = '', emailFetch, emailIntervalMs = RESEND_MIN_INTERVAL_MS, notifyTimeoutMs = NOTIFY_TIMEOUT_MS,
   publicBaseUrl = '', plusSigningKey = '', creemApiKey = '', creemWebhookSecret = '', creemTestMode = '', creemProducts = {}, creemFetch,
-  defer = null, warn = message => console.warn(message)
+  defer = null, warn = message => console.warn(message), configEnv = null, configFetch
 }) {
   const origins = new Set(String(allowedOrigins || '').split(',').map(value => value.trim()).filter(Boolean));
   const totpEnabled = !!String(adminTotpSecret || '').trim();
@@ -1622,6 +1627,10 @@ export function createPlannerApi({
     webhookUrl: `${baseUrl()}/api/creem/webhook`, events: ['checkout.completed', ...Object.keys(REFUND_EVENTS)], now: () => now().getTime()
   }), { now: () => now().getTime() });
 
+  // Configuration checks (server/admin-config.js, 1.31): POST admin/config/check runs every check, read-only,
+  // and answers states and shapes, never a secret's value.
+  const configCheckRoute = createConfigCheckRoute(() => ({ env: configEnv || {}, fetch: configFetch || globalThis.fetch?.bind(globalThis) }));
+
   async function admin(request, path, url, cors) {
     if (!adminToken) return json(503, { error: 'ADMIN_TOKEN is not configured.' }, cors);
     if (totpBroken) return json(503, { error: 'ADMIN_TOTP_SECRET is not valid base32 (A–Z and 2–7, at least 16 characters).' }, cors);
@@ -1631,7 +1640,11 @@ export function createPlannerApi({
       const answer = await creemSetupRoute(request, path, () => readJson(request));
       if (answer) return json(answer.status, answer.body, { ...cors, ...(answer.headers || {}) });
     }
-    const days = Math.min(366, Math.max(1, Math.round(Number(url.searchParams.get('days')) || 90)));
+    if (path === 'admin/config/check') {
+      const answer = await configCheckRoute(request, path);
+      return json(answer.status, answer.body, { ...cors, ...(answer.headers || {}) });
+    }
+    const days =Math.min(366, Math.max(1, Math.round(Number(url.searchParams.get('days')) || 90)));
     const sinceDay = dayKey(new Date(now().getTime() - days * 86400000));
     if (request.method === 'GET' && path === 'admin/summary') {
       const nowIso = now().toISOString();

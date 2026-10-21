@@ -94,6 +94,7 @@ import { randomBytes } from 'node:crypto';
 import { createMemoryStore, createPlannerApi } from '../server/planner-api.js';
 import { generatePlusKeyPair, importSigningKey, publicKeyFromSigningKey, signLicense } from '../server/licenses.js';
 import { checkoutSeal, creemMode, creemProductsFromEnv, webhookSignature } from '../server/creem.js';
+import { CONFIG_VARIABLES } from '../server/config-inventory.js';
 import { expectedProduct } from '../server/creem-setup.js';
 import { beforeTaxCents, priceCents } from '../src/lib/pricing.js';
 import { parseRedirects, redirectFor } from './redirects.mjs';
@@ -424,10 +425,36 @@ if (withApi) {
       }, 120);
     }
   });
-  plannerApi = createPlannerApi({
-    store, adminToken, adminTotpSecret, ...emailOptions(), ...creemOptions(), ...await plusOptions(),
-    publicBaseUrl: devBaseUrl
-  });
+  const options = { ...emailOptions(), ...creemOptions(), ...await plusOptions() };
+  plannerApi = createPlannerApi({ store, adminToken, adminTotpSecret, ...options, publicBaseUrl: devBaseUrl, ...configCheckOptions(options) });
+}
+
+// The configuration page (/admin/configuration/, POST /api/admin/config/check) checks what this server really
+// uses, under the production names: the secrets in effect (the pretend ones with --fake-email and
+// --fake-creem, whose stand-ins answer its read-only calls), the build variables of the served
+// runtime-config.js, and that file itself (ASSETS, as on Cloudflare). There is no D1 here: the page says so.
+function configCheckOptions(options) {
+  const products = options.creemProducts || {};
+  const env = {
+    ...Object.fromEntries(CONFIG_VARIABLES.map(def => [def.name, process.env[def.name] || ''])),
+    ADMIN_TOKEN: adminToken, ADMIN_TOTP_SECRET: adminTotpSecret,
+    RESEND_API_KEY: options.resendApiKey, EMAIL_FROM: options.emailFrom, OWNER_EMAIL: options.ownerEmail, EMAIL_DAILY_LIMIT: options.emailDailyLimit,
+    CREEM_API_KEY: options.creemApiKey, CREEM_WEBHOOK_SECRET: options.creemWebhookSecret, CREEM_TEST_MODE: options.creemTestMode,
+    CREEM_PLUS_EUR: products.plus?.EUR || '', CREEM_PLUS_USD: products.plus?.USD || '', CREEM_GIFT_EUR: products.gift?.EUR || '', CREEM_GIFT_USD: products.gift?.USD || '',
+    PLUS_SIGNING_KEY: options.plusSigningKey, DAILY_PLANNER_PLUS_PUBLIC_KEY: plusPublicKey, DAILY_PLANNER_API_URL: '/api',
+    ASSETS: { fetch: async () => new Response(devRuntimeConfig(await fs.readFile(join(root, 'runtime-config.js'), 'utf8')), { headers: { 'content-type': 'text/javascript; charset=utf-8' } }) }
+  };
+  const senderDomain = (/@([A-Za-z0-9.-]+)>?\s*$/.exec(options.emailFrom || '')?.[1] || '').toLowerCase();
+  async function configFetch(url, init = {}) {
+    const target = new URL(url);
+    if (fakeCreem && /(?:^|\.)creem\.io$/.test(target.hostname)) return fakeCreemFetch(url, init);
+    // The pretend Resend has one domain, verified: the sender's.
+    if (fakeEmail && target.hostname === 'api.resend.com' && target.pathname === '/domains') {
+      return fakeJson(200, { object: 'list', has_more: false, data: [{ id: 'fake-domain', name: senderDomain, status: 'verified', region: 'eu-west-1', capabilities: { sending: 'enabled', receiving: 'disabled' } }] });
+    }
+    return fetch(url, init);
+  }
+  return { configEnv: env, configFetch };
 }
 
 async function devLicense(request, response) {
