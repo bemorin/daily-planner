@@ -2,6 +2,12 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.30.0 — 2026-10-21
+
+- **Opening the planner**: no more empty shell that jumps into place (layout shift 0.26 → 0 on a computer). The page shows plain paper in the right theme until the day is drawn, then — once per browser session, on a visible cold open — the header settles in, the hour grid fades in and the plan and the schedule rise in turn, all within 600 ms, with clicks and keys working from the first frame. Skipped with reduced motion, in the background, before first-run setup, for activation/gift/checkout links or a dialog open on load; a short fade on slow devices; the planner shows on its own after 2.4 s if the script fails. The head script also sets the browser's colour scheme and toolbar colour for a saved theme before first paint; the manifest has dark splash colours.
+- **`/teams/` and `/partners/` are the real addresses** of the Teams and Partners pages. `/welcome/teams/…` and `/welcome/partners/…` redirect there (301, query and hash kept); the old short-link redirects are gone, and the old addresses' responses clear the browser's HTTP cache (`Clear-Site-Data: "cache"`) so a remembered 1.28 redirect can't loop. Every link in the pages, the planner, the legal pages and the docs is updated; the dev server applies `_redirects` like Cloudflare (`scripts/redirects.mjs`).
+- `DAILY_PLANNER_SUPPORT_EMAIL` and `DAILY_PLANNER_PRIVACY_EMAIL` accept `<address>` and `Name <address>`; the dashboard's Setup says what it read. Without the owner API, the request form writes an email to the support address.
+
 ## 1.29.1 — 2026-10-21
 
 - **Ask a question** is a plain contact form: email, name and the question (plus consent) — no company, plan, number of people or timing; the panel reads “Contact · Ask a question”, and links from other pages land on it focused. The API accepts a question without the team fields (invoice, quote and talk still require them); the owner email and the dashboard (“Requests and questions”, Needs your attention) show it as a question.

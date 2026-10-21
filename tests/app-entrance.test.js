@@ -139,6 +139,19 @@ test('the planner is released at once when the entrance does not play, and the s
   }
 });
 
+test('blocked storage (an opaque origin, cookies off) never stops the planner from showing', () => {
+  const before = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, get() { throw new Error('SecurityError: access is denied for this document'); } });
+  try {
+    const doc = fakeDocument({ animate: false });
+    assert.doesNotThrow(() => startAppEntrance({ doc }));
+    assert.equal(doc.documentElement.hasAttribute('data-booting'), false);
+  } finally {
+    if (before) Object.defineProperty(globalThis, 'sessionStorage', before);
+    else delete globalThis.sessionStorage;
+  }
+});
+
 test('the installed app opens on the planner’s paper, light or dark', () => {
   const manifest = JSON.parse(read('manifest.webmanifest'));
   assert.equal(manifest.background_color, '#f6f3ed');

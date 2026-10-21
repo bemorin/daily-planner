@@ -10,9 +10,9 @@
  *
  * Then, once per browser session, the header settles and the day rises in
  * with a short stagger: Web Animations on opacity and transform only, done
- * within ENTRANCE_BUDGET_MS. It is decoration and never holds anyone up: the
- * controls work from the first frame they are shown, a click or a key press
- * finishes it at once, focus is untouched and nothing is announced. It steps
+ * within ENTRANCE_BUDGET_MS. It is decoration and never holds anyone up: it
+ * runs on the compositor, the controls work from the first frame they are
+ * shown, focus is untouched and nothing is announced. It steps
  * aside when motion is reduced, the page opens in the background, comes back
  * from history, a dialog opens on launch (first-run setup, a gift or licence
  * link), or the device is slow to draw the first frame (a short fade then, or
@@ -118,6 +118,11 @@ function keyframesFor(name, distance) {
   return [distance ? { offset: 0, opacity: FROM_OPACITY, transform: `translateY(${distance}px)` } : { offset: 0, opacity: FROM_OPACITY }];
 }
 
+// Reading sessionStorage itself throws where storage is blocked or the origin is opaque.
+function sessionStore() {
+  try { return globalThis.sessionStorage; } catch (_) { return null; }
+}
+
 function readSeen(storage) {
   try { return storage?.getItem(ENTRANCE_SEEN_KEY) === '1'; } catch (_) { return false; }
 }
@@ -141,7 +146,7 @@ function onScreen(el) {
  * once, after the first render. `dialog`: a dialog opens over the planner as
  * it loads (first-run setup).
  */
-export function startAppEntrance({ dialog = false, doc = globalThis.document, storage = globalThis.sessionStorage } = {}) {
+export function startAppEntrance({ dialog = false, doc = globalThis.document, storage = sessionStore() } = {}) {
   const root = doc?.documentElement;
   if (!root) return 'none';
   const reveal = () => root.removeAttribute('data-booting');
@@ -199,16 +204,15 @@ function play(doc, mode) {
   }
   if (!animations.length) return;
   const root = doc.documentElement;
+  // `data-entrance` marks the few hundred milliseconds it plays (a hook for tests and styles).
   root.dataset.entrance = mode;
-  const events = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
-  // Any interaction, or a return from the back/forward cache, lands everything at once.
+  // Input is never held: the animations run on the compositor while clicks and
+  // keys work as usual. A page restored from the back/forward cache lands at once.
   const finish = () => animations.forEach(animation => { try { animation.finish(); } catch (_) {} });
   const settle = () => {
-    events.forEach(type => doc.removeEventListener(type, finish, true));
     globalThis.removeEventListener?.('pageshow', finish);
     delete root.dataset.entrance;
   };
-  events.forEach(type => doc.addEventListener(type, finish, { capture: true, passive: true }));
   globalThis.addEventListener?.('pageshow', finish);
   Promise.all(animations.map(animation => animation.finished.catch(() => {}))).then(settle, settle);
 }
