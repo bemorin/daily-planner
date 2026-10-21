@@ -21,7 +21,7 @@ import { dayOf, normalizeSeries, seriesWindow } from './trends.js';
 import { createStepper } from '../welcome/stepper.js';
 import { compareVersions, readReloadMark, reloadUrl, versionNotice } from './version.js';
 // The legal pages' checks (a plain email address, a phone number): Setup says what the pages will leave out.
-import { legalDetails, legalValueProblem } from '../legal/legal-details.js';
+import { legalDetails, legalEmail, legalValueProblem } from '../legal/legal-details.js';
 
 const SESSION_KEY = 'daily-planner-owner-session';
 const LEGACY_TOKEN_KEY = 'daily-planner-owner-token';
@@ -1228,12 +1228,12 @@ function paymentsItem(payments) {
   return { key: 'payments', title: 'Payments (Creem)', html: `${key}${error}<p>Product ids (one-time products, one per item and currency):</p>${table}${webhook}${url}` };
 }
 
-// Partners (welcome/partners/): “Become a partner” opens the Creem affiliate sign-up link, a build variable,
+// Partners (/partners/): “Become a partner” opens the Creem affiliate sign-up link, a build variable,
 // and the program's terms are set in Creem to match PARTNER_PROGRAM (src/lib/pricing.js).
 function partnersItem(summary, base = 'https://planner.bemorin.com') {
   const program = { rate: 25, teamRate: 10, cookieDays: 30, refundDays: 14, minimumPayout: { EUR: 50, USD: 50 }, ...(summary.partnerProgram || {}) };
   const url = String(APP_CONFIG.AFFILIATE_URL || '').trim();
-  const page = copyRow('Partners page', new URL('welcome/partners/', `${base.replace(/\/+$/, '')}/`).href);
+  const page = copyRow('Partners page', new URL('partners/', `${base.replace(/\/+$/, '')}/`).href);
   const creem = `<p>In Creem → Growth → Affiliate Hub, set the program to match the partners page and the terms: commission <b>${esc(program.rate)}%</b>, attribution window <b>${esc(program.cookieDays)} days</b>, and a <b>public</b> program (anyone can join, no Plus needed). Creem pays partners on the 1st and the 15th once they have ${esc(money(program.minimumPayout.EUR * 100, 'EUR'))} / ${esc(money(program.minimumPayout.USD * 100, 'USD'))}. Check that a refunded or disputed sale earns nothing there. Team gifts aren’t sent to Creem with the partner’s code: you pay their ${esc(program.teamRate)}% yourself (Partners card).</p>`;
   const link = /^https:\/\/\S+$/.test(url)
     ? `<p>“Become a partner” opens your Creem sign-up link (<code>DAILY_PLANNER_AFFILIATE_URL</code>).</p>`
@@ -1254,12 +1254,19 @@ const LEGAL_VARIABLES = [
   ['LEGAL_REGISTRATION', 'optional, SIRET and/or VAT number, in the legal notice and the privacy policy.']
 ];
 
-/** A legal build variable's state in the Setup card: “set” (the phone: “set, shown as …”), “blank”, or “set, but not used: …”. */
+/**
+ * A legal build variable's state in the Setup card: “set” (the phone: “set,
+ * shown as …”; an address typed “<…>” or “Name <…>”: “set, read as …”),
+ * “blank”, or “set, but not used: …”.
+ */
 function legalVariableState(key) {
   const problem = legalValueProblem(key, APP_CONFIG[key]);
   if (problem) return `set, but not used: ${problem}`;
-  if (!String(APP_CONFIG[key] || '').trim()) return 'blank';
-  return key === 'LEGAL_PHONE' ? `set, shown as ${esc(legalDetails(APP_CONFIG).phone)}` : 'set';
+  const value = String(APP_CONFIG[key] || '').trim();
+  if (!value) return 'blank';
+  if (key === 'LEGAL_PHONE') return `set, shown as ${esc(legalDetails(APP_CONFIG).phone)}`;
+  const email = key.endsWith('_EMAIL') ? legalEmail(value) : '';
+  return email && email !== value ? `set, read as ${esc(email)}` : 'set';
 }
 
 function legalItem(base = 'https://planner.bemorin.com') {

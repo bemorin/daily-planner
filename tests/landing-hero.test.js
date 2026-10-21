@@ -219,8 +219,8 @@ test('the welcome pages use the planner’s scrollbar, without the browser’s a
   assert.match(css, /\*::-webkit-scrollbar-button \{ display: none; width: 0; height: 0; \}/);
   assert.match(css, /\*::-webkit-scrollbar-thumb:hover \{\n {2}background: var\(--scrollbar-thumb-hover\);/);
   assert.match(css, /--scrollbar-thumb: color-mix\(in srgb, var\(--line\) 82%, var\(--paper\)\);/, 'the planner’s colours (styles/core.css)');
-  for (const page of ['welcome/index.html', 'welcome/teams/index.html', 'welcome/partners/index.html', 'welcome/thanks/index.html']) {
-    assert.match(await read(page), /<link rel="stylesheet" href="(?:\.\.\/)?(?:\.\/)?landing\.css">/, page);
+  for (const page of ['welcome/index.html', 'teams/index.html', 'partners/index.html', 'welcome/thanks/index.html']) {
+    assert.match(await read(page), /<link rel="stylesheet" href="(?:\.\.\/(?:welcome\/)?)?(?:\.\/)?landing\.css">/, page);
   }
 });
 

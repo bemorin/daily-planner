@@ -181,7 +181,7 @@ The in-app **How it works** modal contains the complete shortcut reference. Comm
 
 ## Landing page
 
-`welcome/` is the public landing page (served at `/welcome/`): animated replicas of the planner, Daily Planner Plus, gifts for a friend, a family or a team, pricing in euros or US dollars (by the visitor's country), and an FAQ. `welcome/thanks/` is where the buyer gets the gift link after paying. The page reuses the planner's runtime configuration, makes no request when `PLANNER_API_URL` is blank, and takes every price from `src/lib/pricing.js`, the file the planner and the owner API use too.
+`welcome/` is the public landing page (served at `/welcome/`): animated replicas of the planner, Daily Planner Plus, gifts for a friend, a family or a team, pricing in euros or US dollars (by the visitor's country), and an FAQ. `welcome/thanks/` is where the buyer gets the gift link after paying. The Teams page (`teams/`, at `/teams/`: the team gift and the “Ask a question” form) and the partners page (`partners/`, at `/partners/`) share its modules and styles; their old addresses under `/welcome/` redirect to them (`_redirects`, query string and `#hash` kept). The page reuses the planner's runtime configuration, makes no request when `PLANNER_API_URL` is blank, and takes every price from `src/lib/pricing.js`, the file the planner and the owner API use too.
 
 ## Legal pages
 

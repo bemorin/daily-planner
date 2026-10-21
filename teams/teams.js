@@ -1,17 +1,17 @@
-import { LANDING_EVENTS, plannerApiEnabled, rememberReferral, setUsageCountsEnabled, trackEvent, usageCountsEnabled } from '../../src/lib/planner-api.js';
-import { PARTNER_PROGRAM } from '../../src/lib/pricing.js';
-import { countedMoments } from '../landing-model.js';
-import { LANDING } from '../landing-settings.js';
-import { qs, qsa, renderFooter, setupTopBar } from '../page-kit.js';
-import { followMotion, motionWanted, reduceQuery, setupFaq, setupReveal } from '../page-motion.js';
-import { createPrivacyDialog } from '../privacy-dialog.js';
-import { createRequestForm } from '../request-form.js';
-import { createSale, renderPriceLines, setupBuyButtons } from '../sale.js';
-import { setupScenes } from '../scenes.js';
-import { createTeamOffer } from '../team-offer.js';
+import { LANDING_EVENTS, plannerApiEnabled, rememberReferral, setUsageCountsEnabled, trackEvent, usageCountsEnabled } from '../src/lib/planner-api.js';
+import { PARTNER_PROGRAM } from '../src/lib/pricing.js';
+import { countedMoments } from '../welcome/landing-model.js';
+import { LANDING } from '../welcome/landing-settings.js';
+import { qs, qsa, renderFooter, setupTopBar } from '../welcome/page-kit.js';
+import { followMotion, motionWanted, reduceQuery, setupFaq, setupReveal } from '../welcome/page-motion.js';
+import { createPrivacyDialog } from '../welcome/privacy-dialog.js';
+import { createRequestForm } from '../welcome/request-form.js';
+import { createSale, renderPriceLines, setupBuyButtons } from '../welcome/sale.js';
+import { setupScenes } from '../welcome/scenes.js';
+import { createTeamOffer } from '../welcome/team-offer.js';
 
 /* ============================================================================
-   TEAMS (/welcome/teams/): the team gift — what it is, how seats work, its
+   TEAMS (/teams/): the team gift — what it is, how seats work, its
    prices (Buy online through Creem, or by invoice; a quote above the last
    tier), “Send this to my manager”, the request form “Invoice, quote or
    question” (#request) and the team questions.

@@ -95,7 +95,7 @@ export function sharePartnerText(rate = PARTNER_PROGRAM.rate) {
 }
 
 /** One line about the partner program, shown once an image is made (hidden until then). */
-const partnerLine = () => `<p class="share-sheet__partner" data-share-partner hidden>${icon('link')}<span>${esc(sharePartnerText())} <a href="./welcome/partners/" target="_blank" rel="noopener" data-share-partner-go>Partner program${icon('arrow')}</a></span><button class="icon-button share-sheet__partner-close" type="button" data-share-partner-dismiss aria-label="Hide the partner program">${icon('close')}</button></p>`;
+const partnerLine = () => `<p class="share-sheet__partner" data-share-partner hidden>${icon('link')}<span>${esc(sharePartnerText())} <a href="./partners/" target="_blank" rel="noopener" data-share-partner-go>Partner program${icon('arrow')}</a></span><button class="icon-button share-sheet__partner-close" type="button" data-share-partner-dismiss aria-label="Hide the partner program">${icon('close')}</button></p>`;
 
 function sheetMarkup({ eyebrow, title, intro, model, state, shareAvailable, copyAvailable, partner = false }) {
   const lines = model.kind === 'week' ? model.lines : [];

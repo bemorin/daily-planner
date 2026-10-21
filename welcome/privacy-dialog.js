@@ -2,7 +2,7 @@
  * The landing page's privacy notice, in a dialog that looks like the
  * planner's own: what this page counts (with the switch to stop it), prices
  * and your country, purchases and requests. Its facts are written in each
- * page that has it (welcome/index.html, welcome/teams/index.html: the same
+ * page that has it (welcome/index.html, teams/index.html: the same
  * dialog); the counted moments come from LANDING_EVENTS (passed in as plain
  * words), so the list cannot drift from what the page sends, and how long a
  * partner code is kept from PARTNER_PROGRAM.cookieDays.

@@ -153,7 +153,7 @@ test('the gift page reads a Creem return, an older confirmation link or a gift p
 });
 
 test('every count the landing page sends is in its notice, and every listed count is sent', async () => {
-  const files = ['welcome/landing.js', 'welcome/teams/teams.js', 'welcome/team-offer.js', 'welcome/request-form.js', 'welcome/thanks/thanks.js', 'welcome/partners/partners.js'];
+  const files = ['welcome/landing.js', 'teams/teams.js', 'welcome/team-offer.js', 'welcome/request-form.js', 'welcome/thanks/thanks.js', 'partners/partners.js'];
   const sources = await Promise.all(files.map(file => readFile(join(root, file), 'utf8')));
   const listed = new Set(LANDING_EVENTS.map(([name]) => name));
   const used = new Set();
@@ -168,15 +168,15 @@ test('every count the landing page sends is in its notice, and every listed coun
 
 test('no Stripe left on the public pages', async () => {
   const files = ['welcome/index.html', 'welcome/landing.js', 'welcome/landing.css', 'welcome/landing-model.js', 'welcome/landing-settings.js', 'welcome/listbox.js', 'welcome/stepper.js',
-    'welcome/sale.js', 'welcome/team-offer.js', 'welcome/request-form.js', 'welcome/teams-model.js', 'welcome/teams/index.html', 'welcome/teams/teams.js',
-    'welcome/thanks/index.html', 'welcome/thanks/thanks.js', 'welcome/partners/index.html', 'welcome/partners/partners.js', 'welcome/partners/partners-model.js'];
+    'welcome/sale.js', 'welcome/team-offer.js', 'welcome/request-form.js', 'welcome/teams-model.js', 'teams/index.html', 'teams/teams.js',
+    'welcome/thanks/index.html', 'welcome/thanks/thanks.js', 'partners/index.html', 'partners/partners.js', 'partners/partners-model.js'];
   for (const file of files) {
     assert.doesNotMatch(await readFile(join(root, file), 'utf8'), /stripe/i, file);
   }
 });
 
 test('the welcome pages have no native dropdowns and no currency switch', async () => {
-  for (const [file, scriptFile] of [['welcome/index.html', 'welcome/landing.js'], ['welcome/teams/index.html', 'welcome/teams/teams.js']]) {
+  for (const [file, scriptFile] of [['welcome/index.html', 'welcome/landing.js'], ['teams/index.html', 'teams/teams.js']]) {
     const page = await readFile(join(root, file), 'utf8');
     const script = await readFile(join(root, scriptFile), 'utf8');
     assert.doesNotMatch(page, /<select\b/i, `${file}: dropdowns are the app’s own (listbox.js)`);
@@ -198,9 +198,9 @@ test('pricing is for one person; the team gift has its own page, and a banner le
   assert.doesNotMatch(page, /id="(?:teams|request|team-prices|seats)"/);
   const banner = /<aside class="band tbanner"[\s\S]*?<\/aside>/.exec(section('pricing'))?.[0] || '';
   assert.match(banner, /data-teams-banner/, 'the banner sits at the end of the prices');
-  assert.match(banner, /<a class="btn btn--light" href="teams\/">See the team gift/);
+  assert.match(banner, /<a class="btn btn--light" href="\.\.\/teams\/">See the team gift/);
   assert.match(banner, /From about <span data-min-per-person>€5<\/span> per person/);
-  assert.match(banner, /href="teams\/\?ask=invoice#request"/);
+  assert.match(banner, /href="\.\.\/teams\/\?ask=invoice#request"/);
   const order = [...page.matchAll(/<section class="(?:hero|section)[^"]*" id="([a-z]+)"/g)].map(match => match[1]);
   assert.deepEqual(order, ['top', 'how', 'progress', 'week', 'tools', 'year', 'yours', 'plus', 'pricing', 'faq']);
   const tinted = [...page.matchAll(/<section class="((?:hero|section)[^"]*)" id="([a-z]+)"/g)].map(match => match[1].includes('section--tint'));

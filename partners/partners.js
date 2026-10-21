@@ -1,13 +1,13 @@
 // Imported as a namespace so a value missing from an older config.js reads as
 // undefined instead of failing the whole module.
-import * as config from '../../src/config.js';
-import { checkoutOptions, plannerApiEnabled, rememberReferral, trackEvent } from '../../src/lib/planner-api.js';
-import { pageCurrency, readCheckoutOptions } from '../landing-model.js';
-import { motionWanted, reduceQuery, setupFaq, setupReveal } from '../page-motion.js';
+import * as config from '../src/config.js';
+import { checkoutOptions, plannerApiEnabled, rememberReferral, trackEvent } from '../src/lib/planner-api.js';
+import { pageCurrency, readCheckoutOptions } from '../welcome/landing-model.js';
+import { motionWanted, reduceQuery, setupFaq, setupReveal } from '../welcome/page-motion.js';
 import { exampleMonth, formatCents, formatCommission, pageFigures, partnerPage, rateRows } from './partners-model.js';
 
 /* ============================================================================
-   Partners (/welcome/partners/): what the partner program pays, how it works,
+   Partners (/partners/): what the partner program pays, how it works,
    its rules and its questions. Creem runs the program for Plus and personal
    gifts (Growth → Affiliate Hub): partners join there, get their code, and
    Creem pays them on the 1st and the 15th. Team gifts earn partners 10%, paid

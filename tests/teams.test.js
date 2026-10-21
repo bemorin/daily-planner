@@ -31,15 +31,15 @@ async function headScriptTarget(address) {
 
 test('old /welcome/ addresses of the team gift lead to the Teams page, query and hash kept', async () => {
   const cases = [
-    ['/welcome/?ask=question#request', '/welcome/teams/?ask=question#request'],
-    ['/welcome/?ask=question&topic=partners#request', '/welcome/teams/?ask=question&topic=partners#request'],
-    ['/welcome/?ask=quote&plan=over-1000', '/welcome/teams/?ask=quote&plan=over-1000'],
-    ['/welcome/?ref=CAMILLE&ask=invoice#request', '/welcome/teams/?ref=CAMILLE&ask=invoice#request'],
-    ['/welcome/#teams', '/welcome/teams/#teams'],
-    ['/welcome/#team-prices', '/welcome/teams/#team-prices'],
-    ['/welcome/#seats', '/welcome/teams/#seats'],
-    ['/welcome/index.html#request', '/welcome/teams/#request'],
-    ['/welcome#request', '/welcome/teams/#request'],
+    ['/welcome/?ask=question#request', '/teams/?ask=question#request'],
+    ['/welcome/?ask=question&topic=partners#request', '/teams/?ask=question&topic=partners#request'],
+    ['/welcome/?ask=quote&plan=over-1000', '/teams/?ask=quote&plan=over-1000'],
+    ['/welcome/?ref=CAMILLE&ask=invoice#request', '/teams/?ref=CAMILLE&ask=invoice#request'],
+    ['/welcome/#teams', '/teams/#teams'],
+    ['/welcome/#team-prices', '/teams/#team-prices'],
+    ['/welcome/#seats', '/teams/#seats'],
+    ['/welcome/index.html#request', '/teams/#request'],
+    ['/welcome#request', '/teams/#request'],
     ['/welcome/', ''],
     ['/welcome/?ref=CAMILLE', ''],
     ['/welcome/#plus', ''],
@@ -117,7 +117,7 @@ test('a question is sent without the team’s fields, and an address never gives
 });
 
 test('the request form hides the team’s fields for a question, and keeps its head the height of the tallest version', async () => {
-  const page = await read('welcome/teams/index.html');
+  const page = await read('teams/index.html');
   const form = /<form class="team-form"[\s\S]*?<\/form>/.exec(page)[0];
   // The four team fields carry the hook; the email, the name and the message never do.
   const hooked = [...form.matchAll(/<(?:label|div) class="field"[^>]*data-team-field[^>]*>[\s\S]*?(?:name|id)="([a-zA-Z-]+)"/g)].map(match => match[1]);
@@ -133,7 +133,7 @@ test('the request form hides the team’s fields for a question, and keeps its h
   assert.match(script, /ghost\.setAttribute\('aria-hidden', 'true'\);/);
   // Arriving from “Ask a question” elsewhere: the title takes the focus, even after the browser moves it to the link's target.
   assert.match(script, /panel\.tabIndex = -1;\n {2}panel\.addEventListener\('focus', event => \{ if \(event\.target === panel\) title\.focus\(\{ preventScroll: true \}\); \}\);/);
-  assert.match(await read('welcome/teams/teams.js'), /if \(arrived\.matches\('\[data-form-panel\]'\)\) form\?\.arrive\(\);/);
+  assert.match(await read('teams/teams.js'), /if \(arrived\.matches\('\[data-form-panel\]'\)\) form\?\.arrive\(\);/);
   const css = await read('welcome/landing.css');
   assert.match(css, /\.team-form__heads > \.team-form__head \{ grid-area: 1 \/ 1; align-self: start; \}/);
   assert.match(css, /\.team-form__ghost \{ visibility: hidden; \}/);
@@ -154,16 +154,16 @@ test('the request form sends the code from referralCode(), and the Teams page re
   const form = await read('welcome/request-form.js');
   assert.match(form, /requestPayload\(values, \{ currency, version: APP_VERSION, locale: navigator\.language \|\| '', ref: referralCode\(\) \}\)/);
   assert.match(form, /import \{ plannerApiEnabled, referralCode \} from '\.\.\/src\/lib\/planner-api\.js';/);
-  const teams = await read('welcome/teams/teams.js');
+  const teams = await read('teams/teams.js');
   assert.match(teams, /if \(apiOn\) rememberReferral\(\);/);
 });
 
 test('“Send this to my manager” links to the Teams page, with the lowest price per person', async () => {
   const { LANDING } = await import('../welcome/landing-settings.js');
-  assert.equal(LANDING.teamsUrl, 'https://planner.bemorin.com/welcome/teams/');
+  assert.equal(LANDING.teamsUrl, 'https://planner.bemorin.com/teams/');
   const body = managerMessage(LANDING.managerEmail.body, { url: LANDING.teamsUrl, perPerson: '€5' });
   assert.match(body, /from about €5 per person/);
-  assert.match(body, /Details and prices: https:\/\/planner\.bemorin\.com\/welcome\/teams\//);
+  assert.match(body, /Details and prices: https:\/\/planner\.bemorin\.com\/teams\//);
   assert.doesNotMatch(body, /\{url\}|\{perPerson\}/);
   assert.equal(LANDING.supportEmail, '', 'blank in the source');
   assert.equal(LANDING.contactEmail, '');
@@ -184,28 +184,32 @@ test('the gift page’s partner invitation names the program’s rate', async ()
 });
 
 test('the Teams page: its own address, the landing page’s head, header and footer', async () => {
-  const page = await read('welcome/teams/index.html');
+  const page = await read('teams/index.html');
   const landing = await read('welcome/index.html');
   assert.match(page, /<title>Team gift — Daily Planner<\/title>/);
-  assert.match(page, /<link rel="canonical" href="https:\/\/planner\.bemorin\.com\/welcome\/teams\/">/);
-  assert.match(page, /<meta property="og:url" content="https:\/\/planner\.bemorin\.com\/welcome\/teams\/">/);
+  assert.match(page, /<link rel="canonical" href="https:\/\/planner\.bemorin\.com\/teams\/">/);
+  assert.match(page, /<meta property="og:url" content="https:\/\/planner\.bemorin\.com\/teams\/">/);
   for (const meta of ['og:title', 'og:description', 'og:image', 'twitter:card', 'twitter:title', 'twitter:image']) assert.match(page, new RegExp(`(?:property|name)="${meta}" content="[^"]+"`), meta);
-  assert.match(page, /<link rel="icon" href="\.\.\/\.\.\/favicon\.svg" type="image\/svg\+xml">/);
-  assert.match(page, /<link rel="stylesheet" href="\.\.\/landing\.css">/);
-  assert.ok(page.indexOf('../../runtime-config.js') < page.indexOf('./teams.js'), 'the runtime config first');
+  // At the site root (/teams/, 1.30): the site's files one folder up, the welcome page's styles in ../welcome/.
+  assert.match(page, /<link rel="icon" href="\.\.\/favicon\.svg" type="image\/svg\+xml">/);
+  assert.match(page, /<link rel="stylesheet" href="\.\.\/welcome\/landing\.css">/);
+  assert.ok(page.indexOf('<script src="../runtime-config.js">') > 0 && page.indexOf('../runtime-config.js') < page.indexOf('./teams.js'), 'the runtime config first');
   assert.match(page, /<script type="module" src="\.\/teams\.js"><\/script>/);
   // The same entrance script as the landing page (without its redirect).
   const arm = source => /var root = document\.documentElement;[\s\S]*?\}, 4000\);/.exec(source)?.[0];
   assert.ok(arm(page) && arm(page) === arm(landing), 'js-anim armed before first paint, as on /welcome/');
   assert.match(page, /<a href="\.\/" aria-current="page">Teams<\/a>/);
-  assert.match(page, /<a class="btn btn--primary btn--sm" href="\.\.\/\.\.\/" data-cta="app">Open the planner<\/a>/);
+  assert.match(page, /<a class="btn btn--primary btn--sm" href="\.\.\/" data-cta="app">Open the planner<\/a>/);
+  assert.match(page, /<a class="brand" href="\.\.\/welcome\/"/, 'the brand leads to the welcome page');
+  const nav = /<nav class="top__nav"[\s\S]*?<\/nav>/.exec(page)[0];
+  assert.deepEqual([...nav.matchAll(/<a href="([^"]+)"/g)].map(match => match[1]), ['../welcome/#how', '../welcome/#year', '../welcome/#plus', './', '../welcome/#pricing', '#faq', '../partners/']);
   const legal = /<nav class="foot__legal"[\s\S]*?<\/nav>/.exec(page)[0];
-  assert.deepEqual([...legal.matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map(match => [match[1], match[2]]), [['../../legal/privacy/', 'Privacy'], ['../../legal/terms/', 'Terms'], ['../../legal/cookies/', 'Cookies'], ['../../legal/', 'Legal notice']]);
+  assert.deepEqual([...legal.matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map(match => [match[1], match[2]]), [['../legal/privacy/', 'Privacy'], ['../legal/terms/', 'Terms'], ['../legal/cookies/', 'Cookies'], ['../legal/', 'Legal notice']]);
   assert.match(page, /<body class="teams-page">/);
 });
 
 test('the Teams page: every part of the team gift, with the ids old links use', async () => {
-  const page = await read('welcome/teams/index.html');
+  const page = await read('teams/index.html');
   for (const id of ['top', 'seats', 'team-prices', 'request', 'faq', 'privacy']) assert.equal((page.match(new RegExp(`id="${id}"`, 'g')) || []).length, 1, id);
   assert.match(page, /<h1 id="teams-title">The year-end gift your team will use all year\.<\/h1>/);
   assert.match(page, /data-scene="gift" data-final="s-open s-on s-seat"/, 'the gift replica');
@@ -230,10 +234,10 @@ test('the Teams page: every part of the team gift, with the ids old links use', 
 });
 
 test('the Teams page’s structured data describes the team gift with today’s prices', async () => {
-  const page = await read('welcome/teams/index.html');
+  const page = await read('teams/index.html');
   const data = JSON.parse(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(page)[1]);
   assert.equal(data['@type'], 'Product');
-  assert.equal(data.url, 'https://planner.bemorin.com/welcome/teams/');
+  assert.equal(data.url, 'https://planner.bemorin.com/teams/');
   assert.equal(data.offers['@type'], 'AggregateOffer');
   assert.equal(data.offers.priceCurrency, 'EUR');
   assert.equal(Number(data.offers.lowPrice), Math.min(...TEAM_TIERS.map(tier => tier.price.EUR)));
@@ -245,7 +249,7 @@ test('the Teams page’s structured data describes the team gift with today’s 
 });
 
 test('the team questions moved to the Teams page FAQ, in the welcome FAQ’s style', async () => {
-  const page = await read('welcome/teams/index.html');
+  const page = await read('teams/index.html');
   const landing = await read('welcome/index.html');
   const faq = /<div class="faq__groups" data-faq data-reveal-each>[\s\S]*?\n {8}<\/div>\n {6}<\/div>\n {4}<\/section>/.exec(page)?.[0] || '';
   assert.ok(faq, 'one [data-faq] container');
@@ -265,21 +269,21 @@ test('the team questions moved to the Teams page FAQ, in the welcome FAQ’s sty
   const gets = /<summary>What does each person get\?<\/summary>\s*<div class="qa__a">([\s\S]*?)<\/div>/.exec(faq)[1];
   for (const feature of PLUS_FEATURES) assert.ok(gets.includes(`<b>${feature.title}.</b>`), feature.title);
   // The landing page keeps one pointer for companies.
-  assert.match(landing, /<summary>Can my company give Plus to its people\?<\/summary>[\s\S]*?href="teams\/">See the team gift<\/a>/);
+  assert.match(landing, /<summary>Can my company give Plus to its people\?<\/summary>[\s\S]*?href="\.\.\/teams\/">See the team gift<\/a>/);
   assert.doesNotMatch(landing, /<h3 class="faq__label">Team gift<\/h3>/);
 });
 
 test('the landing page leads to the Teams page: menu, banner, footer and every request link', async () => {
   const page = await read('welcome/index.html');
   const nav = /<nav class="top__nav"[\s\S]*?<\/nav>/.exec(page)[0];
-  assert.match(nav, /<a href="teams\/">Teams<\/a>/);
-  assert.match(page, /<a class="top__teams" href="teams\/">Teams<\/a>/);
+  assert.match(nav, /<a href="\.\.\/teams\/">Teams<\/a>/);
+  assert.match(page, /<a class="top__teams" href="\.\.\/teams\/">Teams<\/a>/);
   const foot = /<nav class="foot__links"[\s\S]*?<\/nav>/.exec(page)[0];
-  assert.match(foot, /<a href="teams\/">Team gift<\/a>/);
-  assert.match(foot, /<a href="teams\/\?ask=question#request">Ask a question<\/a>/);
+  assert.match(foot, /<a href="\.\.\/teams\/">Team gift<\/a>/);
+  assert.match(foot, /<a href="\.\.\/teams\/\?ask=question#request">Ask a question<\/a>/);
   assert.doesNotMatch(page, /href="#(?:teams|request|team-prices|seats)"|data-request=/, 'no link to a part that moved');
   // Every in-page link points at something on the page, on both pages.
-  for (const file of ['welcome/index.html', 'welcome/teams/index.html']) {
+  for (const file of ['welcome/index.html', 'teams/index.html']) {
     const source = await read(file);
     const ids = new Set([...source.matchAll(/\sid="([^"]+)"/g)].map(match => match[1]));
     for (const [, target] of source.matchAll(/<a [^>]*href="#([^"]+)"/g)) assert.ok(ids.has(target), `${file}: #${target}`);
@@ -290,7 +294,7 @@ test('the landing page leads to the Teams page: menu, banner, footer and every r
 test('the privacy notice is the same on both pages, with 30 days for a partner code and the Teams page’s form', async () => {
   const dialog = (source, legal) => /<dialog class="pv"[\s\S]*?<\/dialog>/.exec(source)[0].replace(legal, 'LEGAL/');
   const landing = dialog(await read('welcome/index.html'), '../legal/');
-  const teams = dialog(await read('welcome/teams/index.html'), '../../legal/');
+  const teams = dialog(await read('teams/index.html'), '../legal/');
   assert.equal(teams, landing);
   assert.match(landing, /kept in this browser for <span data-partner-days>30<\/span> days/);
   assert.equal(PARTNER_PROGRAM.cookieDays, 30, 'the written fallback matches the program');
@@ -298,11 +302,11 @@ test('the privacy notice is the same on both pages, with 30 days for a partner c
   assert.match(landing, /its code goes with the request too/);
   const dialogScript = await read('welcome/privacy-dialog.js');
   assert.match(dialogScript, /\[data-partner-days\]/);
-  for (const file of ['welcome/landing.js', 'welcome/teams/teams.js']) assert.match(await read(file), /partnerDays: PARTNER_PROGRAM\.cookieDays/, file);
+  for (const file of ['welcome/landing.js', 'teams/teams.js']) assert.match(await read(file), /partnerDays: PARTNER_PROGRAM\.cookieDays/, file);
 });
 
 test('the Teams page script: entrances, FAQ, replica, counts', async () => {
-  const teams = await read('welcome/teams/teams.js');
+  const teams = await read('teams/teams.js');
   for (const call of ['setupReveal({ motionOn, motionHooks })', 'setupFaq()', 'setupScenes({ scripts: SCRIPTS, motionOn, motionHooks })', "html.classList.add('js-ready')", "track('teams_viewed')", 'followMotion(motionHooks)']) assert.ok(teams.includes(call), call);
   assert.match(teams, /gift: \{\s*length: 9200,\s*loop: true/, 'the gift scene plays here');
   // The landing page keeps only what it shows.
@@ -318,13 +322,15 @@ test('the Teams page script: entrances, FAQ, replica, counts', async () => {
 test('the gift page sends questions to the Teams page', async () => {
   const page = await read('welcome/thanks/index.html');
   assert.doesNotMatch(page, /href="\.\.\/\?ask=|href="\.\.\/#teams"/);
-  assert.equal((page.match(/href="\.\.\/teams\/\?ask=question#request"/g) || []).length, 2);
-  assert.equal((page.match(/href="\.\.\/teams\/"/g) || []).length, 2);
+  assert.equal((page.match(/href="\.\.\/\.\.\/teams\/\?ask=question#request"/g) || []).length, 2);
+  assert.equal((page.match(/href="\.\.\/\.\.\/teams\/"/g) || []).length, 2);
 });
 
-test('short links: /teams and /partners', async () => {
+test('the Teams page is /teams/; its old address redirects there (tests/redirects.test.js)', async () => {
   const lines = (await read('_redirects')).split('\n').map(line => line.trim());
-  for (const line of ['/teams /welcome/teams/ 301', '/teams/ /welcome/teams/ 301', '/partners /welcome/partners/ 301', '/partners/ /welcome/partners/ 301']) assert.ok(lines.includes(line), line);
-  assert.match(await read('_headers'), /\n\/welcome\/teams\/\n {2}Cache-Control: no-cache\n/);
+  for (const line of ['/welcome/teams /teams/ 301', '/welcome/teams/* /teams/:splat 301']) assert.ok(lines.includes(line), line);
+  assert.ok(!lines.some(line => /^\/teams\/?\s/.test(line)), '/teams/ is the page itself, not a short link any more');
+  assert.match(await read('_headers'), /\n\/teams\/\n {2}Cache-Control: no-cache\n/);
+  assert.match(await read('_headers'), /\n\/welcome\/teams\/\*\n {2}Cache-Control: no-store\n {2}Clear-Site-Data: "cache"\n/, 'the old address’s redirect is never kept, and clears a kept one (tests/cache-headers.test.js)');
   assert.equal(TEAM_ROWS.length, TEAM_TIERS.length + 1);
 });

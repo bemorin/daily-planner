@@ -28,6 +28,7 @@ import { markQuarterNudged, quarterNudgeFor, renderQuarterNudge } from './src/fe
 import { trackAppActive, trackEvent, trackOncePer } from './src/lib/planner-api.js';
 import { viewSummaries } from './src/features/day-summary.js';
 import { createViewSwitch } from './src/features/view-switch.js';
+import { startAppEntrance } from './src/features/app-entrance.js';
 import { createLocalStore } from './src/state/local-store.js';
 import { createSyncLedger } from './src/sync/ledger.js';
 import { createPersonalSyncFeature } from './src/features/personal-sync.js';
@@ -3731,6 +3732,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   trackAppActive({ installed: window.matchMedia?.('(display-mode: standalone)')?.matches || navigator.standalone === true });
   // Gift, purchase and licence links open above first-run setup and return to it.
   requestAnimationFrame(() => { onboarding.maybeOpen(); plusFeature.handleLaunch(); });
+  // The first day is drawn: show the planner, with its entrance once per session (src/features/app-entrance.js).
+  startAppEntrance({ dialog: !settings.onboardingComplete });
   // Once per feature release, a little after opening, what's new and a request for feedback (never over another dialog).
   setTimeout(() => feedbackFeature.maybePrompt({ closeDayCount: settings.closeDayCount, busy: !settings.onboardingComplete || !!activeModal || tour.isActive() || tour.offerVisible() }), 2400);
   setTimeout(() => tour.maybeOffer(), 1600);

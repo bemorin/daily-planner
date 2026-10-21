@@ -36,7 +36,7 @@ test('the Plus window invites everyone: members keep their card, others get a fo
   assert.match(card, /if \(!partnerHintShown\('plus'\)\) return '';/, 'shown to everyone until hidden here');
   assert.doesNotMatch(card, /hasPlus\(\) \|\|/, 'no longer for members only');
   // Neutral words, as a footnote: never an alternative to buying (“Not ready for Plus?”).
-  assert.match(card, /<p class="plus-footnote" data-plus-partner><span>Know people who’d like it\? <a href="\.\/welcome\/partners\/" target="_blank" rel="noopener" data-plus-partner-go>Become a partner<\/a> — earn \$\{esc\(partnerEarnText\(\)\)\}\.<\/span>\$\{close\}<\/p>/);
+  assert.match(card, /<p class="plus-footnote" data-plus-partner><span>Know people who’d like it\? <a href="\.\/partners\/" target="_blank" rel="noopener" data-plus-partner-go>Become a partner<\/a> — earn \$\{esc\(partnerEarnText\(\)\)\}\.<\/span>\$\{close\}<\/p>/);
   assert.doesNotMatch(dialog, /Not ready for Plus/);
   assert.match(card, /data-plus-partner-dismiss aria-label="Hide the partner program"/);
   assert.equal((card.match(/data-plus-partner-go/g) || []).length, 2, 'following it counts as hiding it, in both forms');
@@ -52,7 +52,7 @@ test('the Plus window invites everyone: members keep their card, others get a fo
   const css = await read('styles/plus.css');
   assert.match(css, /\.plus-footnote \{[^}]*color: var\(--faint\); font-size: \.74rem;/);
   assert.doesNotMatch(card.split('if (!hasPlus())')[1].split('return `<aside')[0], /plus-teams__icon|icon\('share'\)/);
-  assert.match(dialog, /\.\/welcome\/teams\//, 'the team line goes to the Teams page');
+  assert.match(dialog, /href="\.\/teams\/"/, 'the team line goes to the Teams page');
   assert.doesNotMatch(code(dialog), /\d+%/, 'no rate typed in by hand');
 });
 
@@ -61,7 +61,7 @@ test('the share sheet’s line is for everyone and says the rate', async () => {
   assert.doesNotMatch(share, /hasPlus|plusLicense/, 'not gated by Plus');
   assert.match(share, /partner: partnerHintShown\('share'\)/);
   assert.match(share, /dismissPartnerHint\('share'\)/);
-  assert.match(share, /\$\{esc\(sharePartnerText\(\)\)\} <a href="\.\/welcome\/partners\/" target="_blank" rel="noopener" data-share-partner-go>Partner program/);
+  assert.match(share, /\$\{esc\(sharePartnerText\(\)\)\} <a href="\.\/partners\/" target="_blank" rel="noopener" data-share-partner-go>Partner program/);
   assert.doesNotMatch(code(share), /\d+%/, 'no rate typed in by hand');
 });
 
@@ -72,9 +72,9 @@ test('How it works keeps a permanent Partners row beside For teams, filled from 
   assert.ok(row, 'the row exists');
   assert.ok(help.indexOf('help-teams') < help.indexOf('help-partners'), 'right after For teams');
   assert.match(row, /<strong>Partners<\/strong> · Recommend Daily Planner and earn <span data-partner-earn>[^<]*<\/span>\. No Plus needed\./);
-  assert.match(row, /<a class="secondary-button" href="\.\/welcome\/partners\/" target="_blank" rel="noopener">See the partner program<\/a>/);
+  assert.match(row, /<a class="secondary-button" href="\.\/partners\/" target="_blank" rel="noopener">See the partner program<\/a>/);
   assert.doesNotMatch(row, /\d/, 'the rate is filled in by the planner, never typed here');
-  assert.match(help, /href="\.\/welcome\/teams\/"/);
+  assert.match(help, /href="\.\/teams\/"/);
   assert.doesNotMatch(help, /welcome\/#teams/);
   const dialog = await read('src/features/plus-dialog.js');
   assert.match(dialog, /qsa\('\[data-partner-entry\]'\)\.forEach\(node => \{ node\.hidden = !plannerApiEnabled\(\); \}\);/);

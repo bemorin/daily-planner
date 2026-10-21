@@ -6,7 +6,8 @@
   <meta name="theme-color" content="#f6f3ed" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#141311" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
-  <script>try{var t=localStorage.getItem('daily-planner-ui:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}</script>
+  <!-- Before the first paint: the saved theme (and the browser colours that go with it), and data-booting, which keeps the planner out of sight until app.js has drawn it (styles/entrance.css). -->
+  <script>(function(d){var r=d.documentElement,t;r.setAttribute('data-booting','');try{t=localStorage.getItem('daily-planner-ui:theme');}catch(e){}if(t!=='light'&&t!=='dark')return;r.dataset.theme=t;d.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=t==='dark'?'#141311':'#f6f3ed';});d.querySelector('meta[name="color-scheme"]').content=t;})(document);</script>
   <title>Daily Planner by Ben Morin</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="icon" href="./favicon.ico" sizes="32x32">
@@ -1101,11 +1102,11 @@
         </div>
         <div class="help-feedback help-teams">
           <span><strong>For teams</strong> · Plan the year together at your January kickoff.</span>
-          <a class="secondary-button" href="./welcome/teams/" target="_blank" rel="noopener">See the team gift</a>
+          <a class="secondary-button" href="./teams/" target="_blank" rel="noopener">See the team gift</a>
         </div>
         <div class="help-feedback help-partners" data-partner-entry hidden>
           <span><strong>Partners</strong> · Recommend Daily Planner and earn <span data-partner-earn>a commission on every Plus purchase made through your link</span>. No Plus needed.</span>
-          <a class="secondary-button" href="./welcome/partners/" target="_blank" rel="noopener">See the partner program</a>
+          <a class="secondary-button" href="./partners/" target="_blank" rel="noopener">See the partner program</a>
         </div>
 
         <div class="help-content">

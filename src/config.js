@@ -6,6 +6,17 @@ const runtimeConfig = globalThis.__DAILY_PLANNER_CONFIG__ && typeof globalThis._
   ? globalThis.__DAILY_PLANNER_CONFIG__
   : {};
 const runtimeValue = key => typeof runtimeConfig[key] === 'string' ? runtimeConfig[key].trim() : '';
+/**
+ * The address in an email setting as it may be typed: “support@example.com”,
+ * “<support@example.com>” or “Support <support@example.com>” (spaces around it
+ * allowed) all give support@example.com. Anything else comes back trimmed, and
+ * whoever shows it checks it is a plain address (legal/legal-details.js has the
+ * same rule for the build and the dashboard).
+ */
+export const emailAddress = value => {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return /^[^<>]*<\s*([^<>]*?)\s*>$/.exec(text)?.[1] ?? text;
+};
 
 export const PROJECT_GITHUB_URL = runtimeValue('PROJECT_GITHUB_URL');
 export const GITHUB_SPONSOR_URL = runtimeValue('GITHUB_SPONSOR_URL');
@@ -26,13 +37,14 @@ export const PLUS_PUBLIC_KEY = runtimeValue('PLUS_PUBLIC_KEY').replace(/\s+/g, '
 // SUPPORT_EMAIL they point to the “Ask a question” form, and privacy
 // questions go to PRIVACY_EMAIL, else SUPPORT_EMAIL, else the form.
 // legal/legal.js checks each one before showing it (a plain address, a phone
-// number of digits, spaces and + ( ) - . only).
-export const SUPPORT_EMAIL = runtimeValue('SUPPORT_EMAIL');
-export const PRIVACY_EMAIL = runtimeValue('PRIVACY_EMAIL');
+// number of digits, spaces and + ( ) - . only). The two addresses may be typed
+// “<support@example.com>” or “Support <support@example.com>”: only the address is kept.
+export const SUPPORT_EMAIL = emailAddress(runtimeValue('SUPPORT_EMAIL'));
+export const PRIVACY_EMAIL = emailAddress(runtimeValue('PRIVACY_EMAIL'));
 export const LEGAL_PHONE = runtimeValue('LEGAL_PHONE');
 export const LEGAL_ADDRESS = runtimeValue('LEGAL_ADDRESS');
 export const LEGAL_REGISTRATION = runtimeValue('LEGAL_REGISTRATION');
-// Partners (welcome/partners/): the Creem affiliate sign-up link (Creem → Growth
+// Partners (/partners/): the Creem affiliate sign-up link (Creem → Growth
 // → Affiliate Hub) behind “Become a partner”. Blank: the button opens the
 // question form on the Teams page. The program's terms (rates, days, minimum)
 // are PARTNER_PROGRAM in src/lib/pricing.js.

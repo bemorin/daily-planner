@@ -15,7 +15,7 @@ import { teamsAddress } from './teams-model.js';
 
 /* ============================================================================
    LANDING (/welcome/): the planner, Plus and its prices for one person, and a
-   banner that leads to the Teams page (/welcome/teams/), where the team gift,
+   banner that leads to the Teams page (/teams/), where the team gift,
    its prices and the request form live. Copy the owner may change without
    touching markup is in welcome/landing-settings.js (LANDING); prices, what
    Plus adds and what it promises next in src/lib/pricing.js (shared with the
@@ -341,7 +341,7 @@ function setupChrome() {
     const target = event.target.closest('a, button');
     if (!target) return;
     if (target.matches('[data-cta="app"]')) track('landing_cta_app');
-    else if (target.matches('a[href^="teams/"]')) track('landing_cta_teams');
+    else if (target.matches('a[href^="../teams/"]')) track('landing_cta_teams');
   });
 }
 
@@ -813,8 +813,8 @@ function start() {
 
 // A payment confirmation sent here instead of to the gift page.
 const params = new URLSearchParams(location.search);
-// The team gift moved to the Teams page: its old addresses (?ask=…, #request,
-// #teams, #team-prices, #seats) lead there. The inline script in <head>
+// The team gift moved to the Teams page (/teams/): its old addresses (?ask=…,
+// #request, #teams, #team-prices, #seats) lead there. The inline script in <head>
 // already did this before first paint; this is the fallback.
 const movedTo = teamsAddress({ path: location.pathname, search: location.search, hash: location.hash });
 if (params.get('checkout_id') || params.get('session')) location.replace(`./thanks/${location.search}`);

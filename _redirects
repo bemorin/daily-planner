@@ -1,4 +1,9 @@
-# Cloudflare Pages redirects (copied to dist/ by scripts/build.mjs).
+# Cloudflare Pages redirects (copied to dist/ by scripts/build.mjs; scripts/serve.mjs
+# applies them too, through scripts/redirects.mjs). The first matching line wins.
+# A redirect keeps the address's query string when its destination has none
+# (/welcome/teams/?ask=question → /teams/?ask=question), and the browser keeps
+# the #hash, so /welcome/teams/?ask=question#request lands on
+# /teams/?ask=question#request.
 # Short links to the legal pages; older links to bemorin.com/privacy, /terms and
 # /cookies arrive here through the bemorin.com → planner.bemorin.com redirect.
 /privacy /legal/privacy/ 301
@@ -7,8 +12,11 @@
 /privacy/ /legal/privacy/ 301
 /terms/ /legal/terms/ 301
 /cookies/ /legal/cookies/ 301
-# Short links to the Teams and partners pages.
-/teams /welcome/teams/ 301
-/teams/ /welcome/teams/ 301
-/partners /welcome/partners/ 301
-/partners/ /welcome/partners/ 301
+# The Teams and partners pages moved from /welcome/teams/ and /welcome/partners/
+# to /teams/ and /partners/ (1.30): their old addresses, and anything under them.
+# _headers adds Clear-Site-Data "cache" to these answers, so a browser that kept
+# 1.28's /teams → /welcome/teams/ redirect doesn't bounce between the two.
+/welcome/teams /teams/ 301
+/welcome/partners /partners/ 301
+/welcome/teams/* /teams/:splat 301
+/welcome/partners/* /partners/:splat 301

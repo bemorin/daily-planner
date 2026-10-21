@@ -9,9 +9,9 @@
  * button opens the question form on the Teams page, about the program.
  */
 
-import { beforeTaxCents, commissionCents, formatMoney, PARTNER_PROGRAM, partnerRate, priceCents, TEAM_TIERS } from '../../src/lib/pricing.js';
+import { beforeTaxCents, commissionCents, formatMoney, PARTNER_PROGRAM, partnerRate, priceCents, TEAM_TIERS } from '../src/lib/pricing.js';
 
-/** The question form of the Teams page, about the partner program (from welcome/partners/). */
+/** The question form of the Teams page, about the partner program (from /partners/: ../teams/ is /teams/). */
 export const PARTNER_QUESTION_HREF = '../teams/?ask=question&topic=partners#request';
 /** The Teams page, for a partner bringing a company. */
 export const TEAMS_HREF = '../teams/';
