@@ -36,8 +36,12 @@ await copyTree('docs');
 await copyTree('assets');
 await copyTree('admin');
 await copyTree('welcome');
+// The Teams and partners pages, at /teams/ and /partners/ (1.30; they load ../welcome/ modules and styles).
+await copyTree('teams');
+await copyTree('partners');
 await copyTree('legal');
-// Cloudflare Pages reads _redirects from the root of the output (short /privacy, /terms, /cookies links).
+// Cloudflare Pages reads _redirects from the root of the output (short /privacy, /terms, /cookies links;
+// the old /welcome/teams/ and /welcome/partners/ addresses).
 await copyFile('_redirects');
 // …and _headers: pages, scripts and styles revalidate on every visit, so a deploy is never hidden by a cache.
 await copyFile('_headers');

@@ -28,7 +28,9 @@ import { markQuarterNudged, quarterNudgeFor, renderQuarterNudge } from './src/fe
 import { trackAppActive, trackEvent, trackOncePer } from './src/lib/planner-api.js';
 import { viewSummaries } from './src/features/day-summary.js';
 import { createViewSwitch } from './src/features/view-switch.js';
+import { startAppEntrance } from './src/features/app-entrance.js';
 import { createLocalStore } from './src/state/local-store.js';
+import { BLOCKED_NOTICE, ensureStorage } from './src/state/browser-storage.js';
 import { createSyncLedger } from './src/sync/ledger.js';
 import { createPersonalSyncFeature } from './src/features/personal-sync.js';
 import { createBlankDay, normalizeDayState } from './src/state/day-state.js';
@@ -49,9 +51,11 @@ import { detectedWeekStart, activeWeekdays as getActiveWeekdays, isPlanningDay a
 import { elapsedMinutesForDate, durationLabel, clockTime, pad2, padHour, parseTimeValue, time, blockEndDateKey as getBlockEndDateKey, blockTimeRange as getBlockTimeRange } from './src/domain/schedule-time.js';
 import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview, blockNoteLineHtml, dayNoteLineHtml } from './src/domain/note-lines.js';
 (() => {
-  const syncLedger = createSyncLedger(window.localStorage);
+  // Cookies and site data blocked: the planner runs on memory for this tab and says so (checkLocalStorage).
+  const { localStorage: browserStorage, blocked: storageBlocked } = ensureStorage(window);
+  const syncLedger = createSyncLedger(browserStorage);
   let personalSyncFeature = null;
-  const store = createLocalStore(window.localStorage, {
+  const store = createLocalStore(browserStorage, {
     onMutation: mutation => { syncLedger.recordMutation(mutation); personalSyncFeature?.noteLocalChange?.(); }
   });
   let date = atNoon(new Date());
@@ -2118,14 +2122,17 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
 
   function checkLocalStorage() {
     const status = qs('[data-storage-safety]');
-    const available = store.canWrite('daily-planner:');
+    const available = !storageBlocked && store.canWrite('daily-planner:');
     if (status) {
       status.textContent = available
         ? 'Local saving is available. Private windows or clearing site data may still remove it — export a backup if you want to keep your planner history.'
         : 'Local saving is unavailable in this browser context. Export anything important before leaving this page.';
       status.classList.toggle('is-warning', !available);
     }
-    if (!available) setTimeout(() => openModal(qs('[data-storage-warning-modal]')), 180);
+    const warning = qs('[data-storage-warning-modal]');
+    if (storageBlocked && warning) [['#storage-warning-title', BLOCKED_NOTICE.title], ['[data-storage-warning-text]', BLOCKED_NOTICE.text]].forEach(([selector, words]) => { const node = qs(selector, warning); if (node) node.textContent = words; });
+    // Once, over first-run setup when it is open (it comes back on Continue), with focus on Continue.
+    if (!available) setTimeout(() => openModal(warning, qs('[data-modal-close].primary-button', warning), { stack: true }), 180);
     return available;
   }
 
@@ -3731,6 +3738,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   trackAppActive({ installed: window.matchMedia?.('(display-mode: standalone)')?.matches || navigator.standalone === true });
   // Gift, purchase and licence links open above first-run setup and return to it.
   requestAnimationFrame(() => { onboarding.maybeOpen(); plusFeature.handleLaunch(); });
+  // The first day is drawn: show the planner, with its entrance once per session (src/features/app-entrance.js).
+  startAppEntrance({ dialog: !settings.onboardingComplete });
   // Once per feature release, a little after opening, what's new and a request for feedback (never over another dialog).
   setTimeout(() => feedbackFeature.maybePrompt({ closeDayCount: settings.closeDayCount, busy: !settings.onboardingComplete || !!activeModal || tour.isActive() || tour.offerVisible() }), 2400);
   setTimeout(() => tour.maybeOffer(), 1600);

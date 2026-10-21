@@ -1,6 +1,6 @@
 /* ============================================================================
    WELCOME PAGES — copy the owner may want to change without touching markup,
-   shared by the landing page (/welcome/) and the Teams page (/welcome/teams/).
+   shared by the landing page (/welcome/) and the Teams page (/teams/).
    Prices, what Plus adds and what it promises next live in
    src/lib/pricing.js (shared with the planner and the server, which charges
    exactly those amounts). Online checkout is Creem, through the owner API:
@@ -19,8 +19,10 @@ export const LANDING = Object.freeze({
   // Optional add-on, shown under the team prices (and as a request type) when
   // enabled. Off: no workshops, travel or live sessions are sold for now.
   talk: Object.freeze({ enabled: false, label: 'A remote talk by Ben (45 minutes)', price: 'On quote' }),
-  // When PLANNER_API_URL is blank, requests become an email to this address.
-  // Left blank too, the form stays visible but cannot be sent.
+  // When PLANNER_API_URL is blank, requests become an email to this address,
+  // or, left blank, to the site's SUPPORT_EMAIL (runtime config). Without
+  // either, the form stays visible but cannot be sent.
+  // “<support@example.com>” and “Support <support@example.com>” work too.
   contactEmail: '',
   // A reachable support address, shown as "Support: …" in the footer when set
   // (the payment provider's review asks for one that matches this site).
@@ -29,7 +31,7 @@ export const LANDING = Object.freeze({
   // Optional promise shown after a request, e.g. 'within two working days'.
   replyDelay: '',
   // The Teams page, as the manager email links to it.
-  teamsUrl: 'https://planner.bemorin.com/welcome/teams/',
+  teamsUrl: 'https://planner.bemorin.com/teams/',
   // "Send this to my manager": the same text feeds the mailto link and the
   // Copy message button. {url} becomes teamsUrl; {perPerson} the lowest
   // price per person in the visitor's currency.

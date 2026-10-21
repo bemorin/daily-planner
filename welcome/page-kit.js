@@ -3,7 +3,7 @@
 import * as config from '../src/config.js';
 
 /* ============================================================================
-   Small pieces shared by the welcome pages (/welcome/, /welcome/teams/): DOM
+   Small pieces shared by the welcome pages (/welcome/, /teams/): DOM
    helpers, the header that gains a hairline once the page scrolls, the footer's
    support address and links, and copying text. No page logic here.
    ============================================================================ */
@@ -20,6 +20,13 @@ export const httpsUrl = value => (typeof value === 'string' && /^https:\/\/[^\s"
 
 /** A string from runtime-config.js / config.js, trimmed; '' when it isn't set (or an older config lacks it). */
 export const configText = key => (typeof config[key] === 'string' ? config[key].trim() : '');
+
+/**
+ * The address in an email setting typed “<support@example.com>” or
+ * “Support <support@example.com>” (config.js emailAddress); anything else
+ * trimmed, for EMAIL_RE to check.
+ */
+export const emailAddress = value => (typeof config.emailAddress === 'function' ? config.emailAddress(value) : String(value ?? '').trim());
 
 export function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
@@ -56,7 +63,7 @@ export function setupTopBar() {
 export function renderFooter({ supportEmail = '' } = {}) {
   const support = qs('[data-support]');
   // config.SUPPORT_EMAIL may not exist in an older config.js: '' is fine.
-  const email = String(supportEmail || configText('SUPPORT_EMAIL') || '').trim();
+  const email = emailAddress(supportEmail || configText('SUPPORT_EMAIL'));
   if (support && EMAIL_RE.test(email)) {
     support.replaceChildren('Support: ', el('a', { href: `mailto:${email}` }, email));
     support.hidden = false;

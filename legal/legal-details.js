@@ -7,8 +7,11 @@
  *     so they show without JavaScript too;
  *   - the owner dashboard's Setup card (admin/admin.js, admin/attention.js)
  *     says when a value is set but not used (legalValueProblem).
- * Pure, no imports: Node (the build, the tests) and the browser load it as is.
+ * Pure: Node (the build, the tests) and the browser load it as is, with the
+ * one rule for reading an email setting (src/lib/text.js emailAddress).
  */
+
+import { emailAddress } from '../src/lib/text.js';
 
 export const PUBLISHER = 'Ben Morin, an individual based in France';
 // The legal notice's director of publication (LCEN art. 6 III): the publisher himself.
@@ -19,8 +22,8 @@ const EMAIL_RE = /^[^\s@<>()[\]\\,;:"?&=%/#]{1,64}@[a-z0-9](?:[a-z0-9.-]{0,188}[
 const PHONE_RE = /^\+?[\d ().-]{6,32}$/;
 // An international number has at most 15 digits, country code included (ITU-T E.164).
 const E164_MAX = 15;
-// The question form lives on the Teams page (1.28).
-const ASK_PATH = 'welcome/teams/?ask=question#request';
+// The question form lives on the Teams page (1.28), at /teams/ (1.30).
+const ASK_PATH = 'teams/?ask=question#request';
 // The configuration keys that hold an email address.
 const EMAIL_KEYS = ['SUPPORT_EMAIL', 'PRIVACY_EMAIL'];
 
@@ -28,9 +31,18 @@ export const esc = value => String(value ?? '').replace(/[&<>"']/g, character =>
 const oneLine = value => String(value ?? '').replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim();
 const configText = (config, key) => (typeof config?.[key] === 'string' ? config[key].trim() : '');
 
-/** An email address from the configuration, or '' when it isn't a plain one. */
+/**
+ * The address in an email value as it may be typed: “support@example.com”,
+ * “<support@example.com>” or “Support <support@example.com>”, spaces around
+ * it allowed, all give support@example.com. Anything else comes back
+ * trimmed, for legalEmail to accept or refuse. The planner and the welcome
+ * pages read it with the same function (src/config.js).
+ */
+export { emailAddress };
+
+/** An email address from the configuration (emailAddress), or '' when it isn't a plain one. */
 export function legalEmail(value) {
-  const email = typeof value === 'string' ? value.trim() : '';
+  const email = emailAddress(value);
   return EMAIL_RE.test(email) ? email : '';
 }
 

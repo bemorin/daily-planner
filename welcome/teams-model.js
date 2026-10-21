@@ -1,7 +1,7 @@
 import { planRow } from './landing-model.js';
 
 /**
- * Pure helpers for the Teams page (/welcome/teams/) and the links that lead
+ * Pure helpers for the Teams page (/teams/) and the links that lead
  * to it: the request form's kinds and what an address asks of it, the body
  * sent to POST /api/teams, the manager email and the old /welcome/ addresses
  * of the team gift. No DOM here, so tests can import it directly.
@@ -146,11 +146,15 @@ const TEAM_HASHES = new Set(['#request', '#teams', '#team-prices', '#seats']);
 /**
  * Where an old /welcome/ address about the team gift now lives: a request
  * (?ask=…) or one of the team gift's parts (#request, #teams, #team-prices,
- * #seats) goes to the Teams page, with the same query and hash. `path` is the
- * welcome page's own path (/welcome/, /welcome/index.html or /welcome).
+ * #seats) goes to the Teams page, with the same query and hash; #teams was
+ * the whole team gift, which is the Teams page itself, so it opens at the
+ * top (no hash: the page has no #teams). `path` is the welcome page's own
+ * path (/welcome/, /welcome/index.html or /welcome); the Teams page is its
+ * neighbour, /teams/ (1.30; /welcome/teams/ before).
  * '' when the address is the landing page's own.
  */
 export function teamsAddress({ path = '/welcome/', search = '', hash = '' } = {}) {
   if (!params(search).has('ask') && !TEAM_HASHES.has(hash)) return '';
-  return `${String(path).replace(/\/(?:index\.html)?$/, '')}/teams/${search}${hash}`;
+  const site = String(path).replace(/\/(?:index\.html)?$/, '').replace(/\/[^/]*$/, '');
+  return `${site}/teams/${search}${hash === '#teams' ? '' : hash}`;
 }

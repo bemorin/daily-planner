@@ -20,7 +20,7 @@ const api = await import('../src/lib/planner-api.js');
 const config = await import('../src/config.js');
 const plus = await import('../src/lib/plus.js');
 const { giftLabel } = await import('../src/features/plus-dialog.js');
-const model = await import('../welcome/partners/partners-model.js');
+const model = await import('../partners/partners-model.js');
 const { formatMoney, memberPriceNotice, memberPriceShown, PARTNER_PROGRAM, PERSONAL_GIFTS, TEAM_TIERS } = await import('../src/lib/pricing.js');
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -94,7 +94,7 @@ test('config: the partner link must be https; the commission is no longer a buil
   const check = await read('scripts/check.mjs');
   assert.match(check, /'LEGAL_REGISTRATION', 'AFFILIATE_URL'\]/);
   assert.doesNotMatch(check, /AFFILIATE_COMMISSION/);
-  for (const file of ['src/config.js', 'admin/admin.js', 'admin/attention.js', 'admin/partners-view.js', 'welcome/partners/partners.js', 'welcome/partners/partners-model.js']) assert.doesNotMatch(await read(file), /AFFILIATE_COMMISSION/, file);
+  for (const file of ['src/config.js', 'admin/admin.js', 'admin/attention.js', 'admin/partners-view.js', 'partners/partners.js', 'partners/partners-model.js']) assert.doesNotMatch(await read(file), /AFFILIATE_COMMISSION/, file);
   // The owner is told the variable is gone, nowhere asked to set it.
   // OWNER_NOTES.md is the owner's private copy (git-ignored): checked only where it exists.
   for (const file of ['docs/FEEDBACK_AND_WAITLIST.md', 'OWNER_NOTES.md']) {
@@ -143,7 +143,7 @@ test('the partners page’s figures come from the prices and the program: before
 });
 
 test('the partners page’s own figures, as written for a visitor without JavaScript, match what the model works out (EUR)', async () => {
-  const page = await read('welcome/partners/index.html');
+  const page = await read('partners/index.html');
   const money = cents => formatMoney(cents / 100, 'EUR');
   for (const row of model.rateRows('EUR')) {
     assert.ok(page.includes(`<td class="num">${money(row.price)}<small>${money(row.beforeTax)} before tax</small></td><td class="num"><b>${model.formatCommission(row.commission, 'EUR')}</b><small>${row.rate}%</small></td>`), row.id);
@@ -196,7 +196,7 @@ test('the landing page: Partners in the menu and the footer, the launch price wh
   const page = await read('welcome/index.html');
   const nav = /<nav class="top__nav"[\s\S]*?<\/nav>/.exec(page)[0];
   const foot = /<nav class="foot__links"[\s\S]*?<\/nav>/.exec(page)[0];
-  for (const part of [nav, foot]) assert.match(part, /<a href="\.\/partners\/">Partners<\/a>/);
+  for (const part of [nav, foot]) assert.match(part, /<a href="\.\.\/partners\/">Partners<\/a>/);
   const offer = /<div class="plus-buy__offer">[\s\S]*?<\/div>\n {10}<\/div>/.exec(page)?.[0] || /<div class="plus-buy__offer">[\s\S]*?plus-buy__trust[\s\S]*?<\/p>/.exec(page)[0];
   assert.match(offer, /data-launch-label>Launch price</);
   assert.match(offer, /data-launch-line>Pay once during the launch and Plus is yours for life\. After the launch, Plus becomes a yearly subscription for new members\.</);
@@ -206,7 +206,7 @@ test('the landing page: Partners in the menu and the footer, the launch price wh
   assert.match(page, /<summary>What does “for life” mean\?<\/summary>/);
   for (const hook of ['data-gift-offer="gift-1"', 'data-gift-offer="family-5"', 'data-member-price="gift-1"', 'data-member-price="family-5"', 'data-member-badge', 'data-gifts-note']) assert.ok(page.includes(hook), hook);
   // The line for coaches moved to the Teams page with the team gift (1.28).
-  assert.match(await read('welcome/teams/index.html'), /data-teams-partner>[\s\S]*?Coach or consultant\?[\s\S]*?href="\.\.\/partners\/"/);
+  assert.match(await read('teams/index.html'), /data-teams-partner>[\s\S]*?Coach or consultant\?[\s\S]*?href="\.\.\/partners\/"/);
   const script = await read('welcome/landing.js');
   assert.match(script, /savedPlusToken\(\)/, 'the licence is read from the planner’s settings');
   assert.match(script, /license: personal && member\.active \? member\.token : ''/, 'and sent with a personal gift only');
@@ -214,19 +214,19 @@ test('the landing page: Partners in the menu and the footer, the launch price wh
 });
 
 test('the partners page: landing style and motion, every section, the rules, the FAQ, and the counts it may send', async () => {
-  const page = await read('welcome/partners/index.html');
-  assert.match(page, /<link rel="stylesheet" href="\.\.\/landing\.css">\n {2}<link rel="stylesheet" href="\.\/partners\.css">/, 'its own styles, after the landing page’s');
-  assert.ok(page.indexOf('../../runtime-config.js') < page.indexOf('./partners.js'), 'the runtime config first');
+  const page = await read('partners/index.html');
+  assert.match(page, /<link rel="stylesheet" href="\.\.\/welcome\/landing\.css">\n {2}<link rel="stylesheet" href="\.\/partners\.css">/, 'its own styles, after the landing page’s');
+  assert.ok(page.indexOf('../runtime-config.js') < page.indexOf('./partners.js'), 'the runtime config first');
   assert.match(page, /<title>Partners — Daily Planner<\/title>/);
   // Motion like /welcome/: js-anim before first paint, entrances, the FAQ one answer at a time.
   assert.match(page, /root\.classList\.add\('js-anim'\);[\s\S]*?root\.classList\.contains\('js-ready'\)/);
-  assert.ok(page.indexOf("classList.add('js-anim')") < page.indexOf('../landing.css'), 'before the styles');
+  assert.ok(page.indexOf("classList.add('js-anim')") < page.indexOf('../welcome/landing.css'), 'before the styles');
   assert.ok((page.match(/data-reveal-each/g) || []).length >= 6 && /data-reveal(?!-)/.test(page));
   assert.match(page, /class="faq__groups" data-faq>/);
   assert.equal((page.match(/<details class="qa"/g) || []).length, 8);
   for (const question of ['How much is a sale worth?', 'Who can be a partner?', 'How are sales tracked?', 'When and how am I paid?', 'What if someone asks for a refund?', 'What is not allowed?', 'And companies?']) assert.ok(page.includes(`<summary>${question}</summary>`), question);
-  const script = await read('welcome/partners/partners.js');
-  assert.match(script, /import \{ motionWanted, reduceQuery, setupFaq, setupReveal \} from '\.\.\/page-motion\.js';/);
+  const script = await read('partners/partners.js');
+  assert.match(script, /import \{ motionWanted, reduceQuery, setupFaq, setupReveal \} from '\.\.\/welcome\/page-motion\.js';/);
   assert.match(script, /setupReveal\(\{ motionOn: motionWanted\(\), motionHooks \}\);\nsetupFaq\(\);/);
   assert.match(script, /html\.classList\.add\('js-ready'\);/);
   for (const id of ['how', 'earn', 'rules', 'who', 'faq']) assert.match(page, new RegExp(`id="${id}"`), id);
@@ -252,14 +252,14 @@ test('the partners page: landing style and motion, every section, the rules, the
   assert.match(page, /refund period is over\. If only part of a team gift is refunded, its commission is on the part kept\.<\/p>/, 'the FAQ says the same');
   assert.doesNotMatch(page, /<h3>Refunds earn nothing<\/h3>|If only part of the price is refunded|a partial refund lowers it/, 'the partial-refund rule is about team gifts only');
   assert.match(page, /don’t count/, 'own purchases');
-  assert.match(page, /href="\.\.\/\.\.\/legal\/terms\/#partners"/);
+  assert.match(page, /href="\.\.\/legal\/terms\/#partners"/);
   assert.doesNotMatch(page, /60 days/);
   // Every way in to a question goes to the Teams page's form, about the program.
   assert.equal((page.match(/data-partner-cta/g) || []).length, 3);
   assert.equal((page.match(/href="\.\.\/teams\/\?ask=question&amp;topic=partners#request" data-partner-cta>Become a partner</g) || []).length, 3, 'works without JavaScript too');
-  assert.doesNotMatch(page, /href="\.\.\/\?ask=|href="\.\.\/#request/, 'nothing left pointing at the landing page’s old form');
+  assert.doesNotMatch(page, /href="\.\.\/(?:welcome\/)?\?ask=|href="\.\.\/(?:welcome\/)?#request/, 'nothing left pointing at the landing page’s old form');
   const legal = /<nav class="foot__legal"[\s\S]*?<\/nav>/.exec(page)[0];
-  assert.deepEqual([...legal.matchAll(/href="([^"]+)"/g)].map(match => match[1]), ['../../legal/privacy/', '../../legal/terms/', '../../legal/cookies/', '../../legal/']);
+  assert.deepEqual([...legal.matchAll(/href="([^"]+)"/g)].map(match => match[1]), ['../legal/privacy/', '../legal/terms/', '../legal/cookies/', '../legal/']);
   assert.match(script, /track\('partners_viewed'\)/);
   assert.match(script, /track\('partner_cta_clicked'\)/);
   const landing = new Map(api.LANDING_EVENTS);
@@ -267,18 +267,18 @@ test('the partners page: landing style and motion, every section, the rules, the
   assert.equal(landing.get('partner_cta_clicked'), 'went to become a partner');
   assert.equal(landing.get('teams_viewed'), 'visited the Teams page');
   assert.equal(landing.get('landing_cta_teams'), 'went to the Teams page');
-  assert.match(await read('_headers'), /\n\/welcome\/partners\/\n {2}Cache-Control: no-cache\n/);
+  assert.match(await read('_headers'), /\n\/partners\/\n {2}Cache-Control: no-cache\n/);
   // The styles moved out of landing.css, and the quality gate reads them.
   assert.doesNotMatch(await read('welcome/landing.css'), /\.pt-[a-z]/);
-  assert.match(await read('scripts/quality.mjs'), /'\.\.\/welcome\/partners\/partners\.css'/);
-  assert.doesNotMatch(await read('welcome/partners/partners.css'), /!important/);
+  assert.match(await read('scripts/quality.mjs'), /'\.\.\/partners\/partners\.css'/);
+  assert.doesNotMatch(await read('partners/partners.css'), /!important/);
 });
 
 test('the planner mentions the program in three quiet places, each dismissible', async () => {
   const dialog = await read('src/features/plus-dialog.js');
   assert.match(dialog, /partnerHintShown\('plus'\)/);
   assert.match(dialog, /dismissPartnerHint\('plus'\)/);
-  assert.match(dialog, /href="\.\/welcome\/partners\/"/);
+  assert.match(dialog, /href="\.\/partners\/"/);
   const share = await read('src/features/share-dialog.js');
   assert.match(share, /partnerHintShown\('share'\)/);
   assert.match(share, /dismissPartnerHint\('share'\)/);
@@ -286,5 +286,5 @@ test('the planner mentions the program in three quiet places, each dismissible',
   const thanks = await read('welcome/thanks/thanks.js');
   assert.match(thanks, /partnerHintShown\('gift'\)/);
   assert.match(thanks, /dismissPartnerHint\('gift'\)/);
-  assert.match(await read('welcome/thanks/index.html'), /Know someone who’d love it\?[\s\S]*?href="\.\.\/partners\/" data-partner-go>Become a partner</);
+  assert.match(await read('welcome/thanks/index.html'), /Know someone who’d love it\?[\s\S]*?href="\.\.\/\.\.\/partners\/" data-partner-go>Become a partner</);
 });

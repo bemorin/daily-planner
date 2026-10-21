@@ -220,14 +220,14 @@ test('Setup: a legal value the pages can’t use is not ready, with the same che
 
 test('the Setup card says “set, but not used” with the legal pages’ own checks, and calls the phone number recommended', () => {
   const source = readFileSync(new URL('../admin/admin.js', import.meta.url), 'utf8');
-  assert.match(source, /import \{ legalDetails, legalValueProblem \} from '\.\.\/legal\/legal-details\.js';/);
+  assert.match(source, /import \{ legalDetails, legalEmail, legalValueProblem \} from '\.\.\/legal\/legal-details\.js';/);
   assert.match(source, /`set, but not used: \$\{problem\}`/);
   const variables = /const LEGAL_VARIABLES = \[([\s\S]*?)\n\];/.exec(source)?.[1] || '';
   assert.match(variables, /\['LEGAL_PHONE', 'recommended \(French law asks an individual publisher for one\)/);
   assert.doesNotMatch(variables, /\['LEGAL_PHONE', 'optional/);
   // How to write the phone number (E.164, no spaces), and how the page shows it.
   assert.match(variables, /\['LEGAL_PHONE', '[^']*international form, <code>\+33<\/code> then the number without its 0, with no spaces \(e\.g\. <code>\+33199001234<\/code>\)[^']*<code>\+33 1 99 00 12 34<\/code>/);
-  assert.match(source, /key === 'LEGAL_PHONE' \? `set, shown as \$\{esc\(legalDetails\(APP_CONFIG\)\.phone\)\}`/, 'Setup shows how the number reads');
+  assert.match(source, /if \(key === 'LEGAL_PHONE'\) return `set, shown as \$\{esc\(legalDetails\(APP_CONFIG\)\.phone\)\}`;/, 'Setup shows how the number reads');
   assert.match(variables, /\['SUPPORT_EMAIL', '[^']*“Support” line of the welcome and Teams pages’ footer/);
 });
 

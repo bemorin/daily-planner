@@ -27,10 +27,11 @@
   <link rel="icon" href="../favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="../apple-touch-icon.png">
   <script>
-    /* Before first paint. The team gift lives on the Teams page: its old
-       addresses here (?ask=…, #request, #teams, #team-prices, #seats) go
-       there, query and hash kept (teamsAddress in teams-model.js, which
-       landing.js checks again).
+    /* Before first paint. The team gift lives on the Teams page (/teams/,
+       next to this folder): its old addresses here (?ask=…, #request,
+       #teams, #team-prices, #seats) go there, query and hash kept (#teams,
+       the whole team gift, opens the Teams page at the top)
+       (teamsAddress in teams-model.js, which landing.js checks again).
        Then, when motion is welcome, replicas start on the first frame of their
        animation and sections below the fold wait to rise in. landing.js adds
        `js-ready`; if it never runs, the page falls back to its final, fully
@@ -40,7 +41,7 @@
       var ask = false;
       try { ask = new URLSearchParams(here.search).has('ask'); } catch (error) { ask = false; }
       if (ask || /^#(?:request|teams|team-prices|seats)$/.test(here.hash)) {
-        here.replace(here.pathname.replace(/\/(?:index\.html)?$/, '') + '/teams/' + here.search + here.hash);
+        here.replace(here.pathname.replace(/\/(?:index\.html)?$/, '').replace(/\/[^/]*$/, '') + '/teams/' + here.search + (here.hash === '#teams' ? '' : here.hash));
         return;
       }
       var root = document.documentElement;
@@ -136,13 +137,13 @@
         <a href="#how">How it works</a>
         <a href="#year">Your year</a>
         <a href="#plus">Plus</a>
-        <a href="teams/">Teams</a>
+        <a href="../teams/">Teams</a>
         <a href="#pricing">Pricing</a>
         <a href="#faq">FAQ</a>
-        <a href="./partners/">Partners</a>
+        <a href="../partners/">Partners</a>
       </nav>
       <div class="top__actions">
-        <a class="top__teams" href="teams/">Teams</a>
+        <a class="top__teams" href="../teams/">Teams</a>
         <a class="btn btn--primary btn--sm" href="../" data-cta="app">Open the planner</a>
       </div>
     </div>
@@ -157,7 +158,7 @@
           <p class="lead">Daily Planner is a calm planner for your day, your week and your year. It’s free, needs no account and works offline. Your plans stay in your browser, not on our servers.</p>
           <div class="cta-row" data-hero-ctas>
             <a class="btn btn--primary" href="../" data-cta="app">Open the planner — it’s free</a>
-            <a class="btn btn--ghost" href="teams/">Give it to your team</a>
+            <a class="btn btn--ghost" href="../teams/">Give it to your team</a>
           </div>
           <div class="devices">
             <span class="devices__icons" aria-hidden="true"><svg class="i devices__laptop"><use href="#i-laptop"/></svg><svg class="i devices__tablet"><use href="#i-tablet"/></svg><svg class="i devices__phone"><use href="#i-phone"/></svg></span>
@@ -1222,7 +1223,7 @@
           <div class="plus-buy__alts">
             <a class="plus-buy__alt" href="#gifts"><svg class="i" aria-hidden="true"><use href="#i-gift"/></svg><span class="plus-buy__alt-name">Give it as a gift</span><span class="plus-buy__alt-price" data-gift-offer="gift-1"><span data-gift-price="gift-1">€29</span>, for one person</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
             <a class="plus-buy__alt" href="#gifts"><svg class="i" aria-hidden="true"><use href="#i-family"/></svg><span class="plus-buy__alt-name">Plus Family</span><span class="plus-buy__alt-price" data-gift-offer="family-5"><span data-gift-price="family-5">€99</span>, up to 5 people at home</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-            <a class="plus-buy__alt" href="teams/"><svg class="i" aria-hidden="true"><use href="#i-team"/></svg><span class="plus-buy__alt-name">Giving it to a team?</span><span class="plus-buy__alt-price">From <span data-min-per-person>€5</span> per person</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+            <a class="plus-buy__alt" href="../teams/"><svg class="i" aria-hidden="true"><use href="#i-team"/></svg><span class="plus-buy__alt-name">Giving it to a team?</span><span class="plus-buy__alt-price">From <span data-min-per-person>€5</span> per person</span><svg class="i plus-buy__alt-go" aria-hidden="true"><use href="#i-arrow"/></svg></a>
           </div>
         </div>
       </div>
@@ -1344,8 +1345,8 @@
               <h2 id="tbanner-title">The year-end gift your team will use all year.</h2>
               <p class="lead">Give everyone Plus with one link: each person who opens it gets Plus for life on their own planner.</p>
               <div class="cta-row tbanner__ctas">
-                <a class="btn btn--light" href="teams/">See the team gift<svg class="i"><use href="#i-arrow"/></svg></a>
-                <a class="btn btn--text-light" href="teams/?ask=invoice#request">Get it by invoice</a>
+                <a class="btn btn--light" href="../teams/">See the team gift<svg class="i"><use href="#i-arrow"/></svg></a>
+                <a class="btn btn--text-light" href="../teams/?ask=invoice#request">Get it by invoice</a>
               </div>
             </div>
             <ul class="why">
@@ -1362,7 +1363,7 @@
       <div class="wrap faq">
         <div class="faq__intro" data-reveal-each>
           <h2 id="faq-title">Questions</h2>
-          <p>Something missing? The planner’s own Help page explains every feature and shortcut, or <a href="teams/?ask=question#request">ask a question</a>.</p>
+          <p>Something missing? The planner’s own Help page explains every feature and shortcut, or <a href="../teams/?ask=question#request">ask a question</a>.</p>
         </div>
         <div class="faq__groups" data-faq data-reveal-each>
           <div class="faq__group">
@@ -1440,7 +1441,7 @@
               </details>
               <details class="qa" name="faq">
                 <summary>Can my company give Plus to its people?</summary>
-                <div class="qa__a"><p>Yes, with a team gift: one link for the whole team, from about <span data-min-per-person>€5</span> per person, paid once by the company. Each person who opens it gets Plus for life on their own planner, and their planner stays private. <a href="teams/">See the team gift</a>.</p></div>
+                <div class="qa__a"><p>Yes, with a team gift: one link for the whole team, from about <span data-min-per-person>€5</span> per person, paid once by the company. Each person who opens it gets Plus for life on their own planner, and their planner stays private. <a href="../teams/">See the team gift</a>.</p></div>
               </details>
               <details class="qa" name="faq">
                 <summary>Which currencies do you charge in?</summary>
@@ -1459,7 +1460,7 @@
         <p class="lead">Open the planner, write one thing to keep in mind, and choose the outcome that would make today count.</p>
         <div class="cta-row">
           <a class="btn btn--primary" href="../" data-cta="app">Open the planner — it’s free</a>
-          <a class="btn btn--ghost" href="teams/">Give it to your team</a>
+          <a class="btn btn--ghost" href="../teams/">Give it to your team</a>
         </div>
       </div>
     </section>
@@ -1474,10 +1475,10 @@
       <nav class="foot__links" aria-label="Footer">
         <a href="../" data-cta="app">Open the planner</a>
         <a href="#plus">Plus</a>
-        <a href="teams/">Team gift</a>
+        <a href="../teams/">Team gift</a>
         <a href="#pricing">Pricing</a>
-        <a href="./partners/">Partners</a>
-        <a href="teams/?ask=question#request">Ask a question</a>
+        <a href="../partners/">Partners</a>
+        <a href="../teams/?ask=question#request">Ask a question</a>
         <span class="foot__support" data-support hidden></span>
         <span class="foot__social" data-social hidden></span>
       </nav>

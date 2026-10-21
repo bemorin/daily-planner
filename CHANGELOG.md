@@ -2,6 +2,15 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.30.0 — 2026-10-21
+
+- **Opening the planner**: no more empty shell that jumps into place (layout shift 0.26 → 0 on a computer). The page shows plain paper in the right theme until the day is drawn, then — once per tab, on a visible cold open — the header settles in, the hour grid fades in and the plan and the schedule rise in turn, all within 600 ms, with clicks and keys working from the first frame. Skipped with reduced motion, in the background, before first-run setup, for activation/gift/checkout links or a dialog open on load; a short fade on slow devices; the planner shows on its own after 2.4 s if the script fails. The head script also sets the browser's colour scheme and toolbar colour for a saved theme before first paint.
+- **`/teams/` and `/partners/` are the real addresses** of the Teams and Partners pages. `/welcome/teams/…` and `/welcome/partners/…` redirect there (301, query and hash kept); the old short-link redirects are gone, the old addresses aren't cached (`no-store`), and `/welcome/teams/` and `/welcome/partners/` (where 1.28's short links pointed) clear the browser's HTTP cache (`Clear-Site-Data: "cache"`, to remove after 2027-01-31) so a remembered 1.28 redirect can't loop in Chromium. `/welcome/#teams` opens the Teams page at the top. Every link in the pages, the planner, the legal pages and the docs is updated; the dev server applies `_redirects` like Cloudflare (`scripts/redirects.mjs`).
+- `DAILY_PLANNER_SUPPORT_EMAIL` and `DAILY_PLANNER_PRIVACY_EMAIL` accept `<address>` and `Name <address>` (one shared reading, `emailAddress` in `src/lib/text.js`; two addresses are refused); the dashboard's Setup says what it read. Without the owner API, the request form writes an email to the support address.
+- **Blocked storage**: when the browser refuses site data, the planner no longer fails to start: it keeps plans in memory for that tab and says so (“This browser won’t keep your plans.”), over first-run setup if needed.
+- Before its entrance the hidden planner is inert (no focus, no clicks, nothing for screen readers), released at the reveal or after 2.4 s.
+- **Offline**: only the planner's own address falls back to the planner; another page that isn't cached (Teams, Partners, welcome, legal) shows a small “You’re offline” page with a way back to the planner.
+
 ## 1.29.1 — 2026-10-21
 
 - **Ask a question** is a plain contact form: email, name and the question (plus consent) — no company, plan, number of people or timing; the panel reads “Contact · Ask a question”, and links from other pages land on it focused. The API accepts a question without the team fields (invoice, quote and talk still require them); the owner email and the dashboard (“Requests and questions”, Needs your attention) show it as a question.

@@ -1,8 +1,8 @@
 import { animate } from '../src/vendor/motion.js';
 
 /* ============================================================================
-   Page motion shared by the welcome pages (/welcome/, /welcome/teams/,
-   /welcome/partners/): sections rise in as they reach the viewport, and the
+   Page motion shared by the welcome pages (/welcome/, /teams/,
+   /partners/): sections rise in as they reach the viewport, and the
    FAQ opens one answer at a time with a smooth height change.
 
    Each page needs, in <head>, the inline script that adds `js-anim` before

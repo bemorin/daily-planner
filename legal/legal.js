@@ -21,7 +21,7 @@ import { contactPhrase, detailRows, detailsHtml, esc, legalDetails } from './leg
 
 // The publisher's details (checked, then written as rows and links) are
 // shared with the build and the owner dashboard: legal-details.js.
-export { DIRECTOR, PUBLISHER, askHref, callingCode, contactEmail, contactHtml, contactPhrase, detailRows, detailsHtml, esc, formatPhone, legalDetails, legalEmail, legalPhone, legalValueProblem, phoneHtml, staticLegalHtml, telHref } from './legal-details.js';
+export { DIRECTOR, PUBLISHER, askHref, callingCode, contactEmail, contactHtml, contactPhrase, detailRows, detailsHtml, emailAddress, esc, formatPhone, legalDetails, legalEmail, legalPhone, legalValueProblem, phoneHtml, staticLegalHtml, telHref } from './legal-details.js';
 
 /** One list item per counted moment, in the words the planner’s Privacy notice uses. */
 export const eventsHtml = (events = COUNTED_EVENTS) => events.map(([, words]) => `<li>${esc(words)}</li>`).join('');

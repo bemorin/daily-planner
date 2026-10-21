@@ -6,10 +6,10 @@
  * (1.22.1, 1.22.2…) keep the same note and are never asked about again.
  */
 export const WHATS_NEW = Object.freeze({
-  version: '1.29',
+  version: '1.30',
   items: Object.freeze([
-    'Insights: the outline of the day or bar you point at now shows on every side, above its neighbours.',
-    'The welcome page shows the planner two ways, your day and your year in Horizon, with a switch to pause or choose.',
-    'Thin scrollbars without arrows everywhere in Chrome and Edge, and clearer contacts on the legal pages.'
+    'Opening the planner is calmer: no empty frame or jump while it loads, and a short entrance when you open it in a new tab.',
+    'The team gift and the partner program now live at their own addresses: /teams and /partners.',
+    'Ask a question is a simple contact form: your email, your name and your question.'
   ])
 });

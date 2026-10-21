@@ -1,5 +1,5 @@
-/* Partners page (welcome/partners/) ---------------------------------------------
-   Loaded after ../landing.css and built on its tokens and parts (.top, .wrap,
+/* Partners page (partners/, at /partners/) --------------------------------------
+   Loaded after ../welcome/landing.css and built on its tokens and parts (.top, .wrap,
    .section, .btn, .kicker, .lead, .faq, .final, .foot). Its own parts carry
    the `pt-` prefix: the hero with its figures and the example month, the three
    steps and the company callout, the rates table, the rules and who it's for.

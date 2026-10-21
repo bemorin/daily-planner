@@ -306,12 +306,12 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     if (!partnerHintShown('plus')) return '';
     const close = `<button class="icon-button plus-partner__close" type="button" data-plus-partner-dismiss aria-label="Hide the partner program">${icon('close')}</button>`;
     if (!hasPlus()) {
-      return `<p class="plus-footnote" data-plus-partner><span>Know people who’d like it? <a href="./welcome/partners/" target="_blank" rel="noopener" data-plus-partner-go>Become a partner</a> — earn ${esc(partnerEarnText())}.</span>${close}</p>`;
+      return `<p class="plus-footnote" data-plus-partner><span>Know people who’d like it? <a href="./partners/" target="_blank" rel="noopener" data-plus-partner-go>Become a partner</a> — earn ${esc(partnerEarnText())}.</span>${close}</p>`;
     }
     return `<aside class="plus-partner" aria-labelledby="plus-partner-title" data-plus-partner>
         <span class="plus-partner__icon">${icon('share')}</span>
         <p class="plus-partner__copy"><strong id="plus-partner-title">Recommend Daily Planner</strong><span>Know people who would like it? As a partner, you earn ${esc(partnerEarnText())}.</span></p>
-        <a class="secondary-button plus-partner__go" href="./welcome/partners/" target="_blank" rel="noopener" data-plus-partner-go>Partner program</a>
+        <a class="secondary-button plus-partner__go" href="./partners/" target="_blank" rel="noopener" data-plus-partner-go>Partner program</a>
         ${close}
       </aside>`;
   }
@@ -384,7 +384,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
   function overview() {
     const focus = PLUS_FEATURES.find(feature => feature.id === view.feature);
     const active = hasPlus();
-    const teams = `<p class="plus-teams"><span class="plus-teams__icon">${icon('team')}</span><span>Buying for a team? <a href="./welcome/teams/" target="_blank" rel="noopener">Give Plus to your people</a> — one link for everyone, as a year‑end gift.</span></p>`;
+    const teams = `<p class="plus-teams"><span class="plus-teams__icon">${icon('team')}</span><span>Buying for a team? <a href="./teams/" target="_blank" rel="noopener">Give Plus to your people</a> — one link for everyone, as a year‑end gift.</span></p>`;
     const privacy = openPrivacy && plannerApiEnabled() && plusAvailable() ? '<p class="privacy-footnote">Plus is checked on this device — no account. <button class="privacy-link" type="button" data-plus-privacy>How this is handled</button></p>' : '';
     if (active) {
       return `<header class="modal__header plus-header">

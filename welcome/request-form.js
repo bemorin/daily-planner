@@ -6,7 +6,7 @@ import { TEAM_TIERS } from '../src/lib/pricing.js';
 import { animate } from '../src/vendor/motion.js';
 import { TEAM_ROWS, defaultPlan, planForPeople, planRow, tierLabel, tierPrice } from './landing-model.js';
 import { createListbox } from './listbox.js';
-import { EMAIL_RE, el, qs, qsa } from './page-kit.js';
+import { EMAIL_RE, configText, el, emailAddress, qs, qsa } from './page-kit.js';
 import { EASE_OUT, reduceQuery } from './page-motion.js';
 import { createStepper } from './stepper.js';
 import { KINDS, PARTNER_QUESTION, PEOPLE_RANGE, TIMING_LABELS, emailField, isTeamKind, requestCopy, requestEmail, requestFromAddress, requestPayload } from './teams-model.js';
@@ -20,11 +20,11 @@ import { KINDS, PARTNER_QUESTION, PEOPLE_RANGE, TIMING_LABELS, emailField, isTea
 
    Links anywhere open it with the right kind: `[data-request="invoice|quote|
    question|talk"]` (and `data-plan`) on this page, `?ask=…&plan=…` from other
-   pages (…/welcome/teams/?ask=question#request). Sent to the owner API
+   pages (/teams/?ask=question#request). Sent to the owner API
    (POST /api/teams), with the partner code this browser remembers (`ref`),
    so a team gift a partner introduced can earn them their share. Without the
-   API, it becomes an email to LANDING.contactEmail; without that either, it
-   stays visible but cannot be sent.
+   API, it becomes an email to LANDING.contactEmail, else to SUPPORT_EMAIL;
+   without either, it stays visible but cannot be sent.
    ============================================================================ */
 
 const PLANNER_API_URL = typeof config.PLANNER_API_URL === 'string' ? config.PLANNER_API_URL : '';
@@ -125,7 +125,10 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
   if (!panel || !form) return null;
 
   const talkOn = !!settings.talk?.enabled;
-  const requestMode = plannerApiEnabled() ? 'api' : (EMAIL_RE.test(settings.contactEmail || '') ? 'mailto' : 'off');
+  // Without the API: an email to the contact address, else to the site's
+  // SUPPORT_EMAIL, either typed plain, “<…>” or “Name <…>”.
+  const contactEmail = emailAddress(settings.contactEmail || configText('SUPPORT_EMAIL'));
+  const requestMode = plannerApiEnabled() ? 'api' : (EMAIL_RE.test(contactEmail) ? 'mailto' : 'off');
   const request = { kind: 'invoice', topic: '', opened: false, quoted: false };
   const smoothBehavior = () => (reduceQuery.matches ? 'auto' : 'smooth');
 
@@ -381,8 +384,8 @@ export function createRequestForm({ sale, track = () => {}, settings }) {
       const price = tier ? tierPrice(tier, sale.currency) : null;
       const planWords = tier ? `Team gift, ${tierLabel(tier).toLowerCase()} (${price == null ? 'on quote' : sale.money(price)})` : '';
       const { subject, lines } = requestEmail(values, { plan: planWords, timing: TIMING_LABELS[values.timing], ref: referralCode() });
-      location.href = `mailto:${settings.contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\r\n'))}`;
-      showDone(`Your email app should open with the request, ready to send. If it doesn’t, write to ${settings.contactEmail}.`);
+      location.href = `mailto:${contactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join('\r\n'))}`;
+      showDone(`Your email app should open with the request, ready to send. If it doesn’t, write to ${contactEmail}.`);
       return;
     }
 

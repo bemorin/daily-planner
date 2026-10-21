@@ -71,6 +71,10 @@
 // request carries a CF-IPCountry header or the server runs with --country FR
 // (or US, DE …), which sets that header on every API request without one.
 //
+// Redirects: _redirects is applied as Cloudflare Pages applies it
+// (scripts/redirects.mjs): /privacy → /legal/privacy/, /welcome/teams/… →
+// /teams/…, the query string kept and the #hash left to the browser.
+//
 // Browsers keep planner data per address (host + port), so the server always
 // prefers the same port. If that port already runs Daily Planner, it simply
 // opens the existing instance instead of starting a second copy elsewhere.
@@ -87,6 +91,7 @@ import { createMemoryStore, createPlannerApi } from '../server/planner-api.js';
 import { generatePlusKeyPair, importSigningKey, publicKeyFromSigningKey, signLicense } from '../server/licenses.js';
 import { checkoutSeal, creemMode, creemProductsFromEnv, webhookSignature } from '../server/creem.js';
 import { beforeTaxCents, priceCents } from '../src/lib/pricing.js';
+import { parseRedirects, redirectFor } from './redirects.mjs';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -412,17 +417,15 @@ try {
   process.exit(1);
 }
 
-// Exact-path redirects from _redirects (“/privacy /legal/privacy/ 301”), as Cloudflare Pages applies them.
-const redirects = new Map((await fs.readFile(join(root, '_redirects'), 'utf8').catch(() => ''))
-  .split('\n').map(line => line.trim().split(/\s+/))
-  .filter(([from, to]) => from?.startsWith('/') && /^\/(?!\/)/.test(to || ''))
-  .map(([from, to, status]) => [from, { to, status: [301, 302, 307, 308].includes(Number(status)) ? Number(status) : 302 }]));
+// Redirects from _redirects (“/privacy /legal/privacy/ 301”, “/welcome/teams/* /teams/:splat 301”), as
+// Cloudflare Pages applies them: the first matching line, the query string kept (scripts/redirects.mjs).
+const redirects = parseRedirects(await fs.readFile(join(root, '_redirects'), 'utf8').catch(() => ''));
 
 async function handle(request, response) {
   try {
     const url = new URL(request.url, 'http://localhost');
-    const redirect = redirects.get(url.pathname);
-    if (redirect) { response.writeHead(redirect.status, { location: `${redirect.to}${url.search}`, 'cache-control': 'no-store', [MARKER]: '1' }).end(); return; }
+    const redirect = redirectFor(redirects, url.pathname, url.search);
+    if (redirect) { response.writeHead(redirect.status, { location: redirect.location, 'cache-control': 'no-store', [MARKER]: '1' }).end(); return; }
     if (devLicenses && url.pathname === '/api/dev/license') { await devLicense(request, response); return; }
     if (plannerApi && fakeCreem && url.pathname === '/__fake-creem/pay') { fakePayPage(url, response); return; }
     if (plannerApi && fakeCreem && url.pathname === '/__fake-creem/refund') { await fakeRefund(request, url, response); return; }

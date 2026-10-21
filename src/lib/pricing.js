@@ -33,7 +33,7 @@ export const LAUNCH = Object.freeze({
 });
 
 /**
- * The partner program (welcome/partners/, the terms, the planner's invitations, the
+ * The partner program (partners/, the terms, the planner's invitations, the
  * dashboard). `rate`: percent of the price before tax of Plus, Give Plus and Plus
  * Family bought through a partner's link, credited and paid by Creem (set the same
  * rate in Creem → Affiliate Hub; Creem has one rate per program). `teamRate`: percent
