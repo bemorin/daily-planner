@@ -78,7 +78,7 @@ sale.load();
 renderPartnerLine();
 setupBuyButtons(button => offer.buy(button));
 setupTopBar();
-renderFooter({ supportEmail: LANDING.supportEmail });
+renderFooter();
 createPrivacyDialog({
   dialog: qs('[data-privacy-dialog]'),
   enabled: apiOn,

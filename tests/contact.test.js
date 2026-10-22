@@ -69,11 +69,12 @@ test('the Contact page’s form is the question form alone: no kinds, no team fi
   assert.ok(form, 'the request form’s markup, on a light card');
   assert.match(form, /data-team-form data-kind="question" novalidate aria-labelledby="contact-title" aria-describedby="contact-intro"/);
   assert.doesNotMatch(form, /data-kind-group|data-team-field|data-listbox|name="(?:kind|company|plan|teamSize|timing)"/);
-  assert.deepEqual([...form.matchAll(/\sname="([a-zA-Z]+)"/g)].map(match => match[1]), ['email', 'name', 'message', 'website', 'consent']);
+  assert.deepEqual([...form.matchAll(/\sname="([a-zA-Z]+)"/g)].map(match => match[1]), ['email', 'name', 'message', 'website'], 'no consent box (1.32): replying is what the form is for');
   assert.match(form, /<textarea name="message" rows="6" maxlength="1000" required/);
   assert.match(form, /<span data-email-label>Email<\/span><input type="email" name="email" autocomplete="email" required maxlength="254" placeholder="you@example\.com"/);
-  assert.match(form, /<span data-consent-label>You may email me about this question\.<\/span>/);
-  assert.match(form, /data-privacy-line hidden>[^<]*<a href="\.\.\/legal\/privacy\/#requests">How questions are handled<\/a>/);
+  assert.doesNotMatch(form, /consent|type="checkbox"/);
+  // Instead, one short line: what is kept, why, for how long, and where to read more.
+  assert.match(form, /<p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request\. <a href="\.\.\/legal\/privacy\/#requests">How questions are handled<\/a><\/p>/);
   assert.match(form, /data-mailto-line hidden>/);
   assert.match(form, /<button class="btn btn--light btn--send" type="submit" data-form-submit disabled>Send the question<\/button>/);
   assert.match(page, /<div class="wrap ct__grid" data-form-panel>/);
@@ -93,7 +94,7 @@ test('the Contact page points to Help, the team gift and the partner program; th
   const more = /<aside class="ct__more"[\s\S]*?<\/aside>/.exec(page)[0];
   assert.match(more, /<h2 id="ct-more-title">Before you write<\/h2>/);
   assert.deepEqual([...more.matchAll(/<a class="ct-link"([^>]*)>[\s\S]*?<b>([^<]+)<\/b>/g)].map(match => [/href="([^"]*)"/.exec(match[1])?.[1] || '', match[2]]), [
-    ['../', 'Help in the planner'],
+    ['../?help', 'Help in the planner'],
     ['../teams/', 'The team gift'],
     ['../partners/', 'The partner program'],
     ['', 'Your data']
@@ -138,7 +139,7 @@ test('its questions are sent as a source the server keeps: “contact” once se
   assert.ok(TEAM_SOURCES.has(CONTACT_SOURCE));
   const values = { email: 'ann@example.com', name: 'Ann', company: '', plan: '', teamSize: '', timing: '', message: 'Partner program: who can join?', website: '', kind: 'question' };
   const body = requestPayload(values, { version: '1.31.0', locale: 'fr-FR', source: CONTACT_SOURCE });
-  assert.deepEqual(body, { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', consent: true, website: '', version: '1.31.0', locale: 'fr-FR', source: CONTACT_SOURCE, kind: 'question' });
+  assert.deepEqual(body, { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', website: '', version: '1.31.0', locale: 'fr-FR', source: CONTACT_SOURCE, kind: 'question' });
   const stored = validateTeamRequest(body, new Date('2026-10-21T09:00:00Z')).entry;
   assert.deepEqual([stored.kind, stored.source, stored.company, stored.teamSize], ['question', CONTACT_SOURCE, '', 0]);
   assert.equal(requestPayload(values).source, 'teams', 'the Teams page, unless said otherwise');

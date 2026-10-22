@@ -2497,6 +2497,11 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 .rp-focus span:empty ~ em { opacity: 1; }
 
+/* The pointer ticks the most important outcome: its box dips as it fills. */
+.rp--day.d-tick .rp-row--mit .rp-check { box-shadow: 0 0 0 .3em color-mix(in srgb, var(--paint) 22%, transparent); transform: scale(.84); }
+
+.motion-ok .rp--day .rp-row--mit .rp-check { transition: background-color 200ms ease, box-shadow 220ms ease, transform 160ms cubic-bezier(.22, 1, .36, 1); }
+
 .rp-sched { position: relative; min-width: 0; }
 
 .rp-sched__head { display: flex; align-items: center; justify-content: space-between; gap: .6em; margin: .1em 0 .8em; }
@@ -2694,10 +2699,10 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 .motion-ok .rp-modal .rp-primary { transition: transform 160ms cubic-bezier(.22, 1, .36, 1), background-color 160ms ease, box-shadow 220ms ease; }
 
-/* The pointer: a system arrow whose tip sits on (--cx, --cy). */
+/* The pointer (both hero views): a system arrow whose tip sits on (--cx, --cy). */
 .rp-cursor { position: absolute; z-index: 6; left: 0; top: 0; width: 2.15em; height: 2.15em; opacity: 0; pointer-events: none; transform: translate(var(--cx, 30em), var(--cy, 24em)); }
 
-.rp--day.d-cursor .rp-cursor { opacity: 1; }
+.rp.d-cursor .rp-cursor { opacity: 1; }
 
 .motion-ok .rp-cursor { transition: transform var(--move, 700ms) cubic-bezier(.55, .06, .25, 1), opacity 260ms ease; }
 
@@ -2705,9 +2710,9 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 .rp-cursor__ripple { position: absolute; left: -1.7em; top: -1.7em; width: 3.4em; height: 3.4em; border-radius: 999px; background: color-mix(in srgb, var(--paint) 34%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--paint) 55%, transparent); opacity: 0; transform: scale(.15); }
 
-.motion-ok .rp--day.d-click .rp-cursor__ripple { animation: rp-ripple 620ms cubic-bezier(.22, 1, .36, 1) both; }
+.motion-ok .rp.d-click .rp-cursor__ripple { animation: rp-ripple 620ms cubic-bezier(.22, 1, .36, 1) both; }
 
-.motion-ok .rp--day.d-click .rp-cursor__arrow { animation: rp-cursor-press 380ms ease both; }
+.motion-ok .rp.d-click .rp-cursor__arrow { animation: rp-cursor-press 380ms ease both; }
 
 @keyframes rp-ripple {
   0% { opacity: .95; transform: scale(.15); }
@@ -2729,8 +2734,11 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 /* The same window, Horizon open in it (styles/horizon.css): the section rail,
    the year at a glance, the Misogi and the mini-adventures. The scene fills
-   the year in, lands a key date on the map, ticks a mini-adventure as lived,
-   then the last Misogi milestone. Same box as the Day view, whose card hangs
+   the year in; the pointer presses Add and a key date lands on the map; it
+   opens Mini-adventures (the section takes the place of the Overview, as in
+   the planner) and ticks one as lived; back on the Overview, it ticks the
+   last Misogi milestone. Every state the pointer passes through is a d-
+   class: the last frame is the Overview. Same box as the Day view, whose card hangs
    below its window: wide enough, the switch rises into that room beside the
    card (.hero-switch), so Horizon keeps it free; narrower, its window fills
    the whole box, with no empty band above the switch. */
@@ -2762,10 +2770,16 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 .rp-hz { flex: 1 1 auto; display: grid; grid-template-columns: 12.8em minmax(0, 1fr); gap: 1.1em; padding: 1em 1.3em 1.3em; }
 
-/* The section rail: Overview is open. */
-.rp-hz-nav { display: grid; align-content: start; gap: .2em; padding-right: .9em; border-right: 1px solid var(--line); }
+/* The section rail: Overview is open, and Mini-adventures while the pointer
+   has it open (d-adv). The open section sits on a card that slides to it. */
+.rp-hz-nav { position: relative; display: grid; align-content: start; gap: .2em; padding-right: .9em; border-right: 1px solid var(--line); }
 
-.rp-hz-sec { display: grid; grid-template-columns: 2em minmax(0, 1fr) auto; align-items: center; gap: .55em; padding: .5em .5em; border-radius: .75em; color: var(--muted); }
+.rp-hz-pill { position: absolute; z-index: 0; left: 0; right: .9em; top: 0; height: 3em; border-radius: .75em; background: var(--surface-strong); box-shadow: 0 1px 2px rgba(25, 22, 17, .05), 0 .5em 1.4em rgba(25, 22, 17, .06), inset 0 0 0 1px var(--line); }
+
+/* Mini-adventures is the third section: two rows (3em) and their gaps below Overview. */
+.rp--horizon.d-adv .rp-hz-pill { transform: translateY(6.4em); }
+
+.rp-hz-sec { position: relative; z-index: 1; display: grid; grid-template-columns: 2em minmax(0, 1fr) auto; align-items: center; gap: .55em; padding: .5em .5em; border-radius: .75em; color: var(--muted); }
 
 .rp-hz-sec > i { width: 2em; height: 2em; display: grid; place-items: center; border-radius: .55em; background: color-mix(in srgb, var(--soft) 85%, transparent); }
 
@@ -2780,11 +2794,29 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 .rp-hz-sec small { color: var(--faint); font-size: .6em; font-variant-numeric: tabular-nums; }
 
-.rp-hz-sec.is-on { background: var(--surface-strong); box-shadow: 0 1px 2px rgba(25, 22, 17, .05), 0 .5em 1.4em rgba(25, 22, 17, .06), inset 0 0 0 1px var(--line); color: var(--ink); }
+/* The pointer over a section (hover), then pressing it. */
+.rp--horizon.d-over-adv .rp-hz-sec--adv,
+.rp--horizon.d-over-ov .rp-hz-sec--ov { background: color-mix(in srgb, var(--soft) 75%, transparent); color: var(--ink); }
 
-.rp-hz-sec.is-on > i { background: color-mix(in srgb, var(--k) 13%, var(--surface-strong)); color: var(--k); }
+.rp--horizon.d-go-adv .rp-hz-sec--adv,
+.rp--horizon.d-go-ov .rp-hz-sec--ov { transform: scale(.97); }
 
-.rp-hz-sec.is-on small { color: var(--muted); }
+.rp--horizon:not(.d-adv) .rp-hz-sec--ov,
+.rp--horizon.d-adv .rp-hz-sec--adv { color: var(--ink); }
+
+.rp--horizon:not(.d-adv) .rp-hz-sec--ov > i,
+.rp--horizon.d-adv .rp-hz-sec--adv > i { background: color-mix(in srgb, var(--k) 13%, var(--surface-strong)); color: var(--k); }
+
+.rp--horizon:not(.d-adv) .rp-hz-sec--ov small,
+.rp--horizon.d-adv .rp-hz-sec--adv small { color: var(--muted); }
+
+.motion-ok .rp--horizon .rp-hz-pill { transition: transform 460ms cubic-bezier(.34, 1.28, .64, 1); }
+
+.motion-ok .rp--horizon .rp-hz-sec { transition: color 200ms ease, background-color 200ms ease, box-shadow 200ms ease, transform 160ms cubic-bezier(.22, 1, .36, 1); }
+
+.motion-ok .rp--horizon .rp-hz-sec > i { transition: background-color 220ms ease, color 220ms ease; }
+
+.motion-ok .rp--horizon .rp-hz-sec small { transition: color 200ms ease; }
 
 .rp-ring { width: 1.3em; height: 1.3em; overflow: visible; transform: rotate(-90deg); }
 
@@ -2800,8 +2832,19 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 .rp--horizon.s-step .rp-hz-sec--step .rp-ring { --p: var(--p1); }
 
+/* The open section: the Overview (it sets the size), or Mini-adventures over it. */
+.rp-hz-main { position: relative; min-width: 0; display: flex; flex-direction: column; }
+
+.rp-hz-ov { flex: 1 1 auto; display: flex; flex-direction: column; gap: .8em; }
+
+.rp--horizon.d-adv .rp-hz-ov { opacity: 0; transform: translateY(.6em); }
+
+/* Going out, a section fades at once; coming in, it fades in and settles (as the planner's panels do). */
+.motion-ok .rp--horizon .rp-hz-ov { transition: opacity 280ms ease 80ms, transform 440ms cubic-bezier(.22, 1, .36, 1) 80ms; }
+
+.motion-ok .rp--horizon.d-adv .rp-hz-ov { transition: opacity 120ms ease, transform 0s linear 120ms; }
+
 /* The year at a glance (the ribbon of the Horizon section, tighter). */
-.rp-hz-main { min-width: 0; display: flex; flex-direction: column; gap: .8em; }
 
 .rp-hz-map { padding: .85em 1em .3em; border: 1px solid var(--line); border-radius: 1em; background: var(--surface-strong); }
 
@@ -2879,15 +2922,120 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 .rp-hz-item em { color: var(--faint); font-size: .84em; font-style: normal; white-space: nowrap; }
 
-/* Ticked: the mini-adventure lived, then the last milestone. */
+/* Mini-adventures, the section the pointer opens: its head, then the six,
+   each with its status, its title and its dates (the planner's cards). */
+.rp-hz-adv { position: absolute; inset: 0; display: flex; flex-direction: column; gap: .8em; opacity: 0; transform: translateY(.6em); }
+
+.rp--horizon.d-adv .rp-hz-adv { opacity: 1; transform: none; }
+
+.motion-ok .rp--horizon .rp-hz-adv { transition: opacity 120ms ease, transform 0s linear 120ms; }
+
+.motion-ok .rp--horizon.d-adv .rp-hz-adv { transition: opacity 280ms ease 80ms, transform 440ms cubic-bezier(.22, 1, .36, 1) 80ms; }
+
+.rp-hz-adv__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1em; padding-top: .15em; }
+
+.rp-hz-adv__intro { min-width: 0; display: grid; gap: .3em; }
+
+.rp-hz-adv .rp-eyebrow { margin: 0; color: var(--k); }
+
+.rp-hz-adv__title { font-size: .98em; font-weight: 720; letter-spacing: -.03em; line-height: 1.2; }
+
+.rp-hz-adv__intro small { overflow: hidden; color: var(--muted); font-size: .64em; white-space: nowrap; text-overflow: ellipsis; }
+
+.rp-hz-adv__stat { flex: 0 0 auto; display: grid; justify-items: end; gap: .2em; text-align: right; }
+
+.rp-hz-adv__stat b { font-size: 1.3em; font-weight: 720; letter-spacing: -.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+
+.rp-hz-adv__stat b small { color: var(--faint); font-size: .56em; font-weight: 600; letter-spacing: 0; }
+
+.rp-hz-adv__stat > small { color: var(--muted); font-size: .58em; white-space: nowrap; }
+
+.rp-hz-advs { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: .6em; }
+
+.rp-adv { position: relative; min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: .55em; overflow: hidden; padding: .75em .75em .8em; border: 1px solid var(--line); border-radius: .9em; background: var(--surface-strong); }
+
+/* Planned: a line of the section's colour on top. */
+.rp-adv::before { content: ""; position: absolute; inset: 0 0 auto; height: .2em; background: var(--k); opacity: 0; }
+
+.rp-adv.is-planned,
+.rp-adv--lived { border-color: color-mix(in srgb, var(--k) 24%, var(--line)); }
+
+.rp-adv.is-planned::before,
+.rp-adv--lived::before { opacity: 1; }
+
+.rp-adv.is-done,
+.rp--horizon.s-lived .rp-adv--lived { border-color: var(--line); background: color-mix(in srgb, var(--soft) 45%, var(--surface-strong)); }
+
+.rp--horizon.s-lived .rp-adv--lived::before { opacity: 0; }
+
+.rp-adv__top { min-width: 0; display: flex; align-items: center; gap: .45em; }
+
+.rp-adv__top em { min-width: 0; overflow: hidden; color: var(--muted); font-size: .6em; font-style: normal; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+
+.rp-adv__status { display: inline-flex; align-items: center; gap: .3em; height: 2.1em; padding: 0 .8em; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: .52em; font-weight: 740; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; }
+
+.rp .rp-adv__status svg.i { width: 1.3em; height: 1.3em; margin-left: -.15em; stroke-width: 2.6; }
+
+.rp-adv__status--planned { background: color-mix(in srgb, var(--k) 12%, var(--surface-strong)); color: var(--k); }
+
+.rp-adv__status--done { background: color-mix(in srgb, var(--habit) 14%, var(--surface-strong)); color: var(--habit); }
+
+/* The weekend in Lisbon: Planned, then Lived once ticked. */
+.rp-adv__swap { display: grid; }
+
+.rp-adv__swap > * { grid-area: 1 / 1; justify-self: start; }
+
+.rp-adv--lived .rp-adv__status--done { opacity: 0; transform: scale(.8); }
+
+.rp--horizon.s-lived .rp-adv--lived .rp-adv__status--done { opacity: 1; transform: none; }
+
+.rp--horizon.s-lived .rp-adv--lived .rp-adv__status--planned,
+.rp--horizon.s-lived .rp-adv--lived .rp-adv__top em { opacity: 0; }
+
+.motion-ok .rp--horizon .rp-adv--lived { transition: background-color 320ms ease 120ms, border-color 320ms ease 120ms; }
+
+.motion-ok .rp--horizon .rp-adv--lived::before { transition: opacity 260ms ease 120ms; }
+
+.motion-ok .rp--horizon .rp-adv__swap > * { transition: opacity 200ms ease 120ms, transform 420ms cubic-bezier(.34, 1.5, .64, 1) 120ms; }
+
+.motion-ok .rp--horizon .rp-adv__top em { transition: opacity 200ms ease 120ms; }
+
+.rp-adv__title { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: .5em; font-size: .74em; font-weight: 640; letter-spacing: -.012em; line-height: 1.3; }
+
+.rp-adv__title .rp-check { width: 1.3em; height: 1.3em; border-radius: .38em; }
+
+.rp-adv__title .rp-txt { display: -webkit-box; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+.rp-adv__date { justify-self: start; max-width: 100%; display: inline-flex; align-items: center; gap: .4em; padding: .38em .8em .38em .6em; border: 1px solid color-mix(in srgb, var(--k) 28%, var(--line)); border-radius: 999px; background: color-mix(in srgb, var(--k) 7%, var(--surface-strong)); font-size: .58em; font-weight: 620; white-space: nowrap; }
+
+.rp .rp-adv__date svg.i { flex: 0 0 auto; width: 1.3em; height: 1.3em; color: var(--muted); }
+
+.rp-adv__date span { overflow: hidden; text-overflow: ellipsis; }
+
+.rp-adv__date--empty { border-style: dashed; border-color: var(--line-strong); background: transparent; color: var(--muted); }
+
+/* Ticked: the mini-adventure lived (in its section and on its tile), then the last milestone. */
+.rp-adv.is-done .rp-check,
 .rp--horizon.s-lived .rp-hz-item--lived .rp-check,
+.rp--horizon.s-lived .rp-adv--lived .rp-check,
 .rp--horizon.s-step .rp-hz-item--step .rp-check { background: var(--ink); box-shadow: none; }
 
+.rp-adv.is-done .rp-check svg.i,
 .rp--horizon.s-lived .rp-hz-item--lived .rp-check svg.i,
+.rp--horizon.s-lived .rp-adv--lived .rp-check svg.i,
 .rp--horizon.s-step .rp-hz-item--step .rp-check svg.i { opacity: 1; transform: none; }
 
+.rp-adv.is-done .rp-txt,
 .rp--horizon.s-lived .rp-hz-item--lived .rp-txt,
+.rp--horizon.s-lived .rp-adv--lived .rp-txt,
 .rp--horizon.s-step .rp-hz-item--step .rp-txt { color: var(--muted); text-decoration-color: color-mix(in srgb, var(--muted) 70%, transparent); }
+
+/* The pointer ticks them: the box dips as it fills. */
+.rp--horizon.d-tick-lived .rp-adv--lived .rp-check,
+.rp--horizon.d-tick-step .rp-hz-item--step .rp-check { box-shadow: 0 0 0 .3em color-mix(in srgb, var(--paint) 22%, transparent); transform: scale(.84); }
+
+.motion-ok .rp--horizon .rp-adv--lived .rp-check,
+.motion-ok .rp--horizon .rp-hz-item--step .rp-check { transition: background-color 200ms ease, box-shadow 220ms ease, transform 160ms cubic-bezier(.22, 1, .36, 1); }
 
 .rp--horizon.s-step .rp-hz-meter--step i { transform: scaleX(calc(var(--w1) / 100)); }
 
@@ -2915,7 +3063,10 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 .rp--horizon:not(.s-key) .rp-hz-flag { opacity: 0; translate: .8em 0; }
 
-.rp--horizon.s-add .rp-hz-add { background: color-mix(in srgb, var(--ink) 80%, var(--paper)); box-shadow: 0 0 0 .3em color-mix(in srgb, var(--paint) 22%, transparent); transform: scale(.93); }
+/* The pointer over Add, then pressing it. */
+.rp--horizon.d-over-add .rp-hz-add { background: color-mix(in srgb, var(--ink) 88%, var(--paper)); }
+
+.rp--horizon.d-add .rp-hz-add { background: color-mix(in srgb, var(--ink) 80%, var(--paper)); box-shadow: 0 0 0 .3em color-mix(in srgb, var(--paint) 22%, transparent); transform: scale(.93); }
 
 .motion-ok .rp--horizon .rp-rib__track::after { transition: transform 1100ms cubic-bezier(.22, 1, .36, 1); }
 
@@ -2939,11 +3090,20 @@ html.has-dialog { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 .motion-ok .rp-hz-add { transition: transform 160ms cubic-bezier(.22, 1, .36, 1), background-color 160ms ease, box-shadow 220ms ease; }
 
+/* Narrower, the rail becomes the tabs above the section, as in the planner
+   on a phone: the open one is a pill, the last ones run off the edge. */
 @container (max-width: 520px) {
   .rp--horizon .rp-top { margin-inline: 1em; }
   .rp--horizon .rp-hz-year { width: 8.4em; margin-right: .2em; }
-  .rp--horizon .rp-hz { grid-template-columns: minmax(0, 1fr); padding-inline: 1em; }
-  .rp--horizon .rp-hz-nav { display: none; }
+  .rp--horizon .rp-hz { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: .75em; padding: .8em 1em 1em; }
+  .rp--horizon .rp-hz-nav { display: flex; gap: .2em; overflow: hidden; margin-inline: -.2em; padding: .2em; border-right: 0; mask-image: linear-gradient(90deg, #000 84%, transparent); }
+  .rp--horizon .rp-hz-pill,
+  .rp--horizon .rp-hz-sec small,
+  .rp--horizon .rp-hz-sec .rp-ring { display: none; }
+  .rp--horizon .rp-hz-sec { flex: 0 0 auto; grid-template-columns: 1.8em auto; gap: .45em; padding: .25em .85em .25em .25em; border-radius: 999px; }
+  .rp--horizon .rp-hz-sec > i { width: 1.8em; height: 1.8em; border-radius: 999px; }
+  .rp--horizon:not(.d-adv) .rp-hz-sec--ov,
+  .rp--horizon.d-adv .rp-hz-sec--adv { background: var(--surface-strong); box-shadow: 0 1px 2px rgba(25, 22, 17, .06), inset 0 0 0 1px var(--line); }
   .rp--horizon .rp-rib { --lw: 4.6em; }
   .rp--horizon .rp-rib__months b { display: none; }
 }

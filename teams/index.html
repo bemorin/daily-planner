@@ -258,8 +258,6 @@
             <p class="form-error" data-form-error role="alert" hidden></p>
             <div class="team-form__foot">
               <div class="team-form__fine">
-                <label class="consent" data-consent-row><input type="checkbox" name="consent" required aria-describedby="err-consent"><span data-consent-label>You may email me about this request.</span></label>
-                <small class="field__err field__err--consent" id="err-consent"></small>
                 <p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request. <a href="#privacy" data-privacy-open="requests">How requests are handled</a></p>
                 <p class="form-off" data-form-off hidden>Requests open when this site’s API is switched on.</p>
                 <noscript><p class="form-off">Sending a request needs JavaScript.</p></noscript>
@@ -383,23 +381,20 @@
         <img src="../favicon.svg" alt="" width="24" height="24" loading="lazy" decoding="async">
         <span><b>Daily Planner</b> By <a href="https://bemorin.com/" rel="noopener">Ben Morin</a></span>
       </div>
-      <nav class="foot__links" aria-label="Footer">
-        <a href="../" data-cta="app">Open the planner</a>
-        <a href="../welcome/#plus">Plus</a>
-        <a href="../welcome/#pricing">Pricing</a>
-        <a href="../partners/">Partners</a>
-        <a href="../contact/">Ask a question</a>
-        <span class="foot__support" data-support hidden></span>
+      <nav class="foot__links" aria-label="Social links" hidden>
         <span class="foot__social" data-social hidden></span>
       </nav>
     </div>
     <div class="wrap foot__base">
-      <nav class="foot__legal" aria-label="Legal">
-        <a href="../legal/privacy/">Privacy</a>
-        <a href="../legal/terms/">Terms</a>
-        <a href="../legal/cookies/">Cookies</a>
-        <a href="../legal/">Legal notice</a>
-      </nav>
+      <div class="foot__links">
+        <nav class="foot__legal" aria-label="Legal">
+          <a href="../legal/privacy/">Privacy</a>
+          <a href="../legal/terms/">Terms</a>
+          <a href="../legal/cookies/">Cookies</a>
+          <a href="../legal/">Legal notice</a>
+        </nav>
+        <a href="../contact/">Contact</a>
+      </div>
       <button class="foot__counts" type="button" data-privacy-open hidden><svg class="i" aria-hidden="true"><use href="#i-stats"/></svg>What this page counts</button>
     </div>
   </footer>

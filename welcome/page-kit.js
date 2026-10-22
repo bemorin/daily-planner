@@ -3,9 +3,10 @@
 import * as config from '../src/config.js';
 
 /* ============================================================================
-   Small pieces shared by the welcome pages (/welcome/, /teams/): DOM
-   helpers, the header that gains a hairline once the page scrolls, the footer's
-   support address and links, and copying text. No page logic here.
+   Small pieces shared by the welcome pages (/welcome/, /teams/, /contact/,
+   /partners/, /welcome/thanks/): DOM helpers, the header that gains a
+   hairline once the page scrolls, the footer's social links, and copying
+   text. No page logic here.
    ============================================================================ */
 
 export const qs = (selector, root = document) => root.querySelector(selector);
@@ -58,16 +59,16 @@ export function setupTopBar() {
   onScroll();
 }
 
-/* Footer: support address and configured links ---------------------------- */
+/* Footer: the configured social links ---------------------------------------
 
-export function renderFooter({ supportEmail = '' } = {}) {
-  const support = qs('[data-support]');
-  // config.SUPPORT_EMAIL may not exist in an older config.js: '' is fine.
-  const email = emailAddress(supportEmail || configText('SUPPORT_EMAIL'));
-  if (support && EMAIL_RE.test(email)) {
-    support.replaceChildren('Support: ', el('a', { href: `mailto:${email}` }, email));
-    support.hidden = false;
-  }
+   Every footer repeats nothing its page's top bar already has (1.32). Above,
+   the brand and “By Ben Morin”, with these links across from it once one is
+   set (and Open the planner on the partners page, whose top bar has no such
+   button); below, the legal pages and Contact, then “What this page
+   counts”. No support address: the Contact page shows it when SUPPORT_EMAIL
+   is set, and so does the legal notice. */
+
+export function renderFooter() {
   const social = qs('[data-social]');
   const links = [['PROJECT_GITHUB_URL', 'GitHub'], ['SOCIAL_X_URL', 'X'], ['SOCIAL_LINKEDIN_URL', 'LinkedIn']]
     .map(([key, label]) => [httpsUrl(configText(key)), label])
@@ -76,6 +77,9 @@ export function renderFooter({ supportEmail = '' } = {}) {
   if (social && links.length) {
     social.replaceChildren(...links);
     social.hidden = false;
+    // Their group waits hidden until it has something to show.
+    const group = social.closest('.foot__links');
+    if (group) group.hidden = false;
   }
 }
 

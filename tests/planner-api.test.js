@@ -180,8 +180,6 @@ test('team kit requests are validated with human messages', () => {
   assert.equal(validateTeamRequest(team({ website: 'https://spam.example' })).spam, true);
   const rejected = {
     'invalid email': { email: 'not-an-email' },
-    'missing consent': { consent: undefined },
-    'consent must be true, not truthy': { consent: 'yes' },
     'empty company': { company: '   ' },
     'company over 120': { company: 'x'.repeat(121) },
     'team of one': { teamSize: 1 },
@@ -430,9 +428,11 @@ test('a question needs no team: no company, number of people or timing; an invoi
     ['invalid email', { email: 'not-an-email' }, /valid email address/],
     ['no question', { message: '   ' }, /write your question/],
     ['question over 1000', { message: 'm'.repeat(1001) }, /1,000 characters/],
-    ['name over 80', { name: 'n'.repeat(81) }, /80 characters/],
-    ['no consent', { consent: undefined }, /email you about your question/]
+    ['name over 80', { name: 'n'.repeat(81) }, /80 characters/]
   ]) assert.match(validateTeamRequest({ ...question, ...overrides }, now).error || '', words, label);
+  const { consent, ...unticked } = question;
+  assert.equal(consent, true, 'what a page before 1.32 sends');
+  assert.deepEqual(validateTeamRequest(unticked, now).entry, validateTeamRequest(question, now).entry, 'a question without consent (1.32 pages) is taken the same');
   assert.equal(validateTeamRequest({ ...question, website: 'bot' }, now).spam, true);
   assert.doesNotMatch(validateTeamRequest({ ...question, email: 'nope' }, now).error, /work email/, 'any address, not a work one');
   // A team request without its team's fields is refused, as before.
@@ -450,7 +450,8 @@ test('a question is stored, listed and exported without a team (memory and D1)',
   if (!d1) return;
   for (const [label, store] of [['memory', createMemoryStore()], ['D1', createD1Store(d1)]]) {
     const api = createPlannerApi({ store, adminToken: 'secret', now: fixedNow });
-    assert.equal((await api(post('teams', { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', consent: true, kind: 'question', source: 'teams', ref: 'COACH_ANNA' }))).status, 201, label);
+    // As a 1.32 page sends it: no consent field.
+    assert.equal((await api(post('teams', { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', kind: 'question', source: 'teams', ref: 'COACH_ANNA' }))).status, 201, label);
     const refused = await api(post('teams', { email: 'ann@example.com', name: 'Ann', message: '', consent: true, kind: 'question' }));
     assert.equal(refused.status, 400, `${label}: a question without its question`);
     assert.equal((await api(post('teams', { email: 'ann@example.com', name: 'Ann', consent: true, kind: 'invoice', message: 'Hi' }))).status, 400, `${label}: an invoice without its team`);

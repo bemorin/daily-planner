@@ -127,10 +127,11 @@ test('every page around the move links only to files that exist', () => {
     assert.equal(resolveFrom(`${folder}index.html`, href), page, href);
     assert.ok(exists(page), page);
   }
-  // Every “Ask a question” link of these pages goes to the Contact page (the Teams page's own buttons open its form in place).
+  // Every “Ask a question” link of these pages, and the footers' Contact (1.32), goes to the Contact page (the Teams page's own buttons open its form in place).
   for (const file of ['welcome/index.html', 'welcome/thanks/index.html', 'teams/index.html', 'partners/index.html', 'contact/index.html', ...legal]) {
     const html = read(file);
-    const asks = [...html.matchAll(/<a ([^>]*)>(?:Ask a question|ask a question|“Ask a question” form)<\/a>/g)].map(match => /href="([^"]+)"/.exec(match[1])[1].replace(/&amp;/g, '&'));
+    const foot = /<footer class="foot">[\s\S]*?<\/footer>/.exec(html)?.[0] || '';
+    const asks = [...html.matchAll(/<a ([^>]*)>(?:Ask a question|ask a question|“Ask a question” form)<\/a>/g), ...foot.matchAll(/<a ([^>]*)>Contact<\/a>/g)].map(match => /href="([^"]+)"/.exec(match[1])[1].replace(/&amp;/g, '&'));
     assert.ok(asks.length > 0, file);
     for (const href of asks) {
       if (file === 'teams/index.html' && href === '#request') continue;

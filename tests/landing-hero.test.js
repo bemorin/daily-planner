@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { HERO_VIEWS, HOLDS, rotationLeft, rotationPlays, rotationRunning, rotationSeen, rotationStart, rotationStep } from '../welcome/hero-views.js';
+import { HERO_SCRIPTS, HERO_VIEWS, HOLDS, rotationLeft, rotationPlays, rotationRunning, rotationSeen, rotationStart, rotationStep, sceneClasses, sceneClicks, sceneEnd } from '../welcome/hero-views.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = rel => readFile(join(root, rel), 'utf8');
@@ -152,17 +152,22 @@ test('reduced motion: nothing turns or plays, the choice still switches, and mot
 });
 
 test('each view stays long enough for its scene to end, and the scenes it plays have scripts', async () => {
-  const landing = await read('welcome/landing.js');
-  const lengthOf = name => Number(new RegExp(`\\n  ${name}: \\{\\s*length: (\\d+)`).exec(landing)?.[1]);
   for (const view of HERO_VIEWS) {
-    const length = lengthOf(view.scene);
-    assert.ok(length > 0, `${view.scene} has a script`);
-    assert.ok(view.dwell >= length, `${view.id}: its time covers its script`);
+    const script = HERO_SCRIPTS[view.scene];
+    assert.ok(script?.length > 0 && script.cues.length > 0, `${view.scene} has a script`);
+    assert.ok(sceneEnd(script) <= script.length, `${view.scene}: everything it sets in motion is over by its end`);
+    assert.ok(view.dwell >= script.length, `${view.id}: its time covers its script`);
+    assert.ok(view.dwell - sceneEnd(script) >= 1200, `${view.id}: a moment on its last frame before the turn`);
   }
   // The day's last change (its streak) comes well before its turn ends.
-  assert.match(landing, /t\.count\(qs\('\[data-count\]', t\.root\), 11700, 300\)/);
+  assert.deepEqual(HERO_SCRIPTS.day.cues.at(-1), { at: 11700, count: '[data-count]', ms: 300 });
   assert.ok(DAY.dwell - 12000 >= 1200, 'a moment on the painted month');
-  assert.match(landing, /import \{ setupHeroViews \} from '\.\/hero-views\.js';/);
+  const landing = await read('welcome/landing.js');
+  assert.match(landing, /import \{ HERO_SCRIPTS, setupHeroViews \} from '\.\/hero-views\.js';/);
+  assert.match(landing, /import \{ playCues, setupScenes \} from '\.\/scenes\.js';/);
+  for (const name of ['day', 'horizon']) {
+    assert.match(landing, new RegExp(`\\n  ${name}: \\{ length: HERO_SCRIPTS\\.${name}\\.length,[^\\n]*run: t => playCues\\(t, HERO_SCRIPTS\\.${name}\\.cues\\) \\},`), `${name} plays its cues`);
+  }
   assert.match(landing, /const scenes = setupScenes\(\{ scripts: SCRIPTS, motionOn, motionHooks \}\);\s*setupHeroViews\(qs\('\[data-hero-views\]'\), \{ scene: scenes\.scene, motionOn, motionHooks \}\);/);
   const scenes = await read('welcome/scenes.js');
   assert.match(scenes, /const watched = scenes\.filter\(scene => !scene\.root\.hasAttribute\('data-scene-driven'\)\);/, 'driven scenes are not played by scrolling');
@@ -170,6 +175,136 @@ test('each view stays long enough for its scene to end, and the scenes it plays 
   assert.match(scenes, /return found;/);
   const module = await read('welcome/hero-views.js');
   assert.doesNotMatch(module, /^import /m, 'no imports: the preview inlines it as it is');
+});
+
+test('cues: the classes at a moment, each click, and when a script is over', () => {
+  const script = {
+    length: 3000,
+    cues: [
+      { at: 900, click: 'd-press' },
+      { at: 100, add: 'd-cursor' },
+      { at: 0, point: '.a', x: 0.5 },
+      { at: 200, point: '.b', ms: 600 },
+      { at: 900, add: 's-on' },
+      { at: 1200, point: '.c', ms: 500 },
+      { at: 1500, click: '' },
+      { at: 1600, remove: 'd-cursor' },
+      { at: 1700, count: '[data-count]', ms: 300 }
+    ]
+  };
+  assert.deepEqual([...sceneClasses(script, 0)], []);
+  assert.deepEqual([...sceneClasses(script, 950)].sort(), ['d-cursor', 'd-press', 's-on'], 'pressed for a moment');
+  assert.deepEqual([...sceneClasses(script, 900 + 240)].sort(), ['d-cursor', 's-on'], 'then not');
+  assert.deepEqual([...sceneClasses(script, 5000)], ['s-on'], 'the pointer gone');
+  assert.deepEqual(sceneClicks(script), [
+    { at: 900, press: 'd-press', target: '.b', still: true, shown: true },
+    { at: 1500, press: '', target: '.c', still: false, shown: true }
+  ], 'the second click comes while the pointer still moves');
+  assert.equal(sceneEnd(script), 2140, 'the last ripple (1500 + 640) outlasts the count (2000)');
+  assert.equal(sceneEnd({ cues: [] }), 0);
+});
+
+test('your day: the pointer ticks the most important outcome as it fills, then closes the day, and is gone at the end', () => {
+  const day = HERO_SCRIPTS.day;
+  const clicks = sceneClicks(day);
+  for (const click of clicks) {
+    assert.ok(click.shown, `${click.target}: the pointer is shown`);
+    assert.ok(click.still, `${click.target}: and at rest on it`);
+  }
+  assert.deepEqual(clicks.map(click => click.target), ['.rp-row--mit .rp-check', '.rp-closebtn', '.rp-mi--save .rp-mc--save', '.rp-mi--forget .rp-mc--forget', '.rp-modal .rp-field', '.rp-modal .rp-primary']);
+  const [tick, close] = clicks;
+  assert.equal(tick.press, 'd-tick', 'the box dips');
+  assert.ok(day.cues.some(cue => cue.add === 's-mit' && cue.at === tick.at), 'ticked as it is clicked');
+  assert.ok(!sceneClasses(day, tick.at - 1).has('s-mit') && sceneClasses(day, tick.at).has('s-mit'));
+  assert.ok(tick.at >= 1800 && tick.at <= 2300, 'about when the scene always ticked it, once the focus is typed');
+  assert.equal(close.press, 'd-press');
+  assert.ok(!sceneClasses(day, close.at).has('d-modal') && sceneClasses(day, close.at + 300).has('d-modal'), 'Close day opens its sheet');
+  // The pointer comes in after the first frame, and is gone before the day is painted.
+  const shown = day.cues.filter(cue => cue.add === 'd-cursor');
+  assert.equal(shown.length, 1);
+  const jump = day.cues.filter(cue => cue.point && cue.at <= shown[0].at).pop();
+  assert.ok(jump && !jump.ms, 'it is placed unseen, then appears');
+  assert.ok(!sceneClasses(day, day.cues.find(cue => cue.add === 's-closed').at).has('d-cursor'));
+  assert.deepEqual([...sceneClasses(day, day.length)].sort(), ['s-block', 's-closed', 's-mit'], 'the last frame: data-final, no d- class');
+});
+
+test('your year: the pointer presses Add, opens Mini-adventures and ticks one lived, then ticks the last milestone back on the Overview', () => {
+  const year = HERO_SCRIPTS.horizon;
+  const clicks = sceneClicks(year);
+  for (const click of clicks) {
+    assert.ok(click.shown, `${click.target}: the pointer is shown`);
+    assert.ok(click.still, `${click.target}: and at rest on it`);
+  }
+  assert.deepEqual(clicks.map(click => [click.target, click.press]), [
+    ['.rp-hz-add', 'd-add'],
+    ['.rp-hz-sec--adv', 'd-go-adv'],
+    ['.rp-adv--lived .rp-check', 'd-tick-lived'],
+    ['.rp-hz-sec--ov', 'd-go-ov'],
+    ['.rp-hz-item--step .rp-check', 'd-tick-step']
+  ]);
+  const [add, open, lived, back, step] = clicks;
+  const at = ms => sceneClasses(year, ms);
+  assert.ok(!at(add.at).has('s-key') && at(add.at + 400).has('s-key'), 'the key date lands once Add is pressed');
+  assert.ok(!at(open.at).has('d-adv') && at(open.at + 300).has('d-adv'), 'the section opens once its tab is pressed');
+  assert.ok(at(lived.at).has('d-adv') && at(lived.at).has('s-lived') && !at(lived.at - 1).has('s-lived'), 'ticked in its section, as it is clicked');
+  assert.ok(at(back.at).has('d-adv') && !at(back.at + 300).has('d-adv'), 'back on the Overview');
+  assert.ok(!at(step.at).has('d-adv') && at(step.at).has('s-step') && !at(step.at - 1).has('s-step'), 'the milestone, on the Overview');
+  assert.ok(!at(year.length).has('d-cursor'), 'the pointer steps aside and goes');
+  assert.deepEqual([...at(year.length)].sort(), ['s-in', 's-key', 's-lived', 's-step'], 'the last frame: the Overview, all done');
+  // Each move is a glide, never a jump while the pointer shows.
+  for (const cue of year.cues.filter(item => item.point)) assert.ok(cue.ms > 0 || !at(cue.at).has('d-cursor'), cue.point);
+});
+
+test('the hero’s pointer: one in each replica, every target in its markup, every state styled, all of it outside the last frame', async () => {
+  const page = await read('welcome/index.html');
+  const hero = /<section class="hero"[\s\S]*?<\/section>/.exec(page)[0];
+  const day = /<div class="rp rp--day[\s\S]*?(?=<div class="hero-view hero-view--year")/.exec(hero)[0];
+  const year = /<div class="rp rp--horizon[\s\S]*?(?=<div class="hero-switch">)/.exec(hero)[0];
+  const cursor = '<span class="rp-cursor"><i class="rp-cursor__ripple"></i><svg class="rp-cursor__arrow" viewBox="0 0 24 24"><path d="M4.5 2.5v16.6l4.3-4.2 2.9 6.6 3-1.3-2.9-6.5h6.1Z"/></svg></span>';
+  for (const [name, markup] of [['day', day], ['horizon', year]]) {
+    assert.equal(markup.split(cursor).length - 1, 1, `${name}: the same pointer, once`);
+    const classes = new Set([...markup.matchAll(/class="([^"]+)"/g)].flatMap(match => match[1].split(/\s+/)));
+    for (const cue of HERO_SCRIPTS[name].cues.filter(item => item.point)) {
+      for (const [, cls] of cue.point.matchAll(/\.([\w-]+)/g)) assert.ok(classes.has(cls), `${name}: ${cue.point}`);
+    }
+  }
+  // Horizon: the rail's two sections, and Mini-adventures as the planner shows it.
+  assert.match(year, /<span class="rp-hz-pill"><\/span>\s*<span class="rp-hz-sec rp-hz-sec--ov"[^>]*>[\s\S]*?<b>Overview<\/b>/);
+  assert.match(year, /<span class="rp-hz-sec rp-hz-sec--adv"[^>]*>[\s\S]*?<b>Mini-adventures<\/b>/);
+  assert.equal((year.match(/class="rp-hz-sec[ "]/g) || []).length, 7, 'seven sections, as in the planner');
+  assert.doesNotMatch(year, /is-on/, 'the open section follows the scene (d-adv), Overview without it');
+  assert.match(year, /<div class="rp-hz-main">\s*<div class="rp-hz-ov">[\s\S]*<div class="rp-hz-adv" style="--k:var\(--adventure\)">/);
+  assert.equal((year.match(/<span class="rp-adv[ "]/g) || []).length, 6, 'six mini-adventures');
+  assert.equal((year.match(/rp-adv--lived/g) || []).length, 1);
+  assert.match(year, /<span class="rp-adv rp-adv--lived">[\s\S]*?Planned[\s\S]*?Lived[\s\S]*?Weekend in Lisbon/);
+  // Every d- state the scenes go through has a style, and scenes.js clears them all.
+  const css = await read('welcome/landing.css');
+  const states = new Set(Object.values(HERO_SCRIPTS).flatMap(script => script.cues.flatMap(cue => [cue.add, cue.remove, cue.click]).filter(cls => cls?.startsWith('d-'))));
+  for (const cls of states) assert.ok(css.includes(`.${cls} `) || css.includes(`.${cls}.`), cls);
+  assert.match(css, /\.rp\.d-cursor \.rp-cursor \{ opacity: 1; \}/, 'the pointer shows in either view');
+  assert.match(css, /\.motion-ok \.rp\.d-click \.rp-cursor__ripple \{ animation:/);
+  for (const name of ['day', 'horizon']) {
+    const finals = new RegExp(`data-scene="${name}" data-final="([^"]+)"`).exec(hero)[1].split(' ');
+    for (const cls of finals) assert.ok(!cls.startsWith('d-'), `${name}: ${cls}`);
+  }
+  const scenes = await read('welcome/scenes.js');
+  assert.match(scenes, /const passing = root => \[\.\.\.root\.classList\]\.filter\(name => name\.startsWith\('d-'\) \|\| TRANSIENT\.includes\(name\)\);/);
+  assert.match(scenes, /root\.classList\.remove\(\.\.\.finals, \.\.\.passing\(root\)\);/, 'reset');
+  assert.match(scenes, /root\.classList\.remove\(\.\.\.passing\(root\), 'is-playing'\);/, 'finish');
+  assert.match(scenes, /export function playCues\(t, cues\) \{/);
+});
+
+test('Mini-adventures takes the Overview’s place without changing the box: over it, and the narrow window gets the planner’s tabs', async () => {
+  const css = await read('welcome/landing.css');
+  assert.match(css, /\.rp-hz-main \{ position: relative;/);
+  assert.match(css, /\.rp-hz-adv \{ position: absolute; inset: 0;[^}]*opacity: 0;/, 'over the Overview, which sets the size');
+  assert.match(css, /\.rp--horizon\.d-adv \.rp-hz-adv \{ opacity: 1; transform: none; \}/);
+  assert.match(css, /\.rp--horizon\.d-adv \.rp-hz-ov \{ opacity: 0;/);
+  assert.match(css, /\.rp--horizon\.d-adv \.rp-hz-pill \{ transform: translateY\(6\.4em\); \}/, 'the open section’s card slides to the third section');
+  const narrow = /\/\* Narrower, the rail becomes the tabs[\s\S]*?@container \(max-width: 520px\) \{([\s\S]*?)\n\}/.exec(css)?.[1] || '';
+  assert.match(narrow, /\.rp--horizon \.rp-hz-nav \{ display: flex;/, 'the tabs above the section');
+  assert.match(narrow, /\.rp--horizon \.rp-hz-pill,/);
+  assert.doesNotMatch(css, /\.rp--horizon \.rp-hz-nav \{ display: none; \}/);
 });
 
 test('the hero: two replicas in one box, a labelled choice, a pause, a caption for each', async () => {

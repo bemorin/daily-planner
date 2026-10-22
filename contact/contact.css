@@ -26,6 +26,21 @@
   .ct__more { grid-area: more; align-self: start; }
 }
 
+/* From 960px the card keeps to the window while the page scrolls: it slides
+   down, under the top bar, through the space the section keeps below it
+   (a last, empty row of the grid instead of the section's bottom padding,
+   so a sticky card can travel through it; the space looks the same). Only
+   when the whole card fits below the top bar (contact.js adds
+   `is-following`): a taller card would keep its own button out of sight. */
+@media (min-width: 960px) {
+  .ct { padding-bottom: 0; }
+  .ct__grid {
+    grid-template-rows: auto 1fr calc(clamp(64px, 8vw, 112px) - 48px);
+    grid-template-areas: "intro card" "more card" ". .";
+  }
+  .ct__card.is-following { position: sticky; top: calc(var(--top-h) + 24px); }
+}
+
 .ct__intro { display: grid; justify-items: start; align-content: start; gap: 18px; }
 
 .ct__intro h1 { max-width: 11em; }

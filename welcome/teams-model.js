@@ -44,8 +44,8 @@ export const isTeamKind = kind => KINDS[kind]?.team !== false;
  * question (`label`, `placeholder`, and what to say when it is empty).
  */
 export const EMAIL_FIELD = Object.freeze({
-  team: Object.freeze({ label: 'Work email', placeholder: 'you@company.com', missing: 'Enter your work email.', consent: 'You may email me about this request.' }),
-  question: Object.freeze({ label: 'Email', placeholder: 'you@example.com', missing: 'Enter your email.', consent: 'You may email me about this question.' })
+  team: Object.freeze({ label: 'Work email', placeholder: 'you@company.com', missing: 'Enter your work email.' }),
+  question: Object.freeze({ label: 'Email', placeholder: 'you@example.com', missing: 'Enter your email.' })
 });
 
 /** The email field's words for a kind of request. */
@@ -82,6 +82,14 @@ const params = search => {
 export const contactTopic = search => (params(search).get('topic') === 'partners' ? 'partners' : 'general');
 
 /**
+ * Whether the Contact page's card may keep to the window as the page scrolls
+ * (contact.css `is-following`): only when all of it fits between the top bar
+ * and the bottom of the window, `gap` from each, so its button is never kept
+ * out of sight.
+ */
+export const cardFollows = ({ card = 0, viewport = 0, topBar = 0, gap = 24 } = {}) => card > 0 && card + topBar + gap * 2 <= viewport;
+
+/**
  * What an address asks the Teams page's form for: ?ask=invoice|quote|question
  * (|talk while the talk is offered) and ?plan=<a team tier>. Anything unknown
  * is dropped: `kind` and `plan` are '' when nothing valid was asked; a
@@ -103,6 +111,8 @@ const partnerCode = ref => (typeof ref === 'string' && /^[A-Za-z0-9_-]{2,64}$/.t
  * partner code (`ref`) when there is one. A question sends no team fields
  * (company, number of people, timing, plan, currency). `source`: the page
  * it was sent from, the Teams page unless said otherwise (CONTACT_SOURCE).
+ * No `consent` (1.32): replying to a request is what it is sent for, so
+ * there is no box to tick (the server still accepts it from older pages).
  */
 export function requestPayload(values, { currency = '', version = '', locale = '', ref = '', source = 'teams' } = {}) {
   const code = partnerCode(ref);
@@ -114,7 +124,6 @@ export function requestPayload(values, { currency = '', version = '', locale = '
     name: values.name,
     ...team,
     message: values.message,
-    consent: true,
     website: values.website,
     version,
     locale,

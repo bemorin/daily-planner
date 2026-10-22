@@ -3,7 +3,7 @@ import { LANDING } from '../welcome/landing-settings.js';
 import { EMAIL_RE, configText, emailAddress, qs, qsa, renderFooter, setupTopBar } from '../welcome/page-kit.js';
 import { followMotion, motionWanted, setupReveal } from '../welcome/page-motion.js';
 import { createRequestForm } from '../welcome/request-form.js';
-import { CONTACT_SOURCE, contactTopic } from '../welcome/teams-model.js';
+import { CONTACT_SOURCE, cardFollows, contactTopic } from '../welcome/teams-model.js';
 
 /* ============================================================================
    CONTACT (/contact/): “Ask a question”, the site's one question form —
@@ -49,13 +49,29 @@ function renderAddresses() {
   }
 }
 
+/**
+ * From 960px the card keeps to the window as the page scrolls (contact.css),
+ * when all of it fits below the top bar: checked again whenever the card or
+ * the window changes size (an error line, the thanks), never while scrolling.
+ */
+function followCard() {
+  const card = qs('.ct__card');
+  if (!card || typeof ResizeObserver !== 'function') return;
+  const top = qs('[data-top]');
+  const check = () => card.classList.toggle('is-following', cardFollows({ card: card.offsetHeight, viewport: window.innerHeight, topBar: top?.offsetHeight || 0 }));
+  new ResizeObserver(check).observe(card);
+  window.addEventListener('resize', check, { passive: true });
+  check();
+}
+
 // A partner's link may lead here too (?ref=CODE): kept like on the other pages, and sent with the question.
 if (apiOn) rememberReferral();
 
 createRequestForm({ settings: LANDING, questionsOnly: true, topic: contactTopic(location.search), source: CONTACT_SOURCE });
 renderAddresses();
+followCard();
 setupTopBar();
-renderFooter({ supportEmail: LANDING.supportEmail });
+renderFooter();
 qsa('[data-counts-link]').forEach(link => { link.hidden = !apiOn; });
 document.addEventListener('click', event => {
   if (event.target.closest('[data-cta="app"]')) track('landing_cta_app');

@@ -571,15 +571,26 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .trends.is-refreshing .trends__body { opacity: .55; }
 
-.trends-switch { display: inline-grid; grid-auto-columns: minmax(72px, 1fr); grid-auto-flow: column; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 11px; background: var(--soft); }
+/* Week · Month · Year: the planner's Day · Week · Horizon pill (styles/core.css
+   .view-switch), at the dashboard's size. The chosen period sits on a raised
+   surface that slides between them (trends-view.js; no slide with reduced
+   motion). */
+.trends-switch { position: relative; display: inline-grid; grid-auto-columns: minmax(76px, 1fr); grid-auto-flow: column; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--surface) 70%, transparent); }
 
-.trends-switch button { min-height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: .8rem; font-weight: 630; cursor: pointer; }
+.trends-switch__indicator { position: absolute; z-index: 0; border-radius: 999px; background: var(--surface-strong); box-shadow: 0 1px 2px rgba(28, 25, 21, .08), inset 0 0 0 1px var(--line); pointer-events: none; }
 
-.trends-switch button:hover { color: var(--ink); }
+.trends-switch__indicator:not([data-ready]) { opacity: 0; }
 
-.trends-switch button[aria-pressed="true"] { background: var(--surface-strong); color: var(--ink); box-shadow: 0 1px 5px rgba(28, 25, 21, .08); }
+.trends-switch button { position: relative; z-index: 1; min-height: 32px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: .8rem; font-weight: 650; letter-spacing: -.01em; cursor: pointer; transition: color 140ms ease, box-shadow 140ms ease; }
 
-.trends-switch button:focus-visible,
+.trends-switch button:hover,
+.trends-switch button.is-active { color: var(--ink); }
+
+.trends-switch button:focus-visible { outline: 0; color: var(--ink); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+
+/* Before the pill has measured itself, the chosen period still reads as chosen. */
+.trends-switch:not(:has([data-ready])) button.is-active { background: var(--surface-strong); box-shadow: inset 0 0 0 1px var(--line); }
+
 .trend-tile:focus-visible,
 .trend-chart__frame:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 

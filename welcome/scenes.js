@@ -8,7 +8,8 @@ import { qs, qsa } from './page-kit.js';
      setupScenes({ scripts: { name: { length, loop, run(t) { … } } }, motionOn, motionHooks })
 
    A script schedules state classes with t.add / t.remove, glides a pointer
-   with t.point, types `[data-type]` text and counts `[data-count]` numbers.
+   with t.point, types `[data-type]` text and counts `[data-count]` numbers;
+   playCues does the same from a list of cues (the hero's, hero-views.js).
    Without motion (reduced motion, or the page gave up waiting), every replica
    simply shows its final frame; `motion-ok` on <html> turns on the CSS
    transitions only once the scenes are armed.
@@ -29,9 +30,23 @@ export function click(t, ms, press = '') {
   t.remove(press, ms + 240);
 }
 
-// Classes a scene passes through on its way to the final frame.
-const TRANSIENT = ['s-press', 's-sync', 's-finger', 's-press-plan', 's-press-save', 's-save', 's-later', 's-tap',
-  'd-cursor', 'd-hover', 'd-press', 'd-click', 'd-modal', 'd-save', 'd-forget', 'd-submit'];
+/** Plays a script written as cues (the hero's, hero-views.js, which says what each cue does). */
+export function playCues(t, cues) {
+  const typed = qsa('[data-type]', t.root);
+  cues.forEach(cue => {
+    if (cue.add) t.add(cue.add, cue.at);
+    if (cue.remove) t.remove(cue.remove, cue.at);
+    if (cue.point) t.point(cue.point, cue.at, { duration: cue.ms, x: cue.x, y: cue.y, jump: !cue.ms });
+    if ('click' in cue) click(t, cue.at, cue.click);
+    if ('type' in cue) t.type(typed[cue.type], cue.at);
+    if (cue.count) qsa(cue.count, t.root).forEach(node => t.count(node, cue.at, cue.ms));
+  });
+}
+
+// Classes a scene passes through on its way to the final frame: these, and
+// every d- class (a pointer's way through the scene).
+const TRANSIENT = ['s-press', 's-sync', 's-finger', 's-press-plan', 's-press-save', 's-save', 's-later', 's-tap'];
+const passing = root => [...root.classList].filter(name => name.startsWith('d-') || TRANSIENT.includes(name));
 
 // Moves a replica's pointer onto `target` (a selector inside the scene), in
 // em so it stays in place if the replica is resized while it glides.
@@ -88,7 +103,7 @@ function createScene(root, scripts) {
   const pointers = qsa('.rp-cursor', root);
 
   function reset() {
-    root.classList.remove(...finals, ...TRANSIENT);
+    root.classList.remove(...finals, ...passing(root));
     pointers.forEach(node => node.removeAttribute('style'));
     typed.forEach(node => { node.textContent = ''; node.classList.remove('is-typing'); });
     counters.forEach(node => { node.textContent = node.dataset.from || '0'; });
@@ -97,7 +112,7 @@ function createScene(root, scripts) {
 
   function finish() {
     clear();
-    root.classList.remove(...TRANSIENT, 'is-playing');
+    root.classList.remove(...passing(root), 'is-playing');
     pointers.forEach(node => node.removeAttribute('style'));
     root.classList.add(...finals, 'is-armed');
     typed.forEach(node => { node.textContent = node.dataset.text; node.classList.remove('is-typing'); });

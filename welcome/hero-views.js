@@ -11,17 +11,153 @@
  *
  * The choices are radio buttons, so the switch also works without JavaScript
  * (landing.css, with :has). The scenes are scenes.js scenes marked
- * `data-scene-driven`, played from here.
+ * `data-scene-driven`, played from here; their scripts are the cues below
+ * (HERO_SCRIPTS), where a pointer does what each view shows.
  *
  * No imports: the single-file preview inlines this module as it is. The pure
- * turns are unit-tested (tests/landing-hero.test.js).
+ * turns and cues are unit-tested (tests/landing-hero.test.js).
  */
 
 /** The views in order, the scene each plays and how long it stays (ms): its script, then a moment on its last frame. */
 export const HERO_VIEWS = Object.freeze([
   Object.freeze({ id: 'day', scene: 'day', dwell: 14000 }),
-  Object.freeze({ id: 'year', scene: 'horizon', dwell: 9800 })
+  Object.freeze({ id: 'year', scene: 'horizon', dwell: 12400 })
 ]);
+
+/*
+ * The two scenes, as cues in time (ms from the scene's start), played by
+ * scenes.js (playCues). A cue does one thing:
+ *   { at, add: 'class' }, { at, remove: 'class' }   a state class of the replica
+ *   { at, point: 'selector', ms, x, y }   the pointer glides onto a target in
+ *       `ms` (without `ms` it jumps there, unseen); x and y place its tip (0–1)
+ *   { at, click: 'class' }   the pointer dips and a ripple spreads; the target
+ *       takes its pressed class for a moment ('' when nothing presses)
+ *   { at, type: n }   the replica's n-th typed text ([data-type]) is typed
+ *   { at, count: 'selector', ms }   those numbers count up
+ * The d- classes are the pointer's way through the scene (shown, hovering,
+ * pressing, the section it opened): never part of the last frame, which
+ * scenes.js shows on reset and finish without them.
+ */
+const PRESS = 240; // how long a click's pressed class stays (scenes.js, click)
+const RIPPLE = 640; // and its ripple
+const cues = list => Object.freeze(list.map(cue => Object.freeze(cue)));
+
+export const HERO_SCRIPTS = Object.freeze({
+  // Your day: the focus is typed; the pointer comes up the plan and ticks the
+  // most important outcome; a block lands on the schedule. Then it closes the
+  // day: two open items decided, a memory written, and only then is the day's
+  // square painted.
+  day: Object.freeze({
+    length: 14000,
+    cues: cues([
+      { at: 300, type: 0 },
+      { at: 950, point: '.rp-plan', x: 0.62, y: 0.99 },
+      { at: 1000, add: 'd-cursor' },
+      { at: 1050, point: '.rp-row--mit .rp-check', ms: 850, x: 0.46, y: 0.52 },
+      { at: 2050, click: 'd-tick' },
+      { at: 2050, add: 's-mit' },
+      { at: 2300, add: 's-block' },
+      { at: 2500, point: '.rp-closebtn', ms: 1350, x: 0.42, y: 0.62 },
+      { at: 3850, add: 'd-hover' },
+      { at: 4150, click: 'd-press' },
+      { at: 4450, remove: 'd-hover' },
+      { at: 4450, add: 'd-modal' },
+      { at: 5100, point: '.rp-mi--save .rp-mc--save', ms: 700 },
+      { at: 5850, click: '' },
+      { at: 5850, add: 'd-save' },
+      { at: 6350, point: '.rp-mi--forget .rp-mc--forget', ms: 560 },
+      { at: 7000, click: '' },
+      { at: 7000, add: 'd-forget' },
+      { at: 7550, point: '.rp-modal .rp-field', ms: 620, x: 0.16, y: 0.55 },
+      { at: 8250, click: '' },
+      { at: 8350, type: 1 },
+      { at: 9650, point: '.rp-modal .rp-primary', ms: 640, x: 0.5, y: 0.58 },
+      { at: 10400, click: 'd-submit' },
+      { at: 10700, remove: 'd-modal' },
+      { at: 10700, remove: 'd-cursor' },
+      { at: 11050, add: 's-closed' },
+      { at: 11200, remove: 'd-save' },
+      { at: 11200, remove: 'd-forget' },
+      { at: 11700, count: '[data-count]', ms: 300 }
+    ])
+  }),
+  // Your year, Horizon: the year fills in; the pointer presses Add and a key
+  // date lands on the map. It opens Mini-adventures in the rail (in a narrow
+  // window, the tabs above) and ticks the weekend in Lisbon as lived. Back on
+  // the Overview, it ticks the last milestone of the Misogi, whose bar fills,
+  // and steps aside.
+  horizon: Object.freeze({
+    length: 11000,
+    cues: cues([
+      { at: 150, add: 's-in' },
+      { at: 1050, point: '.rp-hz-map', x: 0.9, y: 0.94 },
+      { at: 1100, add: 'd-cursor' },
+      { at: 1200, point: '.rp-hz-add', ms: 900, x: 0.56, y: 0.62 },
+      { at: 1950, add: 'd-over-add' },
+      { at: 2350, click: 'd-add' },
+      { at: 2600, remove: 'd-over-add' },
+      { at: 2600, add: 's-key' },
+      { at: 2940, count: '[data-at="key"]', ms: 120 },
+      { at: 3350, point: '.rp-hz-sec--adv', ms: 850, x: 0.42, y: 0.56 },
+      { at: 4050, add: 'd-over-adv' },
+      { at: 4400, click: 'd-go-adv' },
+      { at: 4500, add: 'd-adv' },
+      { at: 4500, remove: 'd-over-adv' },
+      { at: 5150, point: '.rp-adv--lived .rp-check', ms: 750, x: 0.48, y: 0.52 },
+      { at: 6100, click: 'd-tick-lived' },
+      { at: 6100, add: 's-lived' },
+      { at: 6200, count: '[data-at="lived"]', ms: 120 },
+      { at: 6950, point: '.rp-hz-sec--ov', ms: 800, x: 0.42, y: 0.56 },
+      { at: 7600, add: 'd-over-ov' },
+      { at: 7950, click: 'd-go-ov' },
+      { at: 8050, remove: 'd-adv' },
+      { at: 8050, remove: 'd-over-ov' },
+      { at: 8600, point: '.rp-hz-item--step .rp-check', ms: 800, x: 0.48, y: 0.52 },
+      { at: 9600, click: 'd-tick-step' },
+      { at: 9600, add: 's-step' },
+      { at: 9750, count: '[data-at="step"]', ms: 120 },
+      { at: 10200, point: '.rp-hz-item--step', ms: 700, x: 0.62, y: 2.2 },
+      { at: 10300, remove: 'd-cursor' }
+    ])
+  })
+});
+
+const inOrder = script => [...script.cues].sort((a, b) => a.at - b.at);
+
+/** The replica's classes `ms` into a script: its state, and a click's pressed class for a moment. */
+export function sceneClasses(script, ms) {
+  const on = new Set();
+  inOrder(script).forEach(cue => {
+    if (cue.at > ms) return;
+    if (cue.add) on.add(cue.add);
+    if (cue.remove) on.delete(cue.remove);
+    if (cue.click) {
+      if (ms < cue.at + PRESS) on.add(cue.click);
+      else on.delete(cue.click);
+    }
+  });
+  return on;
+}
+
+/** Every click of a script: when, on what (the pointer's last target), and whether the pointer was shown and at rest there. */
+export function sceneClicks(script) {
+  const ordered = inOrder(script);
+  return ordered.filter(cue => 'click' in cue).map(cue => {
+    const glide = ordered.filter(item => item.point && item.at <= cue.at).pop();
+    return {
+      at: cue.at,
+      press: cue.click,
+      target: glide?.point || '',
+      still: !!glide && glide.at + (glide.ms || 0) <= cue.at,
+      shown: sceneClasses(script, cue.at).has('d-cursor')
+    };
+  });
+}
+
+/** When the last thing a script sets in motion is over (ms): a glide, a count, a ripple. */
+export function sceneEnd(script) {
+  return Math.max(0, ...script.cues.map(cue => cue.at + (cue.point || cue.count ? cue.ms || 0 : 0) + ('click' in cue ? RIPPLE : 0)));
+}
 
 /** What makes the turns wait. The last two also stop the scene: nobody can see it. */
 export const HOLDS = Object.freeze(['hover', 'focus', 'hidden', 'offscreen']);

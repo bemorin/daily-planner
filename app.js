@@ -29,6 +29,7 @@ import { trackAppActive, trackEvent, trackOncePer } from './src/lib/planner-api.
 import { viewSummaries } from './src/features/day-summary.js';
 import { createViewSwitch } from './src/features/view-switch.js';
 import { startAppEntrance } from './src/features/app-entrance.js';
+import { openHelpFromAddress } from './src/features/help-link.js';
 import { createLocalStore } from './src/state/local-store.js';
 import { BLOCKED_NOTICE, ensureStorage } from './src/state/browser-storage.js';
 import { createSyncLedger } from './src/sync/ledger.js';
@@ -3737,7 +3738,12 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   feedbackFeature.noteVersionSeen();
   trackAppActive({ installed: window.matchMedia?.('(display-mode: standalone)')?.matches || navigator.standalone === true });
   // Gift, purchase and licence links open above first-run setup and return to it.
-  requestAnimationFrame(() => { onboarding.maybeOpen(); plusFeature.handleLaunch(); });
+  // /?help opens How it works, except on a first run or under one of those (src/features/help-link.js).
+  requestAnimationFrame(() => {
+    const firstRun = onboarding.maybeOpen();
+    const launchDialog = plusFeature.handleLaunch();
+    openHelpFromAddress({ firstRun, launchDialog, open: () => { const help = qs('[data-help-modal]'); updateStorageUsage(); openModal(help, qs('.modal__close', help)); } });
+  });
   // The first day is drawn: show the planner, with its entrance once per session (src/features/app-entrance.js).
   startAppEntrance({ dialog: !settings.onboardingComplete });
   // Once per feature release, a little after opening, what's new and a request for feedback (never over another dialog).
