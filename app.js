@@ -1628,7 +1628,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
       // A panel that left with an exit animation keeps its last frame inline;
       // returning dialogs (preserveScroll) reappear without an entrance, so reset it.
       if (options.preserveScroll) resetMotion(qs('.modal__panel', modal)); else modalEnter(qs('.modal__panel', modal));
-      setTimeout(() => focusTarget?.focus({ preventScroll: true }), 80);
+      // Only while it is still the dialog on top: one opened over it meanwhile (a licence link on a first run) keeps the focus.
+      setTimeout(() => { if (activeModal === modal) focusTarget?.focus({ preventScroll: true }); }, 80);
     });
   }
 

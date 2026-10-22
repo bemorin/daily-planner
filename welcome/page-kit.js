@@ -1,12 +1,13 @@
 // Imported as a namespace so a value missing from an older config.js reads as
 // undefined instead of failing the whole module.
 import * as config from '../src/config.js';
+import { setupTopMenu } from './top-menu.js';
 
 /* ============================================================================
    Small pieces shared by the welcome pages (/welcome/, /teams/, /contact/,
    /partners/, /welcome/thanks/): DOM helpers, the header that gains a
-   hairline once the page scrolls, the footer's social links, and copying
-   text. No page logic here.
+   hairline once the page scrolls (and its menu on a phone), the footer's
+   social links, and copying text. No page logic here.
    ============================================================================ */
 
 export const qs = (selector, root = document) => root.querySelector(selector);
@@ -42,10 +43,14 @@ export function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-/** The header gains its hairline once the page has scrolled. */
+/**
+ * The header gains its hairline once the page has scrolled; below 960px its
+ * Menu button opens the section links (welcome/top-menu.js).
+ */
 export function setupTopBar() {
   const top = qs('[data-top]');
   if (!top) return;
+  setupTopMenu(top);
   let ticking = false;
   const onScroll = () => {
     if (ticking) return;

@@ -292,7 +292,7 @@ test('the landing page leads to the Teams page: menu, banner and every request l
   assert.match(foot, /<a href="\.\.\/contact\/">Contact<\/a>/);
   assert.match(foot, /<nav class="foot__links" aria-label="Social links" hidden>\s*<span class="foot__social" data-social hidden><\/span>\s*<\/nav>/);
   assert.doesNotMatch(foot, /data-support|teams\/|partners\/|#plus|#pricing|Open the planner/);
-  assert.match(page, /Help page explains every feature and shortcut, or <a href="\.\.\/contact\/">ask a question<\/a>\./);
+  assert.match(page, /Something missing\? <a href="\.\.\/\?help" data-cta="app">The planner’s own Help page<\/a> explains every feature and shortcut, or <a href="\.\.\/contact\/">ask a question<\/a>\./, 'the Help page opens in the planner (/?help)');
   assert.doesNotMatch(page, /href="#(?:teams|request|team-prices|seats)"|data-request=/, 'no link to a part that moved');
   // Every in-page link points at something on the page, on both pages.
   for (const file of ['welcome/index.html', 'teams/index.html']) {

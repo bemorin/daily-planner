@@ -3,7 +3,7 @@
 import * as config from '../src/config.js';
 import { checkoutOptions, plannerApiEnabled, rememberReferral, trackEvent } from '../src/lib/planner-api.js';
 import { pageCurrency, readCheckoutOptions } from '../welcome/landing-model.js';
-import { renderFooter } from '../welcome/page-kit.js';
+import { renderFooter, setupTopBar } from '../welcome/page-kit.js';
 import { motionWanted, reduceQuery, setupFaq, setupReveal } from '../welcome/page-motion.js';
 import { exampleMonth, formatCents, formatCommission, pageFigures, partnerPage, rateRows } from './partners-model.js';
 
@@ -79,14 +79,6 @@ function render(currency) {
   });
 }
 
-function setupTop() {
-  const top = qs('.top');
-  if (!top) return;
-  const update = () => top.classList.toggle('is-scrolled', window.scrollY > 4);
-  update();
-  window.addEventListener('scroll', update, { passive: true });
-}
-
 // A partner's own link may lead here too (?ref=CODE): kept like on the landing page.
 if (apiOn) rememberReferral();
 render(pageCurrency(null));
@@ -98,7 +90,7 @@ document.addEventListener('click', event => {
   if (event.target.closest('[data-partner-cta]')) track('partner_cta_clicked');
 });
 
-setupTop();
+setupTopBar();
 const motionHooks = [];
 setupReveal({ motionOn: motionWanted(), motionHooks });
 setupFaq();

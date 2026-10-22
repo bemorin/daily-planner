@@ -325,7 +325,9 @@ h3 { font-size: 1.12rem; font-weight: 690; line-height: 1.3; letter-spacing: -.0
 
 .top__teams { display: none; }
 
-@media (min-width: 400px) {
+/* The shortcut beside the button (Teams, Prices) once there is room for it
+   next to the Menu button; the menu has it too. */
+@media (min-width: 480px) {
   .top__teams { display: inline-block; }
 }
 
@@ -333,6 +335,99 @@ h3 { font-size: 1.12rem; font-weight: 690; line-height: 1.3; letter-spacing: -.0
   .top__nav { display: flex; margin-right: 8px; }
   .top__teams { display: none; }
 }
+
+/* The Menu button, last in the bar below 960px: two lines that turn into a
+   cross while the menu is open. Its room is kept from the first paint, so
+   nothing moves when welcome/top-menu.js makes it visible (`is-ready`);
+   without JavaScript it never shows. */
+.top__menu {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  margin-right: -6px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.top__menu:not(.is-ready) { visibility: hidden; }
+
+.top__menu:hover,
+.top__menu[aria-expanded="true"] { background: var(--soft); }
+
+.top__menu svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+
+.top__menu path { transform-box: fill-box; transform-origin: center; }
+
+.top__menu[aria-expanded="true"] path:first-child { transform: translateY(3.5px) rotate(45deg); }
+
+.top__menu[aria-expanded="true"] path:last-child { transform: translateY(-3.5px) rotate(-45deg); }
+
+@media (min-width: 960px) {
+  .top__menu { display: none; }
+}
+
+/* A phone: room for the Menu button beside the brand and the bar's button. */
+@media (max-width: 479.98px) {
+  .top__inner { gap: 8px; }
+  .top .brand { gap: 9px; font-size: .95rem; }
+  .top__actions .btn--sm { padding-inline: 12px; font-size: .87rem; }
+}
+
+/* The narrowest phones keep the mark and drop the name beside it (the link keeps its label). */
+@media (max-width: 355.98px) {
+  .top .brand span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+
+/* The menu: the bar's own section links, as a panel under the Menu button,
+   over a light scrim that belongs to the bar (a tap on it closes the menu
+   without reaching the page). Below 960px only: the desktop bar shows them. */
+@media (max-width: 959.98px) {
+  .top__nav {
+    position: absolute;
+    z-index: 2;
+    top: calc(100% + 8px);
+    right: var(--gutter);
+    width: min(320px, calc(100% - 2 * var(--gutter)));
+    max-height: calc(100dvh - var(--top-h) - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--surface-strong);
+    box-shadow: var(--shadow-pop);
+    opacity: 0;
+    transform: translateY(-6px) scale(.985);
+    transform-origin: top right;
+  }
+  .top.is-menu-open .top__nav { display: flex; }
+  .top.is-menu-shown .top__nav { opacity: 1; transform: none; }
+  .top__nav a { display: flex; align-items: center; min-height: 46px; padding: 10px 14px; border-radius: 10px; color: var(--ink); font-size: 1rem; }
+  .top__nav a:hover { background: var(--soft); }
+  .top__nav a:focus-visible { outline-offset: -2px; border-radius: 10px; }
+  .top::after { content: ""; position: absolute; z-index: 1; top: 100%; left: 0; right: 0; height: 100vh; display: none; background: var(--scrim); opacity: 0; }
+  .top.is-menu-open::after { display: block; }
+  .top.is-menu-shown::after { opacity: 1; }
+  /* The bar stays as it is over the scrim, with its hairline. */
+  .top.is-menu-open { border-bottom-color: var(--line); background: var(--paper); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .top__nav,
+  .top::after { transition: opacity 160ms ease, transform 220ms cubic-bezier(.22, 1, .36, 1); }
+  .top__menu path { transition: transform 220ms cubic-bezier(.22, 1, .36, 1); }
+}
+
+html.has-menu { overflow: hidden; padding-right: var(--scrollbar-gap, 0px); }
 
 /* Sections -------------------------------------------------------------------- */
 
@@ -934,21 +1029,13 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 
-/* The end of the form: consent and fine print on the left, the button on the
-   right, where the eye finishes the form; stacked on a phone, button last. */
+/* The end of the form: the fine print on the left, the button on the right,
+   where the eye finishes the form; stacked on a phone, button last. */
 .team-form__foot { display: grid; gap: 18px; margin-top: 4px; padding-top: 22px; border-top: 1px solid var(--band-line); }
 
 .team-form__fine { display: grid; align-content: center; justify-items: start; gap: 8px; min-width: 0; }
 
-.consent { display: inline-flex; align-items: flex-start; gap: 12px; cursor: pointer; }
-
-.consent input { width: 22px; height: 22px; flex: 0 0 auto; margin: 1px 0 0; accent-color: var(--band-accent); }
-
-.field__err--consent { margin-top: -4px; padding-left: 34px; }
-
 .form-privacy { max-width: 54em; color: var(--band-muted); font-size: .88rem; line-height: 1.5; }
-
-.consent:not([hidden]) ~ .form-privacy { padding-left: 34px; }
 
 .form-privacy a { color: var(--band-ink); text-underline-offset: 3px; }
 
@@ -1717,21 +1804,14 @@ input[type="number"]::-webkit-outer-spin-button { margin: 0; -webkit-appearance:
 .faq__intro a,
 .qa__a a { color: var(--ink); font-weight: 620; text-decoration-color: color-mix(in srgb, var(--misogi) 60%, transparent); text-underline-offset: 3px; }
 
-.foot__legal { padding-left: 20px; border-left: 1px solid var(--line); }
-
 @media (max-width: 759.98px) {
   .foot__brand { flex-basis: 100%; }
-  .foot__legal { padding-left: 0; border-left: 0; }
 }
 
 .foot__social { display: inline-flex; gap: 20px; }
 
-.foot__support a { color: var(--ink); font-weight: 600; text-underline-offset: 3px; }
-
-/* The landing page's second footer row: legal pages, and what the page counts. */
+/* Every footer's second row: the legal pages and Contact, and what the page counts. */
 .foot__base { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 28px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); font-size: .88rem; }
-
-.foot__base .foot__legal { padding-left: 0; border-left: 0; }
 
 .foot__counts { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; padding: 0 12px 0 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; }
 

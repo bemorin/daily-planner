@@ -79,3 +79,12 @@ test('“Help in the planner” on the Contact page opens the planner on How it 
   assert.ok(link, 'the link is there');
   assert.equal(link[1], '../?help');
 });
+
+test('the landing page’s FAQ points to the same Help', () => {
+  assert.match(read('welcome/index.html'), /<a href="\.\.\/\?help" data-cta="app">The planner’s own Help page<\/a>/);
+});
+
+test('a dialog that opens over another as the planner loads keeps the focus (a licence link on a first run)', () => {
+  // openModal moves focus into its dialog a moment later: only while that dialog is still the one on top.
+  assert.match(read('app.js'), /setTimeout\(\(\) => \{ if \(activeModal === modal\) focusTarget\?\.focus\(\{ preventScroll: true \}\); \}, 80\);/);
+});

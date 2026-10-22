@@ -740,7 +740,7 @@ function start() {
   checkMember();
   setupCompare();
   setupBuyButtons(buy, { onReturn: hideMemberCheck });
-  renderFooter({ supportEmail: LANDING.supportEmail });
+  renderFooter();
   createPrivacyDialog({
     dialog: qs('[data-privacy-dialog]'),
     enabled: apiOn,

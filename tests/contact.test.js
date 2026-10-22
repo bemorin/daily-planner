@@ -225,8 +225,8 @@ test('from 960px the card keeps to the window as the page scrolls, only when all
   assert.equal(cardFollows(), false);
   const css = await read('contact/contact.css');
   const wide = css.slice(css.indexOf('/* From 960px the card keeps to the window'));
-  assert.match(wide, /@media \(min-width: 960px\) \{\n {2}\.ct \{ padding-bottom: 0; \}/, 'the section’s bottom space moves into the grid…');
-  assert.match(wide, /grid-template-rows: auto 1fr calc\(clamp\(64px, 8vw, 112px\) - 48px\);\n {4}grid-template-areas: "intro card" "more card" "\. \.";/, '…as a last, empty row the card can slide through');
+  assert.match(wide, /@media \(min-width: 960px\) \{\n {2}\.ct \{ padding-bottom: 40px; \}/, 'the card stops 40px above the footer, never on its hairline…');
+  assert.match(wide, /grid-template-rows: auto 1fr max\(0px, clamp\(64px, 8vw, 112px\) - 88px\);\n {4}grid-template-areas: "intro card" "more card" "\. \.";/, '…after sliding through the row gap and a last, empty row (48px + that row + 40px: the space as before)');
   assert.match(wide, /\.ct__card\.is-following \{ position: sticky; top: calc\(var\(--top-h\) \+ 24px\); \}\n\}/, 'below the top bar, at desktop widths only');
   assert.match(css, /padding: clamp\(32px, 6vw, 88px\) 0 clamp\(64px, 8vw, 112px\);/, 'the same space as before, on phones too');
   assert.match(css, /body\.contact-page \{ padding-bottom: 0; \}/, 'no room kept under the footer for a dock this page doesn’t have');

@@ -59,7 +59,7 @@ test('every footer is built the same: the brand, its social links, the legal pag
 });
 
 test('every page’s script fills in the social links, and shows what it counts only when it counts', () => {
-  for (const [file, call] of [['teams/teams.js', /^renderFooter\(\);$/m], ['contact/contact.js', /^renderFooter\(\);$/m], ['partners/partners.js', /^renderFooter\(\);$/m], ['welcome/thanks/thanks.js', /^ {2}renderFooter\(\);$/m], ['welcome/landing.js', /renderFooter\(/]]) {
+  for (const [file, call] of [['teams/teams.js', /^renderFooter\(\);$/m], ['contact/contact.js', /^renderFooter\(\);$/m], ['partners/partners.js', /^renderFooter\(\);$/m], ['welcome/thanks/thanks.js', /^ {2}renderFooter\(\);$/m], ['welcome/landing.js', /^ {2}renderFooter\(\);$/m]]) {
     assert.match(read(file), call, file);
   }
   for (const file of ['contact/contact.js', 'partners/partners.js', 'welcome/thanks/thanks.js']) assert.match(read(file), /qsa\('\[data-counts-link\]'\)\.forEach\(link => \{ link\.hidden = !apiOn; \}\);/, file);

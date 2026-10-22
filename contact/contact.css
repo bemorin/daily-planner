@@ -1,7 +1,7 @@
 /* Contact page (contact/, at /contact/) ----------------------------------------
    Loaded after ../welcome/landing.css and built on its tokens and parts (.top,
    .wrap, .kicker, .lead, .btn, .foot) and on the request form's (.team-form,
-   .fields, .field, .consent, .form-done), which sit here on a light card
+   .fields, .field, .form-done), which sit here on a light card
    instead of the Teams page's dark band: the card gives the band's tokens
    the page's own colours. Its own parts carry the `ct` prefix. The intro and
    the card arrive with CSS alone; the list below rises in
@@ -31,15 +31,16 @@ body.contact-page { padding-bottom: 0; }
 }
 
 /* From 960px the card keeps to the window while the page scrolls: it slides
-   down, under the top bar, through the space the section keeps below it
-   (a last, empty row of the grid instead of the section's bottom padding,
-   so a sticky card can travel through it; the space looks the same). Only
-   when the whole card fits below the top bar (contact.js adds
-   `is-following`): a taller card would keep its own button out of sight. */
+   down, under the top bar, through most of the space the section keeps below
+   it (the grid's row gap and a last, empty row), and stops 40px above the
+   footer (the section's bottom padding, which it never crosses); at rest the
+   space looks as before. Only when the whole card fits below the top bar
+   (contact.js adds `is-following`): a taller card would keep its own button
+   out of sight. */
 @media (min-width: 960px) {
-  .ct { padding-bottom: 0; }
+  .ct { padding-bottom: 40px; }
   .ct__grid {
-    grid-template-rows: auto 1fr calc(clamp(64px, 8vw, 112px) - 48px);
+    grid-template-rows: auto 1fr max(0px, clamp(64px, 8vw, 112px) - 88px);
     grid-template-areas: "intro card" "more card" ". .";
   }
   .ct__card.is-following { position: sticky; top: calc(var(--top-h) + 24px); }
