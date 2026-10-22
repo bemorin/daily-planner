@@ -44,7 +44,7 @@ export const LEGAL_REGISTRATION = runtimeValue('LEGAL_REGISTRATION');
 // are PARTNER_PROGRAM in src/lib/pricing.js.
 export const AFFILIATE_URL = /^https:\/\/[^\s"'<>]+$/.test(runtimeValue('AFFILIATE_URL')) ? runtimeValue('AFFILIATE_URL') : '';
 // Kept in step with package.json by scripts/check.mjs; feedback is grouped by it.
-export const APP_VERSION = '1.33.0';
+export const APP_VERSION = '1.33.1';
 // Public/project links are deployment configuration, not repository defaults.
 
 

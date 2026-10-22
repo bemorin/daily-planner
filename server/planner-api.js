@@ -13,9 +13,9 @@
 // - Feedback: what someone chose to send; email only if they added one.
 // - Team kit requests: the work email, company, team size, plan, currency and
 //   kind of request someone typed (a question: only the email, name and
-//   question), kept to reply to that request, only with explicit consent
-//   (`consent: true`, the box the form asks to tick; required again since
-//   1.33, after 1.32 went without), and the partner code
+//   question), kept to reply to that request (no consent box since 1.33.1,
+//   as in 1.32: replying is what it is sent for, and the form shows an
+//   information notice instead), and the partner code
 //   remembered on that browser (?ref= link), if any, so a team order by
 //   invoice can earn that partner 10% (migration 0007). Deletable.
 // - Email (optional, Resend, see server/email.js): the owner is notified of
@@ -379,8 +379,8 @@ function teamFields(body, question) {
  * Validate a team kit request, or a question. Returns { entry }, { error } or
  * { spam }. An invoice, a quote or a talk names the company, the team size
  * and the timing; a question needs none of them (no plan or currency either),
- * but its message is the question, so it can't be empty. Every kind needs
- * `consent: true`: the box agreeing that what is sent is used to reply.
+ * but its message is the question, so it can't be empty. No box to tick:
+ * `consent` is neither needed nor stored.
  */
 export function validateTeamRequest(body, now = new Date()) {
   if (body?.website) return { spam: true };
@@ -395,8 +395,7 @@ export function validateTeamRequest(body, now = new Date()) {
   const message = clip(body?.message, 2000);
   if (message.length > 1000) return { error: 'Please keep the message under 1,000 characters.' };
   if (question && !message) return { error: 'Please write your question.' };
-  // Every kind needs the box ticked (1.33): exactly true, as the waitlist's. A 1.32 page sends none and is refused, with words that say why.
-  if (body?.consent !== true) return { error: 'Please tick the box so we can use your details to reply to you (reload the page if you don’t see the box).' };
+  // No consent to give (1.33.1, as in 1.32): it is sent to be answered. A cached 1.33.0 page still sends `consent: true`, which is ignored.
   const version = VERSION_RE.test(String(body?.version || '')) ? String(body.version) : '';
   return {
     entry: {

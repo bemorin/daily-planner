@@ -9,7 +9,7 @@ export const WHATS_NEW = Object.freeze({
   version: '1.33',
   items: Object.freeze([
     'Partners get a private page with the visits through their link, their sales and each team commission: pending, earned, paid or waiting.',
-    'The Contact and Teams forms ask you to tick a box again, with a label that says exactly what you agree to.',
+    'The Contact and Teams forms stay simple: no box to tick, and a short note says how what you send is used.',
     'The privacy notice now says how visits through a partner’s link are counted: a daily total, nothing about you.'
   ])
 });

@@ -73,14 +73,19 @@ export function giftLabel(gift, currency, { member = false } = {}) {
 
 /**
  * What a partner earns, from the program's terms (PARTNER_PROGRAM.rate in
- * pricing.js): “a 25% commission on every Plus purchase made through your
- * link” — true whatever Creem works it out on; without a usable rate, “a
- * commission on every Plus purchase …”.
+ * pricing.js): the offer, “a 25% commission on every Plus purchase” — true
+ * whatever Creem works it out on; without a usable rate, “a commission on
+ * every Plus purchase” — then where it comes from (PARTNER_EARN_REACH).
  */
-export function partnerEarnText(rate = PARTNER_PROGRAM.rate) {
+export function partnerOffer(rate = PARTNER_PROGRAM.rate) {
   const value = Number(rate);
-  return `${Number.isFinite(value) && value > 0 && value < 100 ? `a ${value}% commission` : 'a commission'} on every Plus purchase made through your link`;
+  return `${Number.isFinite(value) && value > 0 && value < 100 ? `a ${value}% commission` : 'a commission'} on every Plus purchase`;
 }
+
+export const PARTNER_EARN_REACH = 'made through your link';
+
+/** The whole phrase, as the Plus window says it: “a 25% commission on every Plus purchase made through your link”. */
+export const partnerEarnText = (rate = PARTNER_PROGRAM.rate) => `${partnerOffer(rate)} ${PARTNER_EARN_REACH}`;
 
 /** Who a gift is from, as a sentence reads it: the server's fallbacks ("A friend", "Your family") in lower case. */
 export function giverName(org) {
@@ -766,7 +771,9 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     qsa('[data-plus-reset-note]').forEach(node => { node.hidden = !active; });
     // How it works → Partners: always there for anyone (with the owner API), in the program's own words.
     qsa('[data-partner-entry]').forEach(node => { node.hidden = !plannerApiEnabled(); });
-    qsa('[data-partner-earn]').forEach(node => { node.textContent = partnerEarnText(); });
+    // Help's row says the offer in bold, as the owner asked: “earn a 25% commission on every Plus purchase” (the Plus
+    // window's footnote and the share sheet keep it plain).
+    qsa('[data-partner-earn]').forEach(node => node.replaceChildren(Object.assign(document.createElement('strong'), { textContent: `earn ${partnerOffer()}` }), ` ${PARTNER_EARN_REACH}`));
   }
 
   /** Opens on what Plus adds; `feature` ('year-plan', 'quarter-review', 'year-review', 'insights', 'paint-palettes') puts that one first in mind. */

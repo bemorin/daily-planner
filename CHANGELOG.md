@@ -2,6 +2,11 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.33.1 — 2026-10-22
+
+- **No consent box** on the Contact and Teams forms after all: for a contact form an information notice is what's required, and it stays under each form (what is kept, why, deletion on request, link to how requests are handled). The API no longer asks for `consent` (a cached 1.33.0 page that sends it is still accepted; the value isn't stored). The privacy policy and dialogs are back to the 1.32 basis: steps before an order (invoice, quote) and our legitimate interest in answering a question.
+- How it works: “earn a 25% commission on every Plus purchase” is in bold in the Partners row.
+
 ## 1.33.0 — 2026-10-22
 
 - **Partner payouts**: each partner code is an Individual (default) or a Business (micro-entreprise or company, any country, paid against an invoice). An Individual's team commissions are capped at €300 and at $300 per calendar year (Europe/Paris), counted by the payment date the owner enters; the dashboard pays what fits in parts (`<checkout>.<n>`), shows the rest as held until the partner is a Business or the year turns, names the exact payment on Undo, settles a commission whose payments already cover it after a partial refund (and shows an overpayment), and treats codes that differ only by case as one partner. Run `migrations/0008_partner_profiles.sql`.
