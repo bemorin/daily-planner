@@ -58,7 +58,7 @@ const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', ma
 // file, so an old cached admin.js shows its old number.
 const APP_VERSION = '1.31.0';
 // What Reload fetches again past the browser cache before opening the page anew.
-const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './requests-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/ui/motion.js', '../src/vendor/motion.js', '../src/lib/pricing.js', '../legal/legal-details.js', '../src/lib/text.js'];
+const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './requests-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/vendor/motion.js', '../src/lib/pricing.js', '../legal/legal-details.js', '../src/lib/text.js'];
 const RELOAD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/></svg>';
 
 class ApiError extends Error {
@@ -1247,7 +1247,7 @@ function partnersItem(summary, base = 'https://planner.bemorin.com') {
 // number) is left out of them, and said so here. Creem's store review asks
 // for the terms, the privacy policy and the website.
 const LEGAL_VARIABLES = [
-  ['SUPPORT_EMAIL', 'the contact address, in the legal notice, the terms and the “Support” line of the welcome and Teams pages’ footer, and for privacy questions unless <code>DAILY_PLANNER_PRIVACY_EMAIL</code> is set. Blank: the “Ask a question” form, and no Support line.'],
+  ['SUPPORT_EMAIL', 'the contact address, in the legal notice, the terms and on the Contact page (“Prefer email? Write to …”), and for privacy questions unless <code>DAILY_PLANNER_PRIVACY_EMAIL</code> is set. Blank: the “Ask a question” form only.'],
   ['PRIVACY_EMAIL', 'optional, the address for privacy questions, in the privacy policy (data controller, your rights) and the cookies page.'],
   ['LEGAL_PHONE', 'recommended (French law asks an individual publisher for one): your phone number in international form, <code>+33</code> then the number without its 0, with no spaces (e.g. <code>+33199001234</code>). The legal notice shows it as people of that country write it (<code>+33 1 99 00 12 34</code>) in a Phone row, as a link that dials it.'],
   ['LEGAL_ADDRESS', 'the postal address, in the legal notice and the privacy policy.'],

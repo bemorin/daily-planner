@@ -192,11 +192,12 @@ test('a member price the checkout doesn’t confirm is said before paying, with 
   assert.match(landing, /member\.active = false;\s*writePlusCheck\(\{ at: 0 \}\);\s*renderGifts\(\);/);
 });
 
-test('the landing page: Partners in the menu and the footer, the launch price where Plus has a price, member-price hooks, a line for coaches', async () => {
+test('the landing page: Partners in the menu (not again in the footer), the launch price where Plus has a price, member-price hooks, a line for coaches', async () => {
   const page = await read('welcome/index.html');
   const nav = /<nav class="top__nav"[\s\S]*?<\/nav>/.exec(page)[0];
-  const foot = /<nav class="foot__links"[\s\S]*?<\/nav>/.exec(page)[0];
-  for (const part of [nav, foot]) assert.match(part, /<a href="\.\.\/partners\/">Partners<\/a>/);
+  const foot = /<footer class="foot">[\s\S]*?<\/footer>/.exec(page)[0];
+  assert.match(nav, /<a href="\.\.\/partners\/">Partners<\/a>/);
+  assert.doesNotMatch(foot, /partners\//, 'the footer repeats nothing from the top bar (1.32)');
   const offer = /<div class="plus-buy__offer">[\s\S]*?<\/div>\n {10}<\/div>/.exec(page)?.[0] || /<div class="plus-buy__offer">[\s\S]*?plus-buy__trust[\s\S]*?<\/p>/.exec(page)[0];
   assert.match(offer, /data-launch-label>Launch price</);
   assert.match(offer, /data-launch-line>Pay once during the launch and Plus is yours for life\. After the launch, Plus becomes a yearly subscription for new members\.</);
@@ -258,7 +259,11 @@ test('the partners page: landing style and motion, every section, the rules, the
   assert.equal((page.match(/data-partner-cta/g) || []).length, 3);
   assert.equal((page.match(/href="\.\.\/contact\/\?topic=partners" data-partner-cta>Become a partner</g) || []).length, 3, 'works without JavaScript too');
   assert.match(page, /Something else\? <a href="\.\.\/contact\/\?topic=partners">Ask a question<\/a> about the partner program\./);
-  assert.match(/<nav class="foot__links"[\s\S]*?<\/nav>/.exec(page)[0], /<a href="\.\.\/contact\/">Ask a question<\/a>/);
+  // The footer: Open the planner (the top bar has no such button here), then the legal pages and Contact.
+  const foot = /<footer class="foot">[\s\S]*?<\/footer>/.exec(page)[0];
+  assert.deepEqual([...foot.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(match => [match[1], match[2]]), [['https://bemorin.com/', 'Ben Morin'], ['../', 'Open the planner'], ['../legal/privacy/', 'Privacy'], ['../legal/terms/', 'Terms'], ['../legal/cookies/', 'Cookies'], ['../legal/', 'Legal notice'], ['../contact/', 'Contact']]);
+  assert.match(foot, /<span class="foot__social" data-social hidden><\/span>/);
+  assert.match(script, /^renderFooter\(\);$/m, 'its social links, once set');
   assert.doesNotMatch(page, /teams\/\?ask=|#request/, 'nothing left pointing at the Teams page’s form');
   assert.doesNotMatch(page, /href="\.\.\/(?:welcome\/)?\?ask=|href="\.\.\/(?:welcome\/)?#request/, 'nothing left pointing at the landing page’s old form');
   const legal = /<nav class="foot__legal"[\s\S]*?<\/nav>/.exec(page)[0];

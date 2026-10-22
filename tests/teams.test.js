@@ -210,6 +210,10 @@ test('the Teams page: its own address, the landing page’s head, header and foo
   assert.deepEqual([...nav.matchAll(/<a href="([^"]+)"/g)].map(match => match[1]), ['../welcome/#how', '../welcome/#year', '../welcome/#plus', './', '../welcome/#pricing', '#faq', '../partners/']);
   const legal = /<nav class="foot__legal"[\s\S]*?<\/nav>/.exec(page)[0];
   assert.deepEqual([...legal.matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map(match => [match[1], match[2]]), [['../legal/privacy/', 'Privacy'], ['../legal/terms/', 'Terms'], ['../legal/cookies/', 'Cookies'], ['../legal/', 'Legal notice']]);
+  // The footer repeats nothing from the top bar (1.32): the brand, the social links once set, the legal pages and Contact.
+  const foot = /<footer class="foot">[\s\S]*?<\/footer>/.exec(page)[0];
+  assert.deepEqual([...foot.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(match => [match[1], match[2]]), [['https://bemorin.com/', 'Ben Morin'], ['../legal/privacy/', 'Privacy'], ['../legal/terms/', 'Terms'], ['../legal/cookies/', 'Cookies'], ['../legal/', 'Legal notice'], ['../contact/', 'Contact']]);
+  assert.match(await read('teams/teams.js'), /^renderFooter\(\);$/m);
   assert.match(page, /<body class="teams-page">/);
 });
 
@@ -278,14 +282,16 @@ test('the team questions moved to the Teams page FAQ, in the welcome FAQ’s sty
   assert.doesNotMatch(landing, /<h3 class="faq__label">Team gift<\/h3>/);
 });
 
-test('the landing page leads to the Teams page: menu, banner, footer and every request link', async () => {
+test('the landing page leads to the Teams page: menu, banner and every request link; its footer repeats none of the top bar', async () => {
   const page = await read('welcome/index.html');
   const nav = /<nav class="top__nav"[\s\S]*?<\/nav>/.exec(page)[0];
   assert.match(nav, /<a href="\.\.\/teams\/">Teams<\/a>/);
   assert.match(page, /<a class="top__teams" href="\.\.\/teams\/">Teams<\/a>/);
-  const foot = /<nav class="foot__links"[\s\S]*?<\/nav>/.exec(page)[0];
-  assert.match(foot, /<a href="\.\.\/teams\/">Team gift<\/a>/);
-  assert.match(foot, /<a href="\.\.\/contact\/">Ask a question<\/a>/);
+  const foot = /<footer class="foot">[\s\S]*?<\/footer>/.exec(page)[0];
+  assert.deepEqual([...foot.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(match => match[2]), ['Ben Morin', 'Privacy', 'Terms', 'Cookies', 'Legal notice', 'Contact']);
+  assert.match(foot, /<a href="\.\.\/contact\/">Contact<\/a>/);
+  assert.match(foot, /<nav class="foot__links" aria-label="Social links" hidden>\s*<span class="foot__social" data-social hidden><\/span>\s*<\/nav>/);
+  assert.doesNotMatch(foot, /data-support|teams\/|partners\/|#plus|#pricing|Open the planner/);
   assert.match(page, /Help page explains every feature and shortcut, or <a href="\.\.\/contact\/">ask a question<\/a>\./);
   assert.doesNotMatch(page, /href="#(?:teams|request|team-prices|seats)"|data-request=/, 'no link to a part that moved');
   // Every in-page link points at something on the page, on both pages.
@@ -328,8 +334,9 @@ test('the Teams page script: entrances, FAQ, replica, counts', async () => {
 test('the gift page sends questions to the Contact page', async () => {
   const page = await read('welcome/thanks/index.html');
   assert.doesNotMatch(page, /href="\.\.\/\?ask=|href="\.\.\/#teams"|ask=question/);
+  // “Ask a question” on the page, and Contact in the footer (which repeats nothing from the top bar: 1.32).
   assert.equal((page.match(/href="\.\.\/\.\.\/contact\/"/g) || []).length, 2);
-  assert.equal((page.match(/href="\.\.\/\.\.\/teams\/"/g) || []).length, 2);
+  assert.equal((page.match(/href="\.\.\/\.\.\/teams\/"/g) || []).length, 1);
 });
 
 test('the Teams page is /teams/; its old address redirects there (tests/redirects.test.js)', async () => {

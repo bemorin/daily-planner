@@ -277,7 +277,12 @@ test('Week · Month · Year is a radio group whose pill slides like the planner�
   assert.doesNotMatch(group, /aria-pressed/);
 
   const view = await read('admin/trends-view.js');
-  assert.match(view, /import \{ slideIndicator \} from '\.\.\/src\/ui\/motion\.js';/, 'the planner’s own slide (no movement with reduced motion)');
+  // The planner's slide (the same spring as src/ui/motion.js slideIndicator), straight from the library: src/ui/motion.js would mark the page has-motion and take the dropdowns' transition away.
+  assert.match(view, /import \{ animate, spring \} from '\.\.\/src\/vendor\/motion\.js';/);
+  assert.doesNotMatch(view, /src\/ui\/motion\.js'/);
+  assert.match(view, /animate\(pill, keyframes, \{ type: spring, bounce: 0\.16, duration: 0\.4 \}\)/);
+  assert.match(await read('src/ui/motion.js'), /return run\(indicator, keyframes, \{ type: spring, bounce: 0\.16, duration: 0\.4 \}, \[\]\);/, 'still the planner’s');
+  assert.match(view, /if \(!animateMove \|\| !from\.width \|\| reducedMotion\(\) \|\| typeof pill\.animate !== 'function'\) return;/, 'no movement with reduced motion');
   assert.match(view, /button\.setAttribute\('aria-checked', String\(on\)\);\n {6}button\.tabIndex = on \? 0 : -1;/);
   assert.match(view, /syncSwitch\(\{ animate: true \}\);/, 'it slides when a period is chosen');
   assert.match(view, /new ResizeObserver\(\(\) => placeIndicator\(false\)\)\.observe\(group\)/, 'and is placed without sliding once shown or resized');

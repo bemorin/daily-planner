@@ -8,7 +8,8 @@ import {
   sectionUsage, installUsage, saleCurrencies, yearsToShow, PERIODS
 } from './trends.js';
 import { columnChart, sparklineHtml } from './charts.js';
-import { slideIndicator } from '../src/ui/motion.js';
+// The animation library itself, not src/ui/motion.js: that one marks the page `has-motion`, which would take the dashboard's dropdowns' own transition away.
+import { animate, spring } from '../src/vendor/motion.js';
 
 const PERIOD_KEY = 'daily-planner-owner-trends-period';
 
@@ -97,6 +98,25 @@ export function periodKeyTarget(key, at, count) {
   return -1;
 }
 
+const reducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * The raised pill onto `target`, sliding there like the planner's view
+ * switch (src/ui/motion.js slideIndicator: the same soft spring), or at once
+ * the first time, with `animateMove` off or with reduced motion.
+ */
+function slidePill(pill, target, animateMove) {
+  const next = { left: `${target.offsetLeft}px`, top: `${target.offsetTop}px`, width: `${target.offsetWidth}px`, height: `${target.offsetHeight}px` };
+  const from = { left: pill.style.left, width: pill.style.width };
+  Object.assign(pill.style, next);
+  pill.dataset.ready = 'true';
+  if (!animateMove || !from.width || reducedMotion() || typeof pill.animate !== 'function') return;
+  const keyframes = {};
+  ['left', 'width'].forEach(key => { if (from[key] !== next[key]) keyframes[key] = [from[key], next[key]]; });
+  if (!Object.keys(keyframes).length) return;
+  try { animate(pill, keyframes, { type: spring, bounce: 0.16, duration: 0.4 }); } catch (_) { /* it is already in place */ }
+}
+
 function readPeriod(storage) {
   try {
     const saved = storage?.getItem(PERIOD_KEY);
@@ -159,12 +179,12 @@ export function createTrendsView(root, { storage = globalThis.localStorage } = {
   const destroyCharts = () => { charts.forEach(chart => chart.destroy()); charts = []; };
 
   // Week · Month · Year: a radio group whose raised pill slides to the period
-  // chosen, like the planner's Day · Week · Horizon (src/ui/motion.js: it
-  // simply moves with reduced motion). Before the pill has measured itself
-  // (the dashboard starts hidden), the chosen button carries the look.
-  function placeIndicator(animate) {
+  // chosen, like the planner's Day · Week · Horizon (slidePill; it simply
+  // moves with reduced motion). Before the pill has measured itself (the
+  // dashboard starts hidden), the chosen button carries the look.
+  function placeIndicator(animateMove) {
     const active = switches.find(button => button.dataset.trendsPeriod === period);
-    if (indicator && active?.offsetWidth) slideIndicator(indicator, active, { animateMove: animate });
+    if (indicator && active?.offsetWidth) slidePill(indicator, active, animateMove);
   }
 
   function syncSwitch({ animate = false } = {}) {

@@ -7,6 +7,10 @@
    the card arrive with CSS alone; the list below rises in
    (welcome/page-motion.js); nothing moves with reduced motion. */
 
+/* No dock on this page (landing.css keeps room for the landing page's on
+   phones), so nothing is left blank under the footer. */
+body.contact-page { padding-bottom: 0; }
+
 .ct { padding: clamp(32px, 6vw, 88px) 0 clamp(64px, 8vw, 112px); }
 
 /* Phone: the intro, the form, then the list. From 960px: the intro and the

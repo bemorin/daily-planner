@@ -17,7 +17,9 @@ import { CONTACT_SOURCE, cardFollows, contactTopic } from '../welcome/teams-mode
    without the API it becomes an email to SUPPORT_EMAIL. Beside it, a few
    pointers (Help in the planner, the team gift, the partner program, and the
    privacy address when PRIVACY_EMAIL is set) and, when SUPPORT_EMAIL is set,
-   the plain address as another way to write.
+   the plain address as another way to write. “Help in the planner” opens the
+   planner on How it works (/?help, src/features/help-link.js). From 960px the
+   form's card keeps to the window as the page scrolls (followCard).
    ============================================================================ */
 
 const html = document.documentElement;

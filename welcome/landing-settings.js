@@ -24,9 +24,11 @@ export const LANDING = Object.freeze({
   // either, the form stays visible but cannot be sent.
   // “<support@example.com>” and “Support <support@example.com>” work too.
   contactEmail: '',
-  // A reachable support address, shown as "Support: …" in the footer when set
-  // (the payment provider's review asks for one that matches this site).
-  // Blank here: the site's SUPPORT_EMAIL (runtime config) is used instead.
+  // A reachable support address, shown on the Contact page ("Prefer email?
+  // Write to …") when set (the payment provider's review asks for one that
+  // matches this site; the legal notice shows SUPPORT_EMAIL too). No footer
+  // shows it (1.32). Blank here: the site's SUPPORT_EMAIL (runtime config) is
+  // used instead.
   supportEmail: '',
   // Optional promise shown after a request, e.g. 'within two working days'.
   replyDelay: '',

@@ -35,7 +35,7 @@ export const CONFIG_GROUPS = Object.freeze([
   Object.freeze({ id: 'creem', title: 'Creem', text: 'Payments: the API key, the four products and the webhook, checked with read-only calls to Creem.' }),
   Object.freeze({ id: 'resend', title: 'Resend', text: 'Email: the API key, the sender’s domain and where notifications go.' }),
   Object.freeze({ id: 'plus', title: 'Plus licences', text: 'The key pair that signs licences (on the server) and checks them (in the planner). Replacing it invalidates every licence already issued.' }),
-  Object.freeze({ id: 'legal', title: 'Legal pages', text: 'Build variables shown on the legal pages and in the welcome pages’ footer.' })
+  Object.freeze({ id: 'legal', title: 'Legal pages', text: 'Build variables shown on the legal pages and the Contact page.' })
 ]);
 
 const v = fields => Object.freeze(fields);
@@ -108,7 +108,7 @@ export const CONFIG_VARIABLES = Object.freeze([
 
   // ---- Legal pages -------------------------------------------------------------
   v({ name: 'DAILY_PLANNER_SUPPORT_EMAIL', where: 'build', runtimeKey: 'SUPPORT_EMAIL', group: 'legal', level: 'recommended', secret: false, type: 'Text', format: 'legal-email',
-    source: 'An address on your own domain, e.g. support@yourdomain.com.', unlocks: 'The contact address of the legal notice, the terms and the welcome pages’ footer (and privacy questions, without a privacy address).', blocks: 'Without a plain address, the legal pages and the footers point to the question form instead of an email address.' }),
+    source: 'An address on your own domain, e.g. support@yourdomain.com.', unlocks: 'The contact address of the legal notice, the terms and the Contact page (and privacy questions, without a privacy address).', blocks: 'Without a plain address, the legal pages and the Contact page point to the question form instead of an email address.' }),
   v({ name: 'DAILY_PLANNER_PRIVACY_EMAIL', where: 'build', runtimeKey: 'PRIVACY_EMAIL', group: 'legal', level: 'optional', secret: false, type: 'Text', format: 'legal-email',
     source: 'An address for privacy questions, e.g. privacy@yourdomain.com.', unlocks: 'The privacy policy’s and the cookies page’s contact.', blocks: 'Blank: the support address is used.' }),
   v({ name: 'DAILY_PLANNER_LEGAL_PHONE', where: 'build', runtimeKey: 'LEGAL_PHONE', group: 'legal', level: 'recommended', secret: false, type: 'Text', format: 'phone',
