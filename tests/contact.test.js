@@ -72,12 +72,15 @@ test('the Contact page’s form is the question form alone: no kinds, no team fi
   assert.ok(form, 'the request form’s markup, on a light card');
   assert.match(form, /data-team-form data-kind="question" novalidate aria-labelledby="contact-title" aria-describedby="contact-intro"/);
   assert.doesNotMatch(form, /data-kind-group|data-team-field|data-listbox|name="(?:kind|company|plan|teamSize|timing)"/);
-  assert.deepEqual([...form.matchAll(/\sname="([a-zA-Z]+)"/g)].map(match => match[1]), ['email', 'name', 'message', 'website'], 'no consent box (1.32): replying is what the form is for');
+  assert.deepEqual([...form.matchAll(/\sname="([a-zA-Z]+)"/g)].map(match => match[1]), ['email', 'name', 'message', 'website', 'consent'], 'the box to tick, back in 1.33');
   assert.match(form, /<textarea name="message" rows="6" maxlength="1000" required/);
   assert.match(form, /<span data-email-label>Email<\/span><input type="email" name="email" autocomplete="email" required maxlength="254" placeholder="you@example\.com"/);
-  assert.doesNotMatch(form, /consent|type="checkbox"/);
-  // Instead, one short line: what is kept, why, for how long, and where to read more.
-  assert.match(form, /<p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request\. <a href="\.\.\/legal\/privacy\/#requests">How questions are handled<\/a><\/p>/);
+  // A required box whose label says what it agrees to and links the privacy policy (tests/request-consent.test.js).
+  assert.match(form, /<label class="consent" data-consent-row hidden><input type="checkbox" name="consent" required aria-describedby="err-consent"><span>I agree that <span data-consent-use>my email address and question are used to reply to me<\/span>, as explained in the <a href="\.\.\/legal\/privacy\/#requests">privacy policy<\/a>\.<\/span><\/label>/);
+  assert.match(form, /<small class="field__err field__err--consent" id="err-consent"><\/small>/);
+  assert.doesNotMatch(form, /You may email me/, 'never the old, meaningless label');
+  // Under it, one short line: what is kept, for how long, deleted on request; the label already links the policy.
+  assert.match(form, /<p class="form-privacy" data-privacy-line hidden>What you send is kept to follow up on it, and deleted whenever you ask\.<\/p>/);
   assert.match(form, /data-mailto-line hidden>/);
   assert.match(form, /<button class="btn btn--light btn--send" type="submit" data-form-submit disabled>Send the question<\/button>/);
   assert.match(page, /<div class="wrap ct__grid" data-form-panel>/);
@@ -140,9 +143,9 @@ test('its questions are sent as a source the server keeps: “contact” once se
   // Until TEAM_SOURCES has 'contact', anything else is stored as 'landing': the Contact page says 'teams', where the form was.
   assert.equal(CONTACT_SOURCE, TEAM_SOURCES.has('contact') ? 'contact' : 'teams', 'switch CONTACT_SOURCE to \'contact\' when the server accepts it');
   assert.ok(TEAM_SOURCES.has(CONTACT_SOURCE));
-  const values = { email: 'ann@example.com', name: 'Ann', company: '', plan: '', teamSize: '', timing: '', message: 'Partner program: who can join?', website: '', kind: 'question' };
+  const values = { email: 'ann@example.com', name: 'Ann', company: '', plan: '', teamSize: '', timing: '', message: 'Partner program: who can join?', consent: true, website: '', kind: 'question' };
   const body = requestPayload(values, { version: '1.31.0', locale: 'fr-FR', source: CONTACT_SOURCE });
-  assert.deepEqual(body, { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', website: '', version: '1.31.0', locale: 'fr-FR', source: CONTACT_SOURCE, kind: 'question' });
+  assert.deepEqual(body, { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', consent: true, website: '', version: '1.31.0', locale: 'fr-FR', source: CONTACT_SOURCE, kind: 'question' });
   const stored = validateTeamRequest(body, new Date('2026-10-21T09:00:00Z')).entry;
   assert.deepEqual([stored.kind, stored.source, stored.company, stored.teamSize], ['question', CONTACT_SOURCE, '', 0]);
   assert.equal(requestPayload(values).source, 'teams', 'the Teams page, unless said otherwise');

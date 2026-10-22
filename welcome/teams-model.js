@@ -26,14 +26,15 @@ const TEAM_KICKER = 'Invoice, quote or question';
  * talk is about a team gift, and asks for the company, the plan, the number
  * of people and when to send it; a question (about the team gift, there)
  * asks only for an email, a name and the question. `kicker`, `title` and
- * `intro` head the panel; `again` is the button after sending. Anyone's
- * question, about anything, is the Contact page's (CONTACT_TOPICS).
+ * `intro` head the panel; `again` is the button after sending; `consent` is
+ * what the box under the form agrees to (consentLabel). Anyone's question,
+ * about anything, is the Contact page's (CONTACT_TOPICS).
  */
 export const KINDS = Object.freeze({
-  invoice: Object.freeze({ label: 'Invoice', team: true, kicker: TEAM_KICKER, title: 'Get it by invoice', intro: 'Tell us where to send the invoice. You’ll get it by email, then the gift link once it’s paid.', submit: 'Request the invoice', done: 'Thanks, your request is in. The invoice will follow by email', again: 'Send another request' }),
-  quote: Object.freeze({ label: 'Quote', team: true, kicker: TEAM_KICKER, title: 'Ask for a quote', intro: 'Tell us about your organisation, and you’ll get a quote by email.', submit: 'Ask for a quote', done: 'Thanks, your request is in. The quote will follow by email', again: 'Send another request' }),
-  question: Object.freeze({ label: 'Question', team: false, kicker: TEAM_KICKER, title: 'Ask about the team gift', intro: 'Paying, seats, privacy or timing: anything about the team gift.', submit: 'Send the question', done: 'Thanks, your question is in. You’ll get a reply by email', again: 'Ask another question' }),
-  talk: Object.freeze({ label: 'Remote talk', team: true, kicker: TEAM_KICKER, title: 'Ask about the talk', intro: 'Tell us about your team and when a remote talk would help. You’ll get a reply by email.', submit: 'Send the request', done: 'Thanks, your message is in. You’ll get a reply by email', again: 'Send another request' })
+  invoice: Object.freeze({ label: 'Invoice', team: true, kicker: TEAM_KICKER, title: 'Get it by invoice', intro: 'Tell us where to send the invoice. You’ll get it by email, then the gift link once it’s paid.', submit: 'Request the invoice', done: 'Thanks, your request is in. The invoice will follow by email', again: 'Send another request', consent: 'my details are used to reply to me and to prepare my invoice' }),
+  quote: Object.freeze({ label: 'Quote', team: true, kicker: TEAM_KICKER, title: 'Ask for a quote', intro: 'Tell us about your organisation, and you’ll get a quote by email.', submit: 'Ask for a quote', done: 'Thanks, your request is in. The quote will follow by email', again: 'Send another request', consent: 'my details are used to reply to me and to prepare my quote' }),
+  question: Object.freeze({ label: 'Question', team: false, kicker: TEAM_KICKER, title: 'Ask about the team gift', intro: 'Paying, seats, privacy or timing: anything about the team gift.', submit: 'Send the question', done: 'Thanks, your question is in. You’ll get a reply by email', again: 'Ask another question', consent: 'my email address and question are used to reply to me' }),
+  talk: Object.freeze({ label: 'Remote talk', team: true, kicker: TEAM_KICKER, title: 'Ask about the talk', intro: 'Tell us about your team and when a remote talk would help. You’ll get a reply by email.', submit: 'Send the request', done: 'Thanks, your message is in. You’ll get a reply by email', again: 'Send another request', consent: 'my details are used to reply to me about the talk' })
 });
 
 /** Whether a kind of request is about a team gift (and asks for its fields): every kind but a question. */
@@ -53,6 +54,20 @@ export const emailField = kind => (isTeamKind(kind) ? EMAIL_FIELD.team : EMAIL_F
 
 /** What heads the Teams page's panel for a kind: its kicker, title and intro. */
 export const requestCopy = kind => KINDS[kind] || KINDS.invoice;
+
+/**
+ * The box to tick before a request goes to the API (1.33): a required
+ * checkbox whose label says what it agrees to, by kind, and links “privacy
+ * policy” to legal/privacy/#requests. The pages write `before`, the kind's
+ * `consent` (KINDS, in [data-consent-use]: the only part that changes),
+ * `after`, the `link` and `end`; `missing` is what the form says when the box
+ * is left unticked. The note under the form says what is kept and for how
+ * long, not this again.
+ */
+export const CONSENT = Object.freeze({ before: 'I agree that ', after: ', as explained in the ', link: 'privacy policy', end: '.', missing: 'Tick the box so we can reply to you.' });
+
+/** The box's whole label for a kind, as a screen reader reads it. */
+export const consentLabel = kind => `${CONSENT.before}${requestCopy(kind).consent}${CONSENT.after}${CONSENT.link}${CONSENT.end}`;
 
 /**
  * The Contact page (/contact/): the question form alone, anyone's. Its head
@@ -111,8 +126,8 @@ const partnerCode = ref => (typeof ref === 'string' && /^[A-Za-z0-9_-]{2,64}$/.t
  * partner code (`ref`) when there is one. A question sends no team fields
  * (company, number of people, timing, plan, currency). `source`: the page
  * it was sent from, the Teams page unless said otherwise (CONTACT_SOURCE).
- * No `consent` (1.32): replying to a request is what it is sent for, so
- * there is no box to tick (the server still accepts it from older pages).
+ * `consent`: whether the box was ticked (CONSENT), exactly true or false; the
+ * server refuses a request without it (1.33, as before 1.32).
  */
 export function requestPayload(values, { currency = '', version = '', locale = '', ref = '', source = 'teams' } = {}) {
   const code = partnerCode(ref);
@@ -124,6 +139,7 @@ export function requestPayload(values, { currency = '', version = '', locale = '
     name: values.name,
     ...team,
     message: values.message,
+    consent: values.consent === true,
     website: values.website,
     version,
     locale,

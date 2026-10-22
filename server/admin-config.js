@@ -2,7 +2,7 @@
 // behind the owner's sign-in, answers one row per production setting of
 // server/config-inventory.js with its state, checked for real and read-only:
 //   - D1: a simple read (SELECT 1), then every table, column and index that
-//     migrations/0001…0007 create, from sqlite_master (D1 has no extensions or
+//     migrations/0001…0008 create, from sqlite_master (D1 has no extensions or
 //     scheduled jobs, and this app keeps no private settings there);
 //   - Creem: the key (GET /v1/checkouts with a made-up id: 404 means accepted,
 //     401/403 refused), each product (GET /v1/products/{id}: currency, one-time,

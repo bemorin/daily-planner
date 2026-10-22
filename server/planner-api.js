@@ -13,8 +13,9 @@
 // - Feedback: what someone chose to send; email only if they added one.
 // - Team kit requests: the work email, company, team size, plan, currency and
 //   kind of request someone typed (a question: only the email, name and
-//   question), kept to reply to that request (no consent box since 1.32:
-//   replying is what it is sent for), and the partner code
+//   question), kept to reply to that request, only with explicit consent
+//   (`consent: true`, the box the form asks to tick; required again since
+//   1.33, after 1.32 went without), and the partner code
 //   remembered on that browser (?ref= link), if any, so a team order by
 //   invoice can earn that partner 10% (migration 0007). Deletable.
 // - Email (optional, Resend, see server/email.js): the owner is notified of
@@ -73,7 +74,7 @@ import { createConfigCheckRoute } from './admin-config.js';
 import { sharedAdminLimits, waitWords } from './admin-limits.js';
 import { scrubAnswer } from './secret-scrub.js';
 import { CREEM_REASONS, OWNER_SOURCE_PREFIX, readRefundEvent, readTransaction, REFUND_EVENTS, refundNoticeEmail, refundScope, refundWaitingEmail, REVOCATION_NOTE_MAX, revocationTarget, shownScope } from './refunds.js';
-import { normalizeCodeRejection, normalizePartnerSale, normalizePayout, PARTNER_SALES_LISTED, partnerSaleRow, partnerSummary, PAYOUT_NOTE_MAX, payoutCheck } from './partners.js';
+import { normalizeCodeRejection, normalizePartnerSale, normalizePayout, normalizeProfile, PARTNER_SALES_LISTED, PARTNER_STATUSES, PARTNER_VISIT_CODES_PER_DAY, partnerSaleRow, partnerStatement, partnerStatus, partnerSummary, PAYOUT_NOTE_MAX, payoutCheck, payoutPartId, payoutParts, sharedPartnerLimits, statementUrl, statementVisitsFrom, verifyStatementKey } from './partners.js';
 import { currencyForCountry, CURRENCIES, giftPlan, hasMemberPrice, isPersonalGift, isTeamGift, PARTNER_PROGRAM, PERSONAL_GIFTS, priceCents, TEAM_TIERS, validCurrency } from '../src/lib/pricing.js';
 // The release this API was deployed with (kept in step with package.json by scripts/check.mjs).
 // The dashboard compares it with its own to spot a page served from an old cache.
@@ -210,6 +211,10 @@ export const REVIEWS_LATEST = 50;
 export const SERIES_DEFAULT_DAYS = 400;
 export const SERIES_MAX_DAYS = 1200;
 const MISSING_TABLE = 'A database table is missing. Apply every file in migrations/ to the D1 database (see docs/FEEDBACK_AND_WAITLIST.md).';
+/** A partner statement link that doesn't fit its code, or a code nobody has: the same answer. */
+const STATEMENT_INVALID = 'This statement link isn’t valid. Ask us for your private link again.';
+/** The Partners card's visits column: the last 30 days, today included. */
+const PARTNER_VISIT_DAYS = 30;
 const ANNOUNCE_SUBJECT_MAX = 150;
 const ANNOUNCE_TEXT_MAX = 8000;
 const TEAM_SIZE_MIN = 2;
@@ -366,7 +371,8 @@ function teamFields(body, question) {
  * Validate a team kit request, or a question. Returns { entry }, { error } or
  * { spam }. An invoice, a quote or a talk names the company, the team size
  * and the timing; a question needs none of them (no plan or currency either),
- * but its message is the question, so it can't be empty.
+ * but its message is the question, so it can't be empty. Every kind needs
+ * `consent: true`: the box agreeing that what is sent is used to reply.
  */
 export function validateTeamRequest(body, now = new Date()) {
   if (body?.website) return { spam: true };
@@ -381,7 +387,8 @@ export function validateTeamRequest(body, now = new Date()) {
   const message = clip(body?.message, 2000);
   if (message.length > 1000) return { error: 'Please keep the message under 1,000 characters.' };
   if (question && !message) return { error: 'Please write your question.' };
-  // No consent to give (1.32): it is sent to be answered. Older pages still send `consent: true`, which is ignored.
+  // Every kind needs the box ticked (1.33): exactly true, as the waitlist's. A 1.32 page sends none and is refused, with words that say why.
+  if (body?.consent !== true) return { error: 'Please tick the box so we can use your details to reply to you.' };
   const version = VERSION_RE.test(String(body?.version || '')) ? String(body.version) : '';
   return {
     entry: {
@@ -510,12 +517,14 @@ export const buyerCurrency = request => currencyForCountry(requestCountry(reques
  * @param {typeof fetch} [options.configFetch] fetch used by those checks (tests and the dev server inject one)
  * @param {object} [options.adminLimits] rate limits of the configuration check, the Creem setup assistant and the
  *   test email (server/admin-limits.js): the worker isolate's own by default, shared by every request; tests pass theirs
+ * @param {object} [options.partnerLimits] rate limits of a partner's statement and of the visits through partner
+ *   links (server/partners.js): the worker isolate's own by default; tests pass theirs
  */
 export function createPlannerApi({
   store, adminToken = '', adminTotpSecret = '', allowedOrigins = '', now = () => new Date(), authFailureDelayMs = AUTH_FAILURE_DELAY_MS,
   resendApiKey = '', emailFrom = '', ownerEmail = '', emailDailyLimit = '', emailFetch, emailIntervalMs = RESEND_MIN_INTERVAL_MS, notifyTimeoutMs = NOTIFY_TIMEOUT_MS,
   publicBaseUrl = '', plusSigningKey = '', creemApiKey = '', creemWebhookSecret = '', creemTestMode = '', creemProducts = {}, creemFetch,
-  defer = null, warn = message => console.warn(message), configEnv = null, configFetch, adminLimits = sharedAdminLimits
+  defer = null, warn = message => console.warn(message), configEnv = null, configFetch, adminLimits = sharedAdminLimits, partnerLimits = sharedPartnerLimits
 }) {
   const origins = new Set(String(allowedOrigins || '').split(',').map(value => value.trim()).filter(Boolean));
   const totpEnabled = !!String(adminTotpSecret || '').trim();
@@ -1534,14 +1543,25 @@ export function createPlannerApi({
       .catch(error => { if (isMissingTable(error)) return null; throw error; });
   }
 
+  /** The partners' statuses (migration 0008), null while it is missing: then every partner counts as an individual. */
+  function profileList(code = '') {
+    return store.listPartnerProfiles(code ? { code } : {}).catch(error => { if (isMissingTable(error)) return null; throw error; });
+  }
+
+  const PROFILES_MISSING = 'Run migrations/0008_partner_profiles.sql on the D1 database first (see docs/FEEDBACK_AND_WAITLIST.md): until then every partner counts as an individual.';
+
   /**
-   * POST admin/partners/payouts { checkout, note, confirmed, amount } marks an
-   * earned team commission as paid (the owner paid it by bank transfer), with
-   * the amount worked out now — or, when that is only an upper bound (tax or a
-   * refund's amount unknown), the `amount` the owner paid, in cents.
-   * `confirmed` says the owner checked what payoutCheck() asks to check (a
-   * code nothing confirmed, a refund, the tax). DELETE
-   * admin/partners/payouts/<checkout> undoes it.
+   * POST admin/partners/payouts { checkout, note, confirmed, amount, part }
+   * marks an earned team commission as paid (the owner paid it by bank
+   * transfer), with the amount worked out now — or, when that is only an upper
+   * bound (tax or a refund's amount unknown), the `amount` the owner paid, in
+   * cents. `confirmed` says the owner checked what payoutCheck() asks to check
+   * (a code nothing confirmed, a refund, the tax). For an individual, only
+   * what fits under the yearly cap can be paid (more is refused with 409): a
+   * payment that leaves part of the commission owed is kept as a part
+   * (`<checkout>.<n>`), the one that settles it under the checkout itself.
+   * DELETE admin/partners/payouts/<checkout> undoes the latest payment of
+   * that commission (the one that settled it, else its latest part).
    */
   async function adminPayouts(request, path, cors) {
     if (path === 'admin/partners/payouts') {
@@ -1552,21 +1572,109 @@ export function createPlannerApi({
       const note = oneLine(clip(body?.note, 1000));
       if (note.length > PAYOUT_NOTE_MAX) return json(400, { error: `Keep the note under ${PAYOUT_NOTE_MAX} characters.` }, cors);
       if (body?.amount != null && !Number.isInteger(body.amount)) return json(400, { error: 'Give the amount paid in cents.' }, cors);
-      const [lists, commissions] = await Promise.all([partnerLists(), commissionLists()]);
+      const [lists, commissions, profiles] = await Promise.all([partnerLists(), commissionLists(), profileList()]);
       if (!lists || !commissions) return json(503, { error: MISSING_TABLE }, cors);
-      const summary = partnerSummary(lists[0], lists[1], lists[2], { limit: PARTNER_SALES_LISTED, ...commissions, now: now().getTime() });
-      const found = payoutCheck(summary, checkoutId, { confirmed: body?.confirmed === true, amount: body?.amount ?? null });
-      if (found.error) return json(found.status, { error: found.error, ...(found.checks ? { checks: found.checks } : {}) }, cors);
-      const payout = { checkoutId, code: found.sale.code, amount: found.amount, currency: found.sale.currency, note, paidAt: now().toISOString() };
+      const summary = partnerSummary(lists[0], lists[1], lists[2], { limit: PARTNER_SALES_LISTED, ...commissions, profiles: profiles || [], now: now().getTime() });
+      const found = payoutCheck(summary, checkoutId, { confirmed: body?.confirmed === true, amount: body?.amount ?? null, part: body?.part === true });
+      if (found.error) return json(found.status, { error: found.error, ...(found.checks ? { checks: found.checks } : {}), ...(found.cap ? { cap: true } : {}) }, cors);
+      const id = found.final ? checkoutId : payoutPartId(checkoutId, payoutParts(checkoutId, commissions.payouts).next);
+      const payout = { checkoutId: id, code: found.sale.code, amount: found.amount, currency: found.sale.currency, note, paidAt: now().toISOString() };
       if (!await store.addPartnerPayout(payout)) return json(409, { error: 'This commission is already marked as paid.' }, cors);
-      return json(201, { payout: normalizePayout(payout) }, cors);
+      const left = found.final ? 0 : Math.max(0, found.sale.rest - found.amount);
+      return json(201, { payout: normalizePayout(payout), final: found.final, left }, cors);
     }
     const match = /^admin\/partners\/payouts\/([A-Za-z0-9_-]{1,200})$/.exec(path);
     if (!match) return null;
     if (request.method !== 'DELETE') return json(405, { error: 'Method not allowed' }, cors);
     if (!CHECKOUT_ID_RE.test(match[1])) return json(404, { removed: false }, cors);
-    const removed = await store.deletePartnerPayout(match[1]);
+    const commissions = await commissionLists();
+    const { final, rows } = payoutParts(match[1], commissions?.payouts || []);
+    const latest = final || rows.at(-1);
+    const removed = latest ? await store.deletePartnerPayout(latest.checkoutId) : false;
     return json(removed ? 200 : 404, { removed: !!removed }, cors);
+  }
+
+  /**
+   * POST admin/partners/profiles { code, status } records whether a partner is
+   * an individual (team commissions capped each calendar year) or a business (a
+   * micro-entreprise or a company, any country, paid against an invoice, no
+   * cap). Nothing else about the partner is kept: no name, no bank details.
+   */
+  async function adminProfiles(request, cors) {
+    if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+    const body = await readJson(request);
+    const code = affiliateCode(body?.code);
+    if (!code) return json(400, { error: 'Give the partner code.' }, cors);
+    if (!PARTNER_STATUSES.includes(body?.status)) return json(400, { error: `Give the status: ${PARTNER_STATUSES.join(' or ')}.` }, cors);
+    const profile = { code, status: partnerStatus(body.status), updatedAt: now().toISOString() };
+    try {
+      await store.setPartnerProfile(profile);
+    } catch (error) {
+      if (isMissingTable(error)) return json(503, { error: PROFILES_MISSING }, cors);
+      throw error;
+    }
+    return json(200, { profile: normalizeProfile(profile) }, cors);
+  }
+
+  /**
+   * POST admin/partners/links { code }: the private statement link of a
+   * partner code (signed, server/partners.js statementKey), for the owner to
+   * send to that partner. Never logged; the same code always gets the same link.
+   */
+  async function adminStatementLink(request, cors) {
+    if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+    const body = await readJson(request);
+    const code = affiliateCode(body?.code);
+    if (!code) return json(400, { error: 'Give the partner code.' }, cors);
+    return json(200, { code, url: await statementUrl(baseUrl(), adminToken, code) }, cors);
+  }
+
+  /**
+   * GET partners/statement?code=…&key=…: a partner's private statement
+   * (partnerStatement: that code only, nothing about any buyer). A key that
+   * doesn't fit the code — or no ADMIN_TOKEN — answers 404, the same as a code
+   * nobody has, so the route never tells whether a code exists. Rate-limited
+   * per worker isolate.
+   */
+  async function statementRoute(request, url, cors) {
+    if (request.method !== 'GET') return json(405, { error: 'Method not allowed' }, cors);
+    const wait = partnerLimits.statement();
+    if (wait) return json(429, { error: `Too many requests. Try again in ${waitWords(wait)}.`, retryAfter: wait }, { ...cors, 'retry-after': String(wait) });
+    const code = url.searchParams.get('code') || '';
+    if (!await verifyStatementKey(adminToken, code, url.searchParams.get('key') || '')) return json(404, { error: STATEMENT_INVALID }, cors);
+    const at = now().getTime();
+    const missing = fallback => error => { if (isMissingTable(error)) return fallback; throw error; };
+    const [rows, states, refunds, payouts, rejections, profiles, visits] = await Promise.all([
+      store.listPartnerSales({ code, limit: PARTNER_SALES_LISTED }).catch(missing([])),
+      store.partnerSaleStates({ code }).catch(() => []),
+      store.partnerSaleRefunds({ code }).catch(() => []),
+      store.listPartnerPayouts({ code }).catch(missing([])),
+      store.listPartnerCodeRejections().catch(missing([])),
+      store.listPartnerProfiles({ code }).catch(missing([])),
+      store.listPartnerVisits({ code, fromDay: statementVisitsFrom(at) }).catch(missing(null))
+    ]);
+    return json(200, { statement: partnerStatement(code, { rows, states, refunds, payouts, rejections, profiles, visits, now: at }) }, cors);
+  }
+
+  /**
+   * POST partners/visit { ref }: someone arrived through a partner's link
+   * (sent at most once a day per code by a browser, never when its visitor
+   * switched the anonymous counts off). Adds one to that code's count for the
+   * UTC day (migration 0008); nothing else is read or kept. Malformed codes
+   * and the day's bound on new codes (PARTNER_VISIT_CODES_PER_DAY) are ignored
+   * quietly, with the same answer.
+   */
+  async function visitRoute(request, cors) {
+    if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+    const wait = partnerLimits.visit();
+    if (wait) return json(429, { error: 'Too many requests.', retryAfter: wait }, { ...cors, 'retry-after': String(wait) });
+    const body = await readJson(request);
+    const code = affiliateCode(body?.ref);
+    if (code) {
+      try { await store.countPartnerVisit({ code, day: today(), maxCodes: PARTNER_VISIT_CODES_PER_DAY }); }
+      catch (error) { if (!isMissingTable(error)) throw error; }
+    }
+    return new Response(null, { status: 204, headers: cors });
   }
 
   /**
@@ -1693,7 +1801,10 @@ export function createPlannerApi({
       // team commissions marked as paid and codes found to be no partner, from 0007 (none while it is missing, and the card says so).
       const partnerData = partnerLists();
       const commissionData = commissionLists().catch(() => null);
-      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, refundLists, partnerRows, commissions, setup] = await Promise.all([
+      // Partner statuses and visits through partner links come from 0008: without it every partner is an individual.
+      const visitsFrom = dayKey(new Date(now().getTime() - (PARTNER_VISIT_DAYS - 1) * 86400000));
+      const profileData = Promise.all([profileList(), store.partnerVisitTotals({ fromDay: visitsFrom })]).catch(() => null);
+      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, refundLists, partnerRows, commissions, profileRows, setup] = await Promise.all([
         store.eventTotals({ sinceDay }).then(publicEvents),
         store.eventDaily({ sinceDay }).then(publicEvents),
         store.listWaitlist(),
@@ -1706,8 +1817,15 @@ export function createPlannerApi({
         refundData,
         partnerData,
         commissionData,
+        profileData,
         setupInfo()
       ]);
+      const partners = partnerSummary(partnerRows?.[0] || [], partnerRows?.[1] || [], partnerRows?.[2] || [], { limit: PARTNER_SALES_LISTED, payouts: commissions?.payouts || [], rejections: commissions?.rejections || [], profiles: profileRows?.[0] || [], now: now().getTime() });
+      // Visits through each partner's link over the last 30 days; codes with visits and no sale yet are listed apart.
+      const visitsOf = new Map((profileRows?.[1] || []).map(row => [row.code, row.count]));
+      partners.codes.forEach(entry => { entry.visits = visitsOf.get(entry.code) || 0; });
+      partners.visitsOnly = (profileRows?.[1] || []).filter(row => row.count > 0 && !partners.codes.some(entry => entry.code === row.code)).sort((a, b) => b.count - a.count || a.code.localeCompare(b.code)).slice(0, 20);
+      partners.visitDays = PARTNER_VISIT_DAYS;
       const [teamRequests, teamRequestTotals] = teamData || [[], { count: 0, seats: 0 }];
       const [giftRows, giftTotals, purchaseTotals, manualLicenses] = plusData || [[], { count: 0, seats: 0, redeemed: 0, paid: 0 }, { plus: 0, manual: 0 }, []];
       return json(200, {
@@ -1717,8 +1835,9 @@ export function createPlannerApi({
         plus: { purchases: purchaseTotals.plus, manualLicenses: purchaseTotals.manual, recentLicenses: manualLicenses.map(row => ({ id: row.licenseId, note: row.note, createdAt: row.createdAt })) },
         reviews: reviews || [], reviewsUnavailable: !reviews,
         refunds: refundLists?.[0] || [], revocations: refundLists?.[1] || [], refundsUnavailable: !refundLists,
-        partners: partnerSummary(partnerRows?.[0] || [], partnerRows?.[1] || [], partnerRows?.[2] || [], { limit: PARTNER_SALES_LISTED, payouts: commissions?.payouts || [], rejections: commissions?.rejections || [], now: now().getTime() }), partnersUnavailable: !partnerRows,
-        partnerCommissionsUnavailable: !commissions, partnerProgram: { rate: PARTNER_PROGRAM.rate, teamRate: PARTNER_PROGRAM.teamRate, refundDays: PARTNER_PROGRAM.refundDays, cookieDays: PARTNER_PROGRAM.cookieDays, minimumPayout: { ...PARTNER_PROGRAM.minimumPayout } },
+        partners, partnersUnavailable: !partnerRows,
+        partnerCommissionsUnavailable: !commissions, partnerProfilesUnavailable: !profileRows,
+        partnerProgram: { rate: PARTNER_PROGRAM.rate, teamRate: PARTNER_PROGRAM.teamRate, refundDays: PARTNER_PROGRAM.refundDays, cookieDays: PARTNER_PROGRAM.cookieDays, minimumPayout: { ...PARTNER_PROGRAM.minimumPayout }, individualYearlyCap: { ...PARTNER_PROGRAM.individualYearlyCap } },
         setup
       }, cors);
     }
@@ -1753,6 +1872,8 @@ export function createPlannerApi({
       const answer = await adminPayouts(request, path, cors);
       if (answer) return answer;
     }
+    if (path === 'admin/partners/profiles') return adminProfiles(request, cors);
+    if (path === 'admin/partners/links') return adminStatementLink(request, cors);
     if (path.startsWith('admin/partners/rejections')) {
       const answer = await adminCodeRejections(request, path, cors);
       if (answer) return answer;
@@ -1781,6 +1902,8 @@ export function createPlannerApi({
       if (gift) return await giftRoute(request, gift, cors);
       if (path === 'purchases/claim') return await claimRoute(request, cors);
       if (path === 'plus/check') return await plusCheckRoute(request, cors);
+      if (path === 'partners/statement') return await statementRoute(request, url, cors);
+      if (path === 'partners/visit') return await visitRoute(request, cors);
       if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
       const body = await readJson(request);
       if (path === 'events') {
@@ -1840,9 +1963,10 @@ export function createPlannerApi({
  * In-memory store with optional persistence hooks; used by the dev server and
  * the unit tests. Mirrors the D1 store's behaviour (unique emails, counts,
  * oldest-first announcement order, internal email-send counts, gift limits,
- * one gift, purchase, payment, partner sale and payout per checkout, one order
- * and one refund per Creem id, one revocation per target and source, a
- * request's partner code kept with it, one rejection per partner code).
+ * one gift, purchase, payment, partner sale and payout per checkout (or part
+ * of one), one order and one refund per Creem id, one revocation per target
+ * and source, a request's partner code kept with it, one rejection and one
+ * profile per partner code, visits per code and day within the day's bound).
  */
 export function createMemoryStore(initial = {}, { onChange = null } = {}) {
   const data = {
@@ -1860,6 +1984,8 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
     partnerSales: Array.isArray(initial.partnerSales) ? initial.partnerSales : [],
     partnerPayouts: Array.isArray(initial.partnerPayouts) ? initial.partnerPayouts : [],
     partnerCodeRejections: Array.isArray(initial.partnerCodeRejections) ? initial.partnerCodeRejections : [],
+    partnerProfiles: Array.isArray(initial.partnerProfiles) ? initial.partnerProfiles : [],
+    partnerVisits: Array.isArray(initial.partnerVisits) ? initial.partnerVisits : [],
     nextId: Number(initial.nextId) || 1
   };
   // Data files written before 1.21 call the checkout reference stripeSession.
@@ -2086,15 +2212,15 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
       changed();
       return true;
     },
-    async listPartnerSales({ limit = 2000 } = {}) {
-      return [...data.partnerSales].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || String(a.checkoutId).localeCompare(String(b.checkoutId))).slice(0, limit).map(normalizePartnerSale);
+    async listPartnerSales({ limit = 2000, code = '' } = {}) {
+      return data.partnerSales.filter(item => !code || item.code === code).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || String(a.checkoutId).localeCompare(String(b.checkoutId))).slice(0, limit).map(normalizePartnerSale);
     },
-    async partnerSaleStates() {
-      const sold = new Set(data.partnerSales.map(item => `checkout:${item.checkoutId}`));
+    async partnerSaleStates({ code = '' } = {}) {
+      const sold = new Set(data.partnerSales.filter(item => !code || item.code === code).map(item => `checkout:${item.checkoutId}`));
       return data.revocations.filter(item => sold.has(item.target)).map(item => ({ checkoutId: item.target.slice('checkout:'.length), reason: item.reason }));
     },
-    async partnerSaleRefunds() {
-      const sold = new Set(data.partnerSales.map(item => item.checkoutId));
+    async partnerSaleRefunds({ code = '' } = {}) {
+      const sold = new Set(data.partnerSales.filter(item => !code || item.code === code).map(item => item.checkoutId));
       return data.refunds.filter(item => item.checkoutId && sold.has(item.checkoutId) && item.status !== 'pending')
         .map(item => ({ checkoutId: item.checkoutId, amount: item.amount ?? null, currency: item.currency || '', fullRefund: !!item.fullRefund }));
     },
@@ -2104,8 +2230,8 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
       changed();
       return true;
     },
-    async listPartnerPayouts() {
-      return [...data.partnerPayouts].sort((a, b) => String(b.paidAt).localeCompare(String(a.paidAt)) || String(a.checkoutId).localeCompare(String(b.checkoutId))).map(normalizePayout);
+    async listPartnerPayouts({ code = '' } = {}) {
+      return data.partnerPayouts.filter(item => !code || item.code === code).sort((a, b) => String(b.paidAt).localeCompare(String(a.paidAt)) || String(a.checkoutId).localeCompare(String(b.checkoutId))).map(normalizePayout);
     },
     async deletePartnerPayout(checkoutId) {
       const before = data.partnerPayouts.length;
@@ -2127,6 +2253,31 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
       data.partnerCodeRejections = data.partnerCodeRejections.filter(item => item.code !== code);
       if (before !== data.partnerCodeRejections.length) changed();
       return before !== data.partnerCodeRejections.length;
+    },
+    async setPartnerProfile(row) {
+      const profile = normalizeProfile(row);
+      data.partnerProfiles = [...data.partnerProfiles.filter(item => item.code !== profile.code), profile];
+      changed();
+      return true;
+    },
+    async listPartnerProfiles({ code = '' } = {}) {
+      return data.partnerProfiles.filter(item => !code || item.code === code).sort((a, b) => String(a.code).localeCompare(String(b.code))).map(normalizeProfile);
+    },
+    async countPartnerVisit({ code, day, maxCodes }) {
+      const row = data.partnerVisits.find(item => item.code === code && item.day === day);
+      const known = data.partnerProfiles.some(item => item.code === code) || data.partnerSales.some(item => item.code === code);
+      if (!row && !known && data.partnerVisits.filter(item => item.day === day).length >= maxCodes) return false;
+      if (row) row.count += 1; else data.partnerVisits.push({ code, day, count: 1 });
+      changed();
+      return true;
+    },
+    async listPartnerVisits({ code, fromDay }) {
+      return data.partnerVisits.filter(item => item.code === code && item.day >= fromDay).sort((a, b) => a.day.localeCompare(b.day)).map(item => ({ day: item.day, count: item.count }));
+    },
+    async partnerVisitTotals({ fromDay }) {
+      const totals = new Map();
+      data.partnerVisits.filter(item => item.day >= fromDay).forEach(item => totals.set(item.code, (totals.get(item.code) || 0) + item.count));
+      return [...totals].sort(([a], [b]) => a.localeCompare(b)).map(([code, count]) => ({ code, count }));
     },
     async addReview(entry) {
       data.reviews.push({ id: data.nextId++, appVersion: entry.appVersion, rating: entry.rating, text: entry.text, name: entry.name || '', createdAt: entry.createdAt });

@@ -99,8 +99,8 @@ test('a question is the plain form: email, name and the question; an invoice, a 
 });
 
 test('a question is sent without the team’s fields, and an address never gives it a plan', () => {
-  const values = { email: 'ann@example.com', name: 'Ann', company: 'ignored', plan: 'up-to-50', teamSize: '50', timing: 'december-2026', message: 'Partner program: who can join?', website: '', kind: 'question' };
-  assert.deepEqual(requestPayload(values, { currency: 'EUR', version: '1.29.1', locale: 'fr-FR', ref: 'COACH_ANNA' }), { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', website: '', version: '1.29.1', locale: 'fr-FR', source: 'teams', kind: 'question', ref: 'COACH_ANNA' });
+  const values = { email: 'ann@example.com', name: 'Ann', company: 'ignored', plan: 'up-to-50', teamSize: '50', timing: 'december-2026', message: 'Partner program: who can join?', consent: true, website: '', kind: 'question' };
+  assert.deepEqual(requestPayload(values, { currency: 'EUR', version: '1.29.1', locale: 'fr-FR', ref: 'COACH_ANNA' }), { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', consent: true, website: '', version: '1.29.1', locale: 'fr-FR', source: 'teams', kind: 'question', ref: 'COACH_ANNA' });
   const invoice = requestPayload({ ...values, kind: 'invoice' }, { currency: 'EUR' });
   assert.deepEqual([invoice.company, invoice.teamSize, invoice.timing, invoice.plan, invoice.currency], ['ignored', 50, 'december-2026', 'up-to-50', 'EUR'], 'an invoice: as today');
   assert.deepEqual(requestFromAddress('?ask=question&plan=up-to-100'), { kind: 'question', plan: '' });
@@ -125,13 +125,13 @@ test('the request form hides the team’s fields for a question, and keeps its h
   assert.equal((form.match(/data-team-field/g) || []).length, 4);
   assert.match(form, /<div class="team-form__head" data-form-head>\s*<p class="band__kicker"><svg class="i"><use href="#i-mail"\/><\/svg><span data-form-kicker>Invoice, quote or question<\/span><\/p>/);
   assert.match(form, /<span data-email-label>Work email<\/span>/);
-  // No consent box (1.32): an invoice, a quote or a question is sent to be answered. One line says what is kept and why.
-  assert.doesNotMatch(form, /consent|type="checkbox"/);
-  assert.match(form, /<p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request\. <a href="#privacy" data-privacy-open="requests">How requests are handled<\/a><\/p>/);
+  // The box to tick (1.33): what it agrees to follows the kind (the invoice first); the privacy policy is linked from its label.
+  assert.match(form, /<label class="consent" data-consent-row hidden><input type="checkbox" name="consent" required aria-describedby="err-consent"><span>I agree that <span data-consent-use>my details are used to reply to me and to prepare my invoice<\/span>, as explained in the <a href="\.\.\/legal\/privacy\/#requests">privacy policy<\/a>\.<\/span><\/label>/);
+  assert.match(form, /<small class="field__err field__err--consent" id="err-consent"><\/small>/);
+  // Under it, what is kept and for how long; the Requests part of the page's dialog says more.
+  assert.match(form, /<p class="form-privacy" data-privacy-line hidden>What you send is kept to follow up on it, and deleted whenever you ask\. <a href="#privacy" data-privacy-open="requests">How requests are handled<\/a><\/p>/);
   const script = await read('welcome/request-form.js');
-  assert.doesNotMatch(script, /consent/i, 'nothing to tick, read or check');
   assert.match(script, /qs\('\[data-privacy-line\]', form\)\.hidden = requestMode !== 'api';/);
-  assert.doesNotMatch(await read('welcome/teams-model.js'), /consent: /);
   assert.match(script, /teamFields\.forEach\(node => \{ node\.hidden = !team; \}\);/);
   assert.match(script, /\['company', !team \? '' :/, 'a question never asks for a company');
   assert.match(script, /sizeHead\(\);/);
@@ -146,9 +146,9 @@ test('the request form hides the team’s fields for a question, and keeps its h
 });
 
 test('a request carries the remembered partner code as `ref`, and nothing when there is none', () => {
-  const values = { email: 'ann@example.com', name: 'Ann', company: 'Acme', plan: 'up-to-50', teamSize: '40', timing: 'january-2027', message: 'Hi', website: '', kind: 'invoice' };
+  const values = { email: 'ann@example.com', name: 'Ann', company: 'Acme', plan: 'up-to-50', teamSize: '40', timing: 'january-2027', message: 'Hi', consent: true, website: '', kind: 'invoice' };
   const sent = requestPayload(values, { currency: 'EUR', version: '1.27.0', locale: 'fr-FR', ref: 'CAMILLE_2' });
-  assert.deepEqual(sent, { email: 'ann@example.com', name: 'Ann', company: 'Acme', teamSize: 40, timing: 'january-2027', message: 'Hi', website: '', version: '1.27.0', locale: 'fr-FR', source: 'teams', plan: 'up-to-50', currency: 'EUR', kind: 'invoice', ref: 'CAMILLE_2' });
+  assert.deepEqual(sent, { email: 'ann@example.com', name: 'Ann', company: 'Acme', teamSize: 40, timing: 'january-2027', message: 'Hi', consent: true, website: '', version: '1.27.0', locale: 'fr-FR', source: 'teams', plan: 'up-to-50', currency: 'EUR', kind: 'invoice', ref: 'CAMILLE_2' });
   assert.equal('ref' in requestPayload(values, { currency: 'EUR', ref: '' }), false, 'omitted when no code is remembered');
   assert.equal('ref' in requestPayload(values, { currency: 'EUR' }), false);
   assert.equal('ref' in requestPayload(values, { currency: 'EUR', ref: 'a b<script>' }), false, 'only a valid code goes along');

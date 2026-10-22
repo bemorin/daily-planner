@@ -345,5 +345,21 @@ CREATE TABLE IF NOT EXISTS partner_code_rejections (
   code TEXT PRIMARY KEY,
   created_at TEXT NOT NULL
 );`
+  }),
+  Object.freeze({
+    file: '0008_partner_profiles.sql',
+    unlocks: 'Partner statuses (an individual, capped each year, or a business that invoices) and the visits each partner’s link brings, for their private statement.',
+    sql: `CREATE TABLE IF NOT EXISTS partner_profiles (
+  code TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'individual',
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS partner_visits (
+  code TEXT NOT NULL,
+  day TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (code, day)
+);
+CREATE INDEX IF NOT EXISTS partner_visits_day ON partner_visits (day);`
   })
 ]);

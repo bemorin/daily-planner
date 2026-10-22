@@ -118,7 +118,9 @@
             <p class="form-error" data-form-error role="alert" hidden></p>
             <div class="team-form__foot">
               <div class="team-form__fine">
-                <p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request. <a href="../legal/privacy/#requests">How questions are handled</a></p>
+                <label class="consent" data-consent-row hidden><input type="checkbox" name="consent" required aria-describedby="err-consent"><span>I agree that <span data-consent-use>my email address and question are used to reply to me</span>, as explained in the <a href="../legal/privacy/#requests">privacy policy</a>.</span></label>
+                <small class="field__err field__err--consent" id="err-consent"></small>
+                <p class="form-privacy" data-privacy-line hidden>What you send is kept to follow up on it, and deleted whenever you ask.</p>
                 <p class="form-privacy" data-mailto-line hidden>Your email app opens with your question, ready to send.</p>
                 <p class="form-off" data-form-off hidden>Questions open when this site’s API is switched on.</p>
                 <noscript><p class="form-off">Sending a question needs JavaScript.</p></noscript>

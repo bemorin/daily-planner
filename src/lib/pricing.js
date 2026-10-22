@@ -43,13 +43,19 @@ export const LAUNCH = Object.freeze({
  * `minimumPayout`: the balance a partner needs before a payout (Creem's minimum).
  * `refundDays`: a sale earns once its refund period has passed without a refund
  * or a dispute.
+ * `individualYearlyCap` (owner's decision, 1.33): the most the owner pays in team
+ * commissions to a partner who is an individual (not a micro-entreprise or a
+ * company), per calendar year and per currency, in whole units, by the date
+ * paid. Above it, the partner invoices as a business (any country), with no cap;
+ * until then the rest waits. Creem's commissions (`rate`) are Creem's: no cap here.
  */
 export const PARTNER_PROGRAM = Object.freeze({
   rate: 25,
   teamRate: 10,
   cookieDays: 30,
   minimumPayout: Object.freeze({ EUR: 50, USD: 50 }),
-  refundDays: 14
+  refundDays: 14,
+  individualYearlyCap: Object.freeze({ EUR: 300, USD: 300 })
 });
 
 /** Team gift: one price for the company by number of people (seats). */

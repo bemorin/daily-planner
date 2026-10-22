@@ -180,6 +180,9 @@ test('team kit requests are validated with human messages', () => {
   assert.equal(validateTeamRequest(team({ website: 'https://spam.example' })).spam, true);
   const rejected = {
     'invalid email': { email: 'not-an-email' },
+    'missing consent': { consent: undefined },
+    'consent must be true, not truthy': { consent: 'yes' },
+    'consent unticked': { consent: false },
     'empty company': { company: '   ' },
     'company over 120': { company: 'x'.repeat(121) },
     'team of one': { teamSize: 1 },
@@ -428,11 +431,14 @@ test('a question needs no team: no company, number of people or timing; an invoi
     ['invalid email', { email: 'not-an-email' }, /valid email address/],
     ['no question', { message: '   ' }, /write your question/],
     ['question over 1000', { message: 'm'.repeat(1001) }, /1,000 characters/],
-    ['name over 80', { name: 'n'.repeat(81) }, /80 characters/]
+    ['name over 80', { name: 'n'.repeat(81) }, /80 characters/],
+    ['no consent', { consent: undefined }, /tick the box/],
+    ['consent unticked', { consent: false }, /tick the box/]
   ]) assert.match(validateTeamRequest({ ...question, ...overrides }, now).error || '', words, label);
+  // The box is required again (1.33): a question sent by a 1.32 page, without `consent`, is refused.
   const { consent, ...unticked } = question;
-  assert.equal(consent, true, 'what a page before 1.32 sends');
-  assert.deepEqual(validateTeamRequest(unticked, now).entry, validateTeamRequest(question, now).entry, 'a question without consent (1.32 pages) is taken the same');
+  assert.equal(consent, true, 'what the form sends once the box is ticked');
+  assert.equal(validateTeamRequest(unticked, now).error, 'Please tick the box so we can use your details to reply to you.');
   assert.equal(validateTeamRequest({ ...question, website: 'bot' }, now).spam, true);
   assert.doesNotMatch(validateTeamRequest({ ...question, email: 'nope' }, now).error, /work email/, 'any address, not a work one');
   // A team request without its team's fields is refused, as before.
@@ -450,8 +456,11 @@ test('a question is stored, listed and exported without a team (memory and D1)',
   if (!d1) return;
   for (const [label, store] of [['memory', createMemoryStore()], ['D1', createD1Store(d1)]]) {
     const api = createPlannerApi({ store, adminToken: 'secret', now: fixedNow });
-    // As a 1.32 page sends it: no consent field.
-    assert.equal((await api(post('teams', { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', kind: 'question', source: 'teams', ref: 'COACH_ANNA' }))).status, 201, label);
+    assert.equal((await api(post('teams', { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', consent: true, kind: 'question', source: 'teams', ref: 'COACH_ANNA' }))).status, 201, label);
+    // As a 1.32 page sends it, with no box: refused, and nothing is stored.
+    const unticked = await api(post('teams', { email: 'bob@example.com', name: 'Bob', message: 'Hello?', kind: 'question', source: 'contact' }));
+    assert.equal(unticked.status, 400, `${label}: a question without consent`);
+    assert.match((await unticked.json()).error, /tick the box/, label);
     const refused = await api(post('teams', { email: 'ann@example.com', name: 'Ann', message: '', consent: true, kind: 'question' }));
     assert.equal(refused.status, 400, `${label}: a question without its question`);
     assert.equal((await api(post('teams', { email: 'ann@example.com', name: 'Ann', consent: true, kind: 'invoice', message: 'Hi' }))).status, 400, `${label}: an invoice without its team`);
@@ -504,6 +513,7 @@ test('every migration runs when the D1 console joins it into one line', async t 
   assert.ok(files.includes('0005_refunds.sql'));
   assert.ok(files.includes('0006_partners.sql'));
   assert.ok(files.includes('0007_partner_commissions.sql'));
+  assert.ok(files.includes('0008_partner_profiles.sql'));
   const sqlite = new DatabaseSync(':memory:');
   for (const file of files) {
     const source = readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8');
@@ -525,7 +535,7 @@ test('every migration runs when the D1 console joins it into one line', async t 
     sqlite.exec(flat);
   }
   const tables = sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(row => row.name);
-  assert.deepEqual(tables, ['events', 'feedback', 'gifts', 'orders', 'partner_code_rejections', 'partner_payouts', 'partner_sale_taxes', 'partner_sales', 'payments', 'purchases', 'refunds', 'reviews', 'revocations', 'team_request_partners', 'team_requests', 'waitlist']);
+  assert.deepEqual(tables, ['events', 'feedback', 'gifts', 'orders', 'partner_code_rejections', 'partner_payouts', 'partner_profiles', 'partner_sale_taxes', 'partner_sales', 'partner_visits', 'payments', 'purchases', 'refunds', 'reviews', 'revocations', 'team_request_partners', 'team_requests', 'waitlist']);
   const teamColumns = sqlite.prepare('PRAGMA table_info(team_requests)').all();
   const column = name => teamColumns.find(row => row.name === name);
   assert.deepEqual(['plan', 'currency', 'kind'].map(name => [column(name)?.type, column(name)?.notnull, column(name)?.dflt_value]), [['TEXT', 1, "''"], ['TEXT', 1, "''"], ['TEXT', 1, "'quote'"]]);

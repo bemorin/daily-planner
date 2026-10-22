@@ -1029,13 +1029,66 @@ figcaption { margin-top: 18px; color: var(--muted); font-size: .88rem; line-heig
 
 .hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 
-/* The end of the form: the fine print on the left, the button on the right,
-   where the eye finishes the form; stacked on a phone, button last. */
+/* The end of the form: the box to tick and the fine print on the left, the
+   button on the right, where the eye finishes the form; stacked on a phone,
+   button last. */
 .team-form__foot { display: grid; gap: 18px; margin-top: 4px; padding-top: 22px; border-top: 1px solid var(--band-line); }
 
 .team-form__fine { display: grid; align-content: center; justify-items: start; gap: 8px; min-width: 0; }
 
+/* The box that agrees to how the request is used (request-form.js, shown
+   when the form goes to the API): the app's own checkbox (styles/core.css
+   .check), on the form's tokens, at the size of a tap, beside a label that
+   says what it agrees to. The fine print and the error line up with the
+   label's words. */
+.consent { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: start; gap: 12px; max-width: 54em; color: var(--band-ink); font-size: .94rem; line-height: 1.5; text-wrap: pretty; cursor: pointer; }
+
+.consent input {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 1.5px solid color-mix(in srgb, var(--band-ink) 48%, transparent);
+  border-radius: 6px;
+  background: var(--band-field);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* The tick, in the band's own colour on the filled box. */
+.consent input::after { content: ""; position: absolute; left: 6px; top: 1.5px; width: 6.5px; height: 11px; border: solid var(--band-bg); border-width: 0 2.2px 2.2px 0; opacity: 0; transform: rotate(45deg) scale(.6); }
+
+.consent input:checked { border-color: var(--band-ink); background: var(--band-ink); }
+
+.consent input:checked::after { opacity: 1; transform: rotate(45deg); }
+
+.consent:hover input:not(:checked) { border-color: var(--band-ink); }
+
+.consent input:focus-visible { outline: 2.5px solid var(--band-accent); outline-offset: 2px; }
+
+.consent input[aria-invalid="true"] { border-color: var(--band-error); box-shadow: 0 0 0 3px color-mix(in srgb, var(--band-error) 22%, transparent); }
+
+.consent a { color: var(--band-ink); font-weight: 620; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--band-accent) 70%, transparent); text-underline-offset: 3px; }
+
+.consent a:hover { text-decoration-color: currentColor; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .consent input { transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease; }
+  .consent input::after { transition: opacity 120ms ease, transform 180ms cubic-bezier(.22, 1, .36, 1); }
+}
+
+/* High contrast: the system's own checkbox. */
+@media (forced-colors: active) {
+  .consent input { -webkit-appearance: auto; appearance: auto; }
+  .consent input::after { display: none; }
+}
+
+.field__err--consent { margin-top: -2px; padding-left: 34px; }
+
 .form-privacy { max-width: 54em; color: var(--band-muted); font-size: .88rem; line-height: 1.5; }
+
+.consent:not([hidden]) ~ .form-privacy { padding-left: 34px; }
 
 .form-privacy a { color: var(--band-ink); text-underline-offset: 3px; }
 

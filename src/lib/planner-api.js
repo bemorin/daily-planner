@@ -244,16 +244,52 @@ const REFERRAL_PARAMS = ['ref', 'via', 'aff'];
  * Keeps the partner code from a link like /welcome/?ref=CODE for REFERRAL_DAYS
  * (30) on this device (the latest link wins), so a purchase made later — or a
  * team request — is credited to that partner. Returns the code it kept, or ''.
- * Nothing is sent until a checkout or a request.
+ * The visit itself is counted for the partner's statement (countPartnerVisit):
+ * the code only, at most once a day per code on this device, and never when
+ * the anonymous counts are switched off here. Nothing else is sent until a
+ * checkout or a request.
  */
 export function rememberReferral(search = globalThis.location?.search || '', { storage = globalThis.localStorage, now = Date.now() } = {}) {
   let params;
   try { params = new URLSearchParams(search); } catch (_) { return ''; }
   const code = REFERRAL_PARAMS.map(name => String(params.get(name) || '').trim()).find(value => REFERRAL_RE.test(value)) || '';
   if (!code) return '';
-  try { storage?.setItem(REFERRAL_KEY, JSON.stringify({ code, at: now })); } catch (_) { return ''; }
+  let saved = null;
+  try { saved = JSON.parse(storage?.getItem(REFERRAL_KEY) || 'null'); } catch (_) { saved = null; }
+  const counted = countPartnerVisit(code, { last: saved?.code === code ? String(saved.counted || '') : '', storage, now });
+  try { storage?.setItem(REFERRAL_KEY, JSON.stringify({ code, at: now, ...(counted ? { counted } : {}) })); } catch (_) { return ''; }
   return code;
 }
+
+/**
+ * Counts one visit through a partner's link (POST partners/visit { ref }:
+ * the code, nothing else) unless this device already counted that code
+ * today (`last`, the local day it was last counted, kept with the code under
+ * REFERRAL_KEY), the anonymous counts are off here, or the API is off or
+ * offline. Answers the day to remember: today's when it was sent, else
+ * `last` (a new code with no count: '').
+ */
+export function countPartnerVisit(code, { last = '', storage = globalThis.localStorage, now = Date.now() } = {}) {
+  const day = periodKey('day', new Date(now));
+  if (last === day || !REFERRAL_RE.test(String(code || '')) || !plannerApiEnabled() || !usageCountsEnabled(storage) || globalThis.navigator?.onLine === false) return last;
+  try {
+    fetch(`${PLANNER_API_URL}/partners/visit`, {
+      method: 'POST',
+      keepalive: true,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ref: code })
+    }).catch(() => {});
+  } catch (_) { return last; }
+  return day;
+}
+
+/**
+ * A partner's private statement (partners/statement/): GET
+ * partners/statement?code=…&key=… with the code and the key of their link.
+ * Answers { ok, statement } or { ok: false, status, error } (404: the link
+ * isn't valid).
+ */
+export const fetchPartnerStatement = ({ code, key }) => request(`partners/statement?${new URLSearchParams({ code: String(code || ''), key: String(key || '') })}`, { method: 'GET' });
 
 /** The remembered partner code, or '' once it is older than REFERRAL_DAYS (30) or unreadable. */
 export function referralCode({ storage = globalThis.localStorage, now = Date.now() } = {}) {
