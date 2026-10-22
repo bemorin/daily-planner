@@ -256,22 +256,28 @@ export function rememberReferral(search = globalThis.location?.search || '', { s
   if (!code) return '';
   let saved = null;
   try { saved = JSON.parse(storage?.getItem(REFERRAL_KEY) || 'null'); } catch (_) { saved = null; }
-  const counted = countPartnerVisit(code, { last: saved?.code === code ? String(saved.counted || '') : '', storage, now });
+  const counted = countPartnerVisit(code, { counted: saved?.counted, storage, now });
   try { storage?.setItem(REFERRAL_KEY, JSON.stringify({ code, at: now, ...(counted ? { counted } : {}) })); } catch (_) { return ''; }
   return code;
 }
 
+/** Codes a device remembers having counted on one day, at most (a few partners' links in a day, never a list that grows). */
+const COUNTED_CODES_MAX = 20;
+
 /**
  * Counts one visit through a partner's link (POST partners/visit { ref }:
  * the code, nothing else) unless this device already counted that code
- * today (`last`, the local day it was last counted, kept with the code under
- * REFERRAL_KEY), the anonymous counts are off here, or the API is off or
- * offline. Answers the day to remember: today's when it was sent, else
- * `last` (a new code with no count: '').
+ * today (`counted`: { day, codes }, the local day and the codes counted on
+ * it, kept with the code under REFERRAL_KEY), the anonymous counts are off
+ * here, or the API is off or offline. Answers what to remember: today's
+ * codes with this one when it was sent, else `counted` as it was (null when
+ * there is nothing to keep).
  */
-export function countPartnerVisit(code, { last = '', storage = globalThis.localStorage, now = Date.now() } = {}) {
+export function countPartnerVisit(code, { counted = null, storage = globalThis.localStorage, now = Date.now() } = {}) {
   const day = periodKey('day', new Date(now));
-  if (last === day || !REFERRAL_RE.test(String(code || '')) || !plannerApiEnabled() || !usageCountsEnabled(storage) || globalThis.navigator?.onLine === false) return last;
+  const today = counted && counted.day === day && Array.isArray(counted.codes) ? counted.codes.filter(item => REFERRAL_RE.test(String(item))).slice(-COUNTED_CODES_MAX) : [];
+  const kept = today.length ? { day, codes: today } : null;
+  if (today.includes(code) || !REFERRAL_RE.test(String(code || '')) || !plannerApiEnabled() || !usageCountsEnabled(storage) || globalThis.navigator?.onLine === false) return kept;
   try {
     fetch(`${PLANNER_API_URL}/partners/visit`, {
       method: 'POST',
@@ -279,8 +285,8 @@ export function countPartnerVisit(code, { last = '', storage = globalThis.localS
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ref: code })
     }).catch(() => {});
-  } catch (_) { return last; }
-  return day;
+  } catch (_) { return kept; }
+  return { day, codes: [...today, code].slice(-COUNTED_CODES_MAX) };
 }
 
 /**

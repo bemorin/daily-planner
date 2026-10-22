@@ -226,8 +226,8 @@ test('the partners page: landing style and motion, every section, the rules, the
   assert.ok(page.indexOf("classList.add('js-anim')") < page.indexOf('../welcome/landing.css'), 'before the styles');
   assert.ok((page.match(/data-reveal-each/g) || []).length >= 6 && /data-reveal(?!-)/.test(page));
   assert.match(page, /class="faq__groups" data-faq>/);
-  assert.equal((page.match(/<details class="qa"/g) || []).length, 8);
-  for (const question of ['How much is a sale worth?', 'Who can be a partner?', 'How are sales tracked?', 'When and how am I paid?', 'What if someone asks for a refund?', 'What is not allowed?', 'And companies?']) assert.ok(page.includes(`<summary>${question}</summary>`), question);
+  assert.equal((page.match(/<details class="qa"/g) || []).length, 10);
+  for (const question of ['How much is a sale worth?', 'Who can be a partner?', 'How are sales tracked?', 'When and how am I paid?', 'Do I need a business to be paid?', 'Where do I see my visits and commissions?', 'What if someone asks for a refund?', 'What is not allowed?', 'And companies?']) assert.ok(page.includes(`<summary>${question}</summary>`), question);
   const script = await read('partners/partners.js');
   assert.match(script, /import \{ motionWanted, reduceQuery, setupFaq, setupReveal \} from '\.\.\/welcome\/page-motion\.js';/);
   assert.match(script, /setupReveal\(\{ motionOn: motionWanted\(\), motionHooks \}\);\nsetupFaq\(\);/);

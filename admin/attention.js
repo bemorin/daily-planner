@@ -1,6 +1,7 @@
 // What needs the owner's attention, read from the admin summary the dashboard
 // already loads: refunds and disputes to follow up, team requests to answer,
-// team commissions earned by partners and not paid yet, Setup items that are
+// team commissions earned by partners and not paid yet (what fits under an
+// individual's yearly cap; what waits above it is listed apart), Setup items that are
 // missing or need a check, gifts about to expire or full, and new reviews to read. Most urgent first, each with when it started and
 // the card (and row) it points to. The Setup card takes its states from
 // setupChecks() too, so the two always agree. Pure helpers, unit-tested
@@ -47,7 +48,8 @@ const KINDS = {
   'setup-warn': { order: 7, tone: 'warn' },
   'gift-expiring': { order: 8, tone: 'info' },
   'gift-claimed': { order: 9, tone: 'info' },
-  reviews: { order: 10, tone: 'info' }
+  'partner-held': { order: 10, tone: 'info' },
+  reviews: { order: 11, tone: 'info' }
 };
 
 const TEAM_NOUNS = { invoice: 'Invoice request', quote: 'Quote request', question: 'Question', talk: 'Talk request' };
@@ -120,7 +122,11 @@ const PAYMENT_CURRENCIES = ['EUR', 'USD'];
 // What the legal pages need (a usable value: legal-details.js), and the values they leave out when they aren't usable.
 const LEGAL_FIELDS = [['email', 'SUPPORT_EMAIL', 'contact address'], ['address', 'LEGAL_ADDRESS', 'postal address']];
 const LEGAL_CHECKED = ['SUPPORT_EMAIL', 'PRIVACY_EMAIL', 'LEGAL_PHONE'];
-const MIGRATIONS = [['teamRequestsUnavailable', '0002_team_requests.sql'], ['plusUnavailable', '0003_plus.sql'], ['reviewsUnavailable', '0004_creem_reviews.sql'], ['refundsUnavailable', '0005_refunds.sql'], ['partnersUnavailable', '0006_partners.sql'], ['partnerCommissionsUnavailable', '0007_partner_commissions.sql']];
+const MIGRATIONS = [['teamRequestsUnavailable', '0002_team_requests.sql'], ['plusUnavailable', '0003_plus.sql'], ['reviewsUnavailable', '0004_creem_reviews.sql'], ['refundsUnavailable', '0005_refunds.sql'], ['partnersUnavailable', '0006_partners.sql'], ['partnerCommissionsUnavailable', '0007_partner_commissions.sql'], ['partnerProfilesUnavailable', '0008_partner_profiles.sql']];
+const MISSING_WORDS = {
+  '0007_partner_commissions.sql': 'to track team commissions',
+  '0008_partner_profiles.sql': 'to mark partners as businesses and count their visits'
+};
 const listed = words => (words.length > 1 ? `${words.slice(0, -1).join(', ')} and ${words.at(-1)}` : words[0] || '');
 
 /**
@@ -177,7 +183,7 @@ export function setupChecks(summary, { config = {}, pageVersion = '' } = {}) {
   add('legal', legalProblems.length ? 'warn' : 'ok', legalProblems);
 
   const migrations = MIGRATIONS.filter(([flag]) => summary[flag]).map(([, file]) => file);
-  const missingText = file => (file === '0007_partner_commissions.sql' ? `Database: run migrations/${file} to track team commissions` : `Database: migration ${file} not applied`);
+  const missingText = file => (MISSING_WORDS[file] ? `Database: run migrations/${file} ${MISSING_WORDS[file]}` : `Database: migration ${file} not applied`);
   add('database', migrations.length ? 'missing' : 'ok', [migrations.length === 1 ? missingText(migrations[0]) : `Database: ${migrations.length} migrations not applied`]);
   add('sign-in', setup.twoFactor ? 'ok' : 'warn', ['Two-factor sign-in is off']);
   return checks;
@@ -257,15 +263,39 @@ function partnerItems(summary, now, { money }) {
   if (summary.partnersUnavailable || summary.partnerCommissionsUnavailable) return [];
   const rows = Array.isArray(summary.partners?.toPay) ? summary.partners.toPay : [];
   const rate = Number(summary.partnerProgram?.teamRate) || PARTNER_PROGRAM.teamRate;
-  return rows.filter(row => row?.checkoutId).map(row => {
+  const pay = rows.filter(row => row?.checkoutId).map(row => {
     const seats = teamTier(row.plan)?.seats;
     const basis = row.base != null ? `${rate}% of ${money(row.base, row.currency)} ${row.basis === 'paid' ? 'paid, tax included' : 'before tax'}` : '';
+    // Only what can be paid now: the commission, what is left of it, or what fits under an individual's yearly cap.
+    const cents = Number.isInteger(row.payable) ? row.payable : row.commission;
+    const capped = row.held > 0 ? `${money(row.held, row.currency)} more waits above the yearly cap for an individual` : '';
+    const how = row.partner === 'business' ? 'against their invoice, then Mark as paid' : 'by bank transfer, then Mark as paid';
     return {
       kind: 'partner-pay', key: `partner-pay:${row.checkoutId}`, section: 'partners', rows: [`partner:${row.checkoutId}`], icon: 'partner', at: row.earnedAt, when: 'earned',
-      text: `Pay ${row.code} ${row.exact === false ? 'at most ' : ''}${money(row.commission, row.currency)} (${rate}% of a team gift)`,
-      detail: [...payoutCheckWords(row, rate), seats ? `Team gift for up to ${new Intl.NumberFormat('en-US').format(seats)} people` : 'Team gift', basis, 'by bank transfer, then Mark as paid'].filter(Boolean).join(' · ')
+      text: `Pay ${row.code} ${row.exact === false ? 'at most ' : ''}${money(cents, row.currency)} (${rate}% of a team gift)`,
+      detail: [...payoutCheckWords(row, rate), seats ? `Team gift for up to ${new Intl.NumberFormat('en-US').format(seats)} people` : 'Team gift', basis, capped, how].filter(Boolean).join(' · ')
     };
   });
+  return [...pay, ...heldItems(summary, money)];
+}
+
+/**
+ * One line per individual partner and currency with team commissions held
+ * above the yearly cap: nothing to pay now, but the partner can invoice as a
+ * business (then switch them to Business), or the rest is paid from 1 January.
+ */
+function heldItems(summary, money) {
+  const codes = Array.isArray(summary.partners?.codes) ? summary.partners.codes : [];
+  const team = Array.isArray(summary.partners?.team) ? summary.partners.team : [];
+  return codes.filter(row => row?.partner !== 'business' && Array.isArray(row.cap?.lines)).flatMap(row => row.cap.lines.filter(line => line.held > 0).map(line => {
+    const held = team.filter(sale => sale.code === row.code && sale.currency === line.currency && sale.held > 0);
+    const oldest = held.map(sale => sale.earnedAt).filter(Boolean).sort()[0] || '';
+    return {
+      kind: 'partner-held', key: `partner-held:${row.code}:${line.currency}`, section: 'partners', rows: held.map(sale => `partner:${sale.checkoutId}`), icon: 'partner', at: oldest, when: 'earned',
+      text: `${row.code}: ${money(line.held, line.currency)} above the yearly cap for an individual`,
+      detail: `Paid in ${row.cap.year}: ${money(line.paid, line.currency)} of ${money(line.limit, line.currency)} · payable once ${row.code} invoices you as a business (switch them to Business), or from 1 January`
+    };
+  }));
 }
 
 // ---- Team requests, gifts, reviews ---------------------------------------------

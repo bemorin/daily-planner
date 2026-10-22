@@ -38,8 +38,9 @@ test('the four legal pages exist, and each footer links all four in order', asyn
   for (const [folder, file] of Object.entries(PAGES)) {
     const html = await read(file);
     assert.match(html, /^<!doctype html>/i, file);
-    // The privacy policy changed on 22 October 2026 (1.32, then 1.33: requests are made with consent, the box to tick); the others in 1.31.
-    const updated = folder === 'legal/privacy/' ? /Last updated: <time datetime="2026-10-22">22 October 2026<\/time>/ : /Last updated: <time datetime="2026-10-21">21 October 2026<\/time>/;
+    // The privacy policy changed on 22 October 2026 (1.32, then 1.33: requests are made with consent, the box to tick, and
+    // visits through partner links), the terms and cookies too (1.33: the partners' yearly cap, their statements); the notice in 1.31.
+    const updated = ['legal/privacy/', 'legal/terms/', 'legal/cookies/'].includes(folder) ? /Last updated: <time datetime="2026-10-22">22 October 2026<\/time>/ : /Last updated: <time datetime="2026-10-21">21 October 2026<\/time>/;
     assert.match(html, updated, `${file} shows the date`);
     const legalLinks = hrefs(footerOf(html)).map(href => resolveHref(folder, href)).filter(path => path.startsWith('legal'));
     assert.deepEqual(legalLinks, ['legal/privacy/', 'legal/terms/', 'legal/cookies/', 'legal/'], `${file} footer: Privacy · Terms · Cookies · Legal notice`);

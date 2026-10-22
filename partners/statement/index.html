@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Your partner statement — Daily Planner</title>
+  <meta name="description" content="Your private partner statement: the visits your link brings, the purchases made through it and your team commissions.">
+  <meta name="robots" content="noindex, nofollow">
+  <!-- The address carries the statement's key: never send it to another site. -->
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#f6f3ed" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#151412" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="../../favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+  <link rel="stylesheet" href="../../welcome/landing.css">
+  <link rel="stylesheet" href="../partners.css">
+  <link rel="stylesheet" href="./statement.css">
+  <script src="../../runtime-config.js"></script>
+  <script type="module" src="./statement.js"></script>
+</head>
+<body class="partners-page manage-page">
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m6.5 12.5 3.3 3.3 7.7-8"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6.5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h2"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.8"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5c.5 4.3 2.2 6 6.5 6.5-4.3.5-6 2.2-6.5 6.5-.5-4.3-2.2-6-6.5-6.5 4.3-.5 6-2.2 6.5-6.5Z"/><path d="M18.5 15.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5Z"/></symbol>
+    <symbol id="i-team" viewBox="0 0 24 24"><circle cx="12" cy="8.2" r="3"/><path d="M6.8 19.5a5.2 5.2 0 0 1 10.4 0"/><circle cx="5.2" cy="10.2" r="2.1"/><path d="M1.8 17.6a3.6 3.6 0 0 1 4.4-3.3"/><circle cx="18.8" cy="10.2" r="2.1"/><path d="M22.2 17.6a3.6 3.6 0 0 0-4.4-3.3"/></symbol>
+    <symbol id="i-bank" viewBox="0 0 24 24"><path d="M3.5 9.5 12 4.5l8.5 5"/><path d="M5.5 10.5v6.5M9.8 10.5v6.5M14.2 10.5v6.5M18.5 10.5v6.5M3.5 19.5h17"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19 6v5.5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9V6l7-2.5Z"/><path d="m9 12 2.2 2.2L15.5 10"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4.5 6.5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-7L6 20v-3.6a2 2 0 0 1-1.5-1.9Z"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></symbol>
+  </svg>
+
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top" data-top>
+    <div class="wrap top__inner">
+      <a class="brand" href="../../welcome/" aria-label="Daily Planner, about the planner">
+        <img src="../../favicon.svg" alt="" width="28" height="28">
+        <span>Daily Planner</span>
+      </a>
+      <div class="top__actions">
+        <a class="pt-top__link" href="../">Partner program</a>
+        <a class="btn btn--ghost btn--sm" href="../../contact/?topic=partners">Ask a question</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="manage st">
+    <div class="wrap manage__wrap">
+      <section class="manage__loading" data-view="loading">
+        <span class="spinner" aria-hidden="true"></span>
+        <p role="status">Getting your statement…</p>
+      </section>
+
+      <section class="manage__error" data-view="error" hidden>
+        <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg>Partner statement</p>
+        <h1 tabindex="-1" data-error-title>This link isn’t valid</h1>
+        <p class="lead" data-error-text>Open your statement from the private link we sent you, exactly as it is. If it still doesn’t open, ask us for your link again.</p>
+        <div class="cta-row">
+          <button class="btn btn--primary" type="button" data-retry hidden>Try again</button>
+          <a class="btn btn--ghost" href="../../contact/?topic=partners">Ask a question</a>
+          <a class="btn btn--ghost" href="../">The partner program</a>
+        </div>
+      </section>
+
+      <section data-view="ready" hidden>
+        <div class="manage__head st-head">
+          <p class="kicker"><svg class="i" aria-hidden="true"><use href="#i-link"/></svg>Partner statement</p>
+          <h1 tabindex="-1"><span class="sr-only">Statement for </span><span class="st-code" data-code>CODE</span></h1>
+          <p class="lead">The visits your link brings, what was bought through it, and the commissions we pay you. Only you can see this page: keep its address to yourself.</p>
+          <p class="st-updated"><span data-updated></span><button class="btn btn--ghost btn--sm" type="button" data-refresh><svg class="i" aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button></p>
+          <ul class="pt-figures st-figures" aria-label="Your statement in three figures" data-figures></ul>
+        </div>
+
+        <div class="st-grid">
+          <div class="mg-card st-link">
+            <h2><svg class="i" aria-hidden="true"><use href="#i-link"/></svg>Your link</h2>
+            <div class="mg-link__row">
+              <input type="text" readonly data-ref-url aria-label="Your partner link" spellcheck="false">
+              <button class="btn btn--primary" type="button" data-copy-ref><svg class="i" aria-hidden="true"><use href="#i-copy"/></svg>Copy link</button>
+            </div>
+            <p class="mg-status" data-copy-status role="status"></p>
+            <p class="mg-fine">It works on any page of the site: add <code>?ref=<span data-code>CODE</span></code> to the address. A purchase made within <span data-cookie-days>30</span> days counts.</p>
+          </div>
+
+          <section class="mg-card st-visits" aria-labelledby="st-visits-title">
+            <h2 id="st-visits-title"><svg class="i" aria-hidden="true"><use href="#i-eye"/></svg>Visits through your link</h2>
+            <ul class="st-trio" data-visits></ul>
+            <p class="mg-fine" data-visits-note>A browser is counted once a day, and not at all when its visitor switched off our anonymous counts. We count these ourselves: Creem’s dashboard may show other figures.</p>
+          </section>
+
+          <section class="mg-card st-creem" aria-labelledby="st-creem-title">
+            <h2 id="st-creem-title"><svg class="i" aria-hidden="true"><use href="#i-spark"/></svg>Plus and personal gifts</h2>
+            <ul class="st-list" data-creem></ul>
+            <p class="mg-fine">Paid by Creem, <span data-rate>25%</span> of each purchase: see your Creem dashboard for the amounts and your payouts.</p>
+          </section>
+
+          <section class="mg-card st-team" aria-labelledby="st-team-title">
+            <div class="mg-card__head">
+              <h2 id="st-team-title"><svg class="i" aria-hidden="true"><use href="#i-team"/></svg>Team gifts</h2>
+              <span class="pt-chip"><span data-team-rate>10%</span> · we pay you</span>
+            </div>
+            <div class="st-team__totals" data-team-totals></div>
+            <ul class="st-lines" data-team></ul>
+            <p class="mg-fine" data-team-empty hidden>No team gift through your link yet. When a company you introduced gives Plus to its people, you earn <span data-team-rate>10%</span> of its price before tax.</p>
+          </section>
+
+          <section class="mg-card st-cap" aria-labelledby="st-cap-title" data-cap hidden>
+            <h2 id="st-cap-title"><svg class="i" aria-hidden="true"><use href="#i-calendar"/></svg>Your yearly cap as an individual</h2>
+            <div class="st-cap__lines" data-cap-lines></div>
+            <p class="mg-fine" data-cap-note></p>
+          </section>
+
+          <section class="mg-card st-pay" aria-labelledby="st-pay-title">
+            <h2 id="st-pay-title"><svg class="i" aria-hidden="true"><use href="#i-bank"/></svg>How you get paid</h2>
+            <ul class="st-pay__list">
+              <li><b>Plus and personal gifts</b><span>Creem pays you on the 1st and the 15th of each month, once your balance reaches <span data-minimum>€50</span>. Set up your payouts in your Creem dashboard.</span></li>
+              <li><b>Team gifts</b><span data-pay-team></span></li>
+            </ul>
+            <div class="cta-row">
+              <a class="btn btn--primary btn--sm" href="../../contact/?topic=partners" data-ask>Send your details</a>
+              <a class="btn btn--ghost btn--sm" href="../#rules">The program’s rules</a>
+            </div>
+          </section>
+        </div>
+
+        <p class="mg-fine st-privacy"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span>Nothing here says who bought: no names, no emails, no amounts paid by anyone. The full rules are in our <a href="../../legal/terms/#partners">terms</a>.</span></p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot__inner">
+      <div class="foot__brand">
+        <img src="../../favicon.svg" alt="" width="24" height="24" loading="lazy" decoding="async">
+        <span><b>Daily Planner</b> By <a href="https://bemorin.com/" rel="noopener">Ben Morin</a></span>
+      </div>
+    </div>
+    <div class="wrap foot__base">
+      <div class="foot__links">
+        <nav class="foot__legal" aria-label="Legal">
+          <a href="../../legal/privacy/">Privacy</a>
+          <a href="../../legal/terms/">Terms</a>
+          <a href="../../legal/cookies/">Cookies</a>
+          <a href="../../legal/">Legal notice</a>
+        </nav>
+        <a href="../../contact/">Contact</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

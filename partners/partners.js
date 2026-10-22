@@ -60,6 +60,7 @@ function render(currency) {
   setText('[data-cookie-days]', figures.cookieDays);
   setText('[data-refund-days]', figures.refundDays);
   setText('[data-minimum]', figures.minimum);
+  setText('[data-individual-cap]', figures.individualCap);
   setText('[data-plus-price]', figures.plusPrice);
   setText('[data-plus-earns]', figures.plusEarns);
   setText('[data-team-earns]', figures.teamEarns);

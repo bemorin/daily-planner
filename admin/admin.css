@@ -861,3 +861,50 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 [data-owner-partners] .owner-list { margin-top: 18px; }
 
 [data-owner-partners] > .owner-result { margin: 0 0 10px; }
+
+/* A partner's status (Individual / Business: 1.33) and private link, under the code. */
+.owner-partner-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 6px; }
+
+.owner-partner-status { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--surface) 70%, transparent); }
+
+.owner-partner-status button { min-height: 26px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: .72rem; font-weight: 650; cursor: pointer; }
+
+.owner-partner-status button:hover { color: var(--ink); }
+
+.owner-partner-status button[aria-pressed="true"] { background: var(--surface-strong); color: var(--ink); box-shadow: 0 1px 2px rgba(28, 25, 21, .08), inset 0 0 0 1px var(--line); cursor: default; }
+
+.owner-partner-status button:focus-visible { outline: 0; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+
+.owner-table .owner-partner-link { min-height: 26px; margin: 0; padding: 0 4px; font-size: .74rem; white-space: nowrap; }
+
+/* An individual's yearly cap: what is paid this year, with a thin meter, and what waits above it. */
+.owner-partner-owed { min-width: 210px; }
+
+.owner-partner-cap { display: grid; justify-items: end; gap: 3px; }
+
+.owner-cap-meter { display: block; width: 100%; max-width: 160px; height: 4px; overflow: hidden; border-radius: 999px; background: var(--soft); box-shadow: inset 0 0 0 1px var(--line); }
+
+.owner-cap-meter i { display: block; height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--accent) 70%, var(--ink)); }
+
+.owner-cap-meter.is-full i { background: color-mix(in srgb, var(--attn-warn) 75%, var(--ink)); }
+
+.owner-partners .owner-partner-owed .owner-small--warn { max-width: 230px; margin-left: auto; white-space: normal; text-align: right; }
+
+/* The private link of any code, even one with no sale yet. */
+.owner-partner-linkform { display: grid; gap: 6px; max-width: 560px; margin: 16px 0 4px; }
+
+.owner-partner-linkform label { color: var(--ink); font-size: .8rem; font-weight: 650; }
+
+.owner-partner-linkform__row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.owner-partner-linkform input { flex: 1 1 160px; min-width: 0; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-strong); color: var(--ink); font: 600 .82rem/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.owner-partner-linkform input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.owner-partner-linkform__shown { margin-top: 4px; }
+
+.owner-partners { min-width: 860px; }
+
+.owner-partners thead th { white-space: nowrap; }
+
+.owner-partner-note--visits { margin: 10px 0 0; }
