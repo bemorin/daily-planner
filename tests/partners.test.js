@@ -13,7 +13,7 @@ const KEYS = await generatePlusKeyPair();
 const OTHER_KEYS = await generatePlusKeyPair();
 const PRODUCTS = Object.freeze({ plus: { EUR: 'prod_plus_eur', USD: 'prod_plus_usd' }, gift: { EUR: 'prod_gift_eur', USD: 'prod_gift_usd' } });
 const WEBHOOK_SECRET = 'whsec_test_partners';
-const ALL_MIGRATIONS = ['0001_planner_api.sql', '0002_team_requests.sql', '0003_plus.sql', '0004_creem_reviews.sql', '0005_refunds.sql', '0006_partners.sql', '0007_partner_commissions.sql'];
+const ALL_MIGRATIONS = ['0001_planner_api.sql', '0002_team_requests.sql', '0003_plus.sql', '0004_creem_reviews.sql', '0005_refunds.sql', '0006_partners.sql', '0007_partner_commissions.sql', '0008_partner_profiles.sql'];
 
 const jsonResponse = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 const request = (method, path, body, token) => new Request(`https://planner.test/api/${path}`, {
@@ -225,7 +225,7 @@ test('Creem’s order gives the tax included in the amount paid', () => {
 test('a sale’s states: refunded or disputed (by Creem) win over switched off (by the owner)', () => {
   const states = saleStates([{ checkoutId: 'ch_d', reason: 'owner' }, { checkoutId: 'ch_d', reason: 'refund' }, { checkoutId: 'ch_f', reason: 'owner' }, { checkoutId: 'ch_x', reason: 'dispute' }, { checkoutId: 'ch_x', reason: 'refund' }, { checkoutId: '', reason: 'refund' }]);
   assert.deepEqual([...states], [['ch_d', 'refunded'], ['ch_f', 'revoked'], ['ch_x', 'disputed']]);
-  assert.deepEqual(COMMISSION_STATUSES, ['pending', 'earned', 'paid', 'refunded', 'disputed', 'revoked', 'not-partner']);
+  assert.deepEqual(COMMISSION_STATUSES, ['pending', 'earned', 'held', 'paid', 'refunded', 'disputed', 'revoked', 'not-partner']);
 });
 
 test('a commission is a share of the price before tax, partial refunds taken off in proportion; without the tax, of the amount paid', () => {
@@ -331,13 +331,13 @@ test('the Partners card: per partner, Creem’s commissions for information and 
   assert.deepEqual([camille.code, camille.sales, camille.refunded, camille.members, camille.revenue], ['CAMILLE', 4, 1, 1, { EUR: 5300, USD: 9900 }]);
   // Creem: Plus 604 and Give Plus 500 earned (EUR); Family pending (USD, tax unknown: 25% of 99.00); the refunded Plus earns nothing.
   assert.deepEqual(camille.creem, { sales: 4, pending: { USD: 2475 }, earned: { EUR: 1104 } });
-  assert.deepEqual(camille.team, { sales: 0, pending: {}, toPay: {}, paid: {} });
+  assert.deepEqual(camille.team, { sales: 0, pending: {}, toPay: {}, held: {}, paid: {} });
   assert.deepEqual([newsletter.code, newsletter.sales, newsletter.revoked], ['NEWSLETTER', 4, 1]);
   assert.deepEqual(newsletter.creem, { sales: 1, pending: {}, earned: {} }, 'switched off: nothing');
-  assert.deepEqual(newsletter.team, { sales: 3, pending: { EUR: 4958 }, toPay: { EUR: 1625 }, paid: { EUR: 8292 } });
+  assert.deepEqual(newsletter.team, { sales: 3, pending: { EUR: 4958 }, toPay: { EUR: 1625 }, held: {}, paid: { EUR: 8292 } });
   assert.deepEqual([tryout.code, tryout.sales, tryout.test], ['TRYOUT', 0, 1]);
   assert.deepEqual(summary.totals.creem, { pending: { USD: 2475 }, earned: { EUR: 1104 } });
-  assert.deepEqual(summary.totals.team, { pending: { EUR: 4958 }, toPay: { EUR: 1625 }, paid: { EUR: 8292 }, toPayCount: 1, toCheck: 0 });
+  assert.deepEqual(summary.totals.team, { pending: { EUR: 4958 }, toPay: { EUR: 1625 }, held: {}, paid: { EUR: 8292 }, toPayCount: 1, toCheck: 0, heldCount: 0 });
   assert.deepEqual([summary.totals.sales, summary.totals.partners, summary.totals.refunded, summary.totals.test.sales], [8, 2, 2, 1]);
   // Only the USD Family (tax unknown) is an upper bound among the commissions still open.
   assert.equal(summary.totals.inexact, 1);
@@ -345,7 +345,7 @@ test('the Partners card: per partner, Creem’s commissions for information and 
   assert.deepEqual(summary.codeChecks, { CAMILLE: 'creem', NEWSLETTER: 'creem' });
   // The team commissions one by one (live only), newest first, and the one to pay with when it was earned.
   assert.deepEqual(summary.team.map(sale => [sale.checkoutId, sale.status, sale.commission]), [['ch_g', 'pending', 4958], ['ch_e', 'earned', 1625], ['ch_h', 'paid', 8292]]);
-  assert.deepEqual(summary.toPay, [{ checkoutId: 'ch_e', code: 'NEWSLETTER', plan: 'up-to-10', amount: 19500, refundedAmount: 0, refundUnknown: false, rate: 10, base: 16250, basis: 'before-tax', commission: 1625, exact: true, currency: 'EUR', checks: [], earnedAt: iso(START - 4 * DAY), createdAt: iso(START - 18 * DAY) }]);
+  assert.deepEqual(summary.toPay, [{ checkoutId: 'ch_e', code: 'NEWSLETTER', plan: 'up-to-10', amount: 19500, refundedAmount: 0, refundUnknown: false, rate: 10, base: 16250, basis: 'before-tax', commission: 1625, exact: true, currency: 'EUR', checks: [], earnedAt: iso(START - 4 * DAY), createdAt: iso(START - 18 * DAY), paidAmount: null, rest: 1625, payable: 1625, held: 0, partner: 'individual', cap: { year: 2026, limit: 30000, paid: 8292 } }]);
   // Every sale in `recent` says what it earns and where it stands.
   assert.deepEqual(summary.recent.map(sale => [sale.checkoutId, sale.program, sale.status]), [
     ['ch_i', 'team', 'pending'], ['ch_g', 'team', 'pending'], ['ch_c', 'creem', 'pending'], ['ch_e', 'team', 'earned'],
@@ -355,7 +355,7 @@ test('the Partners card: per partner, Creem’s commissions for information and 
   assert.equal(partnerSummary(many, [], [], { now: START }).recent.length, PARTNER_RECENT);
   const empty = partnerSummary([], [], [], { now: START });
   assert.deepEqual([empty.codes, empty.recent, empty.team, empty.toPay], [[], [], [], []]);
-  assert.deepEqual(empty.totals, { sales: 0, partners: 0, refunded: 0, partial: 0, revenue: {}, test: { sales: 0, revenue: {} }, creem: { pending: {}, earned: {} }, team: { pending: {}, toPay: {}, paid: {}, toPayCount: 0, toCheck: 0 }, inexact: 0, listed: 0, capped: false });
+  assert.deepEqual(empty.totals, { sales: 0, partners: 0, refunded: 0, partial: 0, revenue: {}, test: { sales: 0, revenue: {} }, creem: { pending: {}, earned: {} }, team: { pending: {}, toPay: {}, held: {}, paid: {}, toPayCount: 0, toCheck: 0, heldCount: 0 }, inexact: 0, listed: 0, capped: false });
   assert.deepEqual(empty.codeChecks, {});
   // Paid, then disputed: still counted as paid (the money went out).
   const disputedAfter = partnerSummary(rows, saleStates([{ checkoutId: 'ch_h', reason: 'dispute' }]), [], { payouts, now: START });
@@ -363,7 +363,7 @@ test('the Partners card: per partner, Creem’s commissions for information and 
   // A code found to be no partner: its open team commissions earn nothing, what was paid stays paid.
   const rejected = partnerSummary(rows, states, [], { payouts, rejections: [{ code: 'NEWSLETTER', createdAt: iso(START) }], now: START });
   assert.deepEqual(rejected.team.map(sale => [sale.checkoutId, sale.status]), [['ch_g', 'not-partner'], ['ch_e', 'not-partner'], ['ch_h', 'paid']]);
-  assert.deepEqual([rejected.totals.team, rejected.toPay], [{ pending: {}, toPay: {}, paid: { EUR: 8292 }, toPayCount: 0, toCheck: 0 }, []]);
+  assert.deepEqual([rejected.totals.team, rejected.toPay], [{ pending: {}, toPay: {}, held: {}, paid: { EUR: 8292 }, toPayCount: 0, toCheck: 0, heldCount: 0 }, []]);
   assert.equal(rejected.codeChecks.NEWSLETTER, 'rejected');
 });
 
@@ -459,7 +459,7 @@ test('a commission to check is marked as paid only once the owner says they chec
   assert.equal(payoutCheck(summary, 'ch_code', { confirmed: true, amount: 1625 }).amount, 1625);
   // The tax isn't recorded: €19.50 is only an upper bound (10% of the amount paid, tax included).
   assert.deepEqual([payoutCheck(summary, 'ch_tax').status, payoutCheck(summary, 'ch_tax').checks], [409, ['tax']]);
-  assert.match(payoutCheck(summary, 'ch_tax', { confirmed: true }).error, /^Give the amount you paid: more than nothing and at most 19\.50 EUR \(10% of the amount paid, tax included\)\.$/);
+  assert.match(payoutCheck(summary, 'ch_tax', { confirmed: true }).error, /^Give the amount you paid: more than nothing and at most €19\.50 \(10% of the amount paid, tax included\)\.$/);
   for (const amount of [0, -1, 1951, 16.25, '1625']) assert.equal(payoutCheck(summary, 'ch_tax', { confirmed: true, amount }).status, 400, String(amount));
   assert.deepEqual([payoutCheck(summary, 'ch_tax', { confirmed: true, amount: 1625 }).amount], [1625]);
   // Part refunded, amount unknown: the same.
@@ -642,7 +642,7 @@ test('a refunded partner sale is marked, and left out of the revenue (memory and
     const refund = { id: 'evt_ref_1', eventType: 'refund.created', created_at: START, object: { id: 'ref_1', object: 'refund', refund_amount: 2900, refund_currency: 'EUR', transaction: { id: 'tran_1', status: 'refunded' }, created_at: START } };
     assert.equal((await sendWebhook(api, refund)).status, 200, label);
     const { partners } = (await asJson(await api(get('admin/summary', 'secret')))).body;
-    assert.deepEqual(partners.codes, [{ code: 'CAMILLE', sales: 1, refunded: 1, partial: 0, revoked: 0, members: 0, revenue: {}, test: 0, lastAt: new Date(START).toISOString(), creem: { sales: 1, pending: {}, earned: {} }, team: { sales: 0, pending: {}, toPay: {}, paid: {} } }], label);
+    assert.deepEqual(partners.codes, [{ code: 'CAMILLE', sales: 1, refunded: 1, partial: 0, revoked: 0, members: 0, revenue: {}, test: 0, lastAt: new Date(START).toISOString(), creem: { sales: 1, pending: {}, earned: {} }, team: { sales: 0, pending: {}, toPay: {}, held: {}, paid: {} }, key: 'CAMILLE', sameAs: [], partner: 'individual', cap: null, visits: 0 }], label);
     assert.deepEqual([partners.recent[0].state, partners.recent[0].status], ['refunded', 'refunded'], label);
     // Restored in the dashboard: counted again, in full (a full refund is a state, never taken off as an amount).
     assert.equal((await api(request('DELETE', 'admin/revocations/ref_1', undefined, 'secret'))).status, 200, label);
@@ -767,7 +767,7 @@ test('the owner marks an earned team commission as paid, and can undo it (memory
     // Nothing confirmed COACH_ANNA (no sale credited by Creem yet): to check in Creem before paying.
     assert.deepEqual(before.partners.toPay.map(row => [row.checkoutId, row.code, row.commission, row.currency, row.checks]), [[team.id, 'COACH_ANNA', 1625, 'EUR', ['code']]], label);
     assert.equal(before.partners.totals.team.toCheck, 1, label);
-    assert.deepEqual(before.partnerProgram, { rate: 25, teamRate: 10, refundDays: 14, cookieDays: 30, minimumPayout: { EUR: 50, USD: 50 } }, label);
+    assert.deepEqual(before.partnerProgram, { rate: 25, teamRate: 10, refundDays: 14, cookieDays: 30, minimumPayout: { EUR: 50, USD: 50 }, individualYearlyCap: { EUR: 300, USD: 300 } }, label);
     assert.equal((await payout(later, { checkout: 'not a checkout' })).status, 400, label);
     assert.equal((await payout(later, { checkout: team.id, note: 'n'.repeat(201) })).status, 400, label);
     assert.equal((await payout(later, { checkout: team.id, amount: '16.25', confirmed: true })).status, 400, `${label}: cents only`);
@@ -816,7 +816,7 @@ test('a team commission whose tax or refund isn’t known is marked as paid with
     assert.deepEqual(toPay.map(row => [row.commission, row.exact, row.basis, row.checks]), [[1950, false, 'paid', ['code', 'tax']]], label);
     const payout = body => later(request('POST', 'admin/partners/payouts', { checkout: team.id, confirmed: true, ...body }, 'secret'));
     const missing = await asJson(await payout({}));
-    assert.deepEqual([missing.status, /at most 19\.50 EUR/.test(missing.body.error)], [400, true], label);
+    assert.deepEqual([missing.status, /at most €19\.50/.test(missing.body.error)], [400, true], label);
     assert.equal((await payout({ amount: 1951 })).status, 400, label);
     const paid = await asJson(await payout({ amount: 1625, note: 'SEPA 7' }));
     assert.deepEqual([paid.status, paid.body.payout.amount], [201, 1625], label);

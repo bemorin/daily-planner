@@ -12,7 +12,9 @@
 // (./attention.js) and marks the cards and rows it points to.
 
 import { ATTENTION_SECTIONS, attentionBySection, attentionNote, attentionWhen, buildAttention, setupChecks } from './attention.js';
-import { partnersCardHtml, payoutCheckWords } from './partners-view.js';
+import { partnersCardHtml, yearlyCapText } from './partners-view.js';
+// Mark as paid: what to check, the amount, the day paid and a reference, in one dialog.
+import { openPayoutDialog, parseAmount } from './payout-dialog.js';
 // The requests table: a question reads as one, without a team's details.
 import { teamRequestsTableHtml } from './requests-view.js';
 import { createTrendsView } from './trends-view.js';
@@ -43,6 +45,8 @@ const stars = rating => (rating ? `<span class="owner-stars" aria-label="${ratin
 const APP_CONFIG = globalThis.__DAILY_PLANNER_CONFIG__ || {};
 // A team order a partner introduced earns them this share (PARTNER_PROGRAM.teamRate, from the API's summary).
 let TEAM_RATE = 10;
+// The program as the API last said it (its individual yearly cap, for the status switch's words).
+let PARTNER_PROGRAM_SEEN = { individualYearlyCap: { EUR: 300, USD: 300 } };
 const CURRENCIES = [{ value: 'EUR', label: 'EUR (€)' }, { value: 'USD', label: 'USD ($)' }, { value: '', label: 'No currency' }];
 const GIFT_STATUS_LABELS = { available: 'Open', claimed: 'Fully claimed', expired: 'Expired', inactive: 'Switched off' };
 const day = iso => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '');
@@ -56,9 +60,9 @@ const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', ma
 // This page's own release, kept in step with package.json and src/config.js
 // (tests/admin-version.test.js). Not imported: it must come from this very
 // file, so an old cached admin.js shows its old number.
-const APP_VERSION = '1.32.0';
+const APP_VERSION = '1.33.0';
 // What Reload fetches again past the browser cache before opening the page anew.
-const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './requests-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/vendor/motion.js', '../src/lib/pricing.js', '../legal/legal-details.js', '../src/lib/text.js'];
+const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './payout-dialog.js', './requests-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/vendor/motion.js', '../src/lib/pricing.js', '../legal/legal-details.js', '../src/lib/text.js'];
 const RELOAD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/></svg>';
 
 class ApiError extends Error {
@@ -779,13 +783,6 @@ function closeGiftPanel() {
   button?.focus();
 }
 
-function parseAmount(text) {
-  const clean = String(text || '').replace(/[\s  ]/g, '').replace(',', '.');
-  if (!clean) return { amount: null };
-  if (!/^\d{1,9}(?:\.\d{1,2})?$/.test(clean)) return { error: 'Write the amount like 595 or 595.50.' };
-  return { amount: Math.round(Number(clean) * 100) };
-}
-
 function readSeats(input) {
   const seats = Number(input.value);
   return Number.isInteger(seats) && seats >= 1 && seats <= 100000 ? seats : 0;
@@ -1116,63 +1113,118 @@ $('[data-owner-refunds]').closest('.owner-card').addEventListener('click', async
 
 /** Sales through a partner's link (migrations 0006 and 0007): see ./partners-view.js. */
 function renderPartners(summary) {
+  if (summary.partnerProgram) PARTNER_PROGRAM_SEEN = { ...PARTNER_PROGRAM_SEEN, ...summary.partnerProgram };
   $('[data-owner-partners]').innerHTML = partnersCardHtml(summary, { money, exact: exactMoney, number, day });
 }
 
 // After the card is drawn again, focus stays on the row that was acted on (its new first button), else on the result line.
-function focusPartnerRow(checkoutId) {
+function focusPartnerRow(checkoutId, code = '') {
   const row = checkoutId ? [...document.querySelectorAll('[data-owner-partners] [data-owner-attn]')].find(item => item.dataset.ownerAttn === `partner:${checkoutId}`) : null;
-  (row?.querySelector('button') || $('[data-owner-payout-result]'))?.focus();
+  // A partner's status switch: its chosen button.
+  const status = code ? [...document.querySelectorAll('[data-owner-partners] [data-owner-partner-code]')].find(item => item.dataset.ownerPartnerCode === code && item.getAttribute('aria-pressed') === 'true') : null;
+  (status || row?.querySelector('button') || $('[data-owner-payout-result]'))?.focus();
 }
 
 /**
- * Mark as paid asks what the row says to check first (a code nothing confirmed,
- * a refund or the tax not recorded) and, when the commission is only an upper
- * bound, the amount actually paid; the API is told the owner checked.
+ * A partner's private statement link, from the API (signed there, never kept
+ * here): copied, and shown under the card so it can be copied by hand too.
+ * `renew` makes a new link first (asked before): the one sent before stops
+ * working.
  */
-function askPayout(dataset) {
-  const code = dataset.ownerPayoutCode || 'this partner';
-  const checks = String(dataset.ownerPayoutChecks || '').split(' ').filter(Boolean);
-  const first = checks.length ? `${payoutCheckWords({ code, checks }, TEAM_RATE).map(line => `• ${line}.`).join('\n')}\n\n` : '';
-  let amount = null;
-  let shown = dataset.ownerPayoutAmount || 'commission';
-  if (dataset.ownerPayoutExact === '0') {
-    const most = Number(dataset.ownerPayoutCents) || 0;
-    const typed = window.prompt(`${first}${shown} is the most ${code} can have earned. Type the commission you paid by bank transfer (at most ${shown}):`, '');
-    if (typed === null) return null;
-    const parsed = parseAmount(typed);
-    if (parsed.error || !parsed.amount || parsed.amount > most) return { error: parsed.error || `Type the commission you paid: more than nothing and at most ${shown}.` };
-    amount = parsed.amount;
-    shown = exactMoney(amount, dataset.ownerPayoutCurrency);
+async function copyStatementLink(code, button, { renew = false } = {}) {
+  if (!/^[A-Za-z0-9_-]{2,64}$/.test(code)) { showResult('[data-owner-payout-result]', 'Type a partner code: 2 to 64 letters, digits, - or _.', true); return; }
+  if (renew && !window.confirm(`Make a new private link for ${code}? The link you sent before stops working at once, for every case of the code (CAMILLE and Camille alike). Then send ${code} the new one.`)) return;
+  if (button) button.disabled = true;
+  try {
+    const { url } = await sendJson('admin/partners/links', 'POST', renew ? { code, renew: true } : { code });
+    await copyText(url, button);
+    const shown = $('[data-owner-statement-shown]');
+    if (shown) { shown.hidden = false; shown.innerHTML = copyRow(`${code}’s ${renew ? 'new ' : ''}private link`, url); }
+    showResult('[data-owner-payout-result]', renew
+      ? `${code} has a new private statement link, copied: the one sent before no longer opens. Send the new one to ${code} only.`
+      : `${code}’s private statement link is copied. Send it to ${code} only: anyone with it can see their statement.`);
+  } catch (error) {
+    if (error.kind === 'unauthorized') { handleError(error); return; }
+    showResult('[data-owner-payout-result]', failureText(error), true);
+  } finally {
+    if (button) button.disabled = false;
   }
-  const answer = window.prompt(`${amount == null ? first : ''}Mark ${code}’s ${shown} as paid? Do it once the bank transfer is sent. Add its reference if you like (optional, only you see it).`, '');
-  if (answer === null) return null;
-  return {
-    body: { checkout: dataset.ownerPayout, note: answer.trim().slice(0, 200), ...(checks.length ? { confirmed: true } : {}), ...(amount == null ? {} : { amount }) },
-    done: `Marked as paid: ${code}, ${shown}.`
-  };
 }
 
-// Mark an earned team commission as paid (after the bank transfer) or undo it; mark a code as not a partner or undo it.
+$('[data-owner-partners]').addEventListener('submit', event => {
+  const form = event.target.closest('[data-owner-statement-form]');
+  if (!form) return;
+  event.preventDefault();
+  copyStatementLink(String(form.elements.code.value || '').trim(), form.querySelector('button[type="submit"]'));
+});
+
+/**
+ * Undo on a team commission: the question names the exact payment it takes
+ * back (the row's words, from partners-view.js undoWords), and the API is
+ * told which one, so nothing else is undone if the commission changed since
+ * the page loaded (the card is then drawn again, and says so). A payment
+ * from an earlier cap year needs a second, explicit yes (the API refuses it
+ * otherwise): it changes that year's figures. Answers { text, isError } to
+ * show once the card is drawn again, or null when the owner said no.
+ */
+async function undoPayout(dataset) {
+  const code = dataset.ownerPayoutCode || 'this partner';
+  if (!window.confirm(dataset.ownerPayoutQuestion || `Mark ${code}’s commission as not paid?`)) return null;
+  const path = `admin/partners/payouts/${encodeURIComponent(dataset.ownerPayoutUndo)}`;
+  const payment = dataset.ownerPayoutPayment ? `?payment=${encodeURIComponent(dataset.ownerPayoutPayment)}` : '';
+  try {
+    await call(`${path}${payment}`, { method: 'DELETE' });
+  } catch (error) {
+    const message = String(error?.message || '');
+    if (error.kind !== 'failed') throw error;
+    if (/\(HTTP 404\)/.test(message)) return { text: 'There was no payment left to undo: the card is up to date.', isError: false };
+    if (/changed since the page loaded/.test(message)) return { text: `${code}’s payments changed since the page loaded, so nothing was undone. The card now shows them: check, then undo again if you need to.`, isError: true };
+    const year = /made in (\d{4}): undoing it changes/.exec(message)?.[1];
+    if (!year) throw error;
+    if (!window.confirm(`This payment was made in ${year}: undoing it changes ${year}’s figures, the yearly cap included. Undo it anyway?`)) return null;
+    await call(`${path}${payment ? `${payment}&` : '?'}confirm=1`, { method: 'DELETE' });
+  }
+  return { text: dataset.ownerPayoutDone || `Marked as not paid: ${code}.`, isError: false };
+}
+
+// Mark an earned team commission as paid (after the bank transfer) or undo it; mark a code as not a partner or undo it;
+// a partner's status; their private link, copied or made anew.
 $('[data-owner-partners]').addEventListener('click', async event => {
-  const button = event.target.closest('[data-owner-payout], [data-owner-payout-undo], [data-owner-code-reject], [data-owner-code-undo]');
-  if (!button || button.disabled) return;
+  const link = event.target.closest('[data-owner-statement-link]');
+  if (link && !link.disabled) { copyStatementLink(link.dataset.ownerStatementLink, link); return; }
+  const renew = event.target.closest('[data-owner-statement-renew], [data-owner-statement-renew-form]');
+  if (renew && !renew.disabled) {
+    const code = renew.dataset.ownerStatementRenew ?? String(renew.closest('form')?.elements.code.value || '').trim();
+    copyStatementLink(code, renew, { renew: true });
+    return;
+  }
+  const button = event.target.closest('[data-owner-payout], [data-owner-payout-undo], [data-owner-code-reject], [data-owner-code-undo], [data-owner-partner-status]');
+  if (!button || button.disabled || button.getAttribute('aria-pressed') === 'true') return;
   const { dataset } = button;
+  let focusCode = '';
   const row = dataset.ownerPayout || dataset.ownerPayoutUndo || dataset.ownerRow || '';
-  const undoing = dataset.ownerPayoutUndo !== undefined || dataset.ownerCodeUndo !== undefined;
+  const undoingPayout = dataset.ownerPayoutUndo !== undefined;
   let send;
   let done;
   if (dataset.ownerPayout !== undefined) {
-    const asked = askPayout(dataset);
-    if (!asked) return;
-    if (asked.error) { showResult('[data-owner-payout-result]', asked.error, true); button.focus(); return; }
+    // One dialog asks what to check, the amount when it is an upper bound, the day paid and a reference.
+    const asked = await openPayoutDialog(dataset, { money: exactMoney, rate: TEAM_RATE });
+    if (!asked) { button.focus(); return; }
     send = () => sendJson('admin/partners/payouts', 'POST', asked.body);
     done = asked.done;
-  } else if (dataset.ownerPayoutUndo !== undefined) {
-    const code = dataset.ownerPayoutCode || 'this partner';
-    if (!window.confirm(`Mark ${code}’s commission as not paid?`)) return;
-    send = () => call(`admin/partners/payouts/${encodeURIComponent(dataset.ownerPayoutUndo)}`, { method: 'DELETE' });
-    done = `Marked as not paid: ${code}.`;
+  } else if (undoingPayout) {
+    send = () => undoPayout(dataset);
+  } else if (dataset.ownerPartnerStatus !== undefined) {
+    const code = dataset.ownerPartnerCode;
+    const status = dataset.ownerPartnerStatus === 'business' ? 'business' : 'individual';
+    const cap = yearlyCapText(PARTNER_PROGRAM_SEEN);
+    const question = status === 'business'
+      ? `Mark ${code} as a business (a micro-entreprise or a company, in any country)? You then pay their team commissions against their invoice, with no yearly cap.`
+      : `Mark ${code} as an individual? Their team commissions are capped at ${cap} a calendar year again, counting what you paid them this year.`;
+    if (!window.confirm(question)) return;
+    send = () => sendJson('admin/partners/profiles', 'POST', { code, status });
+    done = status === 'business' ? `${code} is a business: pay against their invoice, no yearly cap.` : `${code} is an individual: team commissions capped at ${cap} a calendar year.`;
+    focusCode = code;
   } else if (dataset.ownerCodeReject !== undefined) {
     const code = dataset.ownerCodeReject;
     if (!window.confirm(`Mark ${code} as not a partner? Do it once you have checked Creem → Affiliate Hub and found no partner with this code. Its team commissions will earn nothing (you can undo it).`)) return;
@@ -1185,17 +1237,23 @@ $('[data-owner-partners]').addEventListener('click', async event => {
     done = `${code} counts as a partner again.`;
   }
   button.disabled = true;
+  let isError = false;
   try {
-    await send();
+    const answer = await send();
+    // Undo answers its own words, or null when the owner said no.
+    if (undoingPayout) {
+      if (answer === null) { button.disabled = false; button.focus(); return; }
+      ({ text: done, isError } = answer);
+    }
   } catch (error) {
     button.disabled = false;
     if (error.kind === 'unauthorized') { handleError(error); return; }
-    // "failed" on an Undo is usually a 404: already undone. Just refresh.
-    if (!undoing || error.kind !== 'failed') { showResult('[data-owner-payout-result]', failureText(error), true); button.focus(); return; }
+    // "failed" on the Undo of a rejection is usually a 404: already undone. Just refresh.
+    if (dataset.ownerCodeUndo === undefined || error.kind !== 'failed') { showResult('[data-owner-payout-result]', failureText(error), true); button.focus(); return; }
   }
   await load();
-  showResult('[data-owner-payout-result]', done);
-  focusPartnerRow(row);
+  showResult('[data-owner-payout-result]', done, isError);
+  focusPartnerRow(row, focusCode);
 });
 
 // ---- Setup --------------------------------------------------------------------
@@ -1348,7 +1406,7 @@ function setupItems(summary) {
   items.push({ key: 'links', title: 'Links in emails', html: `<p>They start with ${esc(base)}${setup.publicBaseUrlSet ? ' (<code>PUBLIC_BASE_URL</code>)' : ', the default. Set <code>PUBLIC_BASE_URL</code> to change it'}.</p>` });
   items.push(partnersItem(summary, base));
   items.push(legalItem(base));
-  const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql', summary.reviewsUnavailable && '0004_creem_reviews.sql', summary.refundsUnavailable && '0005_refunds.sql', summary.partnersUnavailable && '0006_partners.sql', summary.partnerCommissionsUnavailable && '0007_partner_commissions.sql'].filter(Boolean);
+  const missingTables = [summary.teamRequestsUnavailable && '0002_team_requests.sql', summary.plusUnavailable && '0003_plus.sql', summary.reviewsUnavailable && '0004_creem_reviews.sql', summary.refundsUnavailable && '0005_refunds.sql', summary.partnersUnavailable && '0006_partners.sql', summary.partnerCommissionsUnavailable && '0007_partner_commissions.sql', summary.partnerProfilesUnavailable && '0008_partner_profiles.sql'].filter(Boolean);
   const listed = files => (files.length > 1 ? `${files.slice(0, -1).join(', ')} and ${files.at(-1)}` : files[0]);
   items.push(missingTables.length
     ? { key: 'database', title: 'Database', html: `<p>Apply ${listed(missingTables.map(file => `<code>migrations/${file}</code>`))} to the D1 database.${summary.refundsUnavailable ? ' Until <code>0005_refunds.sql</code> is applied, refunds are not recorded and nothing is switched off.' : ''}</p>` }

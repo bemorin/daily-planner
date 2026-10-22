@@ -244,16 +244,60 @@ const REFERRAL_PARAMS = ['ref', 'via', 'aff'];
  * Keeps the partner code from a link like /welcome/?ref=CODE for REFERRAL_DAYS
  * (30) on this device (the latest link wins), so a purchase made later — or a
  * team request — is credited to that partner. Returns the code it kept, or ''.
- * Nothing is sent until a checkout or a request.
+ * The visit itself is counted for the partner's statement (countPartnerVisit):
+ * the code only, at most once a day per code on this device, and never when
+ * the anonymous counts are switched off here; the server adds it to that
+ * partner's daily total only for a code it knows. Nothing else is sent until
+ * a checkout or a request.
  */
 export function rememberReferral(search = globalThis.location?.search || '', { storage = globalThis.localStorage, now = Date.now() } = {}) {
   let params;
   try { params = new URLSearchParams(search); } catch (_) { return ''; }
   const code = REFERRAL_PARAMS.map(name => String(params.get(name) || '').trim()).find(value => REFERRAL_RE.test(value)) || '';
   if (!code) return '';
-  try { storage?.setItem(REFERRAL_KEY, JSON.stringify({ code, at: now })); } catch (_) { return ''; }
+  let saved = null;
+  try { saved = JSON.parse(storage?.getItem(REFERRAL_KEY) || 'null'); } catch (_) { saved = null; }
+  const counted = countPartnerVisit(code, { counted: saved?.counted, storage, now });
+  try { storage?.setItem(REFERRAL_KEY, JSON.stringify({ code, at: now, ...(counted ? { counted } : {}) })); } catch (_) { return ''; }
   return code;
 }
+
+/** Codes a device remembers having counted on one day, at most (a few partners' links in a day, never a list that grows). */
+const COUNTED_CODES_MAX = 20;
+
+/**
+ * Counts one visit through a partner's link (POST partners/visit { ref }:
+ * the code, nothing else) unless this device already counted that code
+ * today (`counted`: { day, codes }, the local day and the codes counted on
+ * it, kept with the code under REFERRAL_KEY), the anonymous counts are off
+ * here, or the API is off or offline. Answers what to remember: today's
+ * codes with this one when it was sent, else `counted` as it was (null when
+ * there is nothing to keep).
+ */
+export function countPartnerVisit(code, { counted = null, storage = globalThis.localStorage, now = Date.now() } = {}) {
+  const day = periodKey('day', new Date(now));
+  const today = counted && counted.day === day && Array.isArray(counted.codes) ? counted.codes.filter(item => REFERRAL_RE.test(String(item))).slice(-COUNTED_CODES_MAX) : [];
+  const kept = today.length ? { day, codes: today } : null;
+  if (today.includes(code) || !REFERRAL_RE.test(String(code || '')) || !plannerApiEnabled() || !usageCountsEnabled(storage) || globalThis.navigator?.onLine === false) return kept;
+  try {
+    fetch(`${PLANNER_API_URL}/partners/visit`, {
+      method: 'POST',
+      keepalive: true,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ref: code })
+    }).catch(() => {});
+  } catch (_) { return kept; }
+  return { day, codes: [...today, code].slice(-COUNTED_CODES_MAX) };
+}
+
+/**
+ * A partner's private statement (partners/statement/): POST
+ * partners/statement { code, key }, the code and the key of their link, in
+ * the body — never in an address, where a log or a cache could keep them.
+ * Answers { ok, statement } or { ok: false, status, error } (404: the link
+ * isn't valid).
+ */
+export const fetchPartnerStatement = ({ code, key }) => request('partners/statement', { body: { code: String(code || ''), key: String(key || '') } });
 
 /** The remembered partner code, or '' once it is older than REFERRAL_DAYS (30) or unreadable. */
 export function referralCode({ storage = globalThis.localStorage, now = Date.now() } = {}) {

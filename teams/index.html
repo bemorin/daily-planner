@@ -259,7 +259,9 @@
             <p class="form-error" data-form-error role="alert" hidden></p>
             <div class="team-form__foot">
               <div class="team-form__fine">
-                <p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request. <a href="#privacy" data-privacy-open="requests">How requests are handled</a></p>
+                <label class="consent" data-consent-row hidden><input type="checkbox" name="consent" required aria-describedby="err-consent"><span>I agree that <span data-consent-use>my details are used to reply to me and to prepare my invoice</span>, as explained in the <a href="../legal/privacy/#requests">privacy policy</a>.</span></label>
+                <small class="field__err field__err--consent" id="err-consent"></small>
+                <p class="form-privacy" data-privacy-line hidden>What you send is kept to follow up on it, and deleted whenever you ask. <a href="#privacy" data-privacy-open="requests">How requests are handled</a></p>
                 <p class="form-off" data-form-off hidden>Requests open when this site’s API is switched on.</p>
                 <noscript><p class="form-off">Sending a request needs JavaScript.</p></noscript>
               </div>
@@ -416,6 +418,7 @@
             <p>To learn what helps, this page adds one to a daily count when someone:</p>
             <ul class="pv__moments" data-privacy-moments></ul>
             <p>No identifiers, no cookies, your IP address is not stored.</p>
+            <p data-privacy-partner-visits>A visit through a partner’s link (<code>?ref=</code>) is counted once a day, as a daily total per partner code: only the code is sent, with nothing about you, and that partner sees the totals on their private statement. Only a code we know is counted, and nothing is sent when you switch the counts off.</p>
             <label class="pv-toggle"><span><strong>Count my visits anonymously</strong><small data-privacy-note>On in this browser, here and in the planner.</small></span><input class="pv-switch" type="checkbox" role="switch" checked data-privacy-switch></label>
           </div>
         </section>
@@ -441,7 +444,7 @@
           <span class="pv__icon" aria-hidden="true"><svg class="i"><use href="#i-mail"/></svg></span>
           <div class="pv__body">
             <h3 id="pv-requests" tabindex="-1">Requests</h3>
-            <p>The Teams page’s request form sends what you type — your email, name, company, the kind of request, plan, number of people, currency, timing and message; a question, asked there or on the Contact page, only your email, name and question. It’s stored only to reply to you, with your browser’s language, the page version and where the form was opened, and deleted on request.</p>
+            <p>The Teams page’s request form sends what you type — your email, name, company, the kind of request, plan, number of people, currency, timing and message; a question, asked there or on the Contact page, only your email, name and question. By ticking the box before sending, you agree that it’s used to reply to you and, for an invoice or a quote, to prepare it. It’s stored with your browser’s language, the page version and where the form was opened, and deleted whenever you ask.</p>
             <p>If you came through a partner’s link, its code goes with the request too, so the partner can be credited for a team gift they introduced.</p>
           </div>
         </section>

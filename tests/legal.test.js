@@ -38,8 +38,9 @@ test('the four legal pages exist, and each footer links all four in order', asyn
   for (const [folder, file] of Object.entries(PAGES)) {
     const html = await read(file);
     assert.match(html, /^<!doctype html>/i, file);
-    // The privacy policy changed in 1.32 (no consent box on requests); the others in 1.31.
-    const updated = folder === 'legal/privacy/' ? /Last updated: <time datetime="2026-10-22">22 October 2026<\/time>/ : /Last updated: <time datetime="2026-10-21">21 October 2026<\/time>/;
+    // The privacy policy changed on 22 October 2026 (1.32, then 1.33: requests are made with consent, the box to tick, and
+    // visits through partner links), the terms and cookies too (1.33: the partners' yearly cap, their statements); the notice in 1.31.
+    const updated = ['legal/privacy/', 'legal/terms/', 'legal/cookies/'].includes(folder) ? /Last updated: <time datetime="2026-10-22">22 October 2026<\/time>/ : /Last updated: <time datetime="2026-10-21">21 October 2026<\/time>/;
     assert.match(html, updated, `${file} shows the date`);
     const legalLinks = hrefs(footerOf(html)).map(href => resolveHref(folder, href)).filter(path => path.startsWith('legal'));
     assert.deepEqual(legalLinks, ['legal/privacy/', 'legal/terms/', 'legal/cookies/', 'legal/'], `${file} footer: Privacy · Terms · Cookies · Legal notice`);
@@ -526,7 +527,8 @@ test('the terms’ partner program: the rates, the days and the minimum come fro
   assert.match(words, /A purchase refunded in full, or disputed, earns nothing\. A team commission is earned once the gift’s 14-day refund period has passed without a full refund or a dispute\. If only part of a team gift is refunded, its commission is on the part kept: for example, half the price refunded halves the commission\./);
   assert.doesNotMatch(words, /If only part of the price is refunded/, 'a partial refund is about team gifts: Creem’s 25% follows its own terms');
   assert.match(words, /on the 1st and the 15th of each month, once your balance reaches €50 or \$50/);
-  assert.match(words, /We pay team commissions by bank transfer within 30 days of being earned/);
+  assert.match(words, /We pay team commissions by bank transfer within 30 days of their becoming payable: once earned, or, for what waits above the yearly cap below, once it can be paid\./);
+  assert.match(words, /send your bank details, or your invoice, only by email, never through a form on this site/, 'bank details never go through the question form');
   assert.match(words, /spam/);
   assert.match(words, /bid on “Daily Planner” or similar names in search ads/);
   assert.match(words, /promise discounts, features or results we don’t offer/);

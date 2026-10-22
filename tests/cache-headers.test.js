@@ -126,6 +126,7 @@ test('the build copies _headers next to _redirects', () => {
 test('the service worker keeps its own network-first copy, so no-cache does not break offline use', () => {
   const sw = read('sw.js');
   assert.match(sw, /fetch\(request\)\.then/, 'network first');
-  assert.match(sw, /caches\.match\(request\)/, 'then its own cache');
-  assert.match(sw, /url\.pathname\.includes\('\/api\/'\)/, 'never the API');
+  assert.match(sw, /caches\.match\(request, \{ ignoreSearch: request\.mode === 'navigate' \}\)/, 'then its own cache');
+  assert.match(sw, /const UNTOUCHED = \['\/api\/', '\/admin\/', '\/partners\/statement\/'\];/, 'never the API, the dashboard or a partner’s statement');
+  assert.match(sw, /if \(UNTOUCHED\.some\(path => url\.pathname\.includes\(path\)\)\) return;/);
 });

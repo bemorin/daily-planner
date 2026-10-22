@@ -72,3 +72,30 @@ test('offline, the planner itself and the pages already opened still come from t
   assert.equal(await answer('/admin/'), undefined);
   assert.equal(await answer('/', { method: 'POST' }), undefined);
 });
+
+test('online, a page is kept for offline use (cloned before the page reads it); keyed and private addresses never are', async () => {
+  const listeners = {};
+  const put = [];
+  const context = {
+    self: { addEventListener: (type, listener) => { listeners[type] = listener; }, location: new URL('sw.js', SCOPE), registration: { scope: SCOPE } },
+    caches: { match: async () => undefined, open: async () => ({ put: async (request, response) => { put.push([new URL(request.url).pathname + new URL(request.url).search, await response.text()]); } }) },
+    fetch: async request => new Response(`page ${new URL(request.url).pathname}`, { status: 200, headers: { 'content-type': 'text/html' } }),
+    Response,
+    URL
+  };
+  vm.runInNewContext(source, context);
+  const visit = async path => {
+    let responded;
+    listeners.fetch({ request: { url: new URL(path, SCOPE).href, mode: 'navigate', method: 'GET' }, respondWith: promise => { responded = promise; } });
+    if (!responded) return undefined;
+    // The page reads the body at once, as a browser does: a copy made after this would find it used.
+    return (await responded).text();
+  };
+  assert.equal(await visit('/teams/'), 'page /teams/');
+  for (const path of ['/?license=eyJhbGciOi', '/?gift=ABCD-EFGH-JKMN', '/?checkout_id=ch_123', '/welcome/?ref=CAMILLE', '/teams/?ask=question']) assert.equal(await visit(path), `page ${new URL(path, SCOPE).pathname}`, `${path}: still served`);
+  for (const path of ['/partners/statement/', '/partners/statement/statement.js', '/admin/', '/api/health']) assert.equal(await visit(path), undefined, `${path}: never touched`);
+  await new Promise(resolveWait => { setTimeout(resolveWait, 20); });
+  assert.deepEqual(put, [['/teams/', 'page /teams/']], 'only the page without a query, and its copy is whole');
+  assert.ok(context.keepable(new URL('/legal/privacy/', SCOPE)));
+  assert.equal(context.keepable(new URL('/partners/statement/', SCOPE)), false);
+});

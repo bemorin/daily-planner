@@ -1,0 +1,131 @@
+/* A partner's private statement (partners/statement/) ----------------------------
+   Loaded after ../../welcome/landing.css (the gift page's .manage and .mg-card
+   parts) and ../partners.css (.pt-figures, .pt-chip). Its own parts carry the
+   `st-` prefix. No motion: the page only shows figures. */
+
+.st-head { gap: 12px; }
+
+.st-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; letter-spacing: -.02em; overflow-wrap: anywhere; }
+
+.st-updated { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; color: var(--muted); font-size: .9rem; }
+
+.st-figures { max-width: 760px; margin-top: 8px; }
+
+.st-figures li > span { max-width: 15em; }
+
+/* Two columns from 900px: the link across, then visits and Creem side by side, the team gifts across. */
+.st-grid { display: grid; gap: 16px; }
+
+@media (min-width: 900px) {
+  .st-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .st-link,
+  .st-team,
+  .st-pay.is-wide { grid-column: 1 / -1; }
+  /* Alone on its row: Creem's payouts and ours side by side. */
+  .st-pay.is-wide .st-pay__list { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 32px; }
+}
+
+.st-link { border-color: color-mix(in srgb, var(--paint) 32%, var(--line)); background: color-mix(in srgb, var(--paint) 4%, var(--surface-strong)); }
+
+/* The code moves to the next line as one piece, and breaks only when it is longer than a line. */
+.st-link code { display: inline-block; max-width: 100%; font: 600 .86rem/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+
+/* Three figures in a row: visits over 30 and 90 days, and this year. */
+.st-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+
+.st-trio li { display: grid; gap: 2px; min-width: 0; padding-right: 10px; }
+
+.st-trio li + li { padding-left: clamp(10px, 2vw, 18px); border-left: 1px solid var(--line); }
+
+.st-trio b { font-size: clamp(1.5rem, 1.2rem + 1vw, 1.9rem); font-weight: 740; letter-spacing: -.04em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+
+.st-trio span { color: var(--muted); font-size: .86rem; font-weight: 580; }
+
+.st-trio .st-trio__none { grid-column: 1 / -1; padding: 0; border: 0; }
+
+/* What Creem credits, by kind. */
+.st-list { display: grid; margin: 0; padding: 0; list-style: none; }
+
+.st-list li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+
+.st-list li:first-child { padding-top: 0; }
+
+.st-list__what { display: grid; gap: 2px; font-weight: 600; }
+
+.st-list__what small { color: var(--muted); font-size: .82rem; font-weight: 500; }
+
+.st-list b { font-size: 1.15rem; font-weight: 720; font-variant-numeric: tabular-nums; }
+
+.st-list .st-list__none { color: var(--muted); border-bottom: 0; }
+
+/* Team gifts: the totals, then one line per commission with its state. */
+.st-team__totals { display: flex; flex-wrap: wrap; gap: 10px 28px; padding: 2px 0 6px; }
+
+.st-team__totals span { display: grid; gap: 1px; }
+
+.st-team__totals small { color: var(--muted); font-size: .8rem; font-weight: 620; }
+
+.st-team__totals b { font-size: 1.2rem; font-weight: 720; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+
+.st-lines { display: grid; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+
+.st-line { display: grid; grid-template-columns: 7.2em minmax(0, 1fr) 7.5em minmax(0, 1.25fr); align-items: start; gap: 6px 18px; padding: 13px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent); }
+
+.st-line__when { color: var(--muted); font-size: .9rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.st-line__what { font-weight: 600; }
+
+.st-line__amount { font-weight: 720; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.st-line__state { display: grid; justify-items: start; gap: 4px; }
+
+.st-line__state small { color: var(--muted); font-size: .84rem; line-height: 1.45; }
+
+.st-line.is-off .st-line__what,
+.st-line.is-off .st-line__amount { color: var(--muted); }
+
+.st-pill { display: inline-block; padding: 2px 9px; border-radius: 999px; background: var(--soft); color: var(--muted); font-size: .76rem; font-weight: 680; line-height: 1.45; white-space: nowrap; }
+
+.st-pill--due { background: color-mix(in srgb, var(--paint) 14%, var(--surface-strong)); color: var(--ink); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--paint) 38%, transparent); }
+
+.st-pill--ok { background: color-mix(in srgb, var(--habit) 16%, var(--surface-strong)); color: color-mix(in srgb, var(--habit) 70%, var(--ink)); }
+
+.st-pill--off { background: color-mix(in srgb, var(--danger) 11%, var(--surface-strong)); color: var(--danger); }
+
+@media (max-width: 719.98px) {
+  .st-line { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 14px; }
+  .st-line__when { grid-column: 1 / -1; }
+  .st-line__state { grid-column: 1 / -1; }
+}
+
+/* The yearly cap: what is paid this year, a meter, and what waits above it. */
+.st-cap__lines { display: grid; gap: 16px; }
+
+.st-capline { display: grid; gap: 8px; }
+
+.st-capline b { font-weight: 680; font-variant-numeric: tabular-nums; }
+
+.st-meter.is-full i { background: color-mix(in srgb, var(--paint) 55%, var(--ink)); }
+
+.st-capline__held { padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--paint) 9%, var(--surface-strong)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--paint) 26%, transparent); font-size: .92rem; line-height: 1.5; }
+
+/* How you get paid: Creem's payouts, then ours. */
+.st-pay__list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+
+.st-pay__list li { display: grid; gap: 3px; }
+
+.st-pay__list span { color: var(--muted); font-size: .94rem; line-height: 1.5; }
+
+.st-pay .cta-row { margin-top: 4px; }
+
+.st-privacy { display: flex; align-items: flex-start; gap: 10px; max-width: 46em; margin-top: 24px; }
+
+.st-privacy svg.i { flex: 0 0 auto; width: 18px; height: 18px; margin-top: 2px; color: var(--paint); }
+
+.st-privacy a { color: inherit; text-underline-offset: 3px; }
+
+@media (max-width: 519.98px) {
+  .st-figures { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .st-figures li + li { padding-left: 0; padding-top: 14px; border-left: 0; border-top: 1px solid var(--line); }
+  .st-trio b { font-size: 1.35rem; }
+}

@@ -36,7 +36,7 @@ test('with nothing configured the notice says no network requests are made', () 
 
 test('with the owner API on, the notice names every counted moment and the opt-out', () => {
   const sections = privacyNoticeSections({ plannerApi: true, googleDrive: false });
-  assert.deepEqual(ids(sections), ['local', 'counts', 'submissions']);
+  assert.deepEqual(ids(sections), ['local', 'counts', 'submissions', 'partners']);
   const counts = sections.find(section => section.id === 'counts');
   assert.deepEqual(counts.list, api.COUNTED_EVENTS.map(([, words]) => words));
   assert.ok(counts.list.includes('finished setup') && counts.list.includes('opened the sync guide'));
@@ -56,7 +56,7 @@ test('the waitlist says it is emailed once, deleted afterwards and can be left f
 });
 
 test('with Plus configured, the notice says what a gift, a purchase and the weekly licence check send — and nothing else', () => {
-  assert.deepEqual(ids(privacyNoticeSections({ plannerApi: true, plus: true })), ['local', 'counts', 'submissions', 'plus']);
+  assert.deepEqual(ids(privacyNoticeSections({ plannerApi: true, plus: true })), ['local', 'counts', 'submissions', 'partners', 'plus']);
   assert.deepEqual(ids(privacyNoticeSections({ plannerApi: false, plus: true })), ['local'], 'no API: nothing is sent for Plus either');
   const plusSection = privacyNoticeSections({ plannerApi: true, plus: true }).find(section => section.id === 'plus');
   const words = text([plusSection]);
@@ -70,11 +70,16 @@ test('with Plus configured, the notice says what a gift, a purchase and the week
   assert.match(words, /Activating a gift sends only the gift code/);
   assert.match(words, /a purchase sends only the checkout reference/);
   assert.doesNotMatch(words, /Stripe/);
-  assert.match(words, /partner’s link/);
   assert.match(words, /reads the country of your connection for that one request/);
-  assert.match(words, /that code is kept in this browser for 30 days and sent with a purchase/);
   assert.equal(api.REFERRAL_DAYS, 30, 'a partner’s link counts 30 days, as in Creem');
-  for (const config of [{ plannerApi: true }, { plannerApi: false, plus: true }]) assert.doesNotMatch(text(privacyNoticeSections(config)), /referral/, 'no Plus, no referral code');
+  // Partner links: any opening of the planner with ?ref= keeps the code and counts the visit, Plus or not — so their own section.
+  for (const config of [{ plannerApi: true }, { plannerApi: true, plus: true }]) {
+    const partner = text(privacyNoticeSections(config).filter(section => section.id === 'partners'));
+    assert.match(partner, /If you open the planner through a partner’s link \(one with a code, such as \?ref=\), that code is kept in this browser for 30 days and sent with a purchase, so the partner is credited\./);
+    assert.match(partner, /A visit through the link is counted once a day, as a daily total per partner code: only the code is sent, with nothing about you, and that partner sees the totals on their private statement\. Only a code we know is counted, and nothing is sent when anonymous usage counts are off\./);
+  }
+  assert.doesNotMatch(words, /partner’s link/, 'not inside the Plus section: it applies without Plus too');
+  assert.deepEqual(ids(privacyNoticeSections({ plannerApi: false, plus: true })), ['local'], 'no API: no partner code is kept or counted');
   const counts = privacyNoticeSections({ plannerApi: true }).find(section => section.id === 'counts');
   for (const words of ['opened the Plus details', 'went to buy Plus', 'unlocked Plus', 'opened a gift link', 'activated a gift']) assert.ok(counts.list.includes(words), words);
   const landing = new Map(api.LANDING_EVENTS);
@@ -88,7 +93,7 @@ test('Google Drive sync is described only when a client ID is configured', () =>
   assert.match(text(driveOnly), /Apart from Google Drive sync, which only starts when you connect it/);
   assert.match(text(driveOnly), /one hidden file in your own Drive/);
   assert.match(text(driveOnly), /never passes through or stays on our servers/);
-  assert.deepEqual(ids(privacyNoticeSections({ plannerApi: true, googleDrive: true })), ['local', 'counts', 'submissions', 'drive']);
+  assert.deepEqual(ids(privacyNoticeSections({ plannerApi: true, googleDrive: true })), ['local', 'counts', 'submissions', 'partners', 'drive']);
 });
 
 test('trackEvent sends allow-listed counts only, and nothing once switched off on this device', async () => {

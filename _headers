@@ -53,6 +53,8 @@
   Cache-Control: no-cache
 /partners/
   Cache-Control: no-cache
+/partners/statement/
+  Cache-Control: no-cache
 /contact/
   Cache-Control: no-cache
 /welcome/

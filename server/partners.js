@@ -43,9 +43,32 @@
 // refunded, disputed or switched-off sale earns nothing. The owner marks a
 // team commission as paid in the dashboard (table partner_payouts); a
 // commission paid stays paid, even if the sale is refunded or disputed later.
+//
+// 1.33 (migration 0008): the owner records whether a partner is an individual
+// (the default, also for every code while 0008 is missing) or a business (a
+// micro-entreprise or a company, any country, paid against an invoice). An
+// individual's team commissions are capped per calendar year and per currency
+// (PARTNER_PROGRAM.individualYearlyCap), by the day they are paid in
+// Europe/Paris (partnerYear in src/lib/pricing.js; the owner dates each
+// payment): earned commissions are given what is left of the cap, the oldest
+// first, and the rest is “held above the cap” until the partner becomes a
+// business or the next year starts. So a commission can be paid in parts: the
+// payment that settles it keeps its checkout id in partner_payouts, as before;
+// a part paid before it is `<checkout>.<n>` (payoutPartId). Codes that differ
+// only by case (CAMILLE, Camille) are one partner (partnerKey): one cap, one
+// status, one private link. Each partner can open a private statement
+// (partnerStatement): visits through their link (table partner_visits, daily
+// totals per partner, counted only for a code we know), their purchases by
+// kind and each team commission's state — never anything about a buyer or
+// another partner. Its link is signed (statementKey: HMAC of the code and the
+// partner's link version with a key derived from ADMIN_TOKEN, apart from every
+// other use of it); the owner can replace it (New link), which stops the old one.
 
+import { timingSafeEqual } from './admin-auth.js';
+import { createRateLimiter } from './admin-limits.js';
+import { affiliateCode } from './creem.js';
 import { CREEM_REASONS, moneyText } from './refunds.js';
-import { commissionCents, isTeamGift, PARTNER_PROGRAM, partnerRate } from '../src/lib/pricing.js';
+import { commissionCents, isPersonalGift, isTeamGift, PARTNER_PROGRAM, partnerDay, partnerRate, partnerYear, teamTier } from '../src/lib/pricing.js';
 
 /** Sales read for the dashboard's Partners card (newest first), and how many are listed one by one. */
 export const PARTNER_SALES_LISTED = 2000;
@@ -56,7 +79,9 @@ export const PAYOUT_NOTE_MAX = 200;
 const DAY_MS = 86400000;
 const CURRENCY_ORDER = ['EUR', 'USD'];
 /** What a commission is, in the order the dashboard reads them. */
-export const COMMISSION_STATUSES = Object.freeze(['pending', 'earned', 'paid', 'refunded', 'disputed', 'revoked', 'not-partner']);
+export const COMMISSION_STATUSES = Object.freeze(['pending', 'earned', 'held', 'paid', 'refunded', 'disputed', 'revoked', 'not-partner']);
+/** Still open: pending, earned (to pay) or held above an individual's yearly cap. */
+const OPEN_STATES = new Set(['pending', 'earned', 'held']);
 const OFF_STATES = new Set(['refunded', 'disputed', 'revoked']);
 /** Who pays a partner's commission: Creem (it credited the code at checkout) or the owner (a team gift, since 1.28). */
 export const PAYERS = Object.freeze(['creem', 'owner']);
@@ -148,6 +173,74 @@ export function normalizeCodeRejection(row) {
   return { code: String(row.code ?? ''), createdAt: String(row.createdAt ?? '') };
 }
 
+/** What the owner records about a partner (migration 0008): an individual (the default: capped each year) or a business (invoices, no cap). */
+export const PARTNER_STATUSES = Object.freeze(['individual', 'business']);
+/** A stored or typed status: 'business', else 'individual' (anything unknown is treated as an individual, the safe side). */
+export const partnerStatus = value => (String(value ?? '').trim().toLowerCase() === 'business' ? 'business' : 'individual');
+
+/**
+ * The partner a code names, whatever its case: CAMILLE, Camille and camille
+ * are one partner, with one yearly cap, one status, one private link and one
+ * visit count (partner_profiles and partner_visits are keyed by it). Codes
+ * are letters, digits, - and _ only (affiliateCode), so this is plain ASCII.
+ */
+export const partnerKey = code => String(code ?? '').trim().toUpperCase();
+
+/**
+ * A partner's profile (migration 0008), the same from both stores: { code
+ * (partnerKey), status, linkVersion (the version of their private statement
+ * link, 0 until the owner makes a new one), updatedAt }.
+ */
+export function normalizeProfile(row) {
+  if (!row) return null;
+  const version = Number(row.linkVersion ?? row.link_version ?? 0);
+  return { code: partnerKey(row.code), status: partnerStatus(row.status), linkVersion: Number.isInteger(version) && version > 0 ? version : 0, updatedAt: String(row.updatedAt ?? '') };
+}
+
+/**
+ * The row id of a team commission's payment (partner_payouts.checkout_id):
+ * the checkout itself for the payment that settles it (part 0, as before
+ * 1.33), `<checkout>.<n>` for a part paid before it, when an individual's
+ * yearly cap held the rest back. A checkout id never has a dot (CHECKOUT_ID_RE).
+ */
+export const payoutPartId = (checkoutId, part = 0) => (part > 0 ? `${checkoutId}.${part}` : String(checkoutId ?? ''));
+
+/** The checkout a payout row pays and which part it is: { checkoutId, part } (0: the payment that settles it). */
+export function payoutTarget(id) {
+  const text = String(id ?? '');
+  const match = /^([^.]+)\.(\d{1,4})$/.exec(text);
+  return match && Number(match[2]) > 0 ? { checkoutId: match[1], part: Number(match[2]) } : { checkoutId: text, part: 0 };
+}
+
+/** A team commission's payments, the oldest first: { final (the row that settles it, or null), rows, next (the next part's number) }. */
+export function payoutParts(checkoutId, rows = []) {
+  const mine = (rows || []).filter(row => row && payoutTarget(row.checkoutId).checkoutId === checkoutId)
+    .sort((a, b) => String(a.paidAt).localeCompare(String(b.paidAt)) || payoutTarget(a.checkoutId).part - payoutTarget(b.checkoutId).part);
+  const final = mine.find(row => payoutTarget(row.checkoutId).part === 0) || null;
+  const next = Math.max(0, ...mine.map(row => payoutTarget(row.checkoutId).part)) + 1;
+  return { final, rows: mine, next };
+}
+
+/** The yearly cap of an individual's team commissions in a currency, in cents; null for a currency it doesn't name. */
+export function yearlyCapCents(currency, program = PARTNER_PROGRAM) {
+  const units = Number(program.individualYearlyCap?.[currency]);
+  return Number.isFinite(units) && units > 0 ? Math.round(units * 100) : null;
+}
+
+/**
+ * When a payment dated `day` (YYYY-MM-DD, Europe/Paris, as the owner picks
+ * it) was paid, as stored in partner_payouts.paid_at: the moment itself for
+ * today (`now`), else 10:00 UTC that day — 11:00 or noon in Paris, so the
+ * same day there and in UTC. '' for a day that can't be read.
+ */
+export function payoutPaidAt(day, now = Date.now()) {
+  const text = String(day ?? '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text) || Number.isNaN(Date.parse(`${text}T10:00:00Z`))) return '';
+  const at = new Date(`${text}T10:00:00Z`);
+  if (at.toISOString().slice(0, 10) !== text) return '';
+  return text === partnerDay(now) ? new Date(now).toISOString() : at.toISOString();
+}
+
 /**
  * What became of a sale, from the revocations of its checkout ({ checkoutId,
  * reason } rows): 'refunded' or 'disputed' when a refund or a dispute switched
@@ -167,10 +260,8 @@ export function saleStates(rows = []) {
   return states;
 }
 
-const byCurrency = totals => Object.fromEntries(Object.entries(totals).sort(([a], [b]) => {
-  const rank = code => (CURRENCY_ORDER.includes(code) ? CURRENCY_ORDER.indexOf(code) : CURRENCY_ORDER.length);
-  return rank(a) - rank(b) || a.localeCompare(b);
-}));
+const currencyRank = code => (CURRENCY_ORDER.includes(code) ? CURRENCY_ORDER.indexOf(code) : CURRENCY_ORDER.length);
+const byCurrency = totals => Object.fromEntries(Object.entries(totals).sort(([a], [b]) => currencyRank(a) - currencyRank(b) || a.localeCompare(b)));
 
 /** Creem's test modes: a sale made while testing is never counted with real ones. */
 export const isTestMode = mode => ['test', 'sandbox'].includes(String(mode ?? '').trim().toLowerCase());
@@ -273,11 +364,21 @@ export function codeChecks(sales = [], payouts = [], rejections = []) {
  * One sale as the dashboard reads it: its state, partial refunds, the program
  * that pays it ('creem' for what Creem credits, 'team' for a team gift the
  * owner pays), the commission and where it stands. `taken` is its entry of
- * partialRefunds(), `payout` its row of partner_payouts (team only), `check`
- * its code's entry of codeChecks() ('' when not confirmed). `checks` lists
- * what to check before paying a team commission still open (PAYOUT_CHECKS).
+ * partialRefunds(), `payouts` its rows of partner_payouts (team only: the
+ * payment that settles it and the parts paid before; `payout`, one row, is
+ * read the same), `check` its code's entry of codeChecks() ('' when not
+ * confirmed). `checks` lists what to check before paying a team commission
+ * still open (PAYOUT_CHECKS). `paidAmount` is what was paid so far (null
+ * when nothing), `rest` what is still owed on an open one; `payable` and
+ * `held` split the rest under an individual's yearly cap (partnerSummary
+ * works them out; here everything is payable). Parts that already cover the
+ * commission (a partial refund lowered it after a part was paid) settle it:
+ * 'paid', and `overpaid` says by how much the payments went past it.
+ * `undoPayment` is the payment an Undo takes back ({ id, amount, paidAt }:
+ * the one that settled it, else the latest part recorded), `paidBefore` what
+ * the other payments add up to.
  */
-export function describeSale(row, { state = '', taken = null, payout = null, check = '', now = Date.now() } = {}) {
+export function describeSale(row, { state = '', taken = null, payout = null, payouts = null, check = '', now = Date.now() } = {}) {
   const sale = normalizePartnerSale(row);
   const partialTaken = state ? null : taken;
   const refundedAmount = partialTaken ? Math.min(partialTaken.amount, sale.amount ?? partialTaken.amount) : 0;
@@ -285,12 +386,26 @@ export function describeSale(row, { state = '', taken = null, payout = null, che
   const team = ownerPays(sale);
   const commission = saleCommission(sale, { refunded: refundedAmount, refundUnknown });
   const earned = earnedAt(sale.createdAt);
-  const paidAt = team && payout?.paidAt ? payout.paidAt : '';
+  const { final, rows } = team ? payoutParts(sale.checkoutId, payouts ?? (payout ? [{ ...payout, checkoutId: payout.checkoutId || sale.checkoutId }] : [])) : { final: null, rows: [] };
+  const partsPaid = rows.filter(entry => entry !== final).reduce((sum, entry) => sum + (entry.amount ?? 0), 0);
+  // A settling row without an amount (none is written so) stands for what was left of the commission.
+  const finalAmount = final ? final.amount ?? Math.max(0, (commission.commission ?? 0) - partsPaid) : 0;
+  const paidAmount = rows.length ? partsPaid + finalAmount : null;
+  const last = rows.at(-1) || null;
+  // What an Undo takes back: the payment that settled it, else the part recorded last (the highest number).
+  const undone = final || rows.reduce((latest, entry) => (!latest || payoutTarget(entry.checkoutId).part > payoutTarget(latest.checkoutId).part ? entry : latest), null);
   // Creem refuses a code it doesn't know: what it credits needs no check.
   const codeCheck = team ? check : 'creem';
-  const status = commissionStatus({ state, team, paidAt, earned, rejected: codeCheck === 'rejected' }, now);
-  const open = team && (status === 'pending' || status === 'earned');
+  const rejected = codeCheck === 'rejected';
+  // Paid in part, then refunded, disputed or found to be no partner: the part paid stays paid, the rest earns nothing.
+  // Paid in parts up to what it earns (a partial refund lowered it since): nothing is left, so it is settled by the last payment.
+  const covered = rows.length > 0 && commission.commission != null && paidAmount >= commission.commission;
+  const settled = final || (rows.length && (OFF_STATES.has(state) || rejected || covered) ? last : null);
+  const status = commissionStatus({ state, team, paidAt: settled?.paidAt || '', earned, rejected }, now);
+  const open = team && OPEN_STATES.has(status);
   const checks = open ? PAYOUT_CHECKS.filter(key => (key === 'code' ? !codeCheck : key === 'refund' ? refundUnknown : commission.basis === 'paid')) : [];
+  const rest = open ? Math.max(0, (commission.commission ?? 0) - (paidAmount ?? 0)) : 0;
+  const undoAmount = undone ? (undone === final ? finalAmount : undone.amount ?? 0) : 0;
   return {
     ...sale,
     state,
@@ -304,13 +419,81 @@ export function describeSale(row, { state = '', taken = null, payout = null, che
     checks,
     earnedAt: earned,
     status,
-    paidAt,
-    paidAmount: paidAt ? payout.amount : null,
-    paidNote: paidAt ? payout.note || '' : ''
+    paidAt: status === 'paid' && settled ? settled.paidAt : '',
+    paidAmount: team ? paidAmount : null,
+    paidNote: team && last ? (final || last).note || '' : '',
+    lastPaidAt: team && last ? last.paidAt : '',
+    parts: rows.length,
+    overpaid: team && status === 'paid' && commission.commission != null ? Math.max(0, (paidAmount ?? 0) - commission.commission) : 0,
+    undoPayment: team && undone ? { id: undone.checkoutId, amount: undoAmount, paidAt: undone.paidAt } : null,
+    paidBefore: team && undone ? Math.max(0, (paidAmount ?? 0) - undoAmount) : 0,
+    rest,
+    payable: rest,
+    held: 0,
+    partner: 'individual',
+    cap: null
   };
 }
 
 const add = (into, currency, cents) => { if (cents > 0 && currency) into[currency] = (into[currency] || 0) + cents; };
+
+/**
+ * The yearly cap of individuals, applied to the described sales (mutated):
+ * per partner (partnerKey: codes that differ only by case are one) and
+ * currency, what was paid in `year` (every payment and part, by the day paid
+ * in Europe/Paris, from the payout rows) leaves the rest of the cap to the
+ * earned commissions, the oldest earned first; what doesn't fit is `held`,
+ * and a commission with nothing payable reads 'held'. A business (`statusOf`)
+ * has no cap. Each live team sale gets `partner` and, for an individual,
+ * `cap` ({ year, limit, paid }: cents in its currency). Returns
+ * Map<partner key, Map<currency, { limit, paid }>> for the codes' cap lines.
+ */
+function applyYearlyCap(sales, payoutRows, statusOf, year) {
+  const byCheckout = new Map(sales.map(sale => [sale.checkoutId, sale]));
+  const paid = new Map();
+  const paidOf = key => { if (!paid.has(key)) paid.set(key, new Map()); return paid.get(key); };
+  for (const row of payoutRows) {
+    if (partnerYear(row.paidAt) !== year) continue;
+    const sale = byCheckout.get(payoutTarget(row.checkoutId).checkoutId);
+    const key = partnerKey(row.code || sale?.code || '');
+    const currency = row.currency || sale?.currency || '';
+    // Every payment row has its amount (the dashboard always records one).
+    const cents = row.amount ?? 0;
+    if (!key || !currency || !(cents > 0)) continue;
+    const map = paidOf(key);
+    map.set(currency, (map.get(currency) || 0) + cents);
+  }
+  const team = sales.filter(sale => sale.program === 'team' && !sale.test);
+  const lines = new Map();
+  const lineOf = (key, currency) => {
+    if (!lines.has(key)) lines.set(key, new Map());
+    const map = lines.get(key);
+    if (!map.has(currency)) {
+      const limit = yearlyCapCents(currency);
+      const already = paid.get(key)?.get(currency) || 0;
+      map.set(currency, { limit, paid: already, left: limit == null ? null : Math.max(0, limit - already) });
+    }
+    return map.get(currency);
+  };
+  for (const sale of team) {
+    sale.partner = statusOf(sale.code);
+    if (sale.partner !== 'individual' || !sale.currency) continue;
+    const line = lineOf(partnerKey(sale.code), sale.currency);
+    if (line.limit != null) sale.cap = { year, limit: line.limit, paid: line.paid };
+  }
+  // Partners paid this year whose sales aren't listed still show their cap line.
+  for (const [key, map] of paid) if (statusOf(key) === 'individual') for (const currency of map.keys()) lineOf(key, currency);
+  const earned = team.filter(sale => sale.status === 'earned' && sale.cap).sort((a, b) => a.earnedAt.localeCompare(b.earnedAt) || a.checkoutId.localeCompare(b.checkoutId));
+  for (const sale of earned) {
+    const line = lineOf(partnerKey(sale.code), sale.currency);
+    const payable = Math.min(sale.rest, line.left);
+    line.left -= payable;
+    sale.payable = payable;
+    sale.held = sale.rest - payable;
+    if (sale.rest > 0 && payable === 0) sale.status = 'held';
+  }
+  return lines;
+}
 
 /**
  * The dashboard's Partners card. Per code: sales, how many were refunded or
@@ -318,37 +501,55 @@ const add = (into, currency, cents) => { if (cents > 0 && currency) into[currenc
  * the revenue per currency (cents, after refunds; currencies never added
  * together), Creem's commissions (25%, for information: Creem pays them)
  * pending and earned, and team commissions (10%, the owner pays them) pending,
- * to pay and paid — most sales first. Then `recent`, the latest sales one by
- * one; `team`, the team commissions one by one (every one pending or to pay,
- * then the newest others); `toPay`, the team commissions earned and not paid
- * yet, the oldest first, each with what to check before paying it; and
+ * to pay (what can be paid now), held above an individual's yearly cap and
+ * paid — most sales first — with the partner's status (`partner`: 'individual'
+ * or 'business', from `profiles`, migration 0008) and, for an individual,
+ * `cap`: { year, lines: [{ currency, limit, paid, left, held }] }. Codes that
+ * differ only by case share one status and one cap (`key`, partnerKey), and
+ * each names the others (`sameAs`) so the dashboard can say so. Then
+ * `recent`, the latest sales one by one; `team`, the team commissions one by
+ * one (every one pending, to pay or held, then the newest others); `toPay`,
+ * the team commissions with something payable now (earned, under the cap),
+ * the oldest first, each with what to check before paying it; and
  * `codeChecks`, which codes are confirmed (codeChecks(), as an object). Sales
  * made in Creem's test mode are listed but counted apart (`test`, never in the
  * figures or the lists of commissions). `states` is saleStates() or its input
  * rows, `refunds` the partner sales' refund rows, `payouts` the rows of
- * partner_payouts, `rejections` those of partner_code_rejections; `limit` is
- * how many sales the store was asked for: when it gave that many,
- * `totals.capped` says the figures cover only the latest ones. `now` (ms)
- * decides what is earned.
+ * partner_payouts (parts included), `rejections` those of
+ * partner_code_rejections; `limit` is how many sales the store was asked
+ * for: when it gave that many, `totals.capped` says the figures cover only the
+ * latest ones. `now` (ms) decides what is earned; `capYear` is the year of
+ * the cap (by default the year `now` is in, in Europe/Paris; a payment dated
+ * in another year is checked against that year's cap). `withSales` adds
+ * `sales`, every sale described (partnerStatement).
  */
-export function partnerSummary(rows = [], states = new Map(), refunds = [], { limit = PARTNER_SALES_LISTED, payouts = [], rejections = [], now = Date.now() } = {}) {
+export function partnerSummary(rows = [], states = new Map(), refunds = [], { limit = PARTNER_SALES_LISTED, payouts = [], rejections = [], profiles = [], now = Date.now(), capYear = partnerYear(now), withSales = false } = {}) {
   const stateOf = states instanceof Map ? states : saleStates(states);
   const normalized = rows.map(normalizePartnerSale).filter(Boolean);
   const takenOf = refunds instanceof Map ? refunds : partialRefunds(refunds, normalized);
   const payoutRows = (payouts || []).map(normalizePayout).filter(row => row?.checkoutId);
-  const payoutOf = new Map(payoutRows.map(row => [row.checkoutId, row]));
+  const payoutsOf = new Map();
+  for (const row of payoutRows) {
+    const id = payoutTarget(row.checkoutId).checkoutId;
+    if (!payoutsOf.has(id)) payoutsOf.set(id, []);
+    payoutsOf.get(id).push(row);
+  }
   const checkOf = codeChecks(normalized, payoutRows, (rejections || []).map(normalizeCodeRejection).filter(Boolean));
-  const sales = normalized.map(row => describeSale(row, { state: stateOf.get(row.checkoutId) || '', taken: takenOf.get(row.checkoutId), payout: payoutOf.get(row.checkoutId), check: checkOf.get(row.code) || '', now }))
+  const profileOf = new Map((profiles || []).map(normalizeProfile).filter(row => row?.code).map(row => [row.code, row.status]));
+  const statusOf = code => profileOf.get(partnerKey(code)) || 'individual';
+  const year = Number.isInteger(capYear) ? capYear : partnerYear(now);
+  const sales = normalized.map(row => describeSale(row, { state: stateOf.get(row.checkoutId) || '', taken: takenOf.get(row.checkoutId), payouts: payoutsOf.get(row.checkoutId) || [], check: checkOf.get(row.code) || '', now }))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.checkoutId.localeCompare(b.checkoutId));
+  const capLines = applyYearlyCap(sales, payoutRows, statusOf, year);
   const codes = new Map();
   const revenue = {};
   const test = { sales: 0, revenue: {} };
   const creem = { pending: {}, earned: {} };
-  const teamTotals = { pending: {}, toPay: {}, paid: {} };
+  const teamTotals = { pending: {}, toPay: {}, held: {}, paid: {} };
   const blank = code => ({
     code, sales: 0, refunded: 0, partial: 0, revoked: 0, members: 0, revenue: {}, test: 0, lastAt: '',
     creem: { sales: 0, pending: {}, earned: {} },
-    team: { sales: 0, pending: {}, toPay: {}, paid: {} }
+    team: { sales: 0, pending: {}, toPay: {}, held: {}, paid: {} }
   });
   for (const sale of sales) {
     const entry = codes.get(sale.code) || blank(sale.code);
@@ -369,9 +570,11 @@ export function partnerSummary(rows = [], states = new Map(), refunds = [], { li
       program.sales += 1;
       const cents = sale.commission ?? 0;
       if (sale.program === 'team') {
-        const bucket = { pending: 'pending', earned: 'toPay', paid: 'paid' }[sale.status];
-        const paid = sale.status === 'paid' ? sale.paidAmount ?? cents : cents;
-        if (bucket) { add(entry.team[bucket], sale.currency, paid); add(teamTotals[bucket], sale.currency, paid); }
+        const both = (bucket, amount) => { add(entry.team[bucket], sale.currency, amount); add(teamTotals[bucket], sale.currency, amount); };
+        if (sale.status === 'pending') both('pending', sale.rest);
+        if (sale.status === 'earned' || sale.status === 'held') { both('toPay', sale.payable); both('held', sale.held); }
+        // What went out: a settled commission, or the parts paid of one still open (or switched off since).
+        if (sale.paidAmount) both('paid', sale.paidAmount);
       } else if (sale.status === 'pending' || sale.status === 'earned') {
         add(entry.creem[sale.status], sale.currency, cents);
         add(creem[sale.status], sale.currency, cents);
@@ -382,24 +585,44 @@ export function partnerSummary(rows = [], states = new Map(), refunds = [], { li
   }
   const live = sales.filter(sale => !sale.test);
   const liveTeam = live.filter(sale => sale.program === 'team');
-  const open = liveTeam.filter(sale => sale.status === 'pending' || sale.status === 'earned');
+  const open = liveTeam.filter(sale => OPEN_STATES.has(sale.status));
   const settled = liveTeam.filter(sale => !open.includes(sale)).slice(0, Math.max(0, TEAM_COMMISSIONS_LISTED - open.length));
-  const toPay = open.filter(sale => sale.status === 'earned').sort((a, b) => a.earnedAt.localeCompare(b.earnedAt) || a.checkoutId.localeCompare(b.checkoutId));
+  const toPay = open.filter(sale => sale.status === 'earned' && sale.payable > 0).sort((a, b) => a.earnedAt.localeCompare(b.earnedAt) || a.checkoutId.localeCompare(b.checkoutId));
   const sorted = map => byCurrency(map);
+  const capOf = code => {
+    const key = partnerKey(code);
+    if (statusOf(code) !== 'individual' || !capLines.has(key)) return null;
+    const lines = [...capLines.get(key)].filter(([, line]) => line.limit != null).map(([currency, line]) => {
+      const held = liveTeam.filter(sale => partnerKey(sale.code) === key && sale.currency === currency && sale.held > 0);
+      // `heldAtMost`: part of what waits is only an upper bound (its tax or a refund's amount isn't known).
+      return { currency, limit: line.limit, paid: line.paid, left: Math.max(0, line.limit - line.paid), held: held.reduce((sum, sale) => sum + sale.held, 0), heldAtMost: held.some(sale => !sale.exact) };
+    }).sort((a, b) => currencyRank(a.currency) - currencyRank(b.currency) || a.currency.localeCompare(b.currency));
+    return lines.length ? { year, lines } : null;
+  };
+  // Codes that differ only by case: one partner, named together on the dashboard.
+  const variants = new Map();
+  for (const code of codes.keys()) variants.set(partnerKey(code), [...(variants.get(partnerKey(code)) || []), code].sort());
   return {
     codes: [...codes.values()].map(entry => ({
       ...entry,
       revenue: sorted(entry.revenue),
       creem: { sales: entry.creem.sales, pending: sorted(entry.creem.pending), earned: sorted(entry.creem.earned) },
-      team: { sales: entry.team.sales, pending: sorted(entry.team.pending), toPay: sorted(entry.team.toPay), paid: sorted(entry.team.paid) }
+      team: { sales: entry.team.sales, pending: sorted(entry.team.pending), toPay: sorted(entry.team.toPay), held: sorted(entry.team.held), paid: sorted(entry.team.paid) },
+      key: partnerKey(entry.code),
+      sameAs: (variants.get(partnerKey(entry.code)) || []).filter(code => code !== entry.code),
+      partner: statusOf(entry.code),
+      cap: capOf(entry.code)
     })).sort((a, b) => b.sales - a.sales || b.test - a.test || b.lastAt.localeCompare(a.lastAt) || a.code.localeCompare(b.code)),
     recent: sales.slice(0, PARTNER_RECENT),
     team: [...open, ...settled].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.checkoutId.localeCompare(b.checkoutId)),
     toPay: toPay.map(sale => ({
       checkoutId: sale.checkoutId, code: sale.code, plan: sale.plan, amount: sale.amount, refundedAmount: sale.refundedAmount, refundUnknown: sale.refundUnknown,
-      rate: sale.rate, base: sale.base, basis: sale.basis, commission: sale.commission, exact: sale.exact, currency: sale.currency, checks: sale.checks, earnedAt: sale.earnedAt, createdAt: sale.createdAt
+      rate: sale.rate, base: sale.base, basis: sale.basis, commission: sale.commission, exact: sale.exact, currency: sale.currency, checks: sale.checks, earnedAt: sale.earnedAt, createdAt: sale.createdAt,
+      paidAmount: sale.paidAmount, rest: sale.rest, payable: sale.payable, held: sale.held, partner: sale.partner, cap: sale.cap
     })),
     codeChecks: Object.fromEntries([...checkOf].sort(([a], [b]) => a.localeCompare(b))),
+    // Every sale described, for one partner's statement only (never in the dashboard's answer).
+    ...(withSales ? { sales } : {}),
     totals: {
       sales: live.length,
       partners: new Set(live.map(sale => sale.code)).size,
@@ -408,9 +631,12 @@ export function partnerSummary(rows = [], states = new Map(), refunds = [], { li
       revenue: sorted(revenue),
       test: { sales: test.sales, revenue: sorted(test.revenue) },
       creem: { pending: sorted(creem.pending), earned: sorted(creem.earned) },
-      team: { pending: sorted(teamTotals.pending), toPay: sorted(teamTotals.toPay), paid: sorted(teamTotals.paid), toPayCount: toPay.length, toCheck: toPay.filter(sale => sale.checks.length).length },
-      // Commissions still pending or earned whose figure is only an upper bound (tax or a refund's amount unknown).
-      inexact: live.filter(sale => sale.commission != null && !sale.exact && ['pending', 'earned'].includes(sale.status)).length,
+      team: {
+        pending: sorted(teamTotals.pending), toPay: sorted(teamTotals.toPay), held: sorted(teamTotals.held), paid: sorted(teamTotals.paid),
+        toPayCount: toPay.length, toCheck: toPay.filter(sale => sale.checks.length).length, heldCount: open.filter(sale => sale.held > 0).length
+      },
+      // Commissions still open whose figure is only an upper bound (tax or a refund's amount unknown).
+      inexact: live.filter(sale => sale.commission != null && !sale.exact && OPEN_STATES.has(sale.status)).length,
       listed: sales.length,
       capped: limit > 0 && rows.length >= limit
     }
@@ -428,31 +654,222 @@ export function payoutChecksText(sale) {
 }
 
 /**
- * Whether a team commission may be marked as paid now: { sale, amount }
- * (described, status 'earned'; `amount` what to record, in cents) or
- * { status, error } — 404 when no live team sale has this checkout, 409 when
- * it is still pending, already paid or earns nothing, or when something must
- * be checked first (`checks`) and the owner didn't confirm they did
- * (`confirmed`); 400 for an amount that doesn't fit. `amount` is what the
- * owner paid, for a commission that is only an upper bound (tax or a refund's
- * amount unknown): required then, at most that bound; never for an exact one.
+ * Why (part of) a team commission can't be paid now: the individual's yearly
+ * cap (`sale.cap`). `asked` is the amount the owner wanted to mark as paid.
  */
-export function payoutCheck(summary, checkoutId, { confirmed = false, amount = null } = {}) {
+export function capRefusalText(sale, asked = sale?.rest) {
+  const cap = sale?.cap || { year: partnerYear(Date.now()), limit: 0, paid: 0 };
+  const money = cents => moneyText(cents, sale.currency);
+  const where = `${sale.code}’s yearly cap for an individual: ${money(cap.limit)} of team commissions in ${cap.year}, ${money(cap.paid)} paid so far`;
+  const after = `until ${sale.code} invoices you as a business (switch ${sale.code} to Business on the Partners card), or until 1 January ${cap.year + 1}`;
+  if (!(sale.payable > 0)) {
+    const older = cap.paid < cap.limit ? ', and what is left goes to older commissions first' : '';
+    return `This commission is above ${where}${older}. It waits ${after}.`;
+  }
+  return `${money(asked)} is more than what fits under ${where}. Mark ${money(sale.payable)} as paid now; the rest (${money(sale.rest - sale.payable)}) waits ${after}.`;
+}
+
+/**
+ * Whether a team commission may be marked as paid now: { sale, amount, final }
+ * (described, status 'earned'; `amount` what to record, in cents; `final`
+ * whether it settles the commission) or { status, error } — 404 when no live
+ * team sale has this checkout, 409 when it is still pending, already paid,
+ * earns nothing, is held above an individual's yearly cap, or when something
+ * must be checked first (`checks`) and the owner didn't confirm they did
+ * (`confirmed`); 400 for an amount that doesn't fit. What can be paid is the
+ * rest still owed (`rest`), within what the cap leaves (`payable`, the oldest
+ * commission first): an exact commission is marked with that figure (no
+ * `amount`, or that amount); asking for more than the cap leaves is refused
+ * with 409 (`cap: true`). An upper bound (tax or a refund's amount unknown)
+ * needs the `amount` the owner paid, at most the rest and the cap's part.
+ * When the cap cut it (the amount is all the cap leaves, less than the rest),
+ * it is a part and the rest stays open, unless the owner says it was the
+ * whole commission (`part: false`); below that, it settles the commission,
+ * unless the owner says more is owed (`part: true`). The whole rest always
+ * settles it.
+ */
+export function payoutCheck(summary, checkoutId, { confirmed = false, amount = null, part = null } = {}) {
   const sale = (summary?.team || []).find(row => row.checkoutId === checkoutId);
   if (!sale) return { status: 404, error: 'No team gift sold through a partner’s link has this checkout.' };
   if (sale.status === 'paid') return { status: 409, error: 'This commission is already marked as paid.' };
   if (sale.status === 'pending') return { status: 409, error: `This sale is still within its ${PARTNER_PROGRAM.refundDays}-day refund period: its commission isn’t earned yet.` };
   if (sale.status === 'not-partner') return { status: 409, error: `You marked ${sale.code} as not a partner, so this commission earns nothing. Undo that first if ${sale.code} is a partner in Creem.` };
-  if (sale.status !== 'earned') return { status: 409, error: 'This sale was refunded, disputed or switched off: it earns nothing.' };
+  if (sale.status !== 'earned' && sale.status !== 'held') return { status: 409, error: 'This sale was refunded, disputed or switched off: it earns nothing.' };
   if (!(sale.commission > 0) || !sale.currency) return { status: 409, error: 'This sale has no amount, so its commission can’t be worked out.' };
   const checks = Array.isArray(sale.checks) ? sale.checks : [];
   if (checks.length && confirmed !== true) return { status: 409, error: `${payoutChecksText(sale)} Then mark it as paid again.`, checks };
+  const rest = Number.isInteger(sale.rest) ? sale.rest : sale.commission;
+  const payable = Number.isInteger(sale.payable) ? Math.min(sale.payable, rest) : rest;
+  if (!(payable > 0)) return { status: 409, error: capRefusalText(sale), cap: true };
+  const left = sale.paidAmount ? ' left to pay' : '';
   if (sale.exact) {
-    if (amount != null && amount !== sale.commission) return { status: 400, error: `This commission is known (${moneyText(sale.commission, sale.currency)}): mark it as paid without an amount.` };
-    return { sale, amount: sale.commission };
+    const asked = amount ?? rest;
+    if (!Number.isInteger(asked) || asked < 1 || asked > rest) return { status: 400, error: `This commission is known (${moneyText(rest, sale.currency)}${left}): mark it as paid without an amount.` };
+    if (asked > payable) return { status: 409, error: capRefusalText(sale, asked), cap: true };
+    if (asked !== payable) return { status: 400, error: `Mark ${moneyText(payable, sale.currency)} as paid: ${payable < rest ? 'what fits under the yearly cap' : 'the commission'}.` };
+    return { sale, amount: asked, final: asked === rest };
   }
-  if (!Number.isInteger(amount) || amount < 1 || amount > sale.commission) {
-    return { status: 400, error: `Give the amount you paid: more than nothing and at most ${moneyText(sale.commission, sale.currency)} (${sale.rate}% of the amount paid, tax included).` };
+  if (!Number.isInteger(amount) || amount < 1 || amount > rest) {
+    return { status: 400, error: `Give the amount you paid: more than nothing and at most ${moneyText(rest, sale.currency)}${left} (${sale.rate}% of the amount paid, tax included).` };
   }
-  return { sale, amount };
+  if (amount > payable) return { status: 409, error: capRefusalText(sale, amount), cap: true };
+  // The cap cut it: a part by default, so what may still be owed stays open (the safe side).
+  const capCut = payable < rest && amount === payable;
+  return { sale, amount, final: amount === rest || (capCut ? part === false : part !== true) };
+}
+
+// ---- The partner's private statement (1.33) ------------------------------------
+
+/**
+ * Visits through partner links (migration 0008) are counted only for a code
+ * we know — one with a recorded sale, or one the owner gave a status or a
+ * private link (partner_profiles) — so made-up codes never fill the table.
+ * Daily rows older than this are deleted, now and then, as visits come in.
+ */
+export const PARTNER_VISITS_KEPT_DAYS = 400;
+/** The share of counted visits that also delete the rows past PARTNER_VISITS_KEPT_DAYS (about 1 in 100). */
+export const PARTNER_VISITS_PRUNE_SHARE = 0.01;
+/** How far back a statement reads visits: 90 days, or the whole calendar year when that is longer. */
+export const STATEMENT_VISIT_DAYS = 90;
+/** Rate limits of the public partner routes, per worker isolate (module scope, best effort: Cloudflare's rule on /api/ is the real guard). */
+export const PARTNER_LIMITS = Object.freeze({
+  statement: Object.freeze({ limit: 60, windowMs: 60 * 1000 }),
+  visit: Object.freeze({ limit: 600, windowMs: 60 * 1000 })
+});
+/** A set of limiters ({ statement, visit }); tests make their own. */
+export const createPartnerLimits = ({ now = () => Date.now(), limits = PARTNER_LIMITS } = {}) => Object.fromEntries(Object.entries(limits).map(([name, value]) => [name, createRateLimiter({ ...value, now })]));
+/** The isolate's own set, shared by every request it answers. */
+export const sharedPartnerLimits = createPartnerLimits();
+
+const encoder = new TextEncoder();
+const STATEMENT_KEY_RE = /^[0-9a-f]{32}$/;
+const hex = buffer => [...new Uint8Array(buffer)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+async function hmacHex(keyBytes, message) {
+  const key = await globalThis.crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return hex(await globalThis.crypto.subtle.sign('HMAC', key, encoder.encode(message)));
+}
+
+/** A partner's link version (partner_profiles.link_version): a whole number, 0 for a partner with none yet. */
+const linkVersionOf = value => (Number.isInteger(value) && value > 0 ? value : 0);
+
+/**
+ * The key of a partner's private statement link: 32 hex characters (128 bits)
+ * of HMAC-SHA256(key = HMAC-SHA256(ADMIN_TOKEN, 'partner-statement-key'),
+ * 'statement:v1:' + partner + ':' + version), `partner` the code's
+ * partnerKey (CAMILLE and Camille are one partner) and `version` the
+ * partner's link version (migration 0008; 0 until the owner makes a new
+ * link, which stops the old one). The derived key keeps it apart from every
+ * other use of ADMIN_TOKEN (sessions, waitlist removal tokens).
+ * Deterministic: a partner always gets the same link for a version. Rotating
+ * ADMIN_TOKEN changes every key, so every link given out stops working (send
+ * new ones from the dashboard). '' without an ADMIN_TOKEN or a valid code.
+ */
+export async function statementKey(adminToken, code, version = 0) {
+  const clean = affiliateCode(code);
+  if (!adminToken || !clean || clean !== code) return '';
+  const derived = await hmacHex(encoder.encode(String(adminToken)), 'partner-statement-key');
+  return (await hmacHex(encoder.encode(derived), `statement:v1:${partnerKey(clean)}:${linkVersionOf(version)}`)).slice(0, 32);
+}
+
+/** Constant-time check of a statement link's key, for this code (any case) and its partner's link version. */
+export async function verifyStatementKey(adminToken, code, key, version = 0) {
+  if (!adminToken || typeof key !== 'string' || !STATEMENT_KEY_RE.test(key) || typeof code !== 'string') return false;
+  const expected = await statementKey(adminToken, code, version);
+  return !!expected && timingSafeEqual(expected, key);
+}
+
+/**
+ * The private statement's address for a code:
+ * `<base>/partners/statement/#code=CODE&key=KEY`, '' without a key. The code
+ * and the key ride after `#`: a browser never sends that part to a server, in
+ * a request or a Referer, and the page posts them to the API in a body.
+ */
+export async function statementUrl(baseUrl, adminToken, code, version = 0) {
+  const key = await statementKey(adminToken, code, version);
+  if (!key) return '';
+  const url = new URL('partners/statement/', `${String(baseUrl || '').replace(/\/+$/, '')}/`);
+  url.hash = new URLSearchParams({ code, key }).toString();
+  return url.href;
+}
+
+const dayOf = ms => new Date(ms).toISOString().slice(0, 10);
+/** The first UTC day a statement reads visits from: 89 days before today, or 1 January when that is earlier. */
+export const statementVisitsFrom = now => [dayOf(now - (STATEMENT_VISIT_DAYS - 1) * DAY_MS), `${new Date(now).getUTCFullYear()}-01-01`].sort()[0];
+
+/** Visits through a code's link from its daily rows ({ day, count }): the last 30 and 90 days and this calendar year (UTC), today included. */
+export function visitTotals(rows = [], now = Date.now()) {
+  const today = dayOf(now);
+  const since = days => dayOf(now - (days - 1) * DAY_MS);
+  const yearStart = `${today.slice(0, 4)}-01-01`;
+  const sum = from => (rows || []).filter(row => String(row?.day || '') >= from && String(row.day) <= today).reduce((total, row) => total + Math.max(0, Number(row.count) || 0), 0);
+  return { last30: sum(since(30)), last90: sum(since(90)), year: sum(yearStart), yearOf: Number(today.slice(0, 4)) };
+}
+
+const STATEMENT_KINDS = Object.freeze([['plus', 'Plus'], ['gift-1', 'Give Plus'], ['family-5', 'Plus Family']]);
+const statementKind = sale => (sale.kind === 'plus' ? 'plus' : isPersonalGift(sale.plan) ? sale.plan : 'gift');
+const dayText = iso => (iso ? String(iso).slice(0, 10) : '');
+
+/**
+ * A partner's private statement, for that partner only (the code in any
+ * case: CAMILLE and Camille are one partner): its sales, payouts, rejection
+ * and profile are picked out of the rows given (`rows` the partner sales,
+ * `states` and `refunds` their revocations and refunds, `payouts`,
+ * `rejections`, `profiles` the 0007 and 0008 rows) and read as the dashboard
+ * reads them (partnerSummary). Answers { code, partner ('individual' |
+ * 'business'), currency (of the partner's latest sale, '' without one),
+ * visits (visitTotals of the daily `visits` rows, or null while migration
+ * 0008 is missing), creem: [{ kind, label, count, refunded }] (Plus and the
+ * personal gifts: Creem pays them, so no amounts), team: [{ soldOn, seats,
+ * commission, exact, currency, status, earnedOn, paidOn (the day in
+ * Europe/Paris), paidAmount, payable, held }] (newest first), totals per
+ * currency, cap ({ year, lines }) for an individual, program }. Never a
+ * checkout, an order, a buyer's name, email or country, or what a buyer
+ * paid: only the partner's own commission lines. Sales made in Creem's test
+ * mode are left out.
+ */
+export function partnerStatement(code, { rows = [], states = [], refunds = [], payouts = [], rejections = [], profiles = [], visits = null, now = Date.now() } = {}) {
+  const key = partnerKey(code);
+  const own = list => (list || []).filter(row => row?.code && partnerKey(row.code) === key);
+  const summary = partnerSummary(own(rows), states, refunds, { limit: 0, payouts: own(payouts), rejections: own(rejections), profiles: own(profiles), now, withSales: true });
+  // Every case of the code is the same partner: one status and one cap, their figures added up.
+  const entries = summary.codes;
+  const entry = entries[0] || null;
+  const sales = summary.sales.filter(sale => !sale.test);
+  const offState = sale => sale.state === 'refunded' || sale.state === 'disputed';
+  const creemSales = sales.filter(sale => sale.program === 'creem');
+  const creem = STATEMENT_KINDS.map(([kind, label]) => {
+    const sold = creemSales.filter(sale => statementKind(sale) === kind);
+    return { kind, label, count: sold.length, refunded: sold.filter(offState).length };
+  });
+  // A team gift sold before 1.28 went to Creem with the code: Creem's, listed with what it credits.
+  const legacy = creemSales.filter(sale => statementKind(sale) === 'gift');
+  if (legacy.length) creem.push({ kind: 'team-creem', label: 'Team gift, credited by Creem', count: legacy.length, refunded: legacy.filter(offState).length });
+  const team = sales.filter(sale => sale.program === 'team').map(sale => ({
+    soldOn: dayText(sale.createdAt),
+    seats: teamTier(sale.plan)?.seats ?? null,
+    commission: sale.commission,
+    exact: sale.exact !== false,
+    currency: sale.currency,
+    status: sale.status,
+    earnedOn: dayText(sale.earnedAt),
+    paidOn: partnerDay(sale.status === 'paid' ? sale.paidAt : sale.lastPaidAt),
+    paidAmount: sale.paidAmount ?? null,
+    payable: sale.status === 'earned' ? sale.payable : 0,
+    held: sale.held || 0
+  }));
+  const profile = own(profiles).map(normalizeProfile)[0];
+  const totals = { pending: {}, toPay: {}, held: {}, paid: {} };
+  for (const item of entries) for (const bucket of Object.keys(totals)) for (const [currency, cents] of Object.entries(item.team[bucket] || {})) add(totals[bucket], currency, cents);
+  return {
+    code,
+    generatedAt: new Date(now).toISOString(),
+    partner: entry?.partner || partnerStatus(profile?.status),
+    currency: sales.find(sale => sale.currency)?.currency || '',
+    visits: visits ? visitTotals(visits, now) : null,
+    creem,
+    team,
+    totals: Object.fromEntries(Object.entries(totals).map(([bucket, amounts]) => [bucket, byCurrency(amounts)])),
+    cap: entry?.cap || null,
+    program: { rate: PARTNER_PROGRAM.rate, teamRate: PARTNER_PROGRAM.teamRate, refundDays: PARTNER_PROGRAM.refundDays, cookieDays: PARTNER_PROGRAM.cookieDays, minimumPayout: { ...PARTNER_PROGRAM.minimumPayout }, individualYearlyCap: { ...PARTNER_PROGRAM.individualYearlyCap } }
+  };
 }

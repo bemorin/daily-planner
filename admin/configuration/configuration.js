@@ -175,7 +175,7 @@ const GENERATE_TEXT = {
 function generatedHtml(kind, name = '') {
   const keep = '<p class="cfg-gen__note">Kept nowhere: not sent, not stored. Copy it now; it is gone when you leave this page.</p>';
   if (kind === 'token' && generated.token) {
-    return `${copyRow('New ADMIN_TOKEN', generated.token)}<p class="cfg-gen__note">Set it as a Secret, redeploy, then sign in again with it: changing the token signs every session out.</p>${keep}`;
+    return `${copyRow('New ADMIN_TOKEN', generated.token)}<p class="cfg-gen__note">Set it as a Secret, redeploy, then sign in again with it: changing the token signs every session out, and changes every partner’s private statement link and every waitlist removal link (send partners their new links from the Partners card).</p>${keep}`;
   }
   if (kind === 'totp' && generated.totp) {
     return `${copyRow('New ADMIN_TOTP_SECRET', generated.totp)}${copyRow('Authenticator link', otpauthUri(generated.totp))}<p class="cfg-gen__note">Add it to your authenticator app first (“Enter a setup key”, time-based, or paste the link into a password manager), then set it as a Secret and redeploy.</p>${keep}`;

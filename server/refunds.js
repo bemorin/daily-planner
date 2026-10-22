@@ -119,8 +119,17 @@ export function shownScope(refund, transaction = null) {
   return refund.amount != null && paid != null && refund.amount < paid ? 'completes' : 'full';
 }
 
-/** "29.00 EUR", or '' without an amount. */
-export const moneyText = (amount, currency) => (amount == null ? '' : `${(Number(amount) / 100).toFixed(2)}${currency ? ` ${currency}` : ''}`);
+/** An amount in cents as people read it, always to the cent: “€29.00”, “$5.00”; “29.00” without a currency; '' without an amount. */
+export function moneyText(amount, currency) {
+  if (amount == null) return '';
+  const value = Number(amount) / 100;
+  if (!currency) return value.toFixed(2);
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+  } catch (_) {
+    return `${value.toFixed(2)} ${currency}`;
+  }
+}
 
 /**
  * The short email the owner gets for every refund and dispute: what happened,

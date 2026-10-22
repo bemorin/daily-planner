@@ -95,7 +95,8 @@ export const formatCommission = (cents, currency) => new Intl.NumberFormat(LOCAL
 
 /**
  * Everything the page fills in for a currency, as text: the rates, the
- * days, the minimum payout, the example of one Plus sale, the tax note.
+ * days, the minimum payout, an individual's yearly cap on team commissions,
+ * the example of one Plus sale, the tax note.
  */
 export function pageFigures(currency) {
   const plus = saleExample('plus', '', currency);
@@ -106,6 +107,7 @@ export function pageFigures(currency) {
     cookieDays: String(PARTNER_PROGRAM.cookieDays),
     refundDays: String(PARTNER_PROGRAM.refundDays),
     minimum: money((PARTNER_PROGRAM.minimumPayout[currency] ?? PARTNER_PROGRAM.minimumPayout.USD) * 100, currency),
+    individualCap: money((PARTNER_PROGRAM.individualYearlyCap[currency] ?? PARTNER_PROGRAM.individualYearlyCap.USD) * 100, currency),
     plusPrice: money(plus.price, currency),
     plusTax: money(plus.tax, currency),
     plusBeforeTax: money(plus.beforeTax, currency),

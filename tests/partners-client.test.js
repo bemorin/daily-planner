@@ -36,7 +36,9 @@ test('a gift checkout carries the licence only for a personal gift, with the par
   await api.startCheckout({ item: 'gift', plan: 'gift-1', currency: 'EUR' });
   api.rememberReferral('?ref=CAMILLE');
   await api.startCheckout({ item: 'gift', plan: 'gift-1', currency: 'EUR', license: 'DP1.a.b' });
-  assert.deepEqual(requests.map(entry => entry.body), [
+  // Following the link counted one visit for CAMILLE's statement (the code only).
+  assert.deepEqual(requests.filter(entry => entry.url === '/api/partners/visit').map(entry => entry.body), [{ ref: 'CAMILLE' }]);
+  assert.deepEqual(requests.filter(entry => entry.url !== '/api/partners/visit').map(entry => entry.body), [
     { item: 'gift', plan: 'gift-1', currency: 'EUR', license: 'DP1.a.b' },
     { item: 'gift', plan: 'family-5', currency: 'USD', license: 'DP1.a.b' },
     { item: 'gift', plan: 'up-to-50', currency: 'EUR' },
@@ -44,7 +46,7 @@ test('a gift checkout carries the licence only for a personal gift, with the par
     { item: 'gift', plan: 'gift-1', currency: 'EUR' },
     { item: 'gift', plan: 'gift-1', currency: 'EUR', ref: 'CAMILLE', license: 'DP1.a.b' }
   ]);
-  assert.ok(requests.every(entry => entry.url === '/api/checkout'));
+  assert.ok(requests.every(entry => ['/api/checkout', '/api/partners/visit'].includes(entry.url)));
 });
 
 test('partner hints: shown with the API on until dismissed (or followed), place by place, outside backups and sync', () => {
@@ -116,7 +118,7 @@ test('the partners page: Become a partner goes to Creem, or to the Contact page�
 });
 
 test('the partners page’s figures come from the prices and the program: before tax, to the cent', () => {
-  assert.deepEqual({ ...PARTNER_PROGRAM, minimumPayout: { ...PARTNER_PROGRAM.minimumPayout } }, { rate: 25, teamRate: 10, cookieDays: 30, minimumPayout: { EUR: 50, USD: 50 }, refundDays: 14 });
+  assert.deepEqual({ ...PARTNER_PROGRAM, minimumPayout: { ...PARTNER_PROGRAM.minimumPayout }, individualYearlyCap: { ...PARTNER_PROGRAM.individualYearlyCap } }, { rate: 25, teamRate: 10, cookieDays: 30, minimumPayout: { EUR: 50, USD: 50 }, refundDays: 14, individualYearlyCap: { EUR: 300, USD: 300 } });
   // In France (20% VAT): a €29 Plus is €24.17 before tax, and earns €6.04 — about €6, as on Hero's page.
   assert.deepEqual(model.saleExample('plus', '', 'EUR'), { price: 2900, beforeTax: 2417, tax: 483, rate: 25, commission: 604 });
   assert.deepEqual(model.saleExample('gift', 'family-5', 'EUR'), { price: 9900, beforeTax: 8250, tax: 1650, rate: 25, commission: 2063 });
@@ -224,8 +226,8 @@ test('the partners page: landing style and motion, every section, the rules, the
   assert.ok(page.indexOf("classList.add('js-anim')") < page.indexOf('../welcome/landing.css'), 'before the styles');
   assert.ok((page.match(/data-reveal-each/g) || []).length >= 6 && /data-reveal(?!-)/.test(page));
   assert.match(page, /class="faq__groups" data-faq>/);
-  assert.equal((page.match(/<details class="qa"/g) || []).length, 8);
-  for (const question of ['How much is a sale worth?', 'Who can be a partner?', 'How are sales tracked?', 'When and how am I paid?', 'What if someone asks for a refund?', 'What is not allowed?', 'And companies?']) assert.ok(page.includes(`<summary>${question}</summary>`), question);
+  assert.equal((page.match(/<details class="qa"/g) || []).length, 10);
+  for (const question of ['How much is a sale worth?', 'Who can be a partner?', 'How are sales tracked?', 'When and how am I paid?', 'Do I need a business to be paid?', 'Where do I see my visits and commissions?', 'What if someone asks for a refund?', 'What is not allowed?', 'And companies?']) assert.ok(page.includes(`<summary>${question}</summary>`), question);
   const script = await read('partners/partners.js');
   assert.match(script, /import \{ motionWanted, reduceQuery, setupFaq, setupReveal \} from '\.\.\/welcome\/page-motion\.js';/);
   assert.match(script, /setupReveal\(\{ motionOn: motionWanted\(\), motionHooks \}\);\nsetupFaq\(\);/);

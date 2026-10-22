@@ -9,7 +9,7 @@ import { createListbox } from './listbox.js';
 import { EMAIL_RE, configText, el, emailAddress, qs, qsa } from './page-kit.js';
 import { EASE_OUT, reduceQuery } from './page-motion.js';
 import { createStepper } from './stepper.js';
-import { CONTACT_TOPICS, KINDS, PEOPLE_RANGE, TIMING_LABELS, emailField, isTeamKind, requestCopy, requestEmail, requestFromAddress, requestPayload } from './teams-model.js';
+import { CONSENT, CONTACT_TOPICS, KINDS, PEOPLE_RANGE, TIMING_LABELS, emailField, isTeamKind, requestCopy, requestEmail, requestFromAddress, requestPayload } from './teams-model.js';
 
 /* ============================================================================
    The request form, on two pages:
@@ -26,9 +26,11 @@ import { CONTACT_TOPICS, KINDS, PEOPLE_RANGE, TIMING_LABELS, emailField, isTeamK
 
    Sent to the owner API (POST /api/teams), with the partner code this
    browser remembers (`ref`), so a team gift a partner introduced can earn
-   them their share. Without the API, it becomes an email to
-   LANDING.contactEmail, else to SUPPORT_EMAIL; without either, it stays
-   visible but cannot be sent.
+   them their share, once the visitor has ticked the box that agrees to how
+   it is used (CONSENT, legal/privacy/#requests). Without the API, it
+   becomes an email to LANDING.contactEmail, else to SUPPORT_EMAIL, which
+   the visitor sends themselves (no box); without either, it stays visible
+   but cannot be sent.
    ============================================================================ */
 
 const PLANNER_API_URL = typeof config.PLANNER_API_URL === 'string' ? config.PLANNER_API_URL : '';
@@ -53,6 +55,7 @@ function readForm(form, kind) {
     teamSize: text('teamSize'),
     timing: text('timing'),
     message: text('message'),
+    consent: data.get('consent') === 'on',
     website: String(data.get('website') || ''),
     kind
   };
@@ -71,7 +74,7 @@ function setError(field, message) {
   if (box) box.textContent = message;
 }
 
-function validate(form, values) {
+function validate(form, values, requestMode) {
   const count = Number(values.teamSize);
   const asking = values.kind === 'question' || values.kind === 'talk';
   // A question has no team fields: they are hidden (or absent), and never block it.
@@ -83,7 +86,9 @@ function validate(form, values) {
     ['company', !team ? '' : (!values.company ? 'Enter your company.' : (values.company.length > 120 ? 'Keep the company name under 120 characters.' : ''))],
     ['plan', !team || planRow(values.plan) ? '' : 'Choose a plan.'],
     ['teamSize', !team || (/^\d+$/.test(values.teamSize) && count >= PEOPLE_MIN && count <= PEOPLE_MAX) ? '' : 'Enter the number of people, from 2 to 100,000.'],
-    ['message', values.message.length > 1000 ? 'Keep the message under 1,000 characters.' : (asking && !values.message ? 'Write your question.' : '')]
+    ['message', values.message.length > 1000 ? 'Keep the message under 1,000 characters.' : (asking && !values.message ? 'Write your question.' : '')],
+    // Only the API's form has the box: an email is sent by the visitor themselves.
+    ['consent', requestMode !== 'api' || values.consent ? '' : CONSENT.missing]
   ];
   let first = null;
   checks.forEach(([name, message]) => {
@@ -146,6 +151,9 @@ export function createRequestForm({ sale = null, track = () => {}, settings, que
   const title = qs('[data-form-title]', panel);
   const intro = qs('[data-form-intro]', panel);
   const emailLabel = qs('[data-email-label]', form);
+  // The box to tick: what it agrees to follows the kind (KINDS[kind].consent).
+  const consentRow = qs('[data-consent-row]', form);
+  const consentUse = qs('[data-consent-use]', form);
   // The team gift's own fields (company, plan, number of people, timing): not part of a question.
   const teamFields = qsa('[data-team-field]', form);
   const submit = qs('[data-form-submit]', form);
@@ -182,11 +190,15 @@ export function createRequestForm({ sale = null, track = () => {}, settings, que
   if (!questionsOnly) createListbox(qs('[data-listbox="timing"]', form), { options: Object.entries(TIMING_LABELS).map(([value, label]) => ({ value, label })), value: 'december-2026' });
   const people = questionsOnly ? null : createStepper(size, { min: PEOPLE_MIN, max: PEOPLE_MAX, quick: PEOPLE_CHOICES, noun: 'people', onChange: count => peopleChanged(count) });
 
-  // No box to tick: replying is what the form is for. The line under it says
-  // what is kept, why and for how long (legal/privacy/#requests).
+  // Sent to the API: a required box agrees to how the request is used (its
+  // label links the privacy policy), and the line under it says what is kept
+  // and for how long (legal/privacy/#requests). As an email, neither: the
+  // visitor sends it themselves.
   const mailtoLine = qs('[data-mailto-line]', form);
   if (mailtoLine) mailtoLine.hidden = requestMode !== 'mailto';
   qs('[data-privacy-line]', form).hidden = requestMode !== 'api';
+  consentRow.hidden = requestMode !== 'api';
+  field('consent').required = requestMode === 'api';
   if (requestMode === 'off') {
     submit.disabled = true;
     submit.setAttribute('aria-describedby', 'form-off');
@@ -300,6 +312,7 @@ export function createRequestForm({ sale = null, track = () => {}, settings, que
     const email = emailField(request.kind);
     if (emailLabel) emailLabel.textContent = email.label;
     field('email').placeholder = email.placeholder;
+    consentUse.textContent = copy.consent;
     const asking = request.kind === 'question' || request.kind === 'talk';
     messageLabel.replaceChildren(asking ? 'Your question' : 'Anything else? ', asking ? '' : el('em', {}, 'Optional'));
     field('message').required = asking;
@@ -359,8 +372,10 @@ export function createRequestForm({ sale = null, track = () => {}, settings, que
   });
 
   again?.addEventListener('click', () => {
-    // Another one: the same email and name, a new question (or request).
+    // Another one: the same email and name, a new question (or request), and
+    // the box to tick again: it agreed to the one just sent.
     field('message').value = questionsOnly ? contactCopy.message : '';
+    field('consent').checked = false;
     updateCount();
     showForm();
     if (questionsOnly) field('message').focus();
@@ -388,7 +403,7 @@ export function createRequestForm({ sale = null, track = () => {}, settings, que
     peopleChanged(people?.value);
     applyKind();
     const values = readForm(form, request.kind);
-    const invalid = validate(form, values);
+    const invalid = validate(form, values, requestMode);
     if (invalid) { invalid.focus(); return; }
 
     if (requestMode === 'mailto') {
