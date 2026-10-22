@@ -228,7 +228,8 @@ test('the Setup card says “set, but not used” with the legal pages’ own ch
   // How to write the phone number (E.164, no spaces), and how the page shows it.
   assert.match(variables, /\['LEGAL_PHONE', '[^']*international form, <code>\+33<\/code> then the number without its 0, with no spaces \(e\.g\. <code>\+33199001234<\/code>\)[^']*<code>\+33 1 99 00 12 34<\/code>/);
   assert.match(source, /if \(key === 'LEGAL_PHONE'\) return `set, shown as \$\{esc\(legalDetails\(APP_CONFIG\)\.phone\)\}`;/, 'Setup shows how the number reads');
-  assert.match(variables, /\['SUPPORT_EMAIL', '[^']*“Support” line of the welcome and Teams pages’ footer/);
+  assert.match(variables, /\['SUPPORT_EMAIL', '[^']*on the Contact page \(“Prefer email\? Write to …”\)/);
+  assert.doesNotMatch(variables, /Support” line|Support line/, 'no footer shows it any more (1.32)');
 });
 
 test('Setup: missing pieces are urgent and come before every to-do', () => {

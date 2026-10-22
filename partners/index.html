@@ -58,13 +58,13 @@
 
   <a class="skip" href="#main">Skip to content</a>
 
-  <header class="top">
+  <header class="top" data-top>
     <div class="wrap top__inner">
       <a class="brand" href="../welcome/" aria-label="Daily Planner, about the planner">
         <img src="../favicon.svg" alt="" width="28" height="28">
         <span>Daily Planner</span>
       </a>
-      <nav class="top__nav" aria-label="Partners">
+      <nav class="top__nav" id="top-nav" aria-label="Partners">
         <a href="#how">How it works</a>
         <a href="#earn">What it pays</a>
         <a href="#rules">Rules</a>
@@ -73,6 +73,7 @@
       <div class="top__actions">
         <a class="pt-top__link" href="../welcome/">About the planner</a>
         <a class="btn btn--primary btn--sm" href="../contact/?topic=partners" data-partner-cta>Become a partner</a>
+        <button class="top__menu" type="button" aria-label="Menu" aria-expanded="false" aria-controls="top-nav" data-top-menu><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.5 8.5h15"/><path d="M4.5 15.5h15"/></svg></button>
       </div>
     </div>
   </header>
@@ -287,18 +288,19 @@
       </div>
       <nav class="foot__links" aria-label="Footer">
         <a href="../">Open the planner</a>
-        <a href="../welcome/#plus">Plus</a>
-        <a href="../teams/">Team gift</a>
-        <a href="../contact/">Ask a question</a>
+        <span class="foot__social" data-social hidden></span>
       </nav>
     </div>
     <div class="wrap foot__base">
-      <nav class="foot__legal" aria-label="Legal">
-        <a href="../legal/privacy/">Privacy</a>
-        <a href="../legal/terms/">Terms</a>
-        <a href="../legal/cookies/">Cookies</a>
-        <a href="../legal/">Legal notice</a>
-      </nav>
+      <div class="foot__links">
+        <nav class="foot__legal" aria-label="Legal">
+          <a href="../legal/privacy/">Privacy</a>
+          <a href="../legal/terms/">Terms</a>
+          <a href="../legal/cookies/">Cookies</a>
+          <a href="../legal/">Legal notice</a>
+        </nav>
+        <a href="../contact/">Contact</a>
+      </div>
       <a class="foot__counts" href="../welcome/#privacy" data-counts-link hidden><svg class="i" aria-hidden="true"><use href="#i-stats"/></svg>What this page counts</a>
     </div>
   </footer>

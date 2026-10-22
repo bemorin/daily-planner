@@ -4,6 +4,7 @@ import * as config from '../../src/config.js';
 import { trackEvent, plannerApiEnabled, claimPurchase, dismissPartnerHint, partnerHintShown, rememberReferral } from '../../src/lib/planner-api.js';
 import { PARTNER_PROGRAM } from '../../src/lib/pricing.js';
 import { giftAudience, giftPageParams, isDefaultCompany, partnerInvitation } from '../landing-model.js';
+import { renderFooter } from '../page-kit.js';
 
 /* ============================================================================
    Your gift page (/welcome/thanks/): a private page with the gift link, the
@@ -540,6 +541,9 @@ function start() {
   // A partner's link that leads here is remembered like on the landing page.
   rememberReferral();
   setupActions();
+  // The footer: the social links that are set, and what this page counts (copying the gift link) when it counts.
+  renderFooter();
+  qsa('[data-counts-link]').forEach(link => { link.hidden = !apiOn; });
   if (!apiOn) return showError('off', { about: true });
   const opened = giftPageParams(location.search);
   if (opened.kind === 'checkout') return opened.checkout ? claim(opened.checkout) : showError('noSession');

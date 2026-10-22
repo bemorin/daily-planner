@@ -6,10 +6,10 @@
  * (1.22.1, 1.22.2…) keep the same note and are never asked about again.
  */
 export const WHATS_NEW = Object.freeze({
-  version: '1.31',
+  version: '1.32',
   items: Object.freeze([
-    'Ask a question has its own Contact page, linked from the footer of the planner and from every page of the site.',
-    'The team gift page keeps invoices, quotes and questions about the team gift.',
-    'Behind the scenes, the site’s settings can now be checked in one place, so problems get fixed sooner.'
+    'A Help link can now open the planner straight on How it works.',
+    'The contact and team forms are simpler: no box to tick before you send.',
+    'On a phone, the welcome, Teams, Partners and Contact pages have a menu that reaches every section.'
   ])
 });

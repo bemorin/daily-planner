@@ -2,6 +2,15 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.32.0 — 2026-10-22
+
+- **Welcome hero**: a cursor shows each action — in Your day it clicks the Most important outcome, then Close day; in Your year it presses + Add, opens the Mini-adventures section (a faithful mini version, with tabs on narrow screens), marks Weekend in Lisbon as lived, returns to Overview and ticks the last Misogi milestone. Same box size, reduced motion and no-JS unchanged.
+- **Footers** no longer repeat the top bar nor show “Support: …”: brand, social links, then Privacy · Terms · Cookies · Legal notice · Contact and “What this page counts”, the same on every public page (the thanks page included). **On phones**, the top bars of /welcome/, /teams/, /contact/ and /partners/ get a Menu button that reveals their section links (keyboard, Escape, focus kept inside, no layout shift).
+- **No consent box** on the contact and Teams forms: a request is answered because it was sent (legitimate interest / steps before an order); the API no longer requires `consent`; the privacy policy says so (dated 22 October 2026).
+- **`/?help`** opens the planner on How it works (not on a first run, and not over a licence, gift or purchase link); the address is cleaned at once. Contact's “Help in the planner” and the welcome FAQ's Help link use it.
+- Contact: on a computer, the card beside the form stays in view while scrolling. Admin: the Trends Week / Month / Year switch is a sliding pill like the planner's.
+- Fixed: focus could land on the setup dialog hidden behind a licence dialog on a first visit.
+
 ## 1.31.0 — 2026-10-21
 
 - **Contact page** (`/contact/`): the “Ask a question” form on its own page (email, name, question), with pointers to Help, the team gift and the partner program, the support address when set, and `?topic=partners` for the partner program. Every general “Ask a question” link (legal pages, footers, partners page, the planner's footer) points there; old `?ask=question` links on `/teams/` and `/welcome/` land on it with their topic and partner code; questions arrive with source `contact` (“Contact page” in the dashboard). The Teams page keeps invoices, quotes and “Ask about the team gift”.

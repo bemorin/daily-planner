@@ -2,7 +2,7 @@ import { LANDING_EVENTS, plannerApiEnabled, rememberReferral, setUsageCountsEnab
 import { LAUNCH, PARTNER_PROGRAM, PERSONAL_GIFTS, PLUS_FEATURES, PLUS_PRICE, PLUS_UPCOMING, isPersonalGift, memberGiftPrice, memberPriceNotice } from '../src/lib/pricing.js';
 import { savedPlusToken, verifyPlusToken, writePlusCheck } from '../src/lib/plus.js';
 import { animate } from '../src/vendor/motion.js';
-import { setupHeroViews } from './hero-views.js';
+import { HERO_SCRIPTS, setupHeroViews } from './hero-views.js';
 import { countedMoments, monthWeeks, personalOffer, ritualYear, statusTone, upcomingSentence } from './landing-model.js';
 import { LANDING } from './landing-settings.js';
 import { CHECK_ICON, el, qs, qsa, renderFooter, setupTopBar } from './page-kit.js';
@@ -10,7 +10,7 @@ import { EASE_OUT, followMotion, motionWanted, reduceQuery, setupFaq, setupRevea
 import { createPaletteCard } from './palette-card.js';
 import { createPrivacyDialog } from './privacy-dialog.js';
 import { checkout, createSale, renderPriceLines, setupBuyButtons } from './sale.js';
-import { click, setupScenes } from './scenes.js';
+import { playCues, setupScenes } from './scenes.js';
 import { movedAddress } from './teams-model.js';
 
 /* ============================================================================
@@ -601,59 +601,11 @@ function buildPaint() {
 /* Scenes: replicas that play near the viewport and pause when they leave --- */
 
 const SCRIPTS = {
-  // The hero: plan, then a pointer closes the day. The Close day sheet opens,
-  // two open items are decided, a memory is written, and only then is the
-  // day's square painted.
-  day: {
-    length: 14000,
-    loop: true,
-    run(t) {
-      const [focus, memory] = qsa('[data-type]', t.root);
-      t.type(focus, 300);
-      t.add('s-mit', 1800);
-      t.add('s-block', 2300);
-      t.point('.rp-window', 2900, { x: 0.6, y: 0.94, jump: true });
-      t.add('d-cursor', 2950);
-      t.point('.rp-closebtn', 3050, { duration: 950, x: 0.42, y: 0.62 });
-      t.add('d-hover', 3850);
-      click(t, 4150, 'd-press');
-      t.remove('d-hover', 4450);
-      t.add('d-modal', 4450);
-      t.point('.rp-mi--save .rp-mc--save', 5100, { duration: 700 });
-      click(t, 5850);
-      t.add('d-save', 5850);
-      t.point('.rp-mi--forget .rp-mc--forget', 6350, { duration: 560 });
-      click(t, 7000);
-      t.add('d-forget', 7000);
-      t.point('.rp-modal .rp-field', 7550, { duration: 620, x: 0.16, y: 0.55 });
-      click(t, 8250);
-      t.type(memory, 8350);
-      t.point('.rp-modal .rp-primary', 9650, { duration: 640, x: 0.5, y: 0.58 });
-      click(t, 10400, 'd-submit');
-      t.remove('d-modal', 10700);
-      t.remove('d-cursor', 10700);
-      t.add('s-closed', 11050);
-      t.count(qs('[data-count]', t.root), 11700, 300);
-    }
-  },
-  // The hero's second view, Horizon: the year fills in, a key date lands on
-  // the map, a mini-adventure is ticked as lived, then the last milestone of
-  // the Misogi, whose bar fills.
-  horizon: {
-    length: 8200,
-    run(t) {
-      const counts = step => qsa(`[data-at="${step}"]`, t.root);
-      t.add('s-in', 150);
-      t.add('s-add', 2700);
-      t.remove('s-add', 2960);
-      t.add('s-key', 2960);
-      counts('key').forEach(node => t.count(node, 3300, 120));
-      t.add('s-lived', 4900);
-      counts('lived').forEach(node => t.count(node, 5000, 120));
-      t.add('s-step', 6800);
-      counts('step').forEach(node => t.count(node, 6950, 120));
-    }
-  },
+  // The hero's two views, Your day and Your year (Horizon): a pointer plans
+  // and closes the day, then shapes the year. Their cues are in hero-views.js,
+  // next to how long each view stays.
+  day: { length: HERO_SCRIPTS.day.length, loop: true, run: t => playCues(t, HERO_SCRIPTS.day.cues) },
+  horizon: { length: HERO_SCRIPTS.horizon.length, run: t => playCues(t, HERO_SCRIPTS.horizon.cues) },
   close: {
     length: 13000,
     loop: true,
@@ -788,7 +740,7 @@ function start() {
   checkMember();
   setupCompare();
   setupBuyButtons(buy, { onReturn: hideMemberCheck });
-  renderFooter({ supportEmail: LANDING.supportEmail });
+  renderFooter();
   createPrivacyDialog({
     dialog: qs('[data-privacy-dialog]'),
     enabled: apiOn,

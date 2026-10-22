@@ -253,3 +253,43 @@ test('the series window and answer are checked before use', () => {
   const clean = normalizeSeries({ from: '2025-01-01', to: '2026-10-11', events: {}, sales: [{ day: '2026-10-01' }, { day: 'bad' }, null], salesUnavailable: true });
   assert.deepEqual(clean, { from: '2025-01-01', to: '2026-10-11', events: {}, sales: [{ day: '2026-10-01' }], salesUnavailable: true });
 });
+
+test('Week · Month · Year is a radio group whose pill slides like the planner’s view switch', async () => {
+  const { periodKeyTarget } = await import('../admin/trends-view.js');
+  const { readFile } = await import('node:fs/promises');
+  const read = file => readFile(new URL(`../${file}`, import.meta.url), 'utf8');
+  // The keyboard: the arrows wrap round, Home and End go to the ends, other keys do nothing.
+  assert.equal(periodKeyTarget('ArrowRight', 0, 3), 1);
+  assert.equal(periodKeyTarget('ArrowDown', 2, 3), 0, 'wraps round');
+  assert.equal(periodKeyTarget('ArrowLeft', 0, 3), 2, 'wraps round');
+  assert.equal(periodKeyTarget('ArrowUp', 1, 3), 0);
+  assert.equal(periodKeyTarget('Home', 2, 3), 0);
+  assert.equal(periodKeyTarget('End', 0, 3), 2);
+  assert.equal(periodKeyTarget('Enter', 1, 3), -1);
+  assert.equal(periodKeyTarget('ArrowRight', 0, 0), -1, 'no buttons, no move');
+
+  const html = await read('admin/index.html');
+  const group = /<div class="trends-switch"[\s\S]*?<\/div>/.exec(html)[0];
+  assert.match(group, /role="radiogroup" aria-label="Compare by"/);
+  assert.match(group, /<span class="trends-switch__indicator" data-trends-indicator aria-hidden="true"><\/span>/);
+  const radios = [...group.matchAll(/<button type="button" role="radio"([^>]*)>(\w+)<\/button>/g)].map(match => [match[2], /aria-checked="true"/.test(match[1]), /tabindex="-1"/.test(match[1])]);
+  assert.deepEqual(radios, [['Week', true, false], ['Month', false, true], ['Year', false, true]], 'one tab stop: the chosen period');
+  assert.doesNotMatch(group, /aria-pressed/);
+
+  const view = await read('admin/trends-view.js');
+  // The planner's slide (the same spring as src/ui/motion.js slideIndicator), straight from the library: src/ui/motion.js would mark the page has-motion and take the dropdowns' transition away.
+  assert.match(view, /import \{ animate, spring \} from '\.\.\/src\/vendor\/motion\.js';/);
+  assert.doesNotMatch(view, /src\/ui\/motion\.js'/);
+  assert.match(view, /animate\(pill, keyframes, \{ type: spring, bounce: 0\.16, duration: 0\.4 \}\)/);
+  assert.match(await read('src/ui/motion.js'), /return run\(indicator, keyframes, \{ type: spring, bounce: 0\.16, duration: 0\.4 \}, \[\]\);/, 'still the planner’s');
+  assert.match(view, /if \(!animateMove \|\| !from\.width \|\| reducedMotion\(\) \|\| typeof pill\.animate !== 'function'\) return;/, 'no movement with reduced motion');
+  assert.match(view, /button\.setAttribute\('aria-checked', String\(on\)\);\n {6}button\.tabIndex = on \? 0 : -1;/);
+  assert.match(view, /syncSwitch\(\{ animate: true \}\);/, 'it slides when a period is chosen');
+  assert.match(view, /new ResizeObserver\(\(\) => placeIndicator\(false\)\)\.observe\(group\)/, 'and is placed without sliding once shown or resized');
+
+  const css = await read('admin/admin.css');
+  assert.match(css, /\.trends-switch \{ position: relative;[^}]*border-radius: 999px;/);
+  assert.match(css, /\.trends-switch__indicator \{ position: absolute;[^}]*background: var\(--surface-strong\);/);
+  assert.match(css, /\.trends-switch:not\(:has\(\[data-ready\]\)\) button\.is-active \{/, 'the chosen period reads as chosen before the pill is measured');
+  assert.doesNotMatch(css, /\.trends-switch button\[aria-pressed/);
+});

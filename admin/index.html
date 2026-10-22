@@ -63,10 +63,11 @@
       <section class="trends" data-owner-trends aria-labelledby="owner-trends-title">
         <header class="trends__head">
           <div><h2 id="owner-trends-title">Trends</h2><p data-trends-caption></p></div>
-          <div class="trends-switch" role="group" aria-label="Compare by">
-            <button type="button" data-trends-period="week" aria-pressed="true">Week</button>
-            <button type="button" data-trends-period="month" aria-pressed="false">Month</button>
-            <button type="button" data-trends-period="year" aria-pressed="false">Year</button>
+          <div class="trends-switch" role="radiogroup" aria-label="Compare by">
+            <span class="trends-switch__indicator" data-trends-indicator aria-hidden="true"></span>
+            <button type="button" role="radio" class="is-active" data-trends-period="week" aria-checked="true">Week</button>
+            <button type="button" role="radio" data-trends-period="month" aria-checked="false" tabindex="-1">Month</button>
+            <button type="button" role="radio" data-trends-period="year" aria-checked="false" tabindex="-1">Year</button>
           </div>
         </header>
         <div class="trends__body" data-trends-body><p class="owner-checking">Loading trends…</p></div>

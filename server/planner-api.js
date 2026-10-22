@@ -13,7 +13,8 @@
 // - Feedback: what someone chose to send; email only if they added one.
 // - Team kit requests: the work email, company, team size, plan, currency and
 //   kind of request someone typed (a question: only the email, name and
-//   question), with explicit consent, and the partner code
+//   question), kept to reply to that request (no consent box since 1.32:
+//   replying is what it is sent for), and the partner code
 //   remembered on that browser (?ref= link), if any, so a team order by
 //   invoice can earn that partner 10% (migration 0007). Deletable.
 // - Email (optional, Resend, see server/email.js): the owner is notified of
@@ -380,7 +381,7 @@ export function validateTeamRequest(body, now = new Date()) {
   const message = clip(body?.message, 2000);
   if (message.length > 1000) return { error: 'Please keep the message under 1,000 characters.' };
   if (question && !message) return { error: 'Please write your question.' };
-  if (body?.consent !== true) return { error: question ? 'Please confirm that we may email you about your question.' : 'Please confirm that we may email you about the team kit.' };
+  // No consent to give (1.32): it is sent to be answered. Older pages still send `consent: true`, which is ignored.
   const version = VERSION_RE.test(String(body?.version || '')) ? String(body.version) : '';
   return {
     entry: {

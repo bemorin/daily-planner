@@ -53,7 +53,6 @@ function readForm(form, kind) {
     teamSize: text('teamSize'),
     timing: text('timing'),
     message: text('message'),
-    consent: data.get('consent') === 'on',
     website: String(data.get('website') || ''),
     kind
   };
@@ -72,7 +71,7 @@ function setError(field, message) {
   if (box) box.textContent = message;
 }
 
-function validate(form, values, requestMode) {
+function validate(form, values) {
   const count = Number(values.teamSize);
   const asking = values.kind === 'question' || values.kind === 'talk';
   // A question has no team fields: they are hidden (or absent), and never block it.
@@ -84,8 +83,7 @@ function validate(form, values, requestMode) {
     ['company', !team ? '' : (!values.company ? 'Enter your company.' : (values.company.length > 120 ? 'Keep the company name under 120 characters.' : ''))],
     ['plan', !team || planRow(values.plan) ? '' : 'Choose a plan.'],
     ['teamSize', !team || (/^\d+$/.test(values.teamSize) && count >= PEOPLE_MIN && count <= PEOPLE_MAX) ? '' : 'Enter the number of people, from 2 to 100,000.'],
-    ['message', values.message.length > 1000 ? 'Keep the message under 1,000 characters.' : (asking && !values.message ? 'Write your question.' : '')],
-    ['consent', requestMode !== 'api' || values.consent ? '' : 'Tick this box so we can reply to you.']
+    ['message', values.message.length > 1000 ? 'Keep the message under 1,000 characters.' : (asking && !values.message ? 'Write your question.' : '')]
   ];
   let first = null;
   checks.forEach(([name, message]) => {
@@ -148,7 +146,6 @@ export function createRequestForm({ sale = null, track = () => {}, settings, que
   const title = qs('[data-form-title]', panel);
   const intro = qs('[data-form-intro]', panel);
   const emailLabel = qs('[data-email-label]', form);
-  const consentLabel = qs('[data-consent-label]', form);
   // The team gift's own fields (company, plan, number of people, timing): not part of a question.
   const teamFields = qsa('[data-team-field]', form);
   const submit = qs('[data-form-submit]', form);
@@ -185,14 +182,11 @@ export function createRequestForm({ sale = null, track = () => {}, settings, que
   if (!questionsOnly) createListbox(qs('[data-listbox="timing"]', form), { options: Object.entries(TIMING_LABELS).map(([value, label]) => ({ value, label })), value: 'december-2026' });
   const people = questionsOnly ? null : createStepper(size, { min: PEOPLE_MIN, max: PEOPLE_MAX, quick: PEOPLE_CHOICES, noun: 'people', onChange: count => peopleChanged(count) });
 
+  // No box to tick: replying is what the form is for. The line under it says
+  // what is kept, why and for how long (legal/privacy/#requests).
   const mailtoLine = qs('[data-mailto-line]', form);
   if (mailtoLine) mailtoLine.hidden = requestMode !== 'mailto';
-  if (requestMode === 'api') {
-    qs('[data-privacy-line]', form).hidden = false;
-  } else {
-    qs('[data-consent-row]', form).hidden = true;
-    field('consent').required = false;
-  }
+  qs('[data-privacy-line]', form).hidden = requestMode !== 'api';
   if (requestMode === 'off') {
     submit.disabled = true;
     submit.setAttribute('aria-describedby', 'form-off');
@@ -306,7 +300,6 @@ export function createRequestForm({ sale = null, track = () => {}, settings, que
     const email = emailField(request.kind);
     if (emailLabel) emailLabel.textContent = email.label;
     field('email').placeholder = email.placeholder;
-    if (consentLabel) consentLabel.textContent = email.consent;
     const asking = request.kind === 'question' || request.kind === 'talk';
     messageLabel.replaceChildren(asking ? 'Your question' : 'Anything else? ', asking ? '' : el('em', {}, 'Optional'));
     field('message').required = asking;
@@ -395,7 +388,7 @@ export function createRequestForm({ sale = null, track = () => {}, settings, que
     peopleChanged(people?.value);
     applyKind();
     const values = readForm(form, request.kind);
-    const invalid = validate(form, values, requestMode);
+    const invalid = validate(form, values);
     if (invalid) { invalid.focus(); return; }
 
     if (requestMode === 'mailto') {

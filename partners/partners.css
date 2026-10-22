@@ -12,7 +12,8 @@ body.partners-page { padding-bottom: 0; }
 
 .pt-top__link:hover { background: var(--soft); color: var(--ink); }
 
-@media (max-width: 519.98px) {
+/* Beside its button and the Menu button once there is room (the brand leads there too). */
+@media (max-width: 599.98px) {
   .pt-top__link { display: none; }
 }
 

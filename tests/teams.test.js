@@ -100,7 +100,7 @@ test('a question is the plain form: email, name and the question; an invoice, a 
 
 test('a question is sent without the team’s fields, and an address never gives it a plan', () => {
   const values = { email: 'ann@example.com', name: 'Ann', company: 'ignored', plan: 'up-to-50', teamSize: '50', timing: 'december-2026', message: 'Partner program: who can join?', website: '', kind: 'question' };
-  assert.deepEqual(requestPayload(values, { currency: 'EUR', version: '1.29.1', locale: 'fr-FR', ref: 'COACH_ANNA' }), { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', consent: true, website: '', version: '1.29.1', locale: 'fr-FR', source: 'teams', kind: 'question', ref: 'COACH_ANNA' });
+  assert.deepEqual(requestPayload(values, { currency: 'EUR', version: '1.29.1', locale: 'fr-FR', ref: 'COACH_ANNA' }), { email: 'ann@example.com', name: 'Ann', message: 'Partner program: who can join?', website: '', version: '1.29.1', locale: 'fr-FR', source: 'teams', kind: 'question', ref: 'COACH_ANNA' });
   const invoice = requestPayload({ ...values, kind: 'invoice' }, { currency: 'EUR' });
   assert.deepEqual([invoice.company, invoice.teamSize, invoice.timing, invoice.plan, invoice.currency], ['ignored', 50, 'december-2026', 'up-to-50', 'EUR'], 'an invoice: as today');
   assert.deepEqual(requestFromAddress('?ask=question&plan=up-to-100'), { kind: 'question', plan: '' });
@@ -125,8 +125,13 @@ test('the request form hides the team’s fields for a question, and keeps its h
   assert.equal((form.match(/data-team-field/g) || []).length, 4);
   assert.match(form, /<div class="team-form__head" data-form-head>\s*<p class="band__kicker"><svg class="i"><use href="#i-mail"\/><\/svg><span data-form-kicker>Invoice, quote or question<\/span><\/p>/);
   assert.match(form, /<span data-email-label>Work email<\/span>/);
-  assert.match(form, /<span data-consent-label>You may email me about this request\.<\/span>/);
+  // No consent box (1.32): an invoice, a quote or a question is sent to be answered. One line says what is kept and why.
+  assert.doesNotMatch(form, /consent|type="checkbox"/);
+  assert.match(form, /<p class="form-privacy" data-privacy-line hidden>What you send is stored only to reply to you, and deleted on request\. <a href="#privacy" data-privacy-open="requests">How requests are handled<\/a><\/p>/);
   const script = await read('welcome/request-form.js');
+  assert.doesNotMatch(script, /consent/i, 'nothing to tick, read or check');
+  assert.match(script, /qs\('\[data-privacy-line\]', form\)\.hidden = requestMode !== 'api';/);
+  assert.doesNotMatch(await read('welcome/teams-model.js'), /consent: /);
   assert.match(script, /teamFields\.forEach\(node => \{ node\.hidden = !team; \}\);/);
   assert.match(script, /\['company', !team \? '' :/, 'a question never asks for a company');
   assert.match(script, /sizeHead\(\);/);
@@ -143,7 +148,7 @@ test('the request form hides the team’s fields for a question, and keeps its h
 test('a request carries the remembered partner code as `ref`, and nothing when there is none', () => {
   const values = { email: 'ann@example.com', name: 'Ann', company: 'Acme', plan: 'up-to-50', teamSize: '40', timing: 'january-2027', message: 'Hi', website: '', kind: 'invoice' };
   const sent = requestPayload(values, { currency: 'EUR', version: '1.27.0', locale: 'fr-FR', ref: 'CAMILLE_2' });
-  assert.deepEqual(sent, { email: 'ann@example.com', name: 'Ann', company: 'Acme', teamSize: 40, timing: 'january-2027', message: 'Hi', consent: true, website: '', version: '1.27.0', locale: 'fr-FR', source: 'teams', plan: 'up-to-50', currency: 'EUR', kind: 'invoice', ref: 'CAMILLE_2' });
+  assert.deepEqual(sent, { email: 'ann@example.com', name: 'Ann', company: 'Acme', teamSize: 40, timing: 'january-2027', message: 'Hi', website: '', version: '1.27.0', locale: 'fr-FR', source: 'teams', plan: 'up-to-50', currency: 'EUR', kind: 'invoice', ref: 'CAMILLE_2' });
   assert.equal('ref' in requestPayload(values, { currency: 'EUR', ref: '' }), false, 'omitted when no code is remembered');
   assert.equal('ref' in requestPayload(values, { currency: 'EUR' }), false);
   assert.equal('ref' in requestPayload(values, { currency: 'EUR', ref: 'a b<script>' }), false, 'only a valid code goes along');
@@ -205,6 +210,10 @@ test('the Teams page: its own address, the landing page’s head, header and foo
   assert.deepEqual([...nav.matchAll(/<a href="([^"]+)"/g)].map(match => match[1]), ['../welcome/#how', '../welcome/#year', '../welcome/#plus', './', '../welcome/#pricing', '#faq', '../partners/']);
   const legal = /<nav class="foot__legal"[\s\S]*?<\/nav>/.exec(page)[0];
   assert.deepEqual([...legal.matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)].map(match => [match[1], match[2]]), [['../legal/privacy/', 'Privacy'], ['../legal/terms/', 'Terms'], ['../legal/cookies/', 'Cookies'], ['../legal/', 'Legal notice']]);
+  // The footer repeats nothing from the top bar (1.32): the brand, the social links once set, the legal pages and Contact.
+  const foot = /<footer class="foot">[\s\S]*?<\/footer>/.exec(page)[0];
+  assert.deepEqual([...foot.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(match => [match[1], match[2]]), [['https://bemorin.com/', 'Ben Morin'], ['../legal/privacy/', 'Privacy'], ['../legal/terms/', 'Terms'], ['../legal/cookies/', 'Cookies'], ['../legal/', 'Legal notice'], ['../contact/', 'Contact']]);
+  assert.match(await read('teams/teams.js'), /^renderFooter\(\);$/m);
   assert.match(page, /<body class="teams-page">/);
 });
 
@@ -273,15 +282,17 @@ test('the team questions moved to the Teams page FAQ, in the welcome FAQ’s sty
   assert.doesNotMatch(landing, /<h3 class="faq__label">Team gift<\/h3>/);
 });
 
-test('the landing page leads to the Teams page: menu, banner, footer and every request link', async () => {
+test('the landing page leads to the Teams page: menu, banner and every request link; its footer repeats none of the top bar', async () => {
   const page = await read('welcome/index.html');
   const nav = /<nav class="top__nav"[\s\S]*?<\/nav>/.exec(page)[0];
   assert.match(nav, /<a href="\.\.\/teams\/">Teams<\/a>/);
   assert.match(page, /<a class="top__teams" href="\.\.\/teams\/">Teams<\/a>/);
-  const foot = /<nav class="foot__links"[\s\S]*?<\/nav>/.exec(page)[0];
-  assert.match(foot, /<a href="\.\.\/teams\/">Team gift<\/a>/);
-  assert.match(foot, /<a href="\.\.\/contact\/">Ask a question<\/a>/);
-  assert.match(page, /Help page explains every feature and shortcut, or <a href="\.\.\/contact\/">ask a question<\/a>\./);
+  const foot = /<footer class="foot">[\s\S]*?<\/footer>/.exec(page)[0];
+  assert.deepEqual([...foot.matchAll(/<a href="([^"]+)"[^>]*>([^<]+)<\/a>/g)].map(match => match[2]), ['Ben Morin', 'Privacy', 'Terms', 'Cookies', 'Legal notice', 'Contact']);
+  assert.match(foot, /<a href="\.\.\/contact\/">Contact<\/a>/);
+  assert.match(foot, /<nav class="foot__links" aria-label="Social links" hidden>\s*<span class="foot__social" data-social hidden><\/span>\s*<\/nav>/);
+  assert.doesNotMatch(foot, /data-support|teams\/|partners\/|#plus|#pricing|Open the planner/);
+  assert.match(page, /Something missing\? <a href="\.\.\/\?help" data-cta="app">The planner’s own Help page<\/a> explains every feature and shortcut, or <a href="\.\.\/contact\/">ask a question<\/a>\./, 'the Help page opens in the planner (/?help)');
   assert.doesNotMatch(page, /href="#(?:teams|request|team-prices|seats)"|data-request=/, 'no link to a part that moved');
   // Every in-page link points at something on the page, on both pages.
   for (const file of ['welcome/index.html', 'teams/index.html']) {
@@ -323,8 +334,9 @@ test('the Teams page script: entrances, FAQ, replica, counts', async () => {
 test('the gift page sends questions to the Contact page', async () => {
   const page = await read('welcome/thanks/index.html');
   assert.doesNotMatch(page, /href="\.\.\/\?ask=|href="\.\.\/#teams"|ask=question/);
+  // “Ask a question” on the page, and Contact in the footer (which repeats nothing from the top bar: 1.32).
   assert.equal((page.match(/href="\.\.\/\.\.\/contact\/"/g) || []).length, 2);
-  assert.equal((page.match(/href="\.\.\/\.\.\/teams\/"/g) || []).length, 2);
+  assert.equal((page.match(/href="\.\.\/\.\.\/teams\/"/g) || []).length, 1);
 });
 
 test('the Teams page is /teams/; its old address redirects there (tests/redirects.test.js)', async () => {

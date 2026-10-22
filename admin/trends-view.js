@@ -8,6 +8,8 @@ import {
   sectionUsage, installUsage, saleCurrencies, yearsToShow, PERIODS
 } from './trends.js';
 import { columnChart, sparklineHtml } from './charts.js';
+// The animation library itself, not src/ui/motion.js: that one marks the page `has-motion`, which would take the dashboard's dropdowns' own transition away.
+import { animate, spring } from '../src/vendor/motion.js';
 
 const PERIOD_KEY = 'daily-planner-owner-trends-period';
 
@@ -82,6 +84,39 @@ const SECTION_LABELS = {
   print_used: 'Print'
 };
 
+/**
+ * The Week · Month · Year radio group from the keyboard: the button a key
+ * moves to from button `at` of `count` (the arrows wrap round; Home and End
+ * go to the ends), or -1 for any other key.
+ */
+export function periodKeyTarget(key, at, count) {
+  if (!(count > 0)) return -1;
+  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[key];
+  if (step) return (((at + step) % count) + count) % count;
+  if (key === 'Home') return 0;
+  if (key === 'End') return count - 1;
+  return -1;
+}
+
+const reducedMotion = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * The raised pill onto `target`, sliding there like the planner's view
+ * switch (src/ui/motion.js slideIndicator: the same soft spring), or at once
+ * the first time, with `animateMove` off or with reduced motion.
+ */
+function slidePill(pill, target, animateMove) {
+  const next = { left: `${target.offsetLeft}px`, top: `${target.offsetTop}px`, width: `${target.offsetWidth}px`, height: `${target.offsetHeight}px` };
+  const from = { left: pill.style.left, width: pill.style.width };
+  Object.assign(pill.style, next);
+  pill.dataset.ready = 'true';
+  if (!animateMove || !from.width || reducedMotion() || typeof pill.animate !== 'function') return;
+  const keyframes = {};
+  ['left', 'width'].forEach(key => { if (from[key] !== next[key]) keyframes[key] = [from[key], next[key]]; });
+  if (!Object.keys(keyframes).length) return;
+  try { animate(pill, keyframes, { type: spring, bounce: 0.16, duration: 0.4 }); } catch (_) { /* it is already in place */ }
+}
+
 function readPeriod(storage) {
   try {
     const saved = storage?.getItem(PERIOD_KEY);
@@ -133,6 +168,8 @@ export function createTrendsView(root, { storage = globalThis.localStorage } = {
   const caption = root.querySelector('[data-trends-caption]');
   const body = root.querySelector('[data-trends-body]');
   const switches = [...root.querySelectorAll('[data-trends-period]')];
+  const group = switches[0]?.closest('[role="radiogroup"]') || null;
+  const indicator = root.querySelector('[data-trends-indicator]');
   let period = readPeriod(storage);
   let metricId = 'landing';
   let tableView = false;
@@ -141,8 +178,31 @@ export function createTrendsView(root, { storage = globalThis.localStorage } = {
 
   const destroyCharts = () => { charts.forEach(chart => chart.destroy()); charts = []; };
 
-  function syncSwitch() {
-    switches.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.trendsPeriod === period)));
+  // Week · Month · Year: a radio group whose raised pill slides to the period
+  // chosen, like the planner's Day · Week · Horizon (slidePill; it simply
+  // moves with reduced motion). Before the pill has measured itself (the
+  // dashboard starts hidden), the chosen button carries the look.
+  function placeIndicator(animateMove) {
+    const active = switches.find(button => button.dataset.trendsPeriod === period);
+    if (indicator && active?.offsetWidth) slidePill(indicator, active, animateMove);
+  }
+
+  function syncSwitch({ animate = false } = {}) {
+    switches.forEach(button => {
+      const on = button.dataset.trendsPeriod === period;
+      button.classList.toggle('is-active', on);
+      button.setAttribute('aria-checked', String(on));
+      button.tabIndex = on ? 0 : -1;
+    });
+    placeIndicator(animate);
+  }
+
+  function choosePeriod(next) {
+    if (!PERIODS.includes(next) || next === period) return;
+    period = next;
+    savePeriod(storage, period);
+    syncSwitch({ animate: true });
+    render();
   }
 
   function currencies() { return saleCurrencies(series.sales); }
@@ -312,12 +372,18 @@ export function createTrendsView(root, { storage = globalThis.localStorage } = {
     renderDetail(body.querySelector('[data-trend-detail]'));
   }
 
-  switches.forEach(button => button.addEventListener('click', () => {
-    if (button.dataset.trendsPeriod === period) return;
-    period = button.dataset.trendsPeriod;
-    savePeriod(storage, period);
-    render();
-  }));
+  switches.forEach(button => button.addEventListener('click', () => choosePeriod(button.dataset.trendsPeriod)));
+  // The arrows (and Home, End) move the choice, and the focus with it; Tab leaves the group.
+  group?.addEventListener('keydown', event => {
+    const at = Math.max(0, switches.indexOf(event.target.closest('[data-trends-period]')));
+    const target = periodKeyTarget(event.key, at, switches.length);
+    if (target < 0) return;
+    event.preventDefault();
+    switches[target].focus();
+    choosePeriod(switches[target].dataset.trendsPeriod);
+  });
+  // The pill measures itself once the dashboard is shown, and again whenever the group changes width.
+  if (group && typeof ResizeObserver === 'function') new ResizeObserver(() => placeIndicator(false)).observe(group);
 
   body.addEventListener('click', event => {
     const tile = event.target.closest('[data-trend-metric]');

@@ -29,6 +29,7 @@
     <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5.5 19.5a6.5 6.5 0 0 1 13 0"/></symbol>
     <symbol id="i-close" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></symbol>
+    <symbol id="i-stats" viewBox="0 0 24 24"><path d="M5 19.5V11M12 19.5V5M19 19.5v-6"/></symbol>
     <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.5c.5 4.3 2.2 6 6.5 6.5-4.3.5-6 2.2-6.5 6.5-.5-4.3-2.2-6-6.5-6.5 4.3-.5 6-2.2 6.5-6.5Z"/><path d="M18.5 15.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5Z"/></symbol>
   </svg>
 
@@ -152,18 +153,21 @@
         <img src="../../favicon.svg" alt="" width="24" height="24" loading="lazy" decoding="async">
         <span><b>Daily Planner</b> By <a href="https://bemorin.com/" rel="noopener">Ben Morin</a></span>
       </div>
-      <nav class="foot__links" aria-label="Footer">
-        <a href="../../">Open the planner</a>
-        <a href="../../teams/">Team gift</a>
-        <a href="../../partners/">Partners</a>
-        <a href="../../contact/">Ask a question</a>
+      <nav class="foot__links" aria-label="Social links" hidden>
+        <span class="foot__social" data-social hidden></span>
       </nav>
-      <nav class="foot__legal" aria-label="Legal">
-        <a href="../../legal/privacy/">Privacy</a>
-        <a href="../../legal/terms/">Terms</a>
-        <a href="../../legal/cookies/">Cookies</a>
-        <a href="../../legal/">Legal notice</a>
-      </nav>
+    </div>
+    <div class="wrap foot__base">
+      <div class="foot__links">
+        <nav class="foot__legal" aria-label="Legal">
+          <a href="../../legal/privacy/">Privacy</a>
+          <a href="../../legal/terms/">Terms</a>
+          <a href="../../legal/cookies/">Cookies</a>
+          <a href="../../legal/">Legal notice</a>
+        </nav>
+        <a href="../../contact/">Contact</a>
+      </div>
+      <a class="foot__counts" href="../#privacy" data-counts-link hidden><svg class="i" aria-hidden="true"><use href="#i-stats"/></svg>What this page counts</a>
     </div>
   </footer>
 </body>
