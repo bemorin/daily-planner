@@ -6,10 +6,10 @@
  * (1.22.1, 1.22.2…) keep the same note and are never asked about again.
  */
 export const WHATS_NEW = Object.freeze({
-  version: '1.32',
+  version: '1.33',
   items: Object.freeze([
-    'A Help link can now open the planner straight on How it works.',
-    'The contact and team forms are simpler: no box to tick before you send.',
-    'On a phone, the welcome, Teams, Partners and Contact pages have a menu that reaches every section.'
+    'Partners get a private page with the visits through their link, their sales and each team commission: pending, earned, paid or waiting.',
+    'The Contact and Teams forms ask you to tick a box again, with a label that says exactly what you agree to.',
+    'The privacy notice now says how visits through a partner’s link are counted: a daily total, nothing about you.'
   ])
 });

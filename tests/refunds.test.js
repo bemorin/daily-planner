@@ -182,7 +182,7 @@ test('a full refund of Plus refuses the link, revokes the licence and emails the
     }), label);
     await settle();
     const [notice] = ownerEmails(resend);
-    assert.equal(notice.body.subject, 'Refund: Daily Planner Plus (29.00 EUR)', label);
+    assert.equal(notice.body.subject, 'Refund: Daily Planner Plus (€29.00)', label);
     assert.match(notice.body.text, /Plus was switched off: the activation link no longer works/);
     assert.match(notice.body.text, /Buyer: buyer@example\.com/);
     assert.match(notice.headers['idempotency-key'], /^[0-9a-f]{64}$/);
@@ -252,7 +252,7 @@ test('a partial refund revokes nothing and asks the owner; the refund that compl
     const row = await store.getRefund('ref_part01');
     assert.deepEqual([row.fullRefund, row.item, row.revoked, row.amount], [false, 'plus', '', 1000], label);
     await settle();
-    assert.equal(ownerEmails(resend).at(-1).body.subject, 'Partial refund to check: Daily Planner Plus (10.00 EUR of 29.00 EUR)', label);
+    assert.equal(ownerEmails(resend).at(-1).body.subject, 'Partial refund to check: Daily Planner Plus (€10.00 of €29.00)', label);
     assert.match(ownerEmails(resend).at(-1).body.text, /Nothing was switched off/);
     // The rest is refunded later: Creem now reports the transaction as refunded.
     creem.transactions.tran_part01 = transaction('tran_part01', 'ord_ch_partial0001', { status: 'refunded', refunded: 2900 });
@@ -272,7 +272,7 @@ test('a dispute revokes like a full refund (memory and D1)', async t => {
     const row = await store.getRefund('disp_01');
     assert.deepEqual([row.kind, row.fullRefund, row.item], ['dispute', true, 'plus'], label);
     await settle();
-    assert.equal(ownerEmails(resend).at(-1).body.subject, 'Dispute: Daily Planner Plus (29.00 EUR)', label);
+    assert.equal(ownerEmails(resend).at(-1).body.subject, 'Dispute: Daily Planner Plus (€29.00)', label);
     assert.match(ownerEmails(resend).at(-1).body.text, /Answer the dispute in Creem/);
   });
 });
@@ -290,7 +290,7 @@ test('a refund that matches no purchase is recorded, answered 200 and shown, wit
   assert.deepEqual(store.data.revocations.map(row => [row.target, row.source]), [['order:ord_not_ours', 'ref_foreign1']]);
   assert.equal(foreign.revoked, 'order:ord_not_ours');
   await settle();
-  assert.equal(ownerEmails(resend)[0].body.subject, 'Refund not matched (29.00 EUR)');
+  assert.equal(ownerEmails(resend)[0].body.subject, 'Refund not matched (€29.00)');
   assert.match(ownerEmails(resend)[0].body.text, /paste its checkout id \(ch_…\), the gift code or the licence id/);
   assert.doesNotMatch(ownerEmails(resend)[0].body.text, /will not be delivered/, 'no order known: nothing held back');
   assert.match(ownerEmails(resend)[1].body.text, /If it paid for a purchase that has not been delivered yet, it will not be delivered/);
@@ -332,7 +332,7 @@ test('a refund whose transaction Creem can’t read is kept as waiting, answered
     assert.equal((await store.getRefund('ref_retry1')).attempts, 3, label);
     const [waitingEmail, ...more] = ownerEmails(resend);
     assert.equal(more.length, 0, `${label}: once per refund`);
-    assert.equal(waitingEmail.body.subject, 'Refund waiting: Creem’s transaction could not be read (29.00 EUR)', label);
+    assert.equal(waitingEmail.body.subject, 'Refund waiting: Creem’s transaction could not be read (€29.00)', label);
     assert.match(waitingEmail.body.text, /could not be read from Creem, twice \(Creem answered HTTP 500/);
     assert.match(waitingEmail.body.text, /Refunds and disputes → Revoke/);
 
@@ -343,7 +343,7 @@ test('a refund whose transaction Creem can’t read is kept as waiting, answered
     const done = await store.getRefund('ref_retry1');
     assert.deepEqual([done.status, done.note, done.item, done.fullRefund, done.attempts], ['', '', 'plus', true, 3], label);
     await settle();
-    assert.deepEqual(ownerEmails(resend).map(call => call.body.subject), ['Refund waiting: Creem’s transaction could not be read (29.00 EUR)', 'Refund: Daily Planner Plus (29.00 EUR)'], label);
+    assert.deepEqual(ownerEmails(resend).map(call => call.body.subject), ['Refund waiting: Creem’s transaction could not be read (€29.00)', 'Refund: Daily Planner Plus (€29.00)'], label);
     assert.notEqual(ownerEmails(resend)[0].headers['idempotency-key'], ownerEmails(resend)[1].headers['idempotency-key'], label);
     assert.equal((await sendWebhook(api, refundEvent({ id: 'ref_retry1', tran: 'tran_retry' }))).status, 200, `${label}: then once only`);
     await settle();
@@ -351,7 +351,7 @@ test('a refund whose transaction Creem can’t read is kept as waiting, answered
   });
   const waiting = refundWaitingEmail({ refund: { kind: 'dispute', id: 'disp_w', amount: 500, currency: 'USD', transactionId: 'tran_w' }, error: 'Timed out.' });
   assert.match(waiting.text, /twice \(Timed out\)\. Nothing was switched off yet\./);
-  assert.equal(waiting.subject, 'Dispute waiting: Creem’s transaction could not be read (5.00 USD)');
+  assert.equal(waiting.subject, 'Dispute waiting: Creem’s transaction could not be read ($5.00)');
   assert.match(waiting.text, /Dispute: disp_w/);
 });
 
@@ -491,7 +491,7 @@ test('refund events, transactions and scopes are read defensively', () => {
   assert.equal(shownScope({ kind: 'refund', transactionStatus: 'refunded', amount: null }), 'full', 'no amount: nothing to compare');
 
   const unclear = refundNoticeEmail({ refund: { kind: 'refund', id: 'ref_u', amount: 1000, currency: 'EUR' }, scope: 'unclear', match: { item: 'gift', giftCode: 'ABCD-EFGH-JKMN', giftOrg: 'Acme <b>', checkoutId: 'ch_1' } });
-  assert.equal(unclear.subject, 'Refund to check: gift ABCD-EFGH-JKMN (10.00 EUR)');
+  assert.equal(unclear.subject, 'Refund to check: gift ABCD-EFGH-JKMN (€10.00)');
   assert.match(unclear.text, /could not tell whether the refund was full\. Nothing was switched off/);
   assert.match(unclear.text, /lower the seats of the gift/);
   assert.match(unclear.html, /Acme &lt;b&gt;/);
@@ -623,8 +623,8 @@ test('a delayed partial refund says what it was, and one Restore undoes the whol
     assert.equal((await checkLicense(api, license)).body.revoked, true, label);
     await settle();
     const notice = ownerEmails(resend).at(-1).body;
-    assert.equal(notice.subject, 'Refund: Daily Planner Plus (5.00 EUR, now refunded in full)', label);
-    assert.match(notice.text, /A partial refund of 5\.00 EUR completed a full refund of a Daily Planner Plus purchase \(29\.00 EUR paid\)\./);
+    assert.equal(notice.subject, 'Refund: Daily Planner Plus (€5.00, now refunded in full)', label);
+    assert.match(notice.text, /A partial refund of €5\.00 completed a full refund of a Daily Planner Plus purchase \(€29\.00 paid\)\./);
     assert.doesNotMatch(notice.text, /refunded .* in full: 5\.00/);
 
     // The other refund of the same payment: already switched off, so no second decision.
@@ -677,7 +677,7 @@ test('a refund from the other Creem mode than its order is ignored, recorded as 
     assert.equal((await checkLicense(api, license)).body.revoked, false, label);
     assert.match(warnings.join('\n'), /ref_mode1 is in live mode but order ord_ch_modetest0001 was paid in test mode; ignored/);
     await settle();
-    assert.equal(ownerEmails(resend).at(-1).body.subject, 'Refund not matched (29.00 EUR)', label);
+    assert.equal(ownerEmails(resend).at(-1).body.subject, 'Refund not matched (€29.00)', label);
     assert.match(ownerEmails(resend).at(-1).body.text, /in live mode, but the order it names was paid in test mode, so it was ignored/);
   });
 });

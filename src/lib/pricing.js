@@ -58,6 +58,29 @@ export const PARTNER_PROGRAM = Object.freeze({
   individualYearlyCap: Object.freeze({ EUR: 300, USD: 300 })
 });
 
+/**
+ * The partner program's calendar (1.33): an individual's yearly cap counts
+ * team commissions by the day they were paid in Europe/Paris, where the
+ * publisher pays from, and the owner dates each payment by that day. Visits
+ * through partner links are counted per UTC day, apart from this.
+ * Intl.DateTimeFormat knows the time zone in browsers, Node and Workers alike.
+ */
+export const PARTNER_TIME_ZONE = 'Europe/Paris';
+let partnerDayFormat = null;
+/** The day (YYYY-MM-DD) a moment (ms or an ISO date) falls on in Europe/Paris; '' when it can't be read. */
+export function partnerDay(time) {
+  const ms = typeof time === 'number' ? time : Date.parse(String(time ?? ''));
+  if (!Number.isFinite(ms)) return '';
+  partnerDayFormat ||= new Intl.DateTimeFormat('en-CA', { timeZone: PARTNER_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const parts = Object.fromEntries(partnerDayFormat.formatToParts(ms).map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+/** The calendar year of a moment in Europe/Paris (an individual's cap year), NaN when it can't be read. */
+export const partnerYear = time => {
+  const day = partnerDay(time);
+  return day ? Number(day.slice(0, 4)) : Number.NaN;
+};
+
 /** Team gift: one price for the company by number of people (seats). */
 export const TEAM_TIERS = Object.freeze([
   Object.freeze({ plan: 'up-to-10', seats: 10, price: Object.freeze({ EUR: 195, USD: 195 }) }),

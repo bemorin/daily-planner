@@ -4,22 +4,23 @@ import * as config from '../../src/config.js';
 import { fetchPartnerStatement, plannerApiEnabled } from '../../src/lib/planner-api.js';
 import { legalDetails } from '../../legal/legal-details.js';
 import { setupTopBar } from '../../welcome/page-kit.js';
-import { capLines, capWords, creemRows, formatUnits, payWords, perCurrency, statementFigures, statementParams, teamLineView, updatedLabel, visitFigures } from '../statement-model.js';
+import { capLines, capWords, creemRows, formatUnits, payAction, payWords, statementFigures, statementParams, teamLineViews, teamTotals, updatedLabel, visitFigures } from '../statement-model.js';
 
 /* ============================================================================
-   A partner's private statement (/partners/statement/?code=CODE&key=KEY):
+   A partner's private statement (/partners/statement/#code=CODE&key=KEY):
    the visits their link brought, the purchases made through it, each team
    commission's state, the yearly cap of an individual and how to get paid.
    The key comes with the link the owner sends (signed by the API, see
-   server/partners.js statementKey); it only travels to GET
-   /api/partners/statement and is never stored. The page sends no referrer
-   (its address carries the key) and counts nothing.
+   server/partners.js statementKey), after `#`: a browser never sends that
+   part to a server. The page posts it to /api/partners/statement in the
+   body, never in an address, and never stores it. The page sends no
+   referrer, counts nothing, and the service worker never caches it (sw.js).
    ============================================================================ */
 
 const qs = (selector, root = document) => root.querySelector(selector);
 const qsa = (selector, root = document) => [...root.querySelectorAll(selector)];
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
-const params = statementParams(location.search);
+let params = statementParams(location.hash);
 const views = { loading: qs('[data-view="loading"]'), error: qs('[data-view="error"]'), ready: qs('[data-view="ready"]') };
 let shown = '';
 
@@ -60,9 +61,7 @@ function renderCreem(statement) {
 
 function renderTeam(statement) {
   const lines = statement.team || [];
-  const partner = statement.partner;
-  qs('[data-team]').innerHTML = lines.map(line => {
-    const view = teamLineView(line, { partner });
+  qs('[data-team]').innerHTML = teamLineViews(statement).map(view => {
     return `<li class="st-line${view.off ? ' is-off' : ''}">
       <span class="st-line__when">${esc(view.soldOn)}</span>
       <span class="st-line__what">${esc(view.what)}</span>
@@ -71,13 +70,7 @@ function renderTeam(statement) {
     </li>`;
   }).join('');
   qs('[data-team-empty]').hidden = lines.length > 0;
-  const totals = statement.totals || {};
-  const parts = [
-    ['To be paid', perCurrency(totals.toPay)],
-    ['Pending', perCurrency(totals.pending)],
-    ['Above your yearly cap', perCurrency(totals.held)],
-    ['Paid', perCurrency(totals.paid)]
-  ].filter(([, value]) => value);
+  const parts = teamTotals(statement);
   qs('[data-team-totals]').innerHTML = parts.map(([label, value]) => `<span><small>${esc(label)}</small><b>${esc(value)}</b></span>`).join('');
   qs('[data-team-totals]').hidden = !parts.length;
 }
@@ -117,7 +110,11 @@ function render(statement) {
   renderTeam(statement);
   renderCap(statement);
   qs('[data-pay-team]').textContent = payWords(statement, { email: supportEmail() });
-  qs('[data-ask]').textContent = statement.partner === 'business' ? 'Send an invoice' : 'Send your details';
+  // Bank details and invoices go by email (never through the question form): the button opens one, ready to send.
+  const action = payAction(statement, { email: supportEmail() });
+  const send = qs('[data-pay-send]');
+  send.hidden = !action;
+  if (action) { send.href = action.href; send.textContent = action.label; }
   show('ready');
 }
 
@@ -132,12 +129,14 @@ async function load() {
   }
   const result = await fetchPartnerStatement(params);
   if (result.ok && result.statement) { render(result.statement); return; }
-  if (result.status === 404) showError({ title: 'This link isn’t valid', text: 'Open your statement from the private link we sent you, exactly as it is. If it still doesn’t open, ask us for your link again: links change when we renew our keys.' });
+  if (result.status === 404) showError({ title: 'This link isn’t valid', text: 'Open your statement from the private link we sent you, exactly as it is. If it still doesn’t open, ask us for your link again: when we send you a new one, the one before stops working.' });
   else if (result.status === 429) showError({ title: 'Too many requests', text: 'Wait a minute, then try again.', retry: true });
-  else showError({ title: 'Your statement didn’t load', text: result.error || 'Something went wrong. Try again in a moment.', retry: true });
+  else showError({ title: 'Your statement didn’t load', text: result.status >= 500 || !result.error ? 'Something went wrong on our side. Try again in a moment.' : result.error, retry: true });
 }
 
 qs('[data-retry]').addEventListener('click', () => { show('loading'); load(); });
+// Another link pasted into this tab: read its code and key.
+addEventListener('hashchange', () => { params = statementParams(location.hash); show('loading'); load(); });
 qs('[data-refresh]').addEventListener('click', async event => {
   const button = event.currentTarget;
   button.disabled = true;

@@ -80,7 +80,7 @@ test('the card: what you owe first (with Mark as paid), Creem’s commissions fo
   const table = /<table class="owner-table owner-partner-team">[\s\S]*?<\/table>/.exec(html)[0];
   assert.deepEqual([...table.matchAll(/data-owner-attn="partner:([^"]+)"/g)].map(match => match[1]), ['ch_wait', 'ch_due', 'ch_paid']);
   // COACH_ANNA was paid once, so checked: nothing to check before paying again.
-  assert.match(table, /<button class="secondary-button owner-pay" type="button" data-owner-payout="ch_due" data-owner-payout-code="COACH_ANNA" data-owner-payout-amount="16\.25 EUR" data-owner-payout-cents="1625" data-owner-payout-currency="EUR" data-owner-payout-exact="1" data-owner-payout-checks="" data-owner-payout-rest="1625" data-owner-payout-partner="individual">Mark as paid<\/button><\/div>/);
+  assert.match(table, /<button class="secondary-button owner-pay" type="button" data-owner-payout="ch_due" data-owner-payout-code="COACH_ANNA" data-owner-payout-amount="16\.25 EUR" data-owner-payout-cents="1625" data-owner-payout-currency="EUR" data-owner-payout-exact="1" data-owner-payout-checks="" data-owner-payout-rest="1625" data-owner-payout-partner="individual" data-owner-payout-earned="\d{4}-\d{2}-\d{2}">Mark as paid<\/button><\/div>/);
   assert.match(table, /data-owner-payout-undo="ch_paid"[^>]*>Undo<\/button>/);
   assert.equal((table.match(/data-owner-payout="/g) || []).length, 1, 'only the earned one can be marked');
   assert.match(text(table), /16\.25 EUR 10% of 162\.50 EUR before tax/);
@@ -112,7 +112,7 @@ test('a team commission to check says so on its row: an invented code, a refund 
   const markup = id => new RegExp(`<tr data-owner-attn="partner:${id}"[\\s\\S]*?</tr>`).exec(html)[0];
   // BADCODE: nothing confirmed it — said under the code and in the state, with Not a partner next to Mark as paid.
   assert.match(row('ch_bad'), /BADCODE Not confirmed .* To pay Check that BADCODE is a partner in Creem → Affiliate Hub before paying/);
-  assert.match(markup('ch_bad'), /data-owner-payout-checks="code" data-owner-payout-rest="1625" data-owner-payout-partner="individual">Mark as paid<\/button><button class="text-button" type="button" data-owner-code-reject="BADCODE" data-owner-row="ch_bad" aria-label="Mark BADCODE as not a partner">Not a partner<\/button>/);
+  assert.match(markup('ch_bad'), /data-owner-payout-checks="code" data-owner-payout-rest="1625" data-owner-payout-partner="individual" data-owner-payout-earned="\d{4}-\d{2}-\d{2}">Mark as paid<\/button><button class="text-button" type="button" data-owner-code-reject="BADCODE" data-owner-row="ch_bad" aria-label="Mark BADCODE as not a partner">Not a partner<\/button>/);
   // Still pending: when it is earned, then the check; Not a partner already offered.
   assert.match(row('ch_soon'), /Pending Earned on 2026-10-31 if not refunded · Check that BADCODE is a partner/);
   assert.match(markup('ch_soon'), /data-owner-code-reject="BADCODE"/);
@@ -168,12 +168,17 @@ test('the dashboard renders the card from the view and marks commissions as paid
   const admin = readFileSync(new URL('../admin/admin.js', import.meta.url), 'utf8');
   assert.match(admin, /\$\('\[data-owner-partners\]'\)\.innerHTML = partnersCardHtml\(summary, \{ money, exact: exactMoney, number, day \}\);/);
   assert.match(admin, /sendJson\('admin\/partners\/payouts', 'POST', asked\.body\)/);
-  assert.match(admin, /checkout: dataset\.ownerPayout, note: answer\.trim\(\)\.slice\(0, 200\), \.\.\.\(checks\.length \? \{ confirmed: true \} : \{\}\), \.\.\.\(amount == null \? \{\} : \{ amount \}\)/, 'the owner confirms the checks, and gives the amount paid for an upper bound');
-  assert.match(admin, /call\(`admin\/partners\/payouts\/\$\{encodeURIComponent\(dataset\.ownerPayoutUndo\)\}`, \{ method: 'DELETE' \}\)/);
+  // Mark as paid: one dialog (./payout-dialog.js) asks the checks, the amount of an upper bound, the day paid and a reference.
+  assert.match(admin, /const asked = await openPayoutDialog\(dataset, \{ money: exactMoney, rate: TEAM_RATE \}\);/);
+  const dialog = readFileSync(new URL('../admin/payout-dialog.js', import.meta.url), 'utf8');
+  assert.match(dialog, /body: \{ checkout: details\.checkout, note: String\(values\.note \|\| ''\)\.trim\(\)\.slice\(0, NOTE_MAX\), paidOn, \.\.\.\(details\.checks\.length \? \{ confirmed: true \} : \{\}\), \.\.\.\(amount == null \? \{\} : \{ amount \}\)/, 'the owner confirms the checks, and gives the amount paid for an upper bound');
+  // Undo names the payment it takes back, and the API is told which one.
+  assert.match(admin, /const path = `admin\/partners\/payouts\/\$\{encodeURIComponent\(dataset\.ownerPayoutUndo\)\}`;/);
+  assert.match(admin, /await call\(`\$\{path\}\$\{payment\}`, \{ method: 'DELETE' \}\);/);
   assert.match(admin, /sendJson\('admin\/partners\/rejections', 'POST', \{ code \}\)/);
   assert.match(admin, /call\(`admin\/partners\/rejections\/\$\{encodeURIComponent\(code\)\}`, \{ method: 'DELETE' \}\)/);
   // After Mark as paid, Undo or Not a partner, focus stays on the row (its new first button), never on the page.
-  assert.match(admin, /await load\(\);\n {2}showResult\('\[data-owner-payout-result\]', done\);\n {2}focusPartnerRow\(row, focusCode\);/);
+  assert.match(admin, /await load\(\);\n {2}showResult\('\[data-owner-payout-result\]', done, isError\);\n {2}focusPartnerRow\(row, focusCode\);/);
   // The request list (admin/requests-view.js) shows the partner code and whether it is confirmed.
   assert.match(admin, /teamRequestsTableHtml\(rows, \{ codeChecks, teamRate: TEAM_RATE, when, number \}\)/, 'the request list gets the checks and the team rate');
   const requests = readFileSync(new URL('../admin/requests-view.js', import.meta.url), 'utf8');

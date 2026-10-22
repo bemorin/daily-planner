@@ -438,7 +438,7 @@ test('a question needs no team: no company, number of people or timing; an invoi
   // The box is required again (1.33): a question sent by a 1.32 page, without `consent`, is refused.
   const { consent, ...unticked } = question;
   assert.equal(consent, true, 'what the form sends once the box is ticked');
-  assert.equal(validateTeamRequest(unticked, now).error, 'Please tick the box so we can use your details to reply to you.');
+  assert.equal(validateTeamRequest(unticked, now).error, 'Please tick the box so we can use your details to reply to you (reload the page if you don’t see the box).');
   assert.equal(validateTeamRequest({ ...question, website: 'bot' }, now).spam, true);
   assert.doesNotMatch(validateTeamRequest({ ...question, email: 'nope' }, now).error, /work email/, 'any address, not a work one');
   // A team request without its team's fields is refused, as before.

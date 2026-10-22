@@ -379,7 +379,7 @@ function checkSignIn(ctx, items) {
       patch(tokenItem, {
         state: 'problem',
         summary: `Weak: easy to guess. Use at least ${ADMIN_TOKEN_MIN} random letters and digits (Generate a value below).`,
-        fix: variableFix(configVariableOf('ADMIN_TOKEN'), { edit: true, value: 'a new token: Generate a value below.', after: ['Changing it signs every session out: sign in again with the new token.'] })
+        fix: variableFix(configVariableOf('ADMIN_TOKEN'), { edit: true, value: 'a new token: Generate a value below.', after: ['Changing it signs every session out: sign in again with the new token.', 'It also changes every partner’s private statement link and every waitlist removal link: the old ones stop working. Copy each partner’s new link from the Partners card and send it to them.'] })
       });
     } else patch(tokenItem, { summary: 'Long and varied enough to resist guessing.' });
   }

@@ -12,7 +12,9 @@
 // (./attention.js) and marks the cards and rows it points to.
 
 import { ATTENTION_SECTIONS, attentionBySection, attentionNote, attentionWhen, buildAttention, setupChecks } from './attention.js';
-import { partnersCardHtml, payoutCheckWords, yearlyCapText } from './partners-view.js';
+import { partnersCardHtml, yearlyCapText } from './partners-view.js';
+// Mark as paid: what to check, the amount, the day paid and a reference, in one dialog.
+import { openPayoutDialog, parseAmount } from './payout-dialog.js';
 // The requests table: a question reads as one, without a team's details.
 import { teamRequestsTableHtml } from './requests-view.js';
 import { createTrendsView } from './trends-view.js';
@@ -58,9 +60,9 @@ const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', ma
 // This page's own release, kept in step with package.json and src/config.js
 // (tests/admin-version.test.js). Not imported: it must come from this very
 // file, so an old cached admin.js shows its old number.
-const APP_VERSION = '1.32.0';
+const APP_VERSION = '1.33.0';
 // What Reload fetches again past the browser cache before opening the page anew.
-const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './requests-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/vendor/motion.js', '../src/lib/pricing.js', '../legal/legal-details.js', '../src/lib/text.js'];
+const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './payout-dialog.js', './requests-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/vendor/motion.js', '../src/lib/pricing.js', '../legal/legal-details.js', '../src/lib/text.js'];
 const RELOAD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/></svg>';
 
 class ApiError extends Error {
@@ -781,13 +783,6 @@ function closeGiftPanel() {
   button?.focus();
 }
 
-function parseAmount(text) {
-  const clean = String(text || '').replace(/[\s  ]/g, '').replace(',', '.');
-  if (!clean) return { amount: null };
-  if (!/^\d{1,9}(?:\.\d{1,2})?$/.test(clean)) return { error: 'Write the amount like 595 or 595.50.' };
-  return { amount: Math.round(Number(clean) * 100) };
-}
-
 function readSeats(input) {
   const seats = Number(input.value);
   return Number.isInteger(seats) && seats >= 1 && seats <= 100000 ? seats : 0;
@@ -1131,62 +1126,23 @@ function focusPartnerRow(checkoutId, code = '') {
 }
 
 /**
- * Mark as paid asks what the row says to check first (a code nothing confirmed,
- * a refund or the tax not recorded) and, when the commission is only an upper
- * bound, the amount actually paid; the API is told the owner checked. For an
- * individual, only what fits under the yearly cap is paid (`cents` <
- * `rest`): the prompt says what waits, and for an upper bound asks whether
- * more is owed (then it is kept as a part).
- */
-function askPayout(dataset) {
-  const code = dataset.ownerPayoutCode || 'this partner';
-  const currency = dataset.ownerPayoutCurrency;
-  const checks = String(dataset.ownerPayoutChecks || '').split(' ').filter(Boolean);
-  const first = checks.length ? `${payoutCheckWords({ code, checks }, TEAM_RATE).map(line => `• ${line}.`).join('\n')}\n\n` : '';
-  const business = dataset.ownerPayoutPartner === 'business';
-  const cents = Number(dataset.ownerPayoutCents) || 0;
-  const rest = Number(dataset.ownerPayoutRest) || cents;
-  const capped = cents > 0 && cents < rest;
-  let amount = null;
-  let part = false;
-  let shown = dataset.ownerPayoutAmount || 'commission';
-  const capWords = capped ? `Only ${shown} fits under ${code}’s yearly cap for an individual. The rest (${dataset.ownerPayoutExact === '0' ? 'at most ' : ''}${exactMoney(rest - cents, currency)}) waits until ${code} invoices you as a business, or until 1 January.\n\n` : '';
-  const how = business ? 'against their invoice' : 'by bank transfer';
-  let asked = false;
-  if (dataset.ownerPayoutExact === '0') {
-    const typed = window.prompt(`${first}${capWords}${exactMoney(rest, currency)} is the most ${code} can have earned. Type the commission you paid ${how} (at most ${shown}):`, '');
-    if (typed === null) return null;
-    const parsed = parseAmount(typed);
-    if (parsed.error || !parsed.amount || parsed.amount > cents) return { error: parsed.error || `Type the commission you paid: more than nothing and at most ${shown}.` };
-    amount = parsed.amount;
-    shown = exactMoney(amount, currency);
-    // The cap stopped it short of the most it can be: was that all of it?
-    if (capped && amount === cents) part = !window.confirm(`Was ${shown} the whole commission? OK if it was. Cancel if ${code} is owed more: the rest then waits above the yearly cap.`);
-    asked = true;
-  } else if (capped) {
-    amount = cents;
-  }
-  const answer = window.prompt(`${asked ? '' : `${first}${capWords}`}Mark ${code}’s ${shown} as paid? Do it once ${business ? 'you have paid their invoice' : 'the bank transfer is sent'}. Add its reference if you like (optional, only you see it).`, '');
-  if (answer === null) return null;
-  return {
-    body: { checkout: dataset.ownerPayout, note: answer.trim().slice(0, 200), ...(checks.length ? { confirmed: true } : {}), ...(amount == null ? {} : { amount }), ...(part ? { part: true } : {}) },
-    done: capped && (part || dataset.ownerPayoutExact !== '0') ? `Marked as paid: ${code}, ${shown}. The rest waits above the yearly cap.` : `Marked as paid: ${code}, ${shown}.`
-  };
-}
-
-/**
  * A partner's private statement link, from the API (signed there, never kept
  * here): copied, and shown under the card so it can be copied by hand too.
+ * `renew` makes a new link first (asked before): the one sent before stops
+ * working.
  */
-async function copyStatementLink(code, button) {
+async function copyStatementLink(code, button, { renew = false } = {}) {
   if (!/^[A-Za-z0-9_-]{2,64}$/.test(code)) { showResult('[data-owner-payout-result]', 'Type a partner code: 2 to 64 letters, digits, - or _.', true); return; }
+  if (renew && !window.confirm(`Make a new private link for ${code}? The link you sent before stops working at once, for every case of the code (CAMILLE and Camille alike). Then send ${code} the new one.`)) return;
   if (button) button.disabled = true;
   try {
-    const { url } = await sendJson('admin/partners/links', 'POST', { code });
+    const { url } = await sendJson('admin/partners/links', 'POST', renew ? { code, renew: true } : { code });
     await copyText(url, button);
     const shown = $('[data-owner-statement-shown]');
-    if (shown) { shown.hidden = false; shown.innerHTML = copyRow(`${code}’s private link`, url); }
-    showResult('[data-owner-payout-result]', `${code}’s private statement link is copied. Send it to ${code} only: anyone with it can see their statement.`);
+    if (shown) { shown.hidden = false; shown.innerHTML = copyRow(`${code}’s ${renew ? 'new ' : ''}private link`, url); }
+    showResult('[data-owner-payout-result]', renew
+      ? `${code} has a new private statement link, copied: the one sent before no longer opens. Send the new one to ${code} only.`
+      : `${code}’s private statement link is copied. Send it to ${code} only: anyone with it can see their statement.`);
   } catch (error) {
     if (error.kind === 'unauthorized') { handleError(error); return; }
     showResult('[data-owner-payout-result]', failureText(error), true);
@@ -1202,30 +1158,62 @@ $('[data-owner-partners]').addEventListener('submit', event => {
   copyStatementLink(String(form.elements.code.value || '').trim(), form.querySelector('button[type="submit"]'));
 });
 
-// Mark an earned team commission as paid (after the bank transfer) or undo it; mark a code as not a partner or undo it.
+/**
+ * Undo on a team commission: the question names the exact payment it takes
+ * back (the row's words, from partners-view.js undoWords), and the API is
+ * told which one, so nothing else is undone if the commission changed since
+ * the page loaded (the card is then drawn again, and says so). A payment
+ * from an earlier cap year needs a second, explicit yes (the API refuses it
+ * otherwise): it changes that year's figures. Answers { text, isError } to
+ * show once the card is drawn again, or null when the owner said no.
+ */
+async function undoPayout(dataset) {
+  const code = dataset.ownerPayoutCode || 'this partner';
+  if (!window.confirm(dataset.ownerPayoutQuestion || `Mark ${code}’s commission as not paid?`)) return null;
+  const path = `admin/partners/payouts/${encodeURIComponent(dataset.ownerPayoutUndo)}`;
+  const payment = dataset.ownerPayoutPayment ? `?payment=${encodeURIComponent(dataset.ownerPayoutPayment)}` : '';
+  try {
+    await call(`${path}${payment}`, { method: 'DELETE' });
+  } catch (error) {
+    const message = String(error?.message || '');
+    if (error.kind !== 'failed') throw error;
+    if (/\(HTTP 404\)/.test(message)) return { text: 'There was no payment left to undo: the card is up to date.', isError: false };
+    if (/changed since the page loaded/.test(message)) return { text: `${code}’s payments changed since the page loaded, so nothing was undone. The card now shows them: check, then undo again if you need to.`, isError: true };
+    const year = /made in (\d{4}): undoing it changes/.exec(message)?.[1];
+    if (!year) throw error;
+    if (!window.confirm(`This payment was made in ${year}: undoing it changes ${year}’s figures, the yearly cap included. Undo it anyway?`)) return null;
+    await call(`${path}${payment ? `${payment}&` : '?'}confirm=1`, { method: 'DELETE' });
+  }
+  return { text: dataset.ownerPayoutDone || `Marked as not paid: ${code}.`, isError: false };
+}
+
+// Mark an earned team commission as paid (after the bank transfer) or undo it; mark a code as not a partner or undo it;
+// a partner's status; their private link, copied or made anew.
 $('[data-owner-partners]').addEventListener('click', async event => {
   const link = event.target.closest('[data-owner-statement-link]');
   if (link && !link.disabled) { copyStatementLink(link.dataset.ownerStatementLink, link); return; }
+  const renew = event.target.closest('[data-owner-statement-renew], [data-owner-statement-renew-form]');
+  if (renew && !renew.disabled) {
+    const code = renew.dataset.ownerStatementRenew ?? String(renew.closest('form')?.elements.code.value || '').trim();
+    copyStatementLink(code, renew, { renew: true });
+    return;
+  }
   const button = event.target.closest('[data-owner-payout], [data-owner-payout-undo], [data-owner-code-reject], [data-owner-code-undo], [data-owner-partner-status]');
   if (!button || button.disabled || button.getAttribute('aria-pressed') === 'true') return;
   const { dataset } = button;
   let focusCode = '';
   const row = dataset.ownerPayout || dataset.ownerPayoutUndo || dataset.ownerRow || '';
-  const undoing = dataset.ownerPayoutUndo !== undefined || dataset.ownerCodeUndo !== undefined;
+  const undoingPayout = dataset.ownerPayoutUndo !== undefined;
   let send;
   let done;
   if (dataset.ownerPayout !== undefined) {
-    const asked = askPayout(dataset);
-    if (!asked) return;
-    if (asked.error) { showResult('[data-owner-payout-result]', asked.error, true); button.focus(); return; }
+    // One dialog asks what to check, the amount when it is an upper bound, the day paid and a reference.
+    const asked = await openPayoutDialog(dataset, { money: exactMoney, rate: TEAM_RATE });
+    if (!asked) { button.focus(); return; }
     send = () => sendJson('admin/partners/payouts', 'POST', asked.body);
     done = asked.done;
-  } else if (dataset.ownerPayoutUndo !== undefined) {
-    const code = dataset.ownerPayoutCode || 'this partner';
-    const part = dataset.ownerPayoutPart === '1';
-    if (!window.confirm(part ? `Undo the last payment to ${code}? It counts as not paid again.` : `Mark ${code}’s commission as not paid?`)) return;
-    send = () => call(`admin/partners/payouts/${encodeURIComponent(dataset.ownerPayoutUndo)}`, { method: 'DELETE' });
-    done = part ? `The last payment to ${code} is undone.` : `Marked as not paid: ${code}.`;
+  } else if (undoingPayout) {
+    send = () => undoPayout(dataset);
   } else if (dataset.ownerPartnerStatus !== undefined) {
     const code = dataset.ownerPartnerCode;
     const status = dataset.ownerPartnerStatus === 'business' ? 'business' : 'individual';
@@ -1249,16 +1237,22 @@ $('[data-owner-partners]').addEventListener('click', async event => {
     done = `${code} counts as a partner again.`;
   }
   button.disabled = true;
+  let isError = false;
   try {
-    await send();
+    const answer = await send();
+    // Undo answers its own words, or null when the owner said no.
+    if (undoingPayout) {
+      if (answer === null) { button.disabled = false; button.focus(); return; }
+      ({ text: done, isError } = answer);
+    }
   } catch (error) {
     button.disabled = false;
     if (error.kind === 'unauthorized') { handleError(error); return; }
-    // "failed" on an Undo is usually a 404: already undone. Just refresh.
-    if (!undoing || error.kind !== 'failed') { showResult('[data-owner-payout-result]', failureText(error), true); button.focus(); return; }
+    // "failed" on the Undo of a rejection is usually a 404: already undone. Just refresh.
+    if (dataset.ownerCodeUndo === undefined || error.kind !== 'failed') { showResult('[data-owner-payout-result]', failureText(error), true); button.focus(); return; }
   }
   await load();
-  showResult('[data-owner-payout-result]', done);
+  showResult('[data-owner-payout-result]', done, isError);
   focusPartnerRow(row, focusCode);
 });
 

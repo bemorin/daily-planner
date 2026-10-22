@@ -260,7 +260,7 @@ function refundItems(summary, now, { money }) {
  * 0007 is missing: nothing could be marked as paid (Setup says to run it).
  */
 function partnerItems(summary, now, { money }) {
-  if (summary.partnersUnavailable || summary.partnerCommissionsUnavailable) return [];
+  if (summary.partnersUnavailable || summary.partnersFailed || summary.partnerCommissionsUnavailable) return [];
   const rows = Array.isArray(summary.partners?.toPay) ? summary.partners.toPay : [];
   const rate = Number(summary.partnerProgram?.teamRate) || PARTNER_PROGRAM.teamRate;
   const pay = rows.filter(row => row?.checkoutId).map(row => {
@@ -268,7 +268,7 @@ function partnerItems(summary, now, { money }) {
     const basis = row.base != null ? `${rate}% of ${money(row.base, row.currency)} ${row.basis === 'paid' ? 'paid, tax included' : 'before tax'}` : '';
     // Only what can be paid now: the commission, what is left of it, or what fits under an individual's yearly cap.
     const cents = Number.isInteger(row.payable) ? row.payable : row.commission;
-    const capped = row.held > 0 ? `${money(row.held, row.currency)} more waits above the yearly cap for an individual` : '';
+    const capped = row.held > 0 ? `${row.exact === false ? 'at most ' : ''}${money(row.held, row.currency)} more waits above the yearly cap for an individual` : '';
     const how = row.partner === 'business' ? 'against their invoice, then Mark as paid' : 'by bank transfer, then Mark as paid';
     return {
       kind: 'partner-pay', key: `partner-pay:${row.checkoutId}`, section: 'partners', rows: [`partner:${row.checkoutId}`], icon: 'partner', at: row.earnedAt, when: 'earned',
@@ -283,16 +283,22 @@ function partnerItems(summary, now, { money }) {
  * One line per individual partner and currency with team commissions held
  * above the yearly cap: nothing to pay now, but the partner can invoice as a
  * business (then switch them to Business), or the rest is paid from 1 January.
+ * Codes that differ only by case are one partner (one cap): one line, under
+ * the first of them. “At most” when part of what waits is an upper bound.
  */
 function heldItems(summary, money) {
   const codes = Array.isArray(summary.partners?.codes) ? summary.partners.codes : [];
   const team = Array.isArray(summary.partners?.team) ? summary.partners.team : [];
-  return codes.filter(row => row?.partner !== 'business' && Array.isArray(row.cap?.lines)).flatMap(row => row.cap.lines.filter(line => line.held > 0).map(line => {
-    const held = team.filter(sale => sale.code === row.code && sale.currency === line.currency && sale.held > 0);
+  const keyOf = code => String(code ?? '').toUpperCase();
+  const seen = new Set();
+  const partners = codes.filter(row => row?.partner !== 'business' && Array.isArray(row.cap?.lines) && !seen.has(keyOf(row.code)) && seen.add(keyOf(row.code)));
+  return partners.flatMap(row => row.cap.lines.filter(line => line.held > 0).map(line => {
+    const held = team.filter(sale => keyOf(sale.code) === keyOf(row.code) && sale.currency === line.currency && sale.held > 0);
     const oldest = held.map(sale => sale.earnedAt).filter(Boolean).sort()[0] || '';
+    const atMost = line.heldAtMost || held.some(sale => sale.exact === false) ? 'at most ' : '';
     return {
-      kind: 'partner-held', key: `partner-held:${row.code}:${line.currency}`, section: 'partners', rows: held.map(sale => `partner:${sale.checkoutId}`), icon: 'partner', at: oldest, when: 'earned',
-      text: `${row.code}: ${money(line.held, line.currency)} above the yearly cap for an individual`,
+      kind: 'partner-held', key: `partner-held:${keyOf(row.code)}:${line.currency}`, section: 'partners', rows: held.map(sale => `partner:${sale.checkoutId}`), icon: 'partner', at: oldest, when: 'earned',
+      text: `${row.code}: ${atMost}${money(line.held, line.currency)} above the yearly cap for an individual`,
       detail: `Paid in ${row.cap.year}: ${money(line.paid, line.currency)} of ${money(line.limit, line.currency)} · payable once ${row.code} invoices you as a business (switch them to Business), or from 1 January`
     };
   }));

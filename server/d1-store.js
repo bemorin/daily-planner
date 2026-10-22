@@ -6,15 +6,18 @@
 // Reads that join a 0007 table fall back to the older query while it is
 // missing, and writes to it are skipped, so a deployment works before the
 // migration is applied (the dashboard says it is missing). The 0008 tables
-// (partner statuses and visits) answer "no such table" until it is applied:
-// the router treats every partner as an individual and counts no visit.
+// (partner statuses, link versions and visits) answer "no such table" until
+// it is applied: the router treats every partner as an individual with link
+// version 0 and counts no visit. One partner's rows are read whatever the
+// case of the code (COLLATE NOCASE: codes are ASCII); partner_profiles and
+// partner_visits are keyed by the code in capitals (partnerKey).
 // Every value goes through bound parameters (D1 allows at most 100 per query,
 // so id lists are deleted in chunks).
 // The stripe_session columns of gifts and purchases hold the checkout reference
 // (a Creem checkout id; older rows may hold an earlier reference).
 
 import { normalizeGift } from './gifts.js';
-import { normalizeCodeRejection, normalizePartnerSale, normalizePayout, normalizeProfile, storedSaleKind } from './partners.js';
+import { normalizeCodeRejection, normalizePartnerSale, normalizePayout, normalizeProfile, partnerKey, storedSaleKind } from './partners.js';
 
 const waitlistColumns = 'id, email, devices, note, locale, app_version AS appVersion, drive_seen AS driveSeen, created_at AS createdAt';
 const feedbackColumns = 'id, app_version AS appVersion, rating, kind, message, email, platform, created_at AS createdAt';
@@ -148,47 +151,57 @@ export function createD1Store(db) {
       if (Number.isInteger(row.tax)) await run('INSERT INTO partner_sale_taxes (checkout_id, tax) VALUES (?, ?) ON CONFLICT(checkout_id) DO NOTHING', row.checkoutId, row.tax).catch(skipMissing);
       return added;
     },
-    /** The latest sales, newest first; `code`: one partner's only (their statement). */
+    /** The latest sales, newest first; `code`: one partner's only, in any case (their statement). */
     listPartnerSales: ({ limit = 2000, code = '' } = {}) => withFallback(
-      () => all(`SELECT partner_sales.checkout_id AS checkoutId, code, kind, plan, amount, partner_sale_taxes.tax AS tax, currency, member, mode, created_at AS createdAt FROM partner_sales LEFT JOIN partner_sale_taxes ON partner_sale_taxes.checkout_id = partner_sales.checkout_id${code ? ' WHERE code = ?' : ''} ORDER BY created_at DESC, partner_sales.checkout_id LIMIT ?`, ...(code ? [code] : []), limit),
-      () => all(`SELECT ${partnerSaleColumns} FROM partner_sales${code ? ' WHERE code = ?' : ''} ORDER BY created_at DESC, checkout_id LIMIT ?`, ...(code ? [code] : []), limit)
+      () => all(`SELECT partner_sales.checkout_id AS checkoutId, code, kind, plan, amount, partner_sale_taxes.tax AS tax, currency, member, mode, created_at AS createdAt FROM partner_sales LEFT JOIN partner_sale_taxes ON partner_sale_taxes.checkout_id = partner_sales.checkout_id${code ? ' WHERE code = ? COLLATE NOCASE' : ''} ORDER BY created_at DESC, partner_sales.checkout_id LIMIT ?`, ...(code ? [code] : []), limit),
+      () => all(`SELECT ${partnerSaleColumns} FROM partner_sales${code ? ' WHERE code = ? COLLATE NOCASE' : ''} ORDER BY created_at DESC, checkout_id LIMIT ?`, ...(code ? [code] : []), limit)
     ).then(rows => rows.map(normalizePartnerSale)),
     // Team commissions the owner marked as paid (migration 0007): one row per checkout, or per part of one
     // (`<checkout>.<n>`, server/partners.js payoutPartId) when an individual's yearly cap held the rest back.
     addPartnerPayout: async row => await run('INSERT INTO partner_payouts (checkout_id, code, amount, currency, note, paid_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(checkout_id) DO NOTHING',
       row.checkoutId, row.code, row.amount ?? null, row.currency || '', row.note || '', row.paidAt) > 0,
     listPartnerPayouts: ({ code = '' } = {}) => (code
-      ? all(`SELECT ${payoutColumns} FROM partner_payouts WHERE code = ? ORDER BY paid_at DESC, checkout_id`, code)
+      ? all(`SELECT ${payoutColumns} FROM partner_payouts WHERE code = ? COLLATE NOCASE ORDER BY paid_at DESC, checkout_id`, code)
       : all(`SELECT ${payoutColumns} FROM partner_payouts ORDER BY paid_at DESC, checkout_id`)).then(rows => rows.map(normalizePayout)),
     deletePartnerPayout: async checkoutId => await run('DELETE FROM partner_payouts WHERE checkout_id = ?', checkoutId) > 0,
     // Codes the owner found no partner for (migration 0007): their team commissions earn nothing.
     addPartnerCodeRejection: async row => await run('INSERT INTO partner_code_rejections (code, created_at) VALUES (?, ?) ON CONFLICT(code) DO NOTHING', row.code, row.createdAt) > 0,
     listPartnerCodeRejections: () => all('SELECT code, created_at AS createdAt FROM partner_code_rejections ORDER BY code').then(rows => rows.map(normalizeCodeRejection)),
     deletePartnerCodeRejection: async code => await run('DELETE FROM partner_code_rejections WHERE code = ?', code) > 0,
-    /** Revocations of partner sales' checkouts ({ checkoutId, reason }): a refund, a dispute or the owner switched them off. Needs migration 0005 too. `code`: one partner's. */
-    partnerSaleStates: ({ code = '' } = {}) => all(`SELECT partner_sales.checkout_id AS checkoutId, revocations.reason AS reason FROM partner_sales JOIN revocations ON revocations.target = 'checkout:' || partner_sales.checkout_id${code ? ' WHERE partner_sales.code = ?' : ''}`, ...(code ? [code] : [])),
-    /** Refunds of partner sales ({ checkoutId, amount, currency, fullRefund }), so partial ones come off the revenue. Needs migration 0005 too. `code`: one partner's. */
-    partnerSaleRefunds: ({ code = '' } = {}) => all(`SELECT refunds.checkout_id AS checkoutId, refunds.amount AS amount, refunds.currency AS currency, refunds.full_refund AS fullRefund FROM partner_sales JOIN refunds ON refunds.checkout_id = partner_sales.checkout_id WHERE refunds.status <> 'pending'${code ? ' AND partner_sales.code = ?' : ''}`, ...(code ? [code] : []))
+    /** Revocations of partner sales' checkouts ({ checkoutId, reason }): a refund, a dispute or the owner switched them off. Needs migration 0005 too. `code`: one partner's, in any case. */
+    partnerSaleStates: ({ code = '' } = {}) => all(`SELECT partner_sales.checkout_id AS checkoutId, revocations.reason AS reason FROM partner_sales JOIN revocations ON revocations.target = 'checkout:' || partner_sales.checkout_id${code ? ' WHERE partner_sales.code = ? COLLATE NOCASE' : ''}`, ...(code ? [code] : [])),
+    /** Refunds of partner sales ({ checkoutId, amount, currency, fullRefund }), so partial ones come off the revenue. Needs migration 0005 too. `code`: one partner's, in any case. */
+    partnerSaleRefunds: ({ code = '' } = {}) => all(`SELECT refunds.checkout_id AS checkoutId, refunds.amount AS amount, refunds.currency AS currency, refunds.full_refund AS fullRefund FROM partner_sales JOIN refunds ON refunds.checkout_id = partner_sales.checkout_id WHERE refunds.status <> 'pending'${code ? ' AND partner_sales.code = ? COLLATE NOCASE' : ''}`, ...(code ? [code] : []))
       .then(rows => rows.map(row => ({ ...row, amount: row.amount == null ? null : Number(row.amount), fullRefund: Number(row.fullRefund) === 1 }))),
-    // Partner statuses (migration 0008): one row per code, individual or business. No name, no bank details.
-    setPartnerProfile: async row => await run('INSERT INTO partner_profiles (code, status, updated_at) VALUES (?, ?, ?) ON CONFLICT(code) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at',
-      row.code, row.status, row.updatedAt) > 0,
+    // Partner profiles (migration 0008): one row per partner (the code in capitals), individual or business, and
+    // the version of their private statement link. No name, no bank details. Setting a status keeps the version.
+    setPartnerProfile: async row => await run('INSERT INTO partner_profiles (code, status, link_version, updated_at) VALUES (?, ?, 0, ?) ON CONFLICT(code) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at',
+      partnerKey(row.code), row.status, row.updatedAt) > 0,
     listPartnerProfiles: ({ code = '' } = {}) => (code
-      ? all('SELECT code, status, updated_at AS updatedAt FROM partner_profiles WHERE code = ?', code)
-      : all('SELECT code, status, updated_at AS updatedAt FROM partner_profiles ORDER BY code')).then(rows => rows.map(normalizeProfile)),
+      ? all('SELECT code, status, link_version AS linkVersion, updated_at AS updatedAt FROM partner_profiles WHERE code = ?', partnerKey(code))
+      : all('SELECT code, status, link_version AS linkVersion, updated_at AS updatedAt FROM partner_profiles ORDER BY code')).then(rows => rows.map(normalizeProfile)),
     /**
-     * One visit through a partner's link (migration 0008), added to that code's count for the UTC day. A code
-     * already counted that day, with a status or with a sale always counts; another one only while the day has
-     * fewer than `maxCodes` codes, so made-up codes can't fill the table. True when it was counted.
+     * A partner's link version, their row made first when there is none (an individual, version 0); `renew`
+     * adds one to it, so the link sent before stops working. Answers the version now in force.
      */
-    countPartnerVisit: ({ code, day, maxCodes }) => withFallback(
-      () => run(`INSERT INTO partner_visits (code, day, count) SELECT ?, ?, 1 WHERE EXISTS (SELECT 1 FROM partner_visits WHERE code = ? AND day = ?) OR (SELECT COUNT(*) FROM partner_visits WHERE day = ?) < ? OR EXISTS (SELECT 1 FROM partner_profiles WHERE code = ?) OR EXISTS (SELECT 1 FROM partner_sales WHERE code = ?) ON CONFLICT(code, day) DO UPDATE SET count = count + 1`,
-        code, day, code, day, day, maxCodes, code, code),
-      () => run(`INSERT INTO partner_visits (code, day, count) SELECT ?, ?, 1 WHERE EXISTS (SELECT 1 FROM partner_visits WHERE code = ? AND day = ?) OR (SELECT COUNT(*) FROM partner_visits WHERE day = ?) < ? OR EXISTS (SELECT 1 FROM partner_profiles WHERE code = ?) ON CONFLICT(code, day) DO UPDATE SET count = count + 1`,
-        code, day, code, day, day, maxCodes, code)
-    ).then(changes => changes > 0),
-    /** A code's visits per day from `fromDay` on: [{ day, count }], oldest first. */
-    listPartnerVisits: ({ code, fromDay }) => all('SELECT day, count FROM partner_visits WHERE code = ? AND day >= ? ORDER BY day', code, fromDay)
+    async partnerLinkVersion({ code, renew = false, updatedAt }) {
+      const key = partnerKey(code);
+      if (renew) await run('INSERT INTO partner_profiles (code, status, link_version, updated_at) VALUES (?, ?, 1, ?) ON CONFLICT(code) DO UPDATE SET link_version = partner_profiles.link_version + 1, updated_at = excluded.updated_at', key, 'individual', updatedAt);
+      else await run('INSERT INTO partner_profiles (code, status, link_version, updated_at) VALUES (?, ?, 0, ?) ON CONFLICT(code) DO NOTHING', key, 'individual', updatedAt);
+      const [row] = await all('SELECT link_version AS linkVersion FROM partner_profiles WHERE code = ?', key);
+      return normalizeProfile({ code: key, linkVersion: row?.linkVersion }).linkVersion;
+    },
+    /**
+     * One visit through a partner's link (migration 0008), added to that partner's count for the UTC day (the
+     * code in capitals) — only for a code we know: one with a recorded sale (in any case) or a profile. True when
+     * it was counted.
+     */
+    countPartnerVisit: ({ code, day }) => run('INSERT INTO partner_visits (code, day, count) SELECT ?, ?, 1 WHERE EXISTS (SELECT 1 FROM partner_profiles WHERE code = ?) OR EXISTS (SELECT 1 FROM partner_sales WHERE code = ? COLLATE NOCASE) ON CONFLICT(code, day) DO UPDATE SET count = count + 1',
+      partnerKey(code), day, partnerKey(code), code).then(changes => changes > 0),
+    /** Deletes the daily visit rows before `beforeDay` (kept about 400 days). Answers how many went. */
+    prunePartnerVisits: ({ beforeDay }) => run('DELETE FROM partner_visits WHERE day < ?', beforeDay),
+    /** A partner's visits per day from `fromDay` on: [{ day, count }], oldest first. */
+    listPartnerVisits: ({ code, fromDay }) => all('SELECT day, count FROM partner_visits WHERE code = ? AND day >= ? ORDER BY day', partnerKey(code), fromDay)
       .then(rows => rows.map(row => ({ day: String(row.day), count: Number(row.count) || 0 }))),
     /** Visits per code from `fromDay` on (the dashboard's Partners card): [{ code, count }]. */
     partnerVisitTotals: ({ fromDay }) => all('SELECT code, SUM(count) AS count FROM partner_visits WHERE day >= ? GROUP BY code ORDER BY code', fromDay)

@@ -527,7 +527,8 @@ test('the terms’ partner program: the rates, the days and the minimum come fro
   assert.match(words, /A purchase refunded in full, or disputed, earns nothing\. A team commission is earned once the gift’s 14-day refund period has passed without a full refund or a dispute\. If only part of a team gift is refunded, its commission is on the part kept: for example, half the price refunded halves the commission\./);
   assert.doesNotMatch(words, /If only part of the price is refunded/, 'a partial refund is about team gifts: Creem’s 25% follows its own terms');
   assert.match(words, /on the 1st and the 15th of each month, once your balance reaches €50 or \$50/);
-  assert.match(words, /We pay team commissions by bank transfer within 30 days of being earned/);
+  assert.match(words, /We pay team commissions by bank transfer within 30 days of their becoming payable: once earned, or, for what waits above the yearly cap below, once it can be paid\./);
+  assert.match(words, /send your bank details, or your invoice, only by email, never through a form on this site/, 'bank details never go through the question form');
   assert.match(words, /spam/);
   assert.match(words, /bid on “Daily Planner” or similar names in search ads/);
   assert.match(words, /promise discounts, features or results we don’t offer/);

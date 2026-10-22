@@ -62,7 +62,7 @@ export const CONFIG_VARIABLES = Object.freeze([
 
   // ---- Functions ---------------------------------------------------------------
   v({ name: 'ADMIN_TOKEN', where: 'runtime', group: 'functions', level: 'required', secret: true, type: 'Secret', format: 'admin-token', generate: 'token',
-    source: 'Generate a value here, or run npm run admin:secret.', unlocks: 'Signing in to the dashboard and this page; people leaving the waitlist on their own.', blocks: 'Without it every admin route answers 503 and nobody can leave the waitlist from the app. A short token can be guessed.' }),
+    source: 'Generate a value here, or run npm run admin:secret.', unlocks: 'Signing in to the dashboard and this page; people leaving the waitlist on their own; partners’ private statement links.', blocks: 'Without it every admin route answers 503, nobody can leave the waitlist from the app and no partner statement opens. A short token can be guessed. Changing it signs every session out and changes every partner’s private statement link and every waitlist removal link: send partners their new links from the Partners card.' }),
   v({ name: 'ADMIN_TOTP_SECRET', where: 'runtime', group: 'functions', level: 'recommended', secret: true, type: 'Secret', format: 'totp', generate: 'totp',
     source: 'Generate a value here (or npm run admin:secret), then add it to your authenticator app with “Enter a setup key”.', unlocks: 'An authenticator code at sign-in, on top of the token.', blocks: 'Without it the token alone opens the dashboard. A value that isn’t base32 locks every admin route (503).' }),
   v({ name: 'PUBLIC_BASE_URL', where: 'runtime', group: 'functions', level: 'optional', secret: false, type: 'Text', format: 'base-url',
@@ -348,10 +348,11 @@ CREATE TABLE IF NOT EXISTS partner_code_rejections (
   }),
   Object.freeze({
     file: '0008_partner_profiles.sql',
-    unlocks: 'Partner statuses (an individual, capped each year, or a business that invoices) and the visits each partner’s link brings, for their private statement.',
+    unlocks: 'Partner statuses (an individual, capped each year, or a business that invoices), new private statement links, and the visits each partner’s link brings, for their private statement.',
     sql: `CREATE TABLE IF NOT EXISTS partner_profiles (
   code TEXT PRIMARY KEY,
   status TEXT NOT NULL DEFAULT 'individual',
+  link_version INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS partner_visits (

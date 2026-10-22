@@ -877,6 +877,9 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .owner-table .owner-partner-link { min-height: 26px; margin: 0; padding: 0 4px; font-size: .74rem; white-space: nowrap; }
 
+/* Copy private link and New link stay together: under the status switch when the column is narrow. */
+.owner-partner-links { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 8px; }
+
 /* An individual's yearly cap: what is paid this year, with a thin meter, and what waits above it. */
 .owner-partner-owed { min-width: 210px; }
 
@@ -905,6 +908,37 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .owner-partners { min-width: 860px; }
 
+/* Codes that differ only by case: one partner. The note wraps under the code instead of widening the column. */
+.owner-partners .owner-partner-same { max-width: 34ch; white-space: normal; }
+
 .owner-partners thead th { white-space: nowrap; }
 
 .owner-partner-note--visits { margin: 10px 0 0; }
+
+/* Mark as paid (./payout-dialog.js): a native dialog over the dashboard, in the page's light or dark. */
+.owner-dialog { width: min(500px, calc(100% - 32px)); max-height: calc(100% - 32px); margin: auto; padding: 0; overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-strong); color: var(--ink); box-shadow: var(--shadow); }
+
+.owner-dialog::backdrop { background: var(--modal-scrim, rgba(32, 29, 25, .3)); }
+
+.owner-dialog .owner-subform { gap: 14px; padding: 20px; border: 0; border-radius: 0; background: transparent; }
+
+.owner-dialog .owner-subform__head h2 { margin: 0; font-size: 1rem; letter-spacing: -.02em; }
+
+.owner-dialog .owner-subform__head p { font-size: .82rem; }
+
+.owner-pay__checks,
+.owner-pay__more { display: grid; gap: 8px; min-width: 0; margin: 0; padding: 10px 14px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+
+.owner-pay__checks { border-color: color-mix(in srgb, var(--attn-warn) 45%, var(--line)); }
+
+.owner-pay legend { padding: 0 4px; color: var(--ink); font-size: .76rem; font-weight: 650; }
+
+.owner-pay__checks ul { display: grid; gap: 4px; margin: 0; padding-left: 18px; color: var(--ink); font-size: .8rem; line-height: 1.5; }
+
+.owner-pay__tick,
+.owner-pay__more label { display: flex; align-items: flex-start; gap: 8px; color: var(--ink); font-size: .8rem; font-weight: 600; line-height: 1.45; cursor: pointer; }
+
+.owner-pay input[type="checkbox"],
+.owner-pay input[type="radio"] { flex: none; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--ink); }
+
+.owner-pay .owner-small { margin-top: -8px; }

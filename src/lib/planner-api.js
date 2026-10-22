@@ -246,8 +246,9 @@ const REFERRAL_PARAMS = ['ref', 'via', 'aff'];
  * team request — is credited to that partner. Returns the code it kept, or ''.
  * The visit itself is counted for the partner's statement (countPartnerVisit):
  * the code only, at most once a day per code on this device, and never when
- * the anonymous counts are switched off here. Nothing else is sent until a
- * checkout or a request.
+ * the anonymous counts are switched off here; the server adds it to that
+ * partner's daily total only for a code it knows. Nothing else is sent until
+ * a checkout or a request.
  */
 export function rememberReferral(search = globalThis.location?.search || '', { storage = globalThis.localStorage, now = Date.now() } = {}) {
   let params;
@@ -290,12 +291,13 @@ export function countPartnerVisit(code, { counted = null, storage = globalThis.l
 }
 
 /**
- * A partner's private statement (partners/statement/): GET
- * partners/statement?code=…&key=… with the code and the key of their link.
+ * A partner's private statement (partners/statement/): POST
+ * partners/statement { code, key }, the code and the key of their link, in
+ * the body — never in an address, where a log or a cache could keep them.
  * Answers { ok, statement } or { ok: false, status, error } (404: the link
  * isn't valid).
  */
-export const fetchPartnerStatement = ({ code, key }) => request(`partners/statement?${new URLSearchParams({ code: String(code || ''), key: String(key || '') })}`, { method: 'GET' });
+export const fetchPartnerStatement = ({ code, key }) => request('partners/statement', { body: { code: String(code || ''), key: String(key || '') } });
 
 /** The remembered partner code, or '' once it is older than REFERRAL_DAYS (30) or unreadable. */
 export function referralCode({ storage = globalThis.localStorage, now = Date.now() } = {}) {

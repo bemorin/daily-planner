@@ -50,7 +50,7 @@ test('the server refuses every kind of request without the box, with words that 
   for (const [kind, body] of Object.entries(bodies)) {
     assert.ok(validateTeamRequest({ ...body, consent: true }, now).entry, `${kind}: ticked`);
     for (const consent of [undefined, false, 'true', 'on', 1]) {
-      assert.equal(validateTeamRequest({ ...body, consent }, now).error, 'Please tick the box so we can use your details to reply to you.', `${kind}: ${String(consent)}`);
+      assert.equal(validateTeamRequest({ ...body, consent }, now).error, 'Please tick the box so we can use your details to reply to you (reload the page if you don’t see the box).', `${kind}: ${String(consent)}`);
     }
   }
   assert.equal(validateTeamRequest({ ...bodies.question, website: 'bot' }, now).spam, true, 'a bot is still dropped quietly');

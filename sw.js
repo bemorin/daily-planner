@@ -1,4 +1,4 @@
-const CACHE = 'daily-planner-1.32.0';
+const CACHE = 'daily-planner-1.33.0';
 const CORE = [
   './', './index.html', './styles.css', './runtime-config.js', './app.js', './manifest.webmanifest',
   './favicon.svg', './favicon.ico', './apple-touch-icon.png', './pwa-192.png', './pwa-512.png',
@@ -68,20 +68,35 @@ a:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   return new Response(html, { status: 503, statusText: 'Offline', headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
 }
 
+// Never touched: the API (feedback, waitlist, purchases), the owner dashboard
+// and a partner's private statement (its address carries a key).
+const UNTOUCHED = ['/api/', '/admin/', '/partners/statement/'];
+
+// What may be kept for offline use: same-origin answers without a query. An
+// address with one may carry a licence (?license=), a gift code (?gift=), a
+// checkout (?checkout_id=, ?purchase=) or a partner code: never stored here.
+// Offline, such a navigation still finds its page without the query.
+function keepable(url) {
+  return !url.search && !UNTOUCHED.some(path => url.pathname.includes(path));
+}
+
 self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  // API responses (feedback, waitlist, owner dashboard) are never cached.
-  if (url.pathname.includes('/api/') || url.pathname.includes('/admin/')) return;
+  if (UNTOUCHED.some(path => url.pathname.includes(path))) return;
 
   event.respondWith(
     fetch(request).then(response => {
-      if (response.ok) caches.open(CACHE).then(cache => cache.put(request, response.clone()));
+      // Cloned now, before the page reads the body: a clone made later finds it used.
+      if (response.ok && keepable(url)) {
+        const copy = response.clone();
+        caches.open(CACHE).then(cache => cache.put(request, copy)).catch(() => {});
+      }
       return response;
     }).catch(async () => {
-      const cached = await caches.match(request);
+      const cached = await caches.match(request, { ignoreSearch: request.mode === 'navigate' });
       if (cached) return cached;
       if (request.mode === 'navigate') {
         const scope = self.registration.scope;

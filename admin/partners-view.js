@@ -5,12 +5,14 @@
 // shown for information: Creem pays), each partner's figures — their status
 // (an individual, whose team commissions are capped each calendar year, or a
 // business that invoices), how much of the cap is paid and what waits above
-// it, the visits their link brought and their private statement link — then
-// the latest sales, each with where its commission stands. Pure: it returns
-// HTML (every value escaped) and is unit-tested (tests/admin-partners.test.js);
-// admin.js wires the buttons, and attention.js says the same checks in its own lines.
+// it, the visits their link brought and their private statement link (Copy,
+// or New link to replace it) — then the latest sales, each with where its
+// commission stands. Codes that differ only by case are one partner: the card
+// says so. Pure: it returns HTML (every value escaped) and is unit-tested
+// (tests/admin-partners.test.js); admin.js wires the buttons, and
+// attention.js says the same checks in its own lines.
 
-import { PARTNER_PROGRAM, teamTier } from '../src/lib/pricing.js';
+import { PARTNER_PROGRAM, partnerDay, partnerYear, teamTier } from '../src/lib/pricing.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 const plural = (count, word) => `${word}${Number(count) === 1 ? '' : 's'}`;
@@ -87,7 +89,8 @@ export function commissionState(sale, { day = defaultDay, money = defaultExact }
     }
     case 'held': return { label: 'Held', detail: [paidPart, 'Above the yearly cap for an individual: payable once they invoice as a business, or from 1 January'].filter(Boolean).join(' · '), tone: 'wait' };
     // Paid stays paid when the sale is refunded or disputed later: the money went out, and the state says what happened.
-    case 'paid': return { label: 'Paid', detail: [day(sale.paidAt), sale.paidNote, (sale.paidAmount < sale.commission && AFTER_PART[sale.state]) || AFTER_PAID[sale.state], sale.parts > 1 ? `in ${sale.parts} payments` : ''].filter(Boolean).join(' · '), tone: 'ok' };
+    // Paid past what it earns once part of the sale was refunded: the row says by how much.
+    case 'paid': return { label: 'Paid', detail: [day(sale.paidAt), sale.paidNote, (sale.paidAmount < sale.commission && AFTER_PART[sale.state]) || AFTER_PAID[sale.state], sale.overpaid > 0 ? `Paid ${money(sale.overpaid, sale.currency)} more than earned` : '', sale.parts > 1 ? `in ${sale.parts} payments` : ''].filter(Boolean).join(' · '), tone: 'ok' };
     case 'refunded': return { label: 'Refunded', detail: 'Earns nothing', tone: 'off' };
     case 'disputed': return { label: 'Disputed', detail: 'Earns nothing', tone: 'off' };
     case 'revoked': return { label: 'Switched off', detail: 'Earns nothing', tone: 'off' };
@@ -115,31 +118,51 @@ const struck = (html, off) => (off ? `<s>${html}</s><span class="sr-only"> (not 
 const pill = state => (state.label ? `<span class="owner-pill owner-pill--${esc(state.tone)}">${esc(state.label)}</span>` : '');
 const small = words => (words ? `<small class="owner-small">${esc(words)}</small>` : '');
 
+/**
+ * What Undo says on a team commission, about the exact payment it takes back
+ * (`undoPayment`: the one that settled it, else the latest part): { question,
+ * done }. “Undo the €116.25 paid on 22 Oct 2026? The €300.00 paid before
+ * stays paid.”; with nothing paid before, the commission counts as not paid
+ * again. A payment from an earlier cap year (before `year`) also says it
+ * changes that year's figures (the API asks to confirm it once more).
+ */
+export function undoWords(sale, { money = defaultExact, day = defaultDay, year = partnerYear(Date.now()) } = {}) {
+  const payment = sale?.undoPayment;
+  if (!payment) return { question: `Mark ${sale?.code || 'this partner'}’s commission as not paid?`, done: `Marked as not paid: ${sale?.code || 'this partner'}.` };
+  const what = `the ${money(payment.amount, sale.currency)} paid on ${day(payment.paidAt)}`;
+  const after = sale.paidBefore > 0 ? `The ${money(sale.paidBefore, sale.currency)} paid before stays paid.` : `${sale.code}’s commission counts as not paid again.`;
+  const paidYear = partnerYear(payment.paidAt);
+  const past = paidYear < year ? ` It was paid in ${paidYear}: undoing it changes ${paidYear}’s figures, the yearly cap included.` : '';
+  return { question: `Undo ${what}? ${after}${past}`, done: `Undone: ${what}. ${after}` };
+}
+
 /** The buttons of a team commission: Mark as paid, Not a partner, Undo — none while migration 0007 is missing. */
-function teamActions(sale, fmt, ready) {
+function teamActions(sale, fmt, { ready, year }) {
   if (!ready) return '';
   const checks = Array.isArray(sale.checks) ? sale.checks : [];
   const code = `data-owner-payout-code="${esc(sale.code)}"`;
   const reject = checks.includes('code') ? `<button class="text-button" type="button" data-owner-code-reject="${esc(sale.code)}" data-owner-row="${esc(sale.checkoutId)}" aria-label="${esc(`Mark ${sale.code} as not a partner`)}">Not a partner</button>` : '';
-  // A commission paid in part (an individual's yearly cap held the rest back): its latest payment can be undone.
-  const undoPart = sale.parts ? `<button class="text-button" type="button" data-owner-payout-undo="${esc(sale.checkoutId)}" ${code} data-owner-payout-part="1" aria-label="${esc(`Undo the last payment to ${sale.code}`)}">Undo</button>` : '';
+  // Undo names the exact payment it takes back (a commission paid in parts: the latest one; the API is told which).
+  const words = undoWords(sale, { money: fmt.exact, day: fmt.day, year });
+  const undo = sale.parts ? `<button class="text-button" type="button" data-owner-payout-undo="${esc(sale.checkoutId)}" ${code} data-owner-payout-payment="${esc(sale.undoPayment?.id || '')}" data-owner-payout-question="${esc(words.question)}" data-owner-payout-done="${esc(words.done)}" aria-label="${esc(`Undo ${sale.code}’s payment of ${fmt.exact(sale.undoPayment?.amount, sale.currency)}`)}">Undo</button>` : '';
   if (sale.status === 'earned') {
     const exact = sale.exact !== false;
     const payable = Number.isInteger(sale.payable) ? sale.payable : sale.commission;
     const rest = Number.isInteger(sale.rest) ? sale.rest : sale.commission;
     // What can be paid now: the whole commission (or what is left of it), or what fits under an individual's yearly cap.
-    const pay = `<button class="secondary-button owner-pay" type="button" data-owner-payout="${esc(sale.checkoutId)}" ${code} data-owner-payout-amount="${esc(fmt.exact(payable, sale.currency))}" data-owner-payout-cents="${esc(payable)}" data-owner-payout-currency="${esc(sale.currency)}" data-owner-payout-exact="${exact ? '1' : '0'}" data-owner-payout-checks="${esc(checks.join(' '))}" data-owner-payout-rest="${esc(rest)}" data-owner-payout-partner="${esc(sale.partner || 'individual')}">Mark as paid</button>`;
-    return `${pay}${reject}${undoPart}`;
+    // The day it was earned (Europe/Paris) is the earliest day the payment can be dated.
+    const pay = `<button class="secondary-button owner-pay" type="button" data-owner-payout="${esc(sale.checkoutId)}" ${code} data-owner-payout-amount="${esc(fmt.exact(payable, sale.currency))}" data-owner-payout-cents="${esc(payable)}" data-owner-payout-currency="${esc(sale.currency)}" data-owner-payout-exact="${exact ? '1' : '0'}" data-owner-payout-checks="${esc(checks.join(' '))}" data-owner-payout-rest="${esc(rest)}" data-owner-payout-partner="${esc(sale.partner || 'individual')}" data-owner-payout-earned="${esc(partnerDay(sale.earnedAt))}">Mark as paid</button>`;
+    return `${pay}${reject}${undo}`;
   }
-  if (sale.status === 'held') return `${reject}${undoPart}`;
+  if (sale.status === 'held') return `${reject}${undo}`;
   if (sale.status === 'pending') return reject;
-  if (sale.status === 'paid') return `<button class="text-button" type="button" data-owner-payout-undo="${esc(sale.checkoutId)}" ${code}>Undo</button>`;
+  if (sale.status === 'paid') return undo;
   if (sale.status === 'not-partner') return `<button class="text-button" type="button" data-owner-code-undo="${esc(sale.code)}" data-owner-row="${esc(sale.checkoutId)}" aria-label="${esc(`Undo: ${sale.code} is not a partner`)}">Undo</button>`;
   return '';
 }
 
 /** One team commission: date, partner, the gift, the commission, its state and the actions that fit it. */
-function teamRow(sale, fmt, { ready, rate }) {
+function teamRow(sale, fmt, { ready, rate, year }) {
   const state = commissionState(sale, { day: fmt.day, money: fmt.exact });
   const checks = Array.isArray(sale.checks) ? sale.checks : [];
   const words = payoutCheckWords(sale, rate);
@@ -149,7 +172,7 @@ function teamRow(sale, fmt, { ready, rate }) {
   const codeNote = sale.status === 'not-partner' ? 'Not a partner' : checks.includes('code') ? 'Not confirmed' : sale.partner === 'business' ? 'Business' : '';
   const refunds = [sale.refundedAmount ? `−${fmt.money(sale.refundedAmount, sale.currency)} refunded` : '', sale.refundUnknown ? 'part refunded, amount unknown' : ''].filter(Boolean);
   const figure = sale.status === 'paid' && sale.paidAmount != null ? fmt.exact(sale.paidAmount, sale.currency) : commissionFigure(sale, fmt.exact);
-  const actions = teamActions(sale, fmt, ready);
+  const actions = teamActions(sale, fmt, { ready, year });
   return `<tr data-owner-attn="partner:${esc(sale.checkoutId)}"${state.tone === 'off' ? ' class="is-off"' : ''}>
     <td class="owner-nowrap">${esc(fmt.day(sale.createdAt))}</td>
     <td><code>${esc(sale.code)}</code>${codeNote ? `<small class="owner-small${codeNote === 'Business' ? '' : ' owner-small--warn'}">${esc(codeNote)}</small>` : ''}</td>
@@ -189,19 +212,33 @@ export function partnerCapHtml(row, fmt = {}) {
   const lines = Array.isArray(row.cap?.lines) ? row.cap.lines : [];
   return lines.map(line => {
     const share = line.limit ? Math.min(100, Math.round(line.paid / line.limit * 100)) : 0;
-    const held = line.held > 0 ? `<small class="owner-small owner-small--warn">Above the yearly cap for an individual: ${esc(exact(line.held, line.currency))} — payable once they invoice as a business</small>` : '';
+    const held = line.held > 0 ? `<small class="owner-small owner-small--warn">Above the yearly cap for an individual: ${line.heldAtMost ? 'at most ' : ''}${esc(exact(line.held, line.currency))} — payable once they invoice as a business</small>` : '';
     return `<small class="owner-small owner-partner-cap"><span>Paid in ${esc(row.cap.year)}: ${esc(exact(line.paid, line.currency))} of ${esc(exact(line.limit, line.currency))}</span><span class="owner-cap-meter${share >= 100 ? ' is-full' : ''}" aria-hidden="true"><i style="width:${share}%"></i></span></small>${held}`;
   }).join('');
 }
 
-/** A partner's status switch (Individual / Business) — none while migration 0008 is missing — and their private statement link. */
+/**
+ * A partner's status switch (Individual / Business) and New link — none while
+ * migration 0008 is missing — and Copy private link.
+ */
 function partnerTools(row, { profilesReady }) {
   const code = esc(row.code);
   const status = row.partner === 'business' ? 'business' : 'individual';
   const button = (value, label) => `<button type="button" aria-pressed="${status === value}" data-owner-partner-status="${value}" data-owner-partner-code="${code}"${status === value ? ' class="is-active"' : ''}>${label}</button>`;
   const switcher = profilesReady ? `<span class="owner-partner-status" role="group" aria-label="${esc(`${row.code}’s status`)}">${button('individual', 'Individual')}${button('business', 'Business')}</span>` : '';
   const link = `<button class="text-button owner-partner-link" type="button" data-owner-statement-link="${code}" aria-label="${esc(`Copy ${row.code}’s private statement link`)}">Copy private link</button>`;
-  return `<span class="owner-partner-tools">${switcher}${link}</span>`;
+  const renew = profilesReady ? `<button class="text-button owner-partner-link" type="button" data-owner-statement-renew="${code}" aria-label="${esc(`Make a new private statement link for ${row.code}: the one sent before stops working`)}">New link</button>` : '';
+  return `<span class="owner-partner-tools">${switcher}<span class="owner-partner-links">${link}${renew}</span></span>`;
+}
+
+/** “CAMILLE and Camille”, “CAMILLE, Camille and camille”. */
+const andList = items => (items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items[0] || '');
+
+/** Codes that differ only by case: the same partner, counted together ('' for a code on its own). */
+export function samePartnerNote(row) {
+  const others = Array.isArray(row?.sameAs) ? row.sameAs : [];
+  if (!others.length) return '';
+  return `Same partner? ${andList([row.code, ...others])} are counted together for the cap, the status, the private link and the visits`;
 }
 
 /** One partner: sales, visits, Creem's commissions (for information) and yours to pay, with their status and yearly cap; a code nothing confirmed says so. */
@@ -215,9 +252,10 @@ function codeRow(row, fmt, check, { profilesReady = true } = {}) {
   const teamParts = [perCurrency(team.pending, fmt.exact, '') && `${perCurrency(team.pending, fmt.exact)} pending`, perCurrency(team.paid, fmt.exact, '') && `${perCurrency(team.paid, fmt.exact)} paid`].filter(Boolean).join(' · ');
   const teamLine = team.sales ? `${esc(perCurrency(team.toPay, fmt.exact))}${small(teamParts || `${fmt.number(team.sales)} ${plural(team.sales, 'sale')}`)}${partnerCapHtml(row, fmt)}` : '—';
   const codeNote = check === 'rejected' ? 'Not a partner (you checked)' : !check && team.sales ? 'Not confirmed' : '';
+  const same = samePartnerNote(row);
   const visits = row.visits == null ? '—' : fmt.number(row.visits);
   return `<tr>
-    <td><code>${esc(row.code)}</code>${codeNote ? `<small class="owner-small owner-small--warn">${esc(codeNote)}</small>` : ''}${partnerTools(row, { profilesReady })}</td>
+    <td><code>${esc(row.code)}</code>${codeNote ? `<small class="owner-small owner-small--warn">${esc(codeNote)}</small>` : ''}${same ? `<small class="owner-small owner-small--warn owner-partner-same">${esc(same)}</small>` : ''}${partnerTools(row, { profilesReady })}</td>
     <td class="num"><b>${fmt.number(row.sales)}</b>${small(off)}</td>
     <td class="num">${esc(visits)}</td>
     <td class="num owner-nowrap">${creemLine}</td>
@@ -265,7 +303,7 @@ export function commissionsSetupHtml(summary) {
 export function profilesSetupHtml(summary, program = PARTNER_PROGRAM) {
   if (!summary?.partnerProfilesUnavailable) return '';
   const cap = yearlyCapText(program);
-  return `<p class="owner-partner-setup" role="note">Run <code>migrations/0008_partner_profiles.sql</code> on the D1 database to mark a partner as a business and to count the visits their link brings. Until then every partner counts as an individual, with team commissions capped at ${esc(cap)} a calendar year.</p>`;
+  return `<p class="owner-partner-setup" role="note">Run <code>migrations/0008_partner_profiles.sql</code> on the D1 database to mark a partner as a business, to count the visits their link brings and to give a partner a new private link. Until then every partner counts as an individual, with team commissions capped at ${esc(cap)} a calendar year, and keeps the private link they have.</p>`;
 }
 
 /** Codes whose link brought visits and no sale yet (the last 30 days), one line; '' when none. */
@@ -276,12 +314,13 @@ export function visitsOnlyHtml(partners, fmt = {}) {
   return `<p class="owner-partner-note owner-partner-note--visits">Visits with no sale yet, last ${esc(partners.visitDays || 30)} days: ${rows.map(row => `<code>${esc(row.code)}</code> ${esc(number(row.count))}`).join(' · ')}.</p>`;
 }
 
-/** The private statement link of any code, even one with no sale yet: a code field and Copy private link. */
-export function statementLinkFormHtml() {
+/** The private statement link of any code, even one with no sale yet: a code field, Copy private link and (with migration 0008) New link. */
+export function statementLinkFormHtml({ profilesReady = true } = {}) {
+  const renew = profilesReady ? '<button class="text-button" type="button" data-owner-statement-renew-form>New link</button>' : '';
   return `<form class="owner-partner-linkform" data-owner-statement-form novalidate>
       <label for="owner-statement-code">Private statement link for a partner code</label>
-      <span class="owner-partner-linkform__row"><input id="owner-statement-code" name="code" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="64" pattern="[A-Za-z0-9_\\-]{2,64}" placeholder="CODE" required><button class="secondary-button" type="submit">Copy private link</button></span>
-      <small class="owner-small">Send it to that partner only: it shows their visits, sales and commissions, nothing about anyone else.</small>
+      <span class="owner-partner-linkform__row"><input id="owner-statement-code" name="code" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="64" pattern="[A-Za-z0-9_\\-]{2,64}" placeholder="CODE" required><button class="secondary-button" type="submit">Copy private link</button>${renew}</span>
+      <small class="owner-small">Send it to that partner only: it shows their visits, sales and commissions, nothing about anyone else. If it reached someone else, New link replaces it: the one sent before stops working.</small>
       <div class="owner-partner-linkform__shown" data-owner-statement-shown hidden></div>
     </form>`;
 }
@@ -307,11 +346,17 @@ export function partnersCardHtml(summary, fmt = {}) {
   if (summary?.partnersUnavailable) {
     return '<p class="owner-empty">The <code>partner_sales</code> table does not exist yet, so sales through a partner’s link are not recorded. Apply <code>migrations/0006_partners.sql</code> and <code>migrations/0007_partner_commissions.sql</code> to the D1 database (see <code>docs/FEEDBACK_AND_WAITLIST.md</code>).</p>';
   }
+  if (summary?.partnersFailed) {
+    return '<p class="owner-empty" role="alert">The partner figures couldn’t be read just now, so none are shown. Reload the dashboard to try again.</p>';
+  }
   const partners = summary?.partners || {};
   const codes = Array.isArray(partners.codes) ? partners.codes : [];
   const footnote = partnerFootnote(summary, f);
   const setup = `${commissionsSetupHtml(summary)}${profilesSetupHtml(summary, program)}`;
-  const linkForm = statementLinkFormHtml();
+  const profilesReady = !summary?.partnerProfilesUnavailable;
+  const linkForm = statementLinkFormHtml({ profilesReady });
+  // The cap year now (Europe/Paris): an Undo of a payment from an earlier year says it changes that year.
+  const year = partnerYear(summary?.generatedAt || Date.now());
   const result = '<p class="owner-result" data-owner-payout-result role="status" aria-live="polite" tabindex="-1" hidden></p>';
   if (!codes.length) {
     return `<p class="owner-empty">No sales through a partner’s link yet. Partners share <code>https://planner.bemorin.com/welcome/?ref=CODE</code>; a purchase made through it shows here once it is paid. Plus, Give Plus and Plus Family earn them ${esc(program.rate)}% (Creem pays); a team gift earns them ${esc(program.teamRate)}% (you pay, by bank transfer).</p>${setup}${visitsOnlyHtml(partners, f)}${footnote ? `<p class="owner-partner-note">${esc(footnote)}</p>` : ''}${result}${linkForm}`;
@@ -349,9 +394,8 @@ export function partnersCardHtml(summary, fmt = {}) {
   const recent = Array.isArray(partners.recent) ? partners.recent : [];
   const teamTable = team.length
     ? `<div class="owner-list"><h3>Team commissions · you pay ${esc(program.teamRate)}%</h3></div>
-    <div class="owner-scroll"><table class="owner-table owner-partner-team"><thead><tr><th>Sold</th><th>Partner</th><th>Team gift</th><th class="num">Commission</th><th>State</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${team.map(sale => teamRow(sale, f, { ready, rate: program.teamRate })).join('')}</tbody></table></div>`
+    <div class="owner-scroll"><table class="owner-table owner-partner-team"><thead><tr><th>Sold</th><th>Partner</th><th>Team gift</th><th class="num">Commission</th><th>State</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${team.map(sale => teamRow(sale, f, { ready, rate: program.teamRate, year })).join('')}</tbody></table></div>`
     : '';
-  const profilesReady = !summary?.partnerProfilesUnavailable;
   return `<div class="owner-stats owner-partner-stats">${stats}</div>
     ${setup}
     ${footnote ? `<p class="owner-partner-note">${esc(footnote)}</p>` : ''}

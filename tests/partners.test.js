@@ -459,7 +459,7 @@ test('a commission to check is marked as paid only once the owner says they chec
   assert.equal(payoutCheck(summary, 'ch_code', { confirmed: true, amount: 1625 }).amount, 1625);
   // The tax isn't recorded: €19.50 is only an upper bound (10% of the amount paid, tax included).
   assert.deepEqual([payoutCheck(summary, 'ch_tax').status, payoutCheck(summary, 'ch_tax').checks], [409, ['tax']]);
-  assert.match(payoutCheck(summary, 'ch_tax', { confirmed: true }).error, /^Give the amount you paid: more than nothing and at most 19\.50 EUR \(10% of the amount paid, tax included\)\.$/);
+  assert.match(payoutCheck(summary, 'ch_tax', { confirmed: true }).error, /^Give the amount you paid: more than nothing and at most €19\.50 \(10% of the amount paid, tax included\)\.$/);
   for (const amount of [0, -1, 1951, 16.25, '1625']) assert.equal(payoutCheck(summary, 'ch_tax', { confirmed: true, amount }).status, 400, String(amount));
   assert.deepEqual([payoutCheck(summary, 'ch_tax', { confirmed: true, amount: 1625 }).amount], [1625]);
   // Part refunded, amount unknown: the same.
@@ -642,7 +642,7 @@ test('a refunded partner sale is marked, and left out of the revenue (memory and
     const refund = { id: 'evt_ref_1', eventType: 'refund.created', created_at: START, object: { id: 'ref_1', object: 'refund', refund_amount: 2900, refund_currency: 'EUR', transaction: { id: 'tran_1', status: 'refunded' }, created_at: START } };
     assert.equal((await sendWebhook(api, refund)).status, 200, label);
     const { partners } = (await asJson(await api(get('admin/summary', 'secret')))).body;
-    assert.deepEqual(partners.codes, [{ code: 'CAMILLE', sales: 1, refunded: 1, partial: 0, revoked: 0, members: 0, revenue: {}, test: 0, lastAt: new Date(START).toISOString(), creem: { sales: 1, pending: {}, earned: {} }, team: { sales: 0, pending: {}, toPay: {}, held: {}, paid: {} }, partner: 'individual', cap: null, visits: 0 }], label);
+    assert.deepEqual(partners.codes, [{ code: 'CAMILLE', sales: 1, refunded: 1, partial: 0, revoked: 0, members: 0, revenue: {}, test: 0, lastAt: new Date(START).toISOString(), creem: { sales: 1, pending: {}, earned: {} }, team: { sales: 0, pending: {}, toPay: {}, held: {}, paid: {} }, key: 'CAMILLE', sameAs: [], partner: 'individual', cap: null, visits: 0 }], label);
     assert.deepEqual([partners.recent[0].state, partners.recent[0].status], ['refunded', 'refunded'], label);
     // Restored in the dashboard: counted again, in full (a full refund is a state, never taken off as an amount).
     assert.equal((await api(request('DELETE', 'admin/revocations/ref_1', undefined, 'secret'))).status, 200, label);
@@ -816,7 +816,7 @@ test('a team commission whose tax or refund isn’t known is marked as paid with
     assert.deepEqual(toPay.map(row => [row.commission, row.exact, row.basis, row.checks]), [[1950, false, 'paid', ['code', 'tax']]], label);
     const payout = body => later(request('POST', 'admin/partners/payouts', { checkout: team.id, confirmed: true, ...body }, 'secret'));
     const missing = await asJson(await payout({}));
-    assert.deepEqual([missing.status, /at most 19\.50 EUR/.test(missing.body.error)], [400, true], label);
+    assert.deepEqual([missing.status, /at most €19\.50/.test(missing.body.error)], [400, true], label);
     assert.equal((await payout({ amount: 1951 })).status, 400, label);
     const paid = await asJson(await payout({ amount: 1625, note: 'SEPA 7' }));
     assert.deepEqual([paid.status, paid.body.payout.amount], [201, 1625], label);

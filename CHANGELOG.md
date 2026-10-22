@@ -2,6 +2,14 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.33.0 — 2026-10-22
+
+- **Partner payouts**: each partner code is an Individual (default) or a Business (micro-entreprise or company, any country, paid against an invoice). An Individual's team commissions are capped at €300 and at $300 per calendar year (Europe/Paris), counted by the payment date the owner enters; the dashboard pays what fits in parts (`<checkout>.<n>`), shows the rest as held until the partner is a Business or the year turns, names the exact payment on Undo, settles a commission whose payments already cover it after a partial refund (and shows an overpayment), and treats codes that differ only by case as one partner. Run `migrations/0008_partner_profiles.sql`.
+- **Private partner statement** (`/partners/statement/#code=…&key=…`, signed with a per-partner link version; “Copy private link” and “New link” on the dashboard): visits through the partner's link (30 days, 90 days, this year), purchases by kind, each team commission's state, the yearly cap, and how to get paid (bank details or invoice by email only). The key never travels in a URL sent to the server (POST body), the page is noindex/no-referrer and never cached by the service worker.
+- **Visits through partner links** are counted once a day per browser and code, only for known codes, as daily totals (no personal data, deleted after about 400 days), unless anonymous counts are off; JSON only. The privacy policy, the in-app notice and the page dialogs say so.
+- **Consent box** back on the Contact and Teams forms, required, with a label for each kind (“I agree that my email address and question are used to reply to me…”, “…to prepare my invoice/quote…”); the API requires it again; the privacy policy's basis is that consent, withdrawable by asking for deletion.
+- Service worker: copies a page before handing it over (pages visited online now work offline), never keeps addresses with a query string, `/admin/`, `/api/` or `/partners/statement/`.
+
 ## 1.32.0 — 2026-10-22
 
 - **Welcome hero**: a cursor shows each action — in Your day it clicks the Most important outcome, then Close day; in Your year it presses + Add, opens the Mini-adventures section (a faithful mini version, with tabs on narrow screens), marks Weekend in Lisbon as lived, returns to Overview and ticks the last Misogi milestone. Same box size, reduced motion and no-JS unchanged.
