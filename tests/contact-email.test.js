@@ -66,7 +66,7 @@ test('the planner, the welcome pages and the legal pages read an address the sam
     assert.equal(config.emailAddress(typed), expected, `src/config.js: ${typed}`);
     assert.equal(kit.emailAddress(typed), expected, `welcome/page-kit.js: ${typed}`);
   }
-  // config.js exports the addresses themselves: the legal pages (legal.js) and the footer's Support line read these.
+  // config.js exports the addresses themselves: the legal pages (legal.js) and the Contact page read these.
   assert.equal(config.SUPPORT_EMAIL, 'support@example.com');
   assert.equal(config.PRIVACY_EMAIL, 'privacy@example.com');
   assert.equal(kit.configText('SUPPORT_EMAIL'), 'support@example.com');
@@ -87,9 +87,14 @@ test('the legal pages, built or in the browser, link the address, never the brac
   assert.match(nodes.get('[data-legal-contact="privacy"]')[0].innerHTML, /mailto:privacy@example\.com/);
 });
 
-test('the welcome pages’ Support line and the request form read the address', () => {
+test('the Contact page and the request form read the address; no footer shows it (1.32)', () => {
   const kitSource = read('welcome/page-kit.js');
-  assert.match(kitSource, /const email = emailAddress\(supportEmail \|\| configText\('SUPPORT_EMAIL'\)\);\n {2}if \(support && EMAIL_RE\.test\(email\)\)/);
+  assert.doesNotMatch(kitSource, /Support: |data-support|SUPPORT_EMAIL'\)/, 'no Support line in the footers');
+  for (const page of ['welcome/index.html', 'teams/index.html', 'contact/index.html', 'partners/index.html', 'welcome/thanks/index.html']) {
+    assert.doesNotMatch(/<footer class="foot">[\s\S]*?<\/footer>/.exec(read(page))[0], /data-support|foot__support|mailto:/, page);
+  }
+  // The Contact page shows the address under its intro (“Prefer email? Write to …”), when it is set.
+  assert.match(read('contact/contact.js'), /const support = configEmail\(LANDING\.supportEmail, configText\('SUPPORT_EMAIL'\)\);/);
   const form = read('welcome/request-form.js');
   assert.match(form, /const contactEmail = emailAddress\(settings\.contactEmail \|\| configText\('SUPPORT_EMAIL'\)\);/);
   assert.match(form, /EMAIL_RE\.test\(contactEmail\) \? 'mailto' : 'off'/);
