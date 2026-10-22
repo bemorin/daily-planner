@@ -9,7 +9,7 @@ const stored = new Map();
 Object.defineProperty(globalThis, 'localStorage', { value: { getItem: key => (stored.has(key) ? stored.get(key) : null), setItem: (key, value) => stored.set(key, String(value)), removeItem: key => stored.delete(key) }, configurable: true, writable: true });
 
 const { PARTNER_PROGRAM } = await import('../src/lib/pricing.js');
-const { partnerEarnText } = await import('../src/features/plus-dialog.js');
+const { PARTNER_EARN_REACH, partnerEarnText, partnerOffer } = await import('../src/features/plus-dialog.js');
 const { sharePartnerText } = await import('../src/features/share-dialog.js');
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,6 +23,12 @@ test('what a partner earns is said from the program’s terms, with a calm fallb
   assert.equal(partnerEarnText(25), 'a 25% commission on every Plus purchase made through your link');
   assert.equal(partnerEarnText(12.5), 'a 12.5% commission on every Plus purchase made through your link');
   for (const rate of [0, -5, 100, NaN, 'soon', null]) assert.equal(partnerEarnText(rate), 'a commission on every Plus purchase made through your link', String(rate));
+  // The offer alone (what Help says in bold), then where it comes from: together, the Plus window's words.
+  assert.equal(partnerOffer(), `a ${PARTNER_PROGRAM.rate}% commission on every Plus purchase`);
+  assert.equal(partnerOffer(25), 'a 25% commission on every Plus purchase');
+  assert.equal(partnerOffer(0), 'a commission on every Plus purchase');
+  assert.equal(PARTNER_EARN_REACH, 'made through your link');
+  for (const rate of [25, 12.5, 0, null]) assert.equal(partnerEarnText(rate), `${partnerOffer(rate)} ${PARTNER_EARN_REACH}`, String(rate));
   assert.equal(sharePartnerText(), `Earn a ${PARTNER_PROGRAM.rate}% commission on every Plus purchase made through your link.`);
   assert.equal(sharePartnerText(30), 'Earn a 30% commission on every Plus purchase made through your link.');
   assert.equal(sharePartnerText(0), 'Earn a commission on every Plus purchase made through your link.');
@@ -71,14 +77,20 @@ test('How it works keeps a permanent Partners row beside For teams, filled from 
   const row = /<div class="help-feedback help-partners" data-partner-entry hidden>[\s\S]*?<\/div>/.exec(help)?.[0] || '';
   assert.ok(row, 'the row exists');
   assert.ok(help.indexOf('help-teams') < help.indexOf('help-partners'), 'right after For teams');
-  assert.match(row, /<strong>Partners<\/strong> · Recommend Daily Planner and earn <span data-partner-earn>[^<]*<\/span>\. No Plus needed\./);
+  // The offer in bold, as the owner asked (1.33.1): “earn a 25% commission on every Plus purchase”, then “made through your link”.
+  assert.match(row, /<strong>Partners<\/strong> · Recommend Daily Planner and <span data-partner-earn><strong>earn a commission on every Plus purchase<\/strong> made through your link<\/span>\. No Plus needed\./);
   assert.match(row, /<a class="secondary-button" href="\.\/partners\/" target="_blank" rel="noopener">See the partner program<\/a>/);
   assert.doesNotMatch(row, /\d/, 'the rate is filled in by the planner, never typed here');
   assert.match(help, /href="\.\/teams\/"/);
   assert.doesNotMatch(help, /welcome\/#teams/);
   const dialog = await read('src/features/plus-dialog.js');
   assert.match(dialog, /qsa\('\[data-partner-entry\]'\)\.forEach\(node => \{ node\.hidden = !plannerApiEnabled\(\); \}\);/);
-  assert.match(dialog, /qsa\('\[data-partner-earn\]'\)\.forEach\(node => \{ node\.textContent = partnerEarnText\(\); \}\);/);
+  assert.match(dialog, /qsa\('\[data-partner-earn\]'\)\.forEach\(node => node\.replaceChildren\(Object\.assign\(document\.createElement\('strong'\), \{ textContent: `earn \$\{partnerOffer\(\)\}` \}\), ` \$\{PARTNER_EARN_REACH\}`\)\);/);
+  // Bold only there: the Plus window's footnote and card, and the share sheet, keep the words plain.
+  assert.doesNotMatch(dialog, /<(?:strong|b)>[^<]*\$\{esc\(partnerEarnText\(\)\)\}/);
+  assert.doesNotMatch(await read('src/features/share-dialog.js'), /<(?:strong|b)>\$\{esc\(sharePartnerText\(\)\)\}/);
+  // .help-feedback strong is the ink colour, from the theme's tokens (light and dark).
+  assert.match(await read('styles/guides.css'), /\.help-feedback strong \{ color: var\(--ink\); \}/);
   const css = await read('styles/guides.css');
   assert.match(css, /\.help-teams \+ \.help-partners \{ margin-top: -8px; \}/, 'grouped with For teams');
 });
