@@ -68,3 +68,32 @@ test('every page’s script fills in the social links, and shows what it counts 
   assert.match(kit, /social\.hidden = false;\n[\s\S]*?const group = social\.closest\('\.foot__links'\);\n {4}if \(group\) group\.hidden = false;/, 'the group shows once it has a link');
   assert.doesNotMatch(kit, /data-support|Support: /);
 });
+
+test('the social links are small buttons that say where they lead, open a new tab and draw no brand logo (1.33.2)', async () => {
+  const { socialLinks } = await import('../welcome/page-kit.js');
+  const set = { SOCIAL_X_URL: 'https://x.com/example', SOCIAL_LINKEDIN_URL: ' https://www.linkedin.com/in/example/ ', PROJECT_GITHUB_URL: 'https://github.com/example/daily-planner' };
+  // X first (never “X” alone), then LinkedIn, then the project; each name starts with what it shows (voice control).
+  assert.deepEqual(socialLinks(key => set[key] || ''), [
+    { href: 'https://x.com/example', label: 'Follow on X', name: 'Follow on X (Ben Morin, opens in a new tab)', rel: 'me noopener' },
+    { href: 'https://www.linkedin.com/in/example/', label: 'LinkedIn', name: 'LinkedIn (Ben Morin, opens in a new tab)', rel: 'me noopener' },
+    { href: 'https://github.com/example/daily-planner', label: 'GitHub', name: 'GitHub (Daily Planner, opens in a new tab)', rel: 'noopener' }
+  ]);
+  // Only what is set, and only https.
+  assert.deepEqual(socialLinks(key => (key === 'SOCIAL_LINKEDIN_URL' ? set[key] : '')).map(link => link.label), ['LinkedIn']);
+  assert.deepEqual(socialLinks(key => ({ SOCIAL_X_URL: 'http://x.com/example', SOCIAL_LINKEDIN_URL: 'javascript:alert(1)', PROJECT_GITHUB_URL: 'https://github.com/a b' })[key]), []);
+  assert.deepEqual(socialLinks(() => ''), []);
+
+  const kit = read('welcome/page-kit.js');
+  assert.match(kit, /el\('a', \{ class: 'foot__btn', href, rel, target: '_blank', 'aria-label': name \}, label\)/);
+  // The arrow every page's sprite has, turned to ↗ by the stylesheet: no logo, no new symbol.
+  assert.match(kit, /const OUT_ICON = '<svg class="i" aria-hidden="true" focusable="false"><use href="#i-arrow"\/><\/svg>';/);
+  for (const { file } of PAGES) assert.match(read(file), /<symbol id="i-arrow" viewBox="0 0 24 24">/, `${file}: the arrow is in its sprite`);
+  const css = read('welcome/landing.css');
+  assert.match(css, /\.foot__social a\.foot__btn \{ display: inline-flex;[^}]*border-radius: 999px;[^}]*\}/);
+  assert.match(css, /\.foot__social a\.foot__btn:focus-visible \{ outline-offset: 2px; border-radius: 999px; \}/);
+  assert.match(css, /\.foot__btn svg\.i \{[^}]*transform: rotate\(-45deg\); \}/);
+  // Its transitions and the arrow's nudge only when motion is welcome.
+  const motion = /@media \(prefers-reduced-motion: no-preference\) \{\n {2}\.foot__btn \{ transition:[\s\S]*?\n\}/.exec(css)?.[0] || '';
+  assert.match(motion, /\.foot__btn:hover svg\.i \{ transform: translate\(1\.5px, -1\.5px\) rotate\(-45deg\); \}/);
+  assert.doesNotMatch(css.replace(motion, ''), /\.foot__btn[^{]*\{[^}]*transition/);
+});

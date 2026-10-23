@@ -112,10 +112,11 @@ export function createFeedbackFeature({ openModal, closeModal, openPrivacy = nul
       </section>`;
   }
 
+  // People see the feature release (1.33); the exact version (1.33.1) is what is sent, and the form says so.
   function header() {
     const items = WHATS_NEW.version === release && WHATS_NEW.items.length;
     return `<header class="modal__header feedback-head">
-        <p class="modal__eyebrow">Daily Planner ${esc(APP_VERSION)}</p>
+        <p class="modal__eyebrow">Daily Planner ${esc(release)}</p>
         <h2 id="feedback-title" tabindex="-1">${items ? `What’s new in ${esc(release)}` : 'How is Daily Planner working for you?'}</h2>
       </header>`;
   }

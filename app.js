@@ -15,7 +15,7 @@ import { createTour } from './src/features/tour.js';
 import { createFirstUse } from './src/features/first-use.js';
 import { createInstallFeature } from './src/features/install.js';
 import { createSyncGuide } from './src/features/sync-guide.js';
-import { createFeedbackFeature } from './src/features/feedback.js';
+import { createFeedbackFeature, featureVersion } from './src/features/feedback.js';
 import { createPrivacyNotice } from './src/features/privacy.js';
 import { createCategoryManager } from './src/features/category-manager.js';
 import { createPlusFeature } from './src/features/plus-dialog.js';
@@ -3443,7 +3443,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qs('[data-export-json]').addEventListener('click', () => download(`daily-planner-${ymd()}.json`, JSON.stringify(state, null, 2), 'application/json'));
   qs('[data-export-backup]')?.addEventListener('click', exportPlannerBackup);
   qs('[data-import-menu]')?.addEventListener('click', openImportPicker);
-  qs('[data-export-pdf]').addEventListener('click', printPlanner);
   qs('[data-pip]').addEventListener('click', () => pipFeature.open());
   const openJournal = () => { journalPage = 0; renderJournal(); openModal(qs('[data-journal-modal]')); trackOncePer('day', 'journal_opened'); };
   const openStats = () => { statsFeature.ensureWeek(); insightsFeature.invalidate(); renderStats(); openModal(qs('[data-stats-modal]')); trackOncePer('day', 'stats_opened'); };
@@ -3575,22 +3574,25 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     e.currentTarget.setAttribute('aria-expanded', String(open));
   });
 
-  qs('[data-mobile-print]').addEventListener('click', () => { qs('[data-mobile-more-menu]').hidden = true; printPlanner(); });
-  qs('[data-mobile-stats]')?.addEventListener('click', () => { qs('[data-mobile-more-menu]').hidden = true; openStats(); });
-  qs('[data-mobile-export]')?.addEventListener('click', () => { qs('[data-mobile-more-menu]').hidden = true; openModal(qs('[data-export-modal]')); });
-  qs('[data-mobile-settings]').addEventListener('click', () => { qs('[data-mobile-more-menu]').hidden = true; renderCategorySettings(); renderSettingsHours(); renderPlanningWeek(); openModal(qs('[data-settings-modal]')); });
-  qs('[data-mobile-help]').addEventListener('click', () => { qs('[data-mobile-more-menu]').hidden = true; updateStorageUsage(); openModal(qs('[data-help-modal]')); });
+  // The header menus (Export, More) close on a choice, a click outside or Escape, which hands focus back to their button.
+  const closeHeaderMenus = () => [['[data-export-menu]', '[data-export]'], ['[data-mobile-more-menu]', '[data-mobile-more]']].forEach(([menu, button]) => { qs(menu).hidden = true; qs(button).setAttribute('aria-expanded', 'false'); });
+  qs('[data-mobile-print]').addEventListener('click', () => { closeHeaderMenus(); printPlanner(); });
+  qs('[data-mobile-stats]')?.addEventListener('click', () => { closeHeaderMenus(); openStats(); });
+  qs('[data-mobile-export]')?.addEventListener('click', () => { closeHeaderMenus(); openModal(qs('[data-export-modal]')); });
+  qs('[data-mobile-settings]').addEventListener('click', () => { closeHeaderMenus(); renderCategorySettings(); renderSettingsHours(); renderPlanningWeek(); openModal(qs('[data-settings-modal]')); });
+  qs('[data-mobile-help]').addEventListener('click', () => { closeHeaderMenus(); updateStorageUsage(); openModal(qs('[data-help-modal]')); });
+  [['[data-export-menu]', '[data-export]'], ['[data-mobile-export-options]', '[data-mobile-more]']].forEach(([list, button]) => qs(list)?.addEventListener('click', e => {
+    if (!e.target.closest('button')) return;
+    const focused = qs(list).contains(document.activeElement);
+    closeHeaderMenus();
+    if (focused) qs(button).focus({ preventScroll: true });
+  }));
 
   registerPwa();
 
   appTooltips.bind();
   document.addEventListener('click', e => {
-    if (!e.target.closest('.action-popover-wrap')) {
-      qs('[data-export-menu]').hidden = true;
-      qs('[data-export]').setAttribute('aria-expanded', 'false');
-      qs('[data-mobile-more-menu]').hidden = true;
-      qs('[data-mobile-more]').setAttribute('aria-expanded', 'false');
-    }
+    if (!e.target.closest('.action-popover-wrap')) closeHeaderMenus();
     if (activePopover && !e.target.closest('.app-popover') && e.target !== activePopover.anchor && !activePopover.anchor?.contains(e.target)) closePopover();
   });
   document.addEventListener('keydown', e => {
@@ -3599,6 +3601,8 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
     if (e.key === 'Escape') {
       if (activePopover) { closePopover(); return; }
       if (activeModal) { closeModal(activeModal); return; }
+      const openMenu = [['[data-export-menu]', '[data-export]'], ['[data-mobile-more-menu]', '[data-mobile-more]']].find(([menu]) => !qs(menu).hidden);
+      if (openMenu) { closeHeaderMenus(); qs(openMenu[1]).focus(); return; }
     }
     if (!editable && !e.metaKey && !e.ctrlKey && !e.altKey && activeModal) {
       const activeModalShortcut = {
@@ -3722,14 +3726,15 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   // The first time each main dialog opens, a short guide inside it (src/features/first-use.js).
   createFirstUse({ tour, isReady: () => !!settings.onboardingComplete, isFloating: () => !!pipFeature?.isOpen(), getActiveModal: () => activeModal });
   const onboarding = createOnboarding({ settings: () => settings, persistSettings, startHour, endHour, time, chevronSvg, openListPopover, openModal, closeModal, seedFirstBlock: seedFirstBlockAfterOnboarding, afterFinish: () => { render(); requestAnimationFrame(() => qs('[data-focus]')?.focus({ preventScroll: true })); }, openInstall: () => installFeature.open(), keepTheme: () => { if (themeController.get() === 'system') themeController.set(themeController.resolved()); }, startTour: () => tour.startWhenIdle() });
-  const fromMenu = action => () => { const menu = qs('[data-mobile-more-menu]'); if (menu) menu.hidden = true; action(); };
+  const fromMenu = action => () => { closeHeaderMenus(); action(); };
   qsa('[data-install-open]').forEach(button => button.addEventListener('click', fromMenu(() => installFeature.open())));
   qsa('[data-sync-guide-open]').forEach(button => button.addEventListener('click', fromMenu(() => syncGuide.open())));
   qsa('[data-plus-open]').forEach(button => button.addEventListener('click', fromMenu(() => plusFeature.open())));
   qsa('[data-feedback-open]').forEach(button => { button.hidden = !feedbackFeature.available(); button.addEventListener('click', fromMenu(() => feedbackFeature.open())); });
   const helpFeedback = qs('[data-help-feedback]');
   if (helpFeedback) helpFeedback.hidden = !feedbackFeature.available();
-  qsa('[data-app-version]').forEach(node => { node.textContent = APP_VERSION; });
+  // Help shows the feature release (1.33); feedback still sends the exact version.
+  qsa('[data-app-version]').forEach(node => { node.textContent = featureVersion(APP_VERSION); });
   setMobileView('plan', { animate: false });
   renderCategorySettings();
   renderSettingsHours();

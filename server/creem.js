@@ -26,6 +26,16 @@
 //         The order's `tax_amount` is read so commissions are worked out on the
 //         price before tax.
 //         A gift at the member price (the buyer has Plus) carries `member: '1'`.
+//         Discount codes (1.33.2): Creem's hosted checkout takes a code by
+//         default, on checkouts the API opens too (no `discount_code` is sent);
+//         the code must apply to the product (Plus, or the gift product for a
+//         gift, whose `custom_price` it then reduces — Creem's docs don't say so
+//         either way: try it in test mode). A one-time 100% code makes a free
+//         order, and Creem documents an order's status as 'pending' or 'paid'
+//         without saying which a free one gets: a completed checkout whose
+//         order is free (nothing paid, nothing due) counts as paid unless its
+//         status says it is waiting or failed (freeOrderPaid). It is delivered
+//         like any other, recorded at 0, and earns a partner nothing.
 // Webhook header creem-signature = hex HMAC-SHA256(raw body, CREEM_WEBHOOK_SECRET)
 // Env     CREEM_API_KEY, CREEM_WEBHOOK_SECRET, CREEM_PLUS_EUR, CREEM_PLUS_USD,
 //         CREEM_GIFT_EUR, CREEM_GIFT_USD, CREEM_TEST_MODE ('1'; a creem_test_ key also means test)
@@ -186,6 +196,44 @@ export const creemIdOf = value => {
   return CREEM_ID_RE.test(id) ? id : '';
 };
 
+/** The member flag of a checkout's metadata: we send '1'; 1, true or 'true' read the same. */
+export const memberFlag = value => /^(?:1|true)$/i.test(String(value ?? '').trim());
+
+/**
+ * Order statuses that say a free order is still waiting or didn't go through
+ * (pending, processing, unpaid, requires_…, failed, declined, canceled, void,
+ * expired, refunded, disputed, chargeback, reversed …), in any case.
+ */
+export const ORDER_NOT_PAID_RE = /pend|process|unpaid|requir|incomplete|open|draft|fail|declin|cancel|void|expir|refund|disput|chargeback|revers/i;
+
+/**
+ * Whether an expanded order is free: a 100% discount code. Nothing was paid
+ * (`amount_paid`, else `amount`, is 0), nothing is due (`amount_due` 0 when
+ * given), and the total is 0 or wholly taken off by the discount
+ * (`discount_amount`), in case Creem's `amount` is the price before it.
+ */
+export function freeOrder(order) {
+  const entry = objectOrNull(order);
+  if (!entry) return false;
+  const paid = wholeCents(entry.amount_paid) ?? wholeCents(entry.amount);
+  if (paid !== 0) return false;
+  if (entry.amount_due != null && wholeCents(entry.amount_due) !== 0) return false;
+  const total = entry.amount == null ? 0 : wholeCents(entry.amount);
+  return total === 0 || (total != null && (wholeCents(entry.discount_amount) ?? -1) >= total);
+}
+
+/**
+ * A completed checkout's free order counts as paid when its status is 'paid'
+ * or one Creem doesn't document (it lists only 'pending' and 'paid'), but not
+ * one that says it is waiting or failed (ORDER_NOT_PAID_RE). A missing
+ * status counts too: the checkout itself is completed and nothing is owed.
+ */
+export function freeOrderPaid(order) {
+  if (!freeOrder(order)) return false;
+  const status = String(objectOrNull(order).status ?? '').trim();
+  return !ORDER_NOT_PAID_RE.test(status);
+}
+
 /**
  * What a checkout bought, read defensively (ids or expanded objects).
  * Returns { completed, paid, productId, item, email, country, org, amount, tax, currency, …, orderId }
@@ -203,9 +251,6 @@ export const creemIdOf = value => {
  * three are in the seal, and count for nothing without it (see sealedCheckout
  * in server/planner-api.js).
  */
-/** The member flag of a checkout's metadata: we send '1'; 1, true or 'true' read the same. */
-export const memberFlag = value => /^(?:1|true)$/i.test(String(value ?? '').trim());
-
 export function readCheckout(checkout, products = new Map()) {
   const entity = objectOrNull(checkout) || {};
   const order = objectOrNull(entity.order);
@@ -213,8 +258,9 @@ export function readCheckout(checkout, products = new Map()) {
   const metadata = objectOrNull(entity.metadata) || {};
   const productId = String((typeof entity.product === 'string' ? entity.product : objectOrNull(entity.product)?.id) ?? '').trim();
   const completed = entity.status === 'completed';
-  // Only an expanded order marked paid counts: a missing order, an order id or any other status does not.
-  const paid = completed && order?.status === 'paid';
+  // Only an expanded order marked paid counts: a missing order, an order id or any other status does not —
+  // except a free order (a 100% discount code), whose status Creem doesn't document (freeOrderPaid).
+  const paid = completed && (order?.status === 'paid' || freeOrderPaid(order));
   const product = productId ? products.get(productId) : null;
   let item = null;
   if (product && (!metadata.kind || metadata.kind === product.kind)) {

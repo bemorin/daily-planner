@@ -71,14 +71,36 @@ export function setupTopBar() {
    set (and Open the planner on the partners page, whose top bar has no such
    button); below, the legal pages and Contact, then “What this page
    counts”. No support address: the Contact page shows it when SUPPORT_EMAIL
-   is set, and so does the legal notice. */
+   is set, and so does the legal notice.
+
+   Each social link is a small button that says where it leads (1.33.2: “X”
+   alone read as a stray letter), with the sprite's arrow turned to ↗ for a
+   new tab; no brand logos. Its name starts with what it shows (for voice
+   control), then whose it is and the new tab. Ben Morin's profiles carry
+   rel="me"; the project's page is the project's, not him. */
+
+const SOCIAL_LINKS = [
+  { key: 'SOCIAL_X_URL', label: 'Follow on X', owner: 'Ben Morin', me: true },
+  { key: 'SOCIAL_LINKEDIN_URL', label: 'LinkedIn', owner: 'Ben Morin', me: true },
+  { key: 'PROJECT_GITHUB_URL', label: 'GitHub', owner: 'Daily Planner', me: false }
+];
+
+/** The footer's social links that are set (https only), in order: [{ href, label, name, rel }]. */
+export function socialLinks(read = configText) {
+  return SOCIAL_LINKS.map(link => ({ ...link, href: httpsUrl(read(link.key)) }))
+    .filter(link => link.href)
+    .map(({ href, label, owner, me }) => ({ href, label, name: `${label} (${owner}, opens in a new tab)`, rel: me ? 'me noopener' : 'noopener' }));
+}
+
+const OUT_ICON = '<svg class="i" aria-hidden="true" focusable="false"><use href="#i-arrow"/></svg>';
 
 export function renderFooter() {
   const social = qs('[data-social]');
-  const links = [['PROJECT_GITHUB_URL', 'GitHub'], ['SOCIAL_X_URL', 'X'], ['SOCIAL_LINKEDIN_URL', 'LinkedIn']]
-    .map(([key, label]) => [httpsUrl(configText(key)), label])
-    .filter(([url]) => url)
-    .map(([url, label]) => el('a', { href: url, rel: 'noopener' }, label));
+  const links = socialLinks().map(({ href, label, name, rel }) => {
+    const link = el('a', { class: 'foot__btn', href, rel, target: '_blank', 'aria-label': name }, label);
+    link.insertAdjacentHTML('beforeend', OUT_ICON);
+    return link;
+  });
   if (social && links.length) {
     social.replaceChildren(...links);
     social.hidden = false;
