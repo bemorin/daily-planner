@@ -3,7 +3,7 @@ import { ymdKey } from '../lib/dates.js';
 import { esc, escAttr, safeUrl } from '../lib/text.js';
 import { activatePlusToken, hasPlus, isCheckoutReference, normalizeGiftCode, onPlusChange, parsePlusInput, plusAvailable, plusLicense, plusSettings, plusStatusLine } from '../lib/plus.js';
 import { CURRENCIES, LAUNCH, PARTNER_PROGRAM, PERSONAL_GIFTS, PLUS_PRICE, PLUS_UPCOMING, detectCurrency, formatMoney, isPersonalGift, memberGiftPrice, memberPriceNotice, memberPriceShown, validCurrency } from '../lib/pricing.js';
-import { checkoutOptions, claimPurchase, dismissPartnerHint, fetchGift, partnerHintShown, plannerApiEnabled, redeemGift, rememberReferral, startCheckout, trackEvent } from '../lib/planner-api.js';
+import { checkoutOptions, claimPurchase, dismissPartnerHint, fetchGift, partnerHintShown, plannerApiEnabled, redeemGift, rememberReferral, startCheckout, testModeLine, trackEvent } from '../lib/planner-api.js';
 import { requestPlusCheck } from './plus-check.js';
 import { burst, panelEnter, pulse } from '../ui/motion.js';
 import { readPaint, resolvePaint } from './paint-palettes.js';
@@ -53,6 +53,7 @@ const ICONS = {
   check: '<path d="m6.5 12.5 3.3 3.3 7.7-8"/>',
   team: '<circle cx="9" cy="8.5" r="3"/><path d="M3.5 19c.6-3 2.8-4.6 5.5-4.6s4.9 1.6 5.5 4.6"/><circle cx="16.5" cy="9.5" r="2.4"/><path d="M15.4 14.5c2.5-.3 4.5 1 5.1 3.8"/>',
   notice: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.8v5M12 16.2h.01"/>',
+  info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11.2v5"/><path d="M12 7.8v.01"/>',
   offline: '<path d="M2.5 8.8a14 14 0 0 1 19 0M5.6 12.2a9.5 9.5 0 0 1 12.8 0M8.8 15.6a4.8 4.8 0 0 1 6.4 0M12 19h.01"/><path d="m4 4 16 16"/>'
 };
 const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
@@ -204,6 +205,15 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
   };
   const buyable = (item = 'plus') => (options === null ? 'loading' : options[item] === null || options[item]?.includes(currency) ? 'yes' : 'no');
   const giftsOffered = () => plannerApiEnabled() && plusAvailable() && buyable('gift') !== 'no';
+  /**
+   * Checkouts in Creem's test mode (1.34: review mode, while the payment
+   * provider reviews the store): one calm line under Get Plus, or under the
+   * gifts when Get Plus isn't offered (with Plus, or not on sale here).
+   */
+  const testLine = (place = 'cta') => {
+    const text = testModeLine(options);
+    return text ? `<p class="plus-test plus-test--${place}">${icon('info')}<span>${esc(text)}</span></p>` : '';
+  };
 
   function featureList(focus = '', { compact = false } = {}) {
     return `<ul class="plus-features${compact ? ' plus-features--compact' : ''}">${PLUS_FEATURES.map(feature => `<li class="plus-feature plus-feature--${feature.id}${feature.id === focus ? ' is-focus' : ''}" data-plus-feature="${feature.id}"><span class="plus-feature__icon">${icon(feature.icon)}</span><span><strong>${esc(feature.title)}</strong>${compact ? '' : `<small>${esc(feature.text)}</small>`}</span></li>`).join('')}</ul>`;
@@ -280,6 +290,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     return `<section class="plus-gifts${member ? ' plus-gifts--member' : ''}" aria-labelledby="plus-gifts-title">
         <p class="plus-gifts__lead"><strong id="plus-gifts-title">Give Plus to someone${member ? ' <em class="plus-gifts__badge">Member price</em>' : ''}</strong>${lead}</p>
         <div class="plus-gifts__row">${buttons}</div>
+        ${member || buyable() !== 'yes' ? testLine('gifts') : ''}
         ${view.giftError ? `<p class="plus-inline-error" role="alert">${esc(view.giftError)}</p>` : ''}
         ${memberCheck()}
       </section>`;
@@ -358,6 +369,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
         ${priceBlock()}
         <div class="plus-cta">
           ${buyButton('top')}
+          ${buyable() === 'yes' ? testLine() : ''}
           ${view.buyError ? `<p class="plus-inline-error" role="alert">${esc(view.buyError)}</p>` : buyable() === 'no' ? '<p class="plus-cta__note">Payments open soon. A gift link or a licence already works.</p>' : ''}
           <button class="text-button plus-cta__redeem" type="button" data-plus-redeem-toggle aria-expanded="${!!view.redeemOpen}">Have a gift link or a licence?</button>
           ${redeemForm()}
@@ -434,7 +446,7 @@ export function createPlusFeature({ openModal, closeModal, getActiveModal = () =
     const result = await checkoutOptions();
     const list = value => (Array.isArray(value) ? value.filter(code => CURRENCIES.includes(code)) : []);
     if (result.ok) {
-      options = { plus: list(result.plus), gift: list(result.gift) };
+      options = { plus: list(result.plus), gift: list(result.gift), test: result.test === true, review: result.review === true };
       // The server decides from the buyer's country; when it can't tell, show a price that can be paid.
       const chosen = validCurrency(result.currency);
       if (chosen) currency = chosen;

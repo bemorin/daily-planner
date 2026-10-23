@@ -217,6 +217,18 @@ export const checkPlusLicense = license => request('plus/check', { body: { licen
  */
 export const checkoutOptions = () => request('checkout', { method: 'GET' });
 /**
+ * The one line every buy button shows while checkouts run in Creem's test
+ * mode (`test` in checkoutOptions()'s answer), so nobody believes they paid:
+ * on the production address (`review`), while the payment provider reviews
+ * the store (1.34); elsewhere, a test deployment. '' otherwise.
+ */
+export function testModeLine(answer) {
+  if (answer?.test !== true) return '';
+  return answer.review === true
+    ? 'Payments are in test mode while our payment provider reviews the store: no real card is charged.'
+    : 'Payments are in test mode: no real card is charged.';
+}
+/**
  * Opens a Creem checkout for Plus (`item: 'plus'`) or a gift link (`item: 'gift'`,
  * `plan` from TEAM_TIERS or PERSONAL_GIFTS). `currency` is only a hint: the server
  * charges the currency of the buyer's country when it knows it. A referral code

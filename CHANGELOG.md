@@ -2,6 +2,12 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.34.0 — 2026-10-23
+
+- **Creem review mode**: with a test key, `CREEM_TEST_ON_PRODUCTION=1` (Functions, Text) opens checkouts on the production address in Creem test mode, so the owner and Creem's compliance team can go through the whole purchase before approval (no effect with a live key; preview and localhost unchanged). Purchases keep the `Test mode` note. The configuration page shows it as a warning to remove once live, and the test-key problem points to it.
+- Public notice while buying runs in test mode on the production address: “Payments are in test mode while our payment provider reviews the store: no real card is charged.” under Get Plus on /welcome/, the team tiers on /teams/ and the planner's Plus window.
+- Dashboard → Refunds and disputes: **Switch off test-mode purchases** (counts of Plus licences and gift links, a typed SWITCH OFF confirmation, enforced by the server too) revokes them all as one group — gift links at once, planners at their next weekly check — with Restore all; a test purchase's activation link then says it was a test. Needs your attention reminds the owner once the key is live while test purchases are still on.
+
 ## 1.33.2 — 2026-10-23
 
 - Phones and tablets: **More** lists only what the header hides, in groups (Time stats when it isn't in the header · Print / PDF and Export · Settings, Sync my devices, Install the app, Daily Planner Plus · How it works, Take the tour, Send feedback), never duplicating a header icon; it stops above the bottom bar. **Export**'s options are full size with icons, rounded rows and groups (no “Print / PDF” there any more — Print is its own button); menus close on a choice and on Escape, with visible keyboard focus.

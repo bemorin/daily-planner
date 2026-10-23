@@ -1,7 +1,7 @@
 import { TEAM_TIERS } from '../src/lib/pricing.js';
 import { TEAM_ROWS, lowestPerPerson, perPerson, tierLabel, tierPrice } from './landing-model.js';
 import { copyText, el, qs, qsa } from './page-kit.js';
-import { checkout } from './sale.js';
+import { checkout, testNotice } from './sale.js';
 import { invoiceAnswer, managerMessage } from './teams-model.js';
 
 /* ============================================================================
@@ -47,6 +47,12 @@ export function createTeamOffer({ sale, track = () => {}, openRequest = () => {}
         el('p', { class: 'buy__error tier__error', role: 'alert', 'data-buy-error': true, hidden: true }));
     });
     box.replaceChildren(...rows);
+    // Creem's test mode (review mode while the payment provider reviews the store): one calm line under the tiers.
+    const slot = qs('[data-test-slot]');
+    if (slot) {
+      const notice = state.buyable ? testNotice(sale, 'prices__test') : null;
+      slot.replaceChildren(...(notice ? [notice] : []));
+    }
     const after = qs('[data-gift-after]');
     if (after) {
       after.replaceChildren(...(state.buyable

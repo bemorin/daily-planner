@@ -6,10 +6,10 @@
  * (1.22.1, 1.22.2…) keep the same note and are never asked about again.
  */
 export const WHATS_NEW = Object.freeze({
-  version: '1.33',
+  version: '1.34',
   items: Object.freeze([
-    'Partners get a private page with the visits through their link, their sales and each team commission: pending, earned, paid or waiting.',
-    'The Contact and Teams forms stay simple: no box to tick, and a short note says how what you send is used.',
-    'The privacy notice now says how visits through a partner’s link are counted: a daily total, nothing about you.'
+    'While our payment provider reviews the store, payments run in test mode: a line under the buy buttons says so, and no real card is charged.',
+    'On a phone, More lists only what the header doesn’t show, in groups, and Export’s options are full size.',
+    'A free order made with a 100% code now unlocks Plus like any other purchase.'
   ])
 });

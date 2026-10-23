@@ -52,8 +52,11 @@ test('prices show in the server’s currency for the visitor’s country, else a
 });
 
 test('what is on sale: GET /api/checkout answers, read defensively', () => {
-  assert.deepEqual(readCheckoutOptions({ ok: true, plus: ['EUR', 'USD'], gift: ['USD', 'GBP'], currency: 'EUR', test: true }), { known: true, plus: ['EUR', 'USD'], gift: ['USD'], currency: 'EUR', test: true });
-  assert.deepEqual(readCheckoutOptions({ ok: true }), { known: true, plus: [], gift: [], currency: '', test: false });
+  assert.deepEqual(readCheckoutOptions({ ok: true, plus: ['EUR', 'USD'], gift: ['USD', 'GBP'], currency: 'EUR', test: true }), { known: true, plus: ['EUR', 'USD'], gift: ['USD'], currency: 'EUR', test: true, review: false });
+  assert.deepEqual(readCheckoutOptions({ ok: true }), { known: true, plus: [], gift: [], currency: '', test: false, review: false });
+  // Review mode (1.34): the production address in Creem's test mode; `review` alone means nothing.
+  assert.deepEqual(readCheckoutOptions({ ok: true, plus: ['EUR'], gift: ['EUR'], currency: 'EUR', test: true, review: true }), { known: true, plus: ['EUR'], gift: ['EUR'], currency: 'EUR', test: true, review: true });
+  assert.equal(readCheckoutOptions({ ok: true, review: true }).review, false);
   assert.equal(readCheckoutOptions({ ok: true, plus: [], currency: 'GBP' }).currency, '');
   assert.equal(readCheckoutOptions({ ok: false, status: 0 }).known, false, 'unreachable: not known yet');
   assert.equal(readCheckoutOptions(null).known, false);

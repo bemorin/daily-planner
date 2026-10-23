@@ -1,5 +1,6 @@
 // What needs the owner's attention, read from the admin summary the dashboard
-// already loads: refunds and disputes to follow up, team requests to answer,
+// already loads: refunds and disputes to follow up, test-mode purchases still
+// active once payments are live (1.34), team requests to answer,
 // team commissions earned by partners and not paid yet (what fits under an
 // individual's yearly cap; what waits above it is listed apart), Setup items that are
 // missing or need a check, gifts about to expire or full, and new reviews to read. Most urgent first, each with when it started and
@@ -43,13 +44,14 @@ const KINDS = {
   'setup-missing': { order: 2, tone: 'urgent' },
   dispute: { order: 3, tone: 'warn' },
   'refund-partial': { order: 4, tone: 'warn' },
-  team: { order: 5, tone: 'warn' },
-  'partner-pay': { order: 6, tone: 'warn' },
-  'setup-warn': { order: 7, tone: 'warn' },
-  'gift-expiring': { order: 8, tone: 'info' },
-  'gift-claimed': { order: 9, tone: 'info' },
-  'partner-held': { order: 10, tone: 'info' },
-  reviews: { order: 11, tone: 'info' }
+  'test-purchases': { order: 5, tone: 'warn' },
+  team: { order: 6, tone: 'warn' },
+  'partner-pay': { order: 7, tone: 'warn' },
+  'setup-warn': { order: 8, tone: 'warn' },
+  'gift-expiring': { order: 9, tone: 'info' },
+  'gift-claimed': { order: 10, tone: 'info' },
+  'partner-held': { order: 11, tone: 'info' },
+  reviews: { order: 12, tone: 'info' }
 };
 
 const TEAM_NOUNS = { invoice: 'Invoice request', quote: 'Quote request', question: 'Question', talk: 'Talk request' };
@@ -162,7 +164,9 @@ export function setupChecks(summary, { config = {}, pageVersion = '' } = {}) {
     const products = payments.products || {};
     const missingProducts = PAYMENT_ITEMS.flatMap(item => PAYMENT_CURRENCIES.filter(currency => !products[item]?.[currency])).length;
     const problems = [];
-    if (payments.mode === 'test') problems.push('Creem is in test mode: no real payments');
+    // Review mode (CREEM_TEST_ON_PRODUCTION, 1.34): on purpose while Creem reviews the store, to remove once live.
+    if (payments.mode === 'test') problems.push(payments.reviewOpen ? 'Review mode is on: test purchases are open on the production address. Turn it off once your live key is in' : 'Creem is in test mode: no real payments');
+    if (payments.mode === 'live' && payments.reviewMode) problems.push('CREEM_TEST_ON_PRODUCTION has no effect with a live key: remove it');
     if (payments.error) problems.push('Creem’s settings have an error');
     if (missingProducts) problems.push(`Creem: ${missingProducts} product ${missingProducts === 1 ? 'id is' : 'ids are'} missing`);
     if (!payments.webhookSecretSet) problems.push('Creem’s webhook secret isn’t set: refunds don’t switch Plus off');
@@ -247,6 +251,30 @@ function refundItems(summary, now, { money }) {
     if (!row.fullRefund && !switchedOff(row)) items.push({ ...base, kind: 'refund-partial', key: `refund-partial:${row.id}`, icon: 'refund', text: `Partial refund on ${purchase(row)}`, detail: detail('Nothing was switched off. Decide whether to revoke it by hand.') });
   });
   return items;
+}
+
+// ---- Test-mode purchases ----------------------------------------------------------
+
+/**
+ * Once payments are live (a live key, CREEM_TEST_ON_PRODUCTION gone), one line
+ * while purchases bought in Creem's test mode still give Plus: they were never
+ * paid for, so switch them off (Refunds and disputes). None while the summary
+ * has no counts (an older API, or migration 0005 missing).
+ */
+function testPurchaseItems(summary, { number }) {
+  const status = summary.testPurchases;
+  const payments = summary.setup?.payments || {};
+  if (!status || payments.mode !== 'live' || payments.reviewMode) return [];
+  const active = Number(status.active) || 0;
+  if (active <= 0) return [];
+  const plus = Math.max(0, (Number(status.plus) || 0) - (Number(status.plusOff) || 0));
+  const gifts = Math.max(0, (Number(status.gifts) || 0) - (Number(status.giftsOff) || 0));
+  const parts = [plus ? `${number(plus)} Plus ${plus === 1 ? 'licence' : 'licences'}` : '', gifts ? `${number(gifts)} gift ${gifts === 1 ? 'link' : 'links'}` : ''].filter(Boolean);
+  return [{
+    kind: 'test-purchases', key: 'test-purchases', section: 'refunds', rows: ['test-purchases'], icon: 'test', at: status.latestAt || '', when: 'since',
+    text: `${number(active)} test-mode ${active === 1 ? 'purchase' : 'purchases'} still active — switch ${active === 1 ? 'it' : 'them'} off`,
+    detail: `Bought in Creem’s test mode, never paid for: ${parts.join(' and ')} still ${active === 1 ? 'gives' : 'give'} Plus.`
+  }];
 }
 
 // ---- Partner commissions ------------------------------------------------------------
@@ -383,7 +411,7 @@ export function buildAttention(summary, { now, config = {}, pageVersion = '', mo
     key: `setup:${check.key}:${part}`, section: 'setup', rows: [`setup:${check.key}`], icon: check.key === 'version' ? 'version' : 'setup',
     text, detail: '', at: '', when: 'setup', position: index * 10 + part
   })));
-  const items = [...refundItems(summary, at, format), ...teamItems(summary, at, format), ...partnerItems(summary, at, format), ...setup, ...giftItems(summary, at, format), ...reviewItems(summary, at)];
+  const items = [...refundItems(summary, at, format), ...testPurchaseItems(summary, format), ...teamItems(summary, at, format), ...partnerItems(summary, at, format), ...setup, ...giftItems(summary, at, format), ...reviewItems(summary, at)];
   const sortKey = item => (item.when === 'setup' ? item.position : timeOf(item.at) || 0);
   return items
     .map(item => ({ ...item, tone: KINDS[item.kind].tone }))

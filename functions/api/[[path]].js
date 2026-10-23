@@ -14,6 +14,9 @@
 // (for /api/creem/webhook, subscribed to checkout.completed, refund.created and
 // dispute.created), the product ids `CREEM_PLUS_EUR`, `CREEM_PLUS_USD`,
 // `CREEM_GIFT_EUR`, `CREEM_GIFT_USD`, and optional `CREEM_TEST_MODE` = 1.
+// Review mode: optional `CREEM_TEST_ON_PRODUCTION` = 1 lets a test key sell on
+// the production address while Creem reviews the store (no effect with a live
+// key); delete it once the live key is in.
 // The checkout currency follows the buyer's country from Cloudflare
 // (request.cf.country): EUR in the euro area, USD elsewhere.
 // Refunds and revoked licences need migrations/0005_refunds.sql in the D1 database.
@@ -44,6 +47,7 @@ export async function onRequest(context) {
     creemApiKey: env.CREEM_API_KEY || '',
     creemWebhookSecret: env.CREEM_WEBHOOK_SECRET || '',
     creemTestMode: env.CREEM_TEST_MODE || '',
+    creemTestOnProduction: env.CREEM_TEST_ON_PRODUCTION || '',
     creemProducts: creemProductsFromEnv(env),
     // Owner notifications and gift emails finish after the response has been sent.
     defer: promise => context.waitUntil(promise),

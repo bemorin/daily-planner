@@ -16,23 +16,40 @@ export const STATE_LABELS = Object.freeze({
 
 export const LEVEL_LABELS = Object.freeze({ required: 'Required', recommended: 'Recommended', optional: 'Optional' });
 
+/**
+ * A problem the server marks as a warning (1.34: review mode, on purpose while
+ * Creem reviews the store) is a reminder, not a blocker: it reads “Warning”,
+ * in amber, and comes last in “Fix first”.
+ */
+export const isWarning = item => item?.state === 'problem' && item.warning === true;
+/** The state an item is shown with: its own, or 'warning'. */
+export const shownState = item => (isWarning(item) ? 'warning' : item?.state);
+export const stateLabel = item => (isWarning(item) ? 'Warning' : STATE_LABELS[item?.state] || item?.state);
+
 const LEVEL_ORDER = { required: 0, recommended: 1, optional: 2 };
 const STATE_ORDER = { problem: 0, missing: 1 };
-const TOTAL_WORDS = [['ok', 'OK', 'OK'], ['problem', 'problem', 'problems'], ['missing', 'missing', 'missing'], ['optional-missing', 'optional and not set', 'optional and not set'], ['untested', 'present but not tested', 'present but not tested']];
+const TOTAL_WORDS = [['ok', 'OK', 'OK'], ['problem', 'problem', 'problems'], ['warning', 'warning', 'warnings'], ['missing', 'missing', 'missing'], ['optional-missing', 'optional and not set', 'optional and not set'], ['untested', 'present but not tested', 'present but not tested']];
 
-/** What to fix first: problems and missing settings, required ones first, then recommended, then optional. */
+/** What to fix first: problems and missing settings, required ones first, then recommended, then optional; warnings after them all. */
 export function fixFirst(items = []) {
   return items
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => item.state === 'problem' || item.state === 'missing')
-    .sort((a, b) => (LEVEL_ORDER[a.item.level] ?? 3) - (LEVEL_ORDER[b.item.level] ?? 3) || STATE_ORDER[a.item.state] - STATE_ORDER[b.item.state] || a.index - b.index)
+    .sort((a, b) => Number(isWarning(a.item)) - Number(isWarning(b.item)) || (LEVEL_ORDER[a.item.level] ?? 3) - (LEVEL_ORDER[b.item.level] ?? 3) || STATE_ORDER[a.item.state] - STATE_ORDER[b.item.state] || a.index - b.index)
     .map(({ item }) => item);
 }
 
-/** “16 OK, 3 problems, 4 missing …”: the counts that aren't zero. */
+/** The counts as shown: the warnings apart from the other problems (the server counts them among the problems too). */
+export function shownCounts(counts = {}) {
+  const warning = Math.max(0, Number(counts.warning) || 0);
+  return { ...counts, problem: Math.max(0, (Number(counts.problem) || 0) - warning), warning };
+}
+
+/** “16 OK, 3 problems, 1 warning, 4 missing …”: the counts that aren't zero. */
 export function totalsText(counts = {}) {
-  return TOTAL_WORDS.filter(([state]) => Number(counts[state]) > 0)
-    .map(([state, one, many]) => `${Number(counts[state])} ${Number(counts[state]) === 1 ? one : many}`)
+  const shown = shownCounts(counts);
+  return TOTAL_WORDS.filter(([state]) => Number(shown[state]) > 0)
+    .map(([state, one, many]) => `${Number(shown[state])} ${Number(shown[state]) === 1 ? one : many}`)
     .join(', ');
 }
 
@@ -53,7 +70,7 @@ const where = deployment => (deployment?.production ? 'on the production address
 function line(item) {
   const facts = [item.level, item.secret ? 'secret' : '', item.type && item.type !== 'Secret' ? item.type : ''].filter(Boolean).join(', ');
   const shape = item.shape ? ` [${item.shape}]` : '';
-  return `${item.name} (${facts}): ${STATE_LABELS[item.state] || item.state}${shape} — ${item.summary}`;
+  return `${item.name} (${facts}): ${stateLabel(item)}${shape} — ${item.summary}`;
 }
 
 /**

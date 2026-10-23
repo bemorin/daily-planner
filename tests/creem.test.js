@@ -712,7 +712,7 @@ test('the setup summary shows Creem, email and Plus without ever showing a secre
   assert.deepEqual(body.setup, {
     email: { configured: true, apiKeySet: true, fromSet: true, from: 'Ben Morin <hello@bemorin.example>', ownerEmail: 'owner@bemorin.example', dailyLimit: 100 },
     payments: {
-      provider: 'creem', configured: true, apiKeySet: true, mode: 'test',
+      provider: 'creem', configured: true, apiKeySet: true, mode: 'test', reviewMode: false, reviewOpen: false,
       products: { plus: { EUR: 'prod_plus_eur', USD: 'prod_plus_usd' }, gift: { EUR: 'prod_gift_eur', USD: 'prod_gift_usd' } },
       webhookSecretSet: true, webhookUrl: 'https://planner.bemorin.com/api/creem/webhook', webhookEvents: ['checkout.completed', 'refund.created', 'dispute.created'], error: ''
     },
@@ -729,7 +729,7 @@ test('the setup summary shows Creem, email and Plus without ever showing a secre
   const off = (await asJson(await empty.api(get('admin/summary', 'secret')))).body.setup;
   assert.deepEqual([off.email.configured, off.plus.configured], [false, false]);
   assert.deepEqual(off.payments, {
-    provider: 'creem', configured: false, apiKeySet: false, mode: '',
+    provider: 'creem', configured: false, apiKeySet: false, mode: '', reviewMode: false, reviewOpen: false,
     products: { plus: { EUR: '', USD: '' }, gift: { EUR: '', USD: '' } },
     webhookSecretSet: false, webhookUrl: 'https://staging.example/api/creem/webhook', webhookEvents: ['checkout.completed', 'refund.created', 'dispute.created'], error: 'CREEM_GIFT_USD is not a product id (prod_…).'
   });

@@ -57,6 +57,13 @@
 // and USD only), empty, differs (Plus USD at $25, tax added on top) or full. Its
 // webhook needs a public https PUBLIC_BASE_URL, as with Creem.
 // Without --fake-creem the CREEM_* variables are used, as in production.
+// Review mode: CREEM_TEST_ON_PRODUCTION=1 works here as in production (a test
+// key sells on the production address too, the pages say payments are in test
+// mode). A local address is never production: to see it, set PUBLIC_BASE_URL
+// to another host name that points at this computer and open the server
+// there, e.g. PUBLIC_BASE_URL=http://planner.test:8080 with planner.test
+// mapped to 127.0.0.1 (the browser must treat that http address as secure for
+// WebCrypto: Chromium's --unsafely-treat-insecure-origin-as-secure does).
 // Links in emails and checkout returns point at this server unless
 // PUBLIC_BASE_URL is set.
 //
@@ -362,8 +369,8 @@ async function fakeRefund(request, url, response) {
 
 function creemOptions() {
   const env = process.env;
-  const options = { creemApiKey: env.CREEM_API_KEY || '', creemWebhookSecret: env.CREEM_WEBHOOK_SECRET || '', creemTestMode: env.CREEM_TEST_MODE || '', creemProducts: creemProductsFromEnv(env) };
-  const webhook = options.creemWebhookSecret ? ', webhook on' : '';
+  const options = { creemApiKey: env.CREEM_API_KEY || '', creemWebhookSecret: env.CREEM_WEBHOOK_SECRET || '', creemTestMode: env.CREEM_TEST_MODE || '', creemTestOnProduction: env.CREEM_TEST_ON_PRODUCTION || '', creemProducts: creemProductsFromEnv(env) };
+  const webhook = `${options.creemWebhookSecret ? ', webhook on' : ''}${/^(?:1|true|yes|on)$/i.test(options.creemTestOnProduction.trim()) ? ', review mode on' : ''}`;
   if (fakeCreem) {
     creemLabel = `fake (/?checkout_id=fake_plus, /welcome/thanks/?checkout_id=fake_gift50, POST /__fake-creem/refund?checkout=…${webhook})`;
     return { ...options, creemApiKey: 'creem_test_fake', creemTestMode: '1', creemProducts: FAKE_PRODUCTS, creemFetch: fakeCreemFetch, creemWebhookSecret: options.creemWebhookSecret || FAKE_WEBHOOK_SECRET };
@@ -444,7 +451,7 @@ function configCheckOptions(options) {
     ...Object.fromEntries(CONFIG_VARIABLES.map(def => [def.name, process.env[def.name] || ''])),
     ADMIN_TOKEN: adminToken, ADMIN_TOTP_SECRET: adminTotpSecret,
     RESEND_API_KEY: options.resendApiKey, EMAIL_FROM: options.emailFrom, OWNER_EMAIL: options.ownerEmail, EMAIL_DAILY_LIMIT: options.emailDailyLimit,
-    CREEM_API_KEY: options.creemApiKey, CREEM_WEBHOOK_SECRET: options.creemWebhookSecret, CREEM_TEST_MODE: options.creemTestMode,
+    CREEM_API_KEY: options.creemApiKey, CREEM_WEBHOOK_SECRET: options.creemWebhookSecret, CREEM_TEST_MODE: options.creemTestMode, CREEM_TEST_ON_PRODUCTION: options.creemTestOnProduction,
     CREEM_PLUS_EUR: products.plus?.EUR || '', CREEM_PLUS_USD: products.plus?.USD || '', CREEM_GIFT_EUR: products.gift?.EUR || '', CREEM_GIFT_USD: products.gift?.USD || '',
     PLUS_SIGNING_KEY: options.plusSigningKey, DAILY_PLANNER_PLUS_PUBLIC_KEY: plusPublicKey, DAILY_PLANNER_API_URL: '/api',
     ASSETS: { fetch: async () => new Response(devRuntimeConfig(await fs.readFile(join(root, 'runtime-config.js'), 'utf8')), { headers: { 'content-type': 'text/javascript; charset=utf-8' } }) }

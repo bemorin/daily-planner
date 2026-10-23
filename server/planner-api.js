@@ -64,6 +64,12 @@
 //   request only and never stored. Creem only sees `member: '1'`.
 // - Reviews: feedback whose author ticked that it may be quoted, with the
 //   name they chose to give (optional). Deletable.
+// - Review mode (1.34, CREEM_TEST_ON_PRODUCTION): while Creem reviews the
+//   store, a test key sells on the production address too, in Creem's test
+//   mode (no card is charged), so Creem's team can make a test purchase.
+//   What it sells is recorded as any purchase, with the Test mode note; once
+//   payments are live, the owner switches every test-mode purchase off in one
+//   go (revocations under owner_test_mode, migration 0005), and can restore them.
 //
 // Owner access: POST admin/session exchanges ADMIN_TOKEN (+ an authenticator
 // code when ADMIN_TOTP_SECRET is set) for an 8-hour signed session, sent as
@@ -208,6 +214,15 @@ export const REFUNDS_LISTED = 100;
 export const ORDER_BACKFILL_MAX = 40;
 const ORDER_BACKFILL_BATCH = 8;
 export const REVOCATIONS_LISTED = 500;
+// Switching test-mode purchases off (1.34): one decision, under one source, so Restore all undoes exactly it and a
+// second switch-off only adds what was bought since. Each call takes at most this many purchases (well within D1's
+// queries per request: the rows go in a few at a time); a larger set is finished by switching off again.
+export const TEST_PURCHASES_SOURCE = `${OWNER_SOURCE_PREFIX}test_mode`;
+export const TEST_SWITCH_OFF_CONFIRM = 'SWITCH OFF';
+export const TEST_RESTORE_CONFIRM = 'RESTORE';
+export const TEST_SWITCH_OFF_BATCH = 120;
+const TEST_SWITCH_OFF_NOTE = 'Bought in test mode, switched off together';
+const FLAG_ON_RE = /^(?:1|true|yes|on)$/i;
 // Shown on the Creem checkout of a gift; the answer is the name the gift shows:
 // the company for a team gift, the giver for a personal gift (labels ≤ 50 characters).
 const COMPANY_FIELD = Object.freeze({ type: 'text', key: 'company', label: 'Company name, shown to your team', optional: true, text: Object.freeze({ max_length: 80 }) });
@@ -514,6 +529,8 @@ export const buyerCurrency = request => currencyForCountry(requestCountry(reques
  * @param {string} [options.creemApiKey]    CREEM_API_KEY; payments are off without it
  * @param {string} [options.creemWebhookSecret] CREEM_WEBHOOK_SECRET; the webhook answers 503 without it
  * @param {string} [options.creemTestMode]  CREEM_TEST_MODE ('1' uses Creem's test API; so does a creem_test_ key)
+ * @param {string} [options.creemTestOnProduction] CREEM_TEST_ON_PRODUCTION ('1': review mode, a test key sells on the
+ *   production address too, while Creem reviews the store; no effect with a live key)
  * @param {{ plus?: { EUR?: string, USD?: string }, gift?: { EUR?: string, USD?: string } }} [options.creemProducts]
  *   CREEM_PLUS_EUR, CREEM_PLUS_USD, CREEM_GIFT_EUR, CREEM_GIFT_USD (see creemProductsFromEnv in server/creem.js)
  * @param {typeof fetch} [options.creemFetch] fetch used for Creem (tests and the dev server inject one)
@@ -533,7 +550,7 @@ export const buyerCurrency = request => currencyForCountry(requestCountry(reques
 export function createPlannerApi({
   store, adminToken = '', adminTotpSecret = '', allowedOrigins = '', now = () => new Date(), authFailureDelayMs = AUTH_FAILURE_DELAY_MS,
   resendApiKey = '', emailFrom = '', ownerEmail = '', emailDailyLimit = '', emailFetch, emailIntervalMs = RESEND_MIN_INTERVAL_MS, notifyTimeoutMs = NOTIFY_TIMEOUT_MS,
-  publicBaseUrl = '', plusSigningKey = '', creemApiKey = '', creemWebhookSecret = '', creemTestMode = '', creemProducts = {}, creemFetch,
+  publicBaseUrl = '', plusSigningKey = '', creemApiKey = '', creemWebhookSecret = '', creemTestMode = '', creemTestOnProduction = '', creemProducts = {}, creemFetch,
   defer = null, warn = message => console.warn(message), configEnv = null, configFetch, adminLimits = sharedAdminLimits, partnerLimits = sharedPartnerLimits, random = Math.random
 }) {
   const origins = new Set(String(allowedOrigins || '').split(',').map(value => value.trim()).filter(Boolean));
@@ -565,10 +582,15 @@ export function createPlannerApi({
   creem.mode = creemMode(creem.apiKey, creemTestMode);
   const webhookSecret = String(creemWebhookSecret || '').trim();
   const paymentsConfigured = !!(creem.apiKey && products.byId.size && creem.fetch);
-  // Test keys never sell on the production address (anyone could pay with a test
-  // card and get a real licence): test on a preview address or locally instead.
+  // Test keys don't sell on the production address (anyone could pay with a test
+  // card and get a licence): test on a preview address or locally instead —
+  // except in review mode (CREEM_TEST_ON_PRODUCTION), while Creem reviews the
+  // store and its team may make a test purchase there. Those purchases carry
+  // the Test mode note, and the owner switches them all off once live.
   const productionHost = () => { try { return new URL(baseUrl()).hostname; } catch { return ''; } };
   const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+  const reviewMode = FLAG_ON_RE.test(String(creemTestOnProduction ?? '').trim());
+  const reviewOpen = reviewMode && creem.mode === 'test';
   const testOnProduction = request => {
     if (creem.mode !== 'test') return false;
     try {
@@ -576,6 +598,8 @@ export function createPlannerApi({
       return !LOCAL_HOSTS.has(host) && host === productionHost();
     } catch { return true; }
   };
+  /** Whether buying is off for this request: a test key on the production address, outside review mode. */
+  const sellingOff = request => testOnProduction(request) && !reviewOpen;
   /** Checkouts return to the address they were opened from (a preview address while testing). */
   const returnBase = request => {
     try {
@@ -634,8 +658,13 @@ export function createPlannerApi({
     try { return await store.listRevocationsFor(targets.filter(Boolean)); } catch (error) { if (isMissingTable(error)) return []; throw error; }
   }
   const byCreem = rows => rows.some(row => CREEM_REASONS.includes(row.reason));
-  /** The answer for a purchase link that no longer works: refunded (by Creem) or switched off (by the owner). */
-  const refusedAnswer = (rows, cors) => (byCreem(rows) ? json(410, { error: REFUNDED_PURCHASE, refunded: true }, cors) : json(410, { error: SWITCHED_OFF_PURCHASE, revoked: true }, cors));
+  /**
+   * The answer for a purchase link that no longer works: refunded (by Creem), switched off with the other
+   * test-mode purchases (a test purchase, said as such) or switched off by the owner.
+   */
+  const refusedAnswer = (rows, cors) => (byCreem(rows) ? json(410, { error: REFUNDED_PURCHASE, refunded: true }, cors)
+    : rows.every(row => row.source === TEST_PURCHASES_SOURCE) ? json(410, { error: TEST_PURCHASE, test: true }, cors)
+      : json(410, { error: SWITCHED_OFF_PURCHASE, revoked: true }, cors));
   /** The Creem order of a paid checkout, so a later refund finds it. Best effort: never blocks a delivery. */
   async function recordOrder(checkoutId, kind, orderId, mode = '') {
     if (!orderId) return;
@@ -1062,12 +1091,15 @@ export function createPlannerApi({
   /**
    * What can be bought right now (currencies with a product, while payments and
    * Plus are set up) and `currency`, the one this buyer pays in: from their
-   * country, '' when it is unknown (local development).
+   * country, '' when it is unknown (local development). `test`: checkouts run
+   * in Creem's test mode (no card is charged), so the pages say so; `review`
+   * (only when true): on the production address, in review mode.
    */
   async function checkoutOptions(request) {
-    const ready = paymentsConfigured && !testOnProduction(request) && !!await signer();
+    const ready = paymentsConfigured && !sellingOff(request) && !!await signer();
     const currencies = item => (ready ? CURRENCIES.filter(currency => products.ids[item][currency]) : []);
-    return { plus: currencies('plus'), gift: currencies('gift'), currency: buyerCurrency(request), test: ready && creem.mode === 'test' };
+    const test = ready && creem.mode === 'test';
+    return { plus: currencies('plus'), gift: currencies('gift'), currency: buyerCurrency(request), test, ...(test && testOnProduction(request) ? { review: true } : {}) };
   }
 
   /**
@@ -1104,7 +1136,7 @@ export function createPlannerApi({
     if (!currency) return json(400, { error: 'Choose a currency: EUR or USD.' }, cors);
     const gift = item === 'gift' ? giftPlan(typeof body?.plan === 'string' ? body.plan : '') : null;
     if (item === 'gift' && !gift) return json(400, { error: 'Choose which gift to buy.' }, cors);
-    if (!paymentsConfigured || testOnProduction(request) || !await signer()) return json(503, { error: CHECKOUT_OFF }, cors);
+    if (!paymentsConfigured || sellingOff(request) || !await signer()) return json(503, { error: CHECKOUT_OFF }, cors);
     const productId = products.ids[item][currency];
     if (!productId) {
       // Never switched to another currency: the buyer would pay a price they were not shown.
@@ -1424,6 +1456,136 @@ export function createPlannerApi({
     return json(200, { restored }, cors);
   }
 
+  // ---- Test-mode purchases (1.34) ------------------------------------------------
+
+  /**
+   * Every Plus purchase and gift bought in Creem's test mode (the Test mode
+   * note), each with whether it is off now (`revoked`: by anything — this
+   * switch-off, a refund, a revocation by hand) and whether the switch-off
+   * holds it (`grouped`). Throws "no such table" while migration 0005 is missing.
+   */
+  const testPurchaseLists = () => store.listTestPurchases({ note: TEST_NOTE, source: TEST_PURCHASES_SOURCE });
+
+  /**
+   * What the dashboard shows: how many Plus licences and gift links were bought
+   * in test mode, how many are off, how many are still active, how many the
+   * switch-off holds and how many it doesn't yet (`pending`), and the mode.
+   */
+  function testPurchaseStatus({ plus = [], gifts = [] } = {}) {
+    const off = rows => rows.filter(row => row.revoked).length;
+    const all = [...plus, ...gifts];
+    return {
+      plus: plus.length,
+      gifts: gifts.length,
+      plusOff: off(plus),
+      giftsOff: off(gifts),
+      active: all.length - off(all),
+      switchedOff: all.filter(row => row.grouped).length,
+      pending: all.filter(row => !row.grouped).length,
+      latestAt: all.map(row => String(row.createdAt || '')).sort().at(-1) || '',
+      mode: creem.mode,
+      reviewMode,
+      reviewOpen
+    };
+  }
+
+  /**
+   * POST admin/test-purchases/switch-off { confirm: 'SWITCH OFF' }: revokes
+   * every test-mode purchase the switch-off doesn't hold yet (at most
+   * TEST_SWITCH_OFF_BATCH a call), as one owner decision: its activation link
+   * (checkout), its licence or its gift link with every licence activated from
+   * it. Planners lose Plus at their next weekly check; gift links stop at once.
+   * Idempotent: a second call only adds what was bought since.
+   * POST admin/test-purchases/restore { confirm: 'RESTORE' } undoes it all,
+   * each gift link back as it was, unless something else still holds it.
+   * GET admin/test-purchases answers the counts.
+   */
+  async function adminTestPurchases(request, path, cors) {
+    const missing = () => json(503, { error: MISSING_TABLE }, cors);
+    const lists = () => testPurchaseLists().catch(error => { if (isMissingTable(error)) return null; throw error; });
+    if (path === 'admin/test-purchases') {
+      if (request.method !== 'GET') return json(405, { error: 'Method not allowed' }, cors);
+      const found = await lists();
+      return found ? json(200, { status: testPurchaseStatus(found) }, cors) : missing();
+    }
+    const action = /^admin\/test-purchases\/(switch-off|restore)$/.exec(path)?.[1];
+    if (!action) return null;
+    if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+    const body = await readJson(request);
+    if (action === 'switch-off') {
+      if (body?.confirm !== TEST_SWITCH_OFF_CONFIRM) return json(400, { error: `Type ${TEST_SWITCH_OFF_CONFIRM} to confirm.` }, cors);
+      if (!signingSecret) return json(503, { error: PLUS_OFF }, cors);
+      const before = await lists();
+      if (!before) return missing();
+      const result = await switchOffTestPurchases(before);
+      const after = await lists();
+      return json(200, { ...result, status: testPurchaseStatus(after || before) }, cors);
+    }
+    if (body?.confirm !== TEST_RESTORE_CONFIRM) return json(400, { error: `Confirm with ${TEST_RESTORE_CONFIRM} to restore them.` }, cors);
+    let rows;
+    try { rows = await store.listRevocationsBySource(TEST_PURCHASES_SOURCE); } catch (error) { if (isMissingTable(error)) return missing(); throw error; }
+    const restored = { plus: rows.filter(row => row.kind === 'license').length, gifts: rows.filter(row => row.kind === 'gift').length };
+    if (rows.length) await restoreTestPurchases(rows);
+    const after = await lists();
+    return json(200, { restored, status: testPurchaseStatus(after || {}) }, cors);
+  }
+
+  /** The switch-off itself: { added: { plus, gifts }, more } (`more`: purchases left for another call). */
+  async function switchOffTestPurchases({ plus, gifts }) {
+    const todo = [...plus.filter(row => !row.grouped).map(row => ({ plus: row })), ...gifts.filter(row => !row.grouped).map(row => ({ gift: row }))];
+    const batch = todo.slice(0, TEST_SWITCH_OFF_BATCH);
+    const giftsIn = batch.filter(entry => entry.gift).map(entry => entry.gift);
+    // A gift's link comes back on Restore as it was before it was first revoked: read once for all of them.
+    const targets = new Map(await Promise.all(giftsIn.map(async gift => [gift.code, await giftTarget(gift.code)])));
+    const earlier = await revocationsOf([...targets.values()]);
+    const rows = [];
+    for (const entry of batch) {
+      if (entry.plus) {
+        rows.push({ target: revocationTarget('checkout', entry.plus.checkoutRef), kind: 'checkout', label: entry.plus.checkoutRef });
+        if (LICENSE_ID_RE.test(String(entry.plus.licenseId || ''))) rows.push({ target: revocationTarget('license', entry.plus.licenseId), kind: 'license', label: entry.plus.licenseId });
+        continue;
+      }
+      const { gift } = entry;
+      rows.push({ target: revocationTarget('checkout', gift.checkoutRef), kind: 'checkout', label: gift.checkoutRef });
+      const target = targets.get(gift.code);
+      if (!target) continue;
+      const was = earlier.find(row => row.target === target && typeof row.wasActive === 'boolean');
+      rows.push({ target, kind: 'gift', label: formatGiftCode(gift.code), wasActive: was ? was.wasActive : !!gift.active });
+    }
+    if (rows.length) {
+      // Gift links off first, as every revocation does, then the rows, a few to a statement.
+      if (giftsIn.length) await store.setGiftsActive(giftsIn.map(gift => gift.code), false);
+      const createdAt = now().toISOString();
+      await store.addRevocations(rows.map(row => ({ ...row, source: TEST_PURCHASES_SOURCE, reason: 'owner', note: TEST_SWITCH_OFF_NOTE, createdAt })));
+    }
+    return { added: { plus: batch.filter(entry => entry.plus).length, gifts: giftsIn.length }, more: Math.max(0, todo.length - batch.length) };
+  }
+
+  /**
+   * Restore all: the switch-off's rows go, and each gift link it switched off
+   * comes back on when it was on before, unless a refund, a dispute or another
+   * revocation still holds its checkout or its gift.
+   */
+  async function restoreTestPurchases(rows) {
+    await store.deleteRevocations(TEST_PURCHASES_SOURCE);
+    const giftRows = rows.filter(row => row.kind === 'gift' && row.wasActive !== false);
+    if (!giftRows.length) return;
+    const { gifts } = await testPurchaseLists();
+    const byCode = new Map(gifts.map(gift => [gift.code, gift]));
+    const held = new Set((await revocationsOf(giftRows.map(row => row.target))).map(row => row.target));
+    const codes = [];
+    for (const row of giftRows) {
+      const code = normalizeGiftCode(row.label);
+      if (!code || held.has(row.target)) continue;
+      const listed = byCode.get(code);
+      if (listed) { if (!listed.revoked) codes.push(code); continue; }
+      // No longer noted as a test purchase (its note was edited): checked on its own.
+      const gift = await store.getGift(code);
+      if (gift && !await isRevoked([gift.checkoutRef ? revocationTarget('checkout', gift.checkoutRef) : ''])) codes.push(code);
+    }
+    if (codes.length) await store.setGiftsActive(codes, true);
+  }
+
   async function setupInfo() {
     const publicKey = await plusPublicKey();
     return {
@@ -1440,6 +1602,9 @@ export function createPlannerApi({
         configured: paymentsConfigured,
         apiKeySet: !!creem.apiKey,
         mode: creem.mode,
+        // reviewMode: CREEM_TEST_ON_PRODUCTION is on; reviewOpen: with a test key, so test purchases are open on the production address.
+        reviewMode,
+        reviewOpen,
         products: { plus: { ...products.ids.plus }, gift: { ...products.ids.gift } },
         webhookSecretSet: !!webhookSecret,
         webhookUrl: `${baseUrl()}/api/creem/webhook`,
@@ -1870,6 +2035,8 @@ export function createPlannerApi({
       // Reviews come from migration 0004, refunds from 0005; without them the rest still loads.
       const reviewRows = store.listReviews({ limit: REVIEWS_LATEST }).catch(() => null);
       const refundData = Promise.all([store.listRefunds({ limit: REFUNDS_LISTED }), store.listRevocations({ limit: REVOCATIONS_LISTED })]).catch(() => null);
+      // Purchases made in Creem's test mode, and whether they are switched off (0003 and 0005).
+      const testData = testPurchaseLists().then(testPurchaseStatus).catch(() => null);
       // Partner sales come from migration 0006; which were refunded (in full or in part), from 0005 as well (none while it is missing);
       // team commissions marked as paid and codes found to be no partner, from 0007 (none while it is missing, and the card says so).
       // Partner statuses and visits through partner links come from 0008: without it every partner is an individual.
@@ -1881,7 +2048,7 @@ export function createPlannerApi({
       const commissionData = commissionLists().catch(failed);
       const visitsFrom = dayKey(new Date(now().getTime() - (PARTNER_VISIT_DAYS - 1) * 86400000));
       const profileData = Promise.all([profileList(), store.partnerVisitTotals({ fromDay: visitsFrom })]).catch(whenMissing(null)).catch(failed);
-      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, refundLists, partnerRows, commissions, profileRows, setup] = await Promise.all([
+      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, refundLists, partnerRows, commissions, profileRows, setup, testPurchases] = await Promise.all([
         store.eventTotals({ sinceDay }).then(publicEvents),
         store.eventDaily({ sinceDay }).then(publicEvents),
         store.listWaitlist(),
@@ -1895,7 +2062,8 @@ export function createPlannerApi({
         partnerData,
         commissionData,
         profileData,
-        setupInfo()
+        setupInfo(),
+        testData
       ]);
       const partners = partnerSummary(partnerRows?.[0] || [], partnerRows?.[1] || [], partnerRows?.[2] || [], { limit: PARTNER_SALES_LISTED, payouts: commissions?.payouts || [], rejections: commissions?.rejections || [], profiles: profileRows?.[0] || [], now: now().getTime() });
       // Visits through each partner's link over the last 30 days (one count per partner, whatever the case of the code);
@@ -1912,7 +2080,7 @@ export function createPlannerApi({
         gifts: await Promise.all(giftRows.map(gift => adminGift(gift, nowIso))), giftTotals, plusUnavailable: !plusData,
         plus: { purchases: purchaseTotals.plus, manualLicenses: purchaseTotals.manual, recentLicenses: manualLicenses.map(row => ({ id: row.licenseId, note: row.note, createdAt: row.createdAt })) },
         reviews: reviews || [], reviewsUnavailable: !reviews,
-        refunds: refundLists?.[0] || [], revocations: refundLists?.[1] || [], refundsUnavailable: !refundLists,
+        refunds: refundLists?.[0] || [], revocations: refundLists?.[1] || [], refundsUnavailable: !refundLists, testPurchases,
         partners, partnersUnavailable: !partnerRows && !partnersFailed, partnersFailed,
         partnerCommissionsUnavailable: !commissions && !partnersFailed, partnerProfilesUnavailable: !profileRows && !partnersFailed,
         partnerProgram: { rate: PARTNER_PROGRAM.rate, teamRate: PARTNER_PROGRAM.teamRate, refundDays: PARTNER_PROGRAM.refundDays, cookieDays: PARTNER_PROGRAM.cookieDays, minimumPayout: { ...PARTNER_PROGRAM.minimumPayout }, individualYearlyCap: { ...PARTNER_PROGRAM.individualYearlyCap } },
@@ -1940,6 +2108,10 @@ export function createPlannerApi({
     if (path === 'admin/licenses') return adminLicense(request, cors);
     if (path.startsWith('admin/revocations')) {
       const answer = await adminRevocations(request, path, cors);
+      if (answer) return answer;
+    }
+    if (path.startsWith('admin/test-purchases')) {
+      const answer = await adminTestPurchases(request, path, cors);
       if (answer) return answer;
     }
     if (path.startsWith('admin/gifts')) {
@@ -2284,6 +2456,32 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
       data.revocations = data.revocations.filter(item => item.source !== source);
       changed();
       return before - data.revocations.length;
+    },
+    /**
+     * Plus purchases and gifts bought online whose note starts with `note`
+     * (the Test mode note), newest first: `revoked` when a revocation holds
+     * their checkout (or a Plus purchase's licence), `grouped` when `source`'s does.
+     */
+    async listTestPurchases({ note, source }) {
+      const noted = row => !!note && String(row?.note || '').startsWith(note);
+      const revoked = targets => data.revocations.some(item => targets.includes(item.target));
+      const grouped = ref => data.revocations.some(item => item.source === source && item.target === `checkout:${ref}`);
+      const newest = (a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || String(a.checkoutRef).localeCompare(String(b.checkoutRef));
+      return {
+        plus: data.purchases.filter(row => row.kind === 'plus' && row.checkoutRef && noted(row))
+          .map(row => ({ checkoutRef: row.checkoutRef, licenseId: row.licenseId || '', createdAt: row.createdAt, revoked: revoked([`checkout:${row.checkoutRef}`, `license:${row.licenseId}`]), grouped: grouped(row.checkoutRef) }))
+          .sort(newest),
+        gifts: data.gifts.filter(row => row.checkoutRef && (row.source ?? 'manual') === 'creem' && noted(row))
+          .map(row => ({ code: row.code, checkoutRef: row.checkoutRef, active: normalizeGift(row).active, createdAt: row.createdAt, revoked: revoked([`checkout:${row.checkoutRef}`]), grouped: grouped(row.checkoutRef) }))
+          .sort(newest)
+      };
+    },
+    async setGiftsActive(codes, active) {
+      const wanted = new Set(codes);
+      let changedRows = 0;
+      data.gifts.forEach(gift => { if (wanted.has(gift.code)) { gift.active = !!active; changedRows += 1; } });
+      if (changedRows) changed();
+      return changedRows;
     },
     async addPartnerSale(row) {
       if (data.partnerSales.some(item => item.checkoutId === row.checkoutId)) return false;
