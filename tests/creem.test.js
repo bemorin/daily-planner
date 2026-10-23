@@ -302,16 +302,16 @@ test('a Creem Plus purchase becomes a licence, the same one on every claim (memo
     assert.deepEqual([row.kind, row.claims, row.email, row.licenseId, row.checkoutRef], ['plus', 1, 'buyer@example.com', payload.id, 'ch_plus123456'], label);
     const payment = await store.getPayment('ch_plus123456');
     assert.deepEqual({ ...payment, seats: Number(payment.seats) }, { checkoutId: 'ch_plus123456', kind: 'plus', plan: '', seats: 1, amount: 2900, currency: 'EUR', country: 'FR', createdAt: '2026-10-09T08:00:00.000Z', emailedAt: null }, label);
-    // Claims 2…10 answer the same licence id from the database; the older `session` field works too.
+    // Claims 2…3 answer the same licence id from the database; the older `session` field works too.
     for (let claim = 2; claim <= PLUS_CLAIMS_MAX; claim += 1) {
       const again = await asJson(await api(post('purchases/claim', claim === 2 ? { session: 'ch_plus123456' } : { checkout: 'ch_plus123456' })));
       assert.equal(again.status, 200, `${label} claim ${claim}`);
       assert.equal((await verifyLicense(KEYS.publicKey, again.body.license)).id, payload.id);
     }
     assert.equal(creem.calls.length, 1, `${label}: Creem is asked once`);
-    const eleventh = await asJson(await api(post('purchases/claim', { checkout: 'ch_plus123456' })));
-    assert.equal(eleventh.status, 409, label);
-    assert.match(eleventh.body.error, /10 times/);
+    const fourth = await asJson(await api(post('purchases/claim', { checkout: 'ch_plus123456' })));
+    assert.equal(fourth.status, 409, label);
+    assert.match(fourth.body.error, /3 times\. Your other devices get Plus through a backup or sync/);
     // Bought with a test key: counted apart, never as a sale (1.34.1).
     const { plus } = (await asJson(await api(get('admin/summary', 'secret')))).body;
     assert.deepEqual([plus.purchases, plus.testPurchases], [0, 1], label);

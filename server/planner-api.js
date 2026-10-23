@@ -184,7 +184,9 @@ const INTERNAL_EVENT_PREFIX = 'internal:';
 // Resend's free plan: 100 emails a day (3,000 a month).
 export const DEFAULT_EMAIL_DAILY_LIMIT = 100;
 // A Plus purchase can be claimed again (reinstall, another browser) this many times.
-export const PLUS_CLAIMS_MAX = 10;
+// A purchase's activation link works on this many devices; other devices get Plus
+// through a backup or Google Drive sync, which carry the licence (1.34.2: was 10).
+export const PLUS_CLAIMS_MAX = 3;
 const NOTIFY_TIMEOUT_MS = 3000;
 const BUYER_EMAIL_TIMEOUT_MS = 10000;
 const LICENSE_NOTE_MAX = 200;
@@ -952,7 +954,7 @@ export function createPlannerApi({
 
   async function plusClaimAnswer(purchase, key, cors) {
     if (!await store.claimPurchase(purchase.checkoutRef, PLUS_CLAIMS_MAX)) {
-      return json(409, { error: `This purchase has already been activated ${PLUS_CLAIMS_MAX} times. Reply to your receipt and we will help.` }, cors);
+      return json(409, { error: `This purchase has already been activated ${PLUS_CLAIMS_MAX} times. Your other devices get Plus through a backup or sync (Settings); if you need a hand, reply to your receipt.` }, cors);
     }
     const license = await signLicense(key, { src: 'purchase', id: purchase.licenseId, iat: String(purchase.createdAt).slice(0, 10) });
     return json(200, { kind: 'plus', license }, cors);

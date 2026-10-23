@@ -2,6 +2,11 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.34.2 — 2026-10-23
+
+- A Plus purchase's activation link now works on **3 devices** (was 10): other devices get Plus with the plans, through a backup or Google Drive sync, which already carry the licence. The purchase email, the refusal message and the terms say so (“Please don’t share that link or your backup; to give Plus to someone else, use a gift, or Plus Family for a household”).
+- `docs/LAUNCH.md`: the owner's launch checklist, from Creem's review to launch day.
+
 ## 1.34.1 — 2026-10-23
 
 - **Wider scrollbar** everywhere (planner, its modals, the floating window, the dashboard, the public and legal pages): a 12px gutter with a 6px rounded thumb that grows to 8px and darkens under the pointer, from one set of tokens per stylesheet; Firefox keeps its thin bar.
