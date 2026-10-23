@@ -94,10 +94,10 @@ test('email HTML escapes everything and keeps the one-email footer', () => {
 
 test('the Plus purchase email carries the activation link, in text and escaped HTML', () => {
   const url = 'https://planner.bemorin.com/?purchase=ch_abc&x=<b>';
-  const email = plusPurchaseEmail({ url, devices: 10 });
+  const email = plusPurchaseEmail({ url, devices: 3 });
   assert.equal(email.subject, 'Your Daily Planner Plus');
-  assert.ok(email.text.includes(`Activate Plus on each device: open this link on the phone, tablet or computer where you plan.\n${url}\n`));
-  assert.ok(email.text.includes('up to 10 devices'));
+  assert.ok(email.text.includes(`Activate Plus: open this link on the phone, tablet or computer where you plan.\n${url}\n`));
+  assert.ok(email.text.includes('up to 3 devices. Your other devices get Plus with your plans, through a backup or Google Drive sync.'));
   assert.ok(email.text.includes('Creem'), 'the receipt comes from Creem');
   assert.ok(email.html.includes('href="https://planner.bemorin.com/?purchase=ch_abc&amp;x=&lt;b&gt;"'));
   assert.ok(!email.html.includes('<b>"'), 'the link is escaped');
