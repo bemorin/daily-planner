@@ -3443,7 +3443,6 @@ import { parseChecklistLine as parseBlockChecklistLine, renderBlockNotesPreview,
   qs('[data-export-json]').addEventListener('click', () => download(`daily-planner-${ymd()}.json`, JSON.stringify(state, null, 2), 'application/json'));
   qs('[data-export-backup]')?.addEventListener('click', exportPlannerBackup);
   qs('[data-import-menu]')?.addEventListener('click', openImportPicker);
-  qs('[data-export-pdf]').addEventListener('click', printPlanner);
   qs('[data-pip]').addEventListener('click', () => pipFeature.open());
   const openJournal = () => { journalPage = 0; renderJournal(); openModal(qs('[data-journal-modal]')); trackOncePer('day', 'journal_opened'); };
   const openStats = () => { statsFeature.ensureWeek(); insightsFeature.invalidate(); renderStats(); openModal(qs('[data-stats-modal]')); trackOncePer('day', 'stats_opened'); };

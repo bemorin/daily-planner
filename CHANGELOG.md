@@ -2,6 +2,14 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.33.2 — 2026-10-23
+
+- Phones and tablets: **More** lists only what the header hides, in groups (Time stats when it isn't in the header · Print / PDF and Export · Settings, Sync my devices, Install the app, Daily Planner Plus · How it works, Take the tour, Send feedback), never duplicating a header icon; it stops above the bottom bar. **Export**'s options are full size with icons, rounded rows and groups (no “Print / PDF” there any more — Print is its own button); menus close on a choice and on Escape, with visible keyboard focus.
+- The planner shows the feature release (“Version 1.33”) in Help and the feedback window; feedback still carries the exact version.
+- Footers: social links are labelled pill buttons (“Follow on X ↗”, “LinkedIn ↗”, “GitHub ↗”). Contact: no divider in the card beside the form.
+- **Free orders** (a 100% discount code, as Creem's review may use): a completed checkout whose order owes nothing counts as paid unless its status says waiting or failed; Plus or the gift is delivered, the sale is recorded at 0, buyer emails show no amount, and a free order through a partner link creates no commission.
+- The dev server reads the footer's social-link variables too.
+
 ## 1.33.1 — 2026-10-22
 
 - **No consent box** on the Contact and Teams forms after all: for a contact form an information notice is what's required, and it stays under each form (what is kept, why, deletion on request, link to how requests are handled). The API no longer asks for `consent` (a cached 1.33.0 page that sends it is still accepted; the value isn't stored). The privacy policy and dialogs are back to the 1.32 basis: steps before an order (invoice, quote) and our legitimate interest in answering a question.

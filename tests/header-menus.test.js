@@ -81,10 +81,13 @@ test('nothing in More is also a visible header icon at the same width', () => {
 });
 
 test('Export reads like the other menus: icons, the same type, rounded rows on a well, a visible keyboard ring', () => {
-  assert.deepEqual(choices(exportMenu), ['data-export-md', 'data-export-json', 'data-export-backup', 'data-import-menu', 'data-export-pdf']);
+  assert.deepEqual(choices(exportMenu), ['data-export-md', 'data-export-json', 'data-export-backup', 'data-import-menu']);
   for (const option of exportMenu.split('\n').filter(line => line.includes('<button'))) assert.match(option, /<svg viewBox="0 0 24 24" aria-hidden="true">.*<\/svg><span>[^<]+<\/span><\/button>/, 'an icon and a label');
-  assert.equal(exportMenu.split('<span class="app-menu__rule" aria-hidden="true"></span>').length, 3, 'this day · all data · print');
+  assert.equal(exportMenu.split('<span class="app-menu__rule" aria-hidden="true"></span>').length, 2, 'this day · all data');
   const exportList = between(moreMenu, '<div class="mobile-export-list">', '</div>');
+  assert.deepEqual(choices(exportList), ['data-mobile-export-md', 'data-mobile-export-json', 'data-mobile-export-backup', 'data-mobile-import']);
+  // Print has its own button wherever Export shows (both header-secondary on a desktop; their own rows in More): never a second Print inside Export.
+  for (const menu of [exportMenu, exportList]) assert.doesNotMatch(menu, /Print|data-[a-z-]*(?:print|pdf)/);
   for (const option of exportList.split('\n').filter(line => line.includes('<button'))) assert.match(option, /<svg viewBox="0 0 24 24" aria-hidden="true">.*<\/svg><span>[^<]+<\/span><\/button>/);
 
   const size = selector => /font-size: ([^;]+);/.exec(rule(selector))?.[1];

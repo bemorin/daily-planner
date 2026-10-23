@@ -418,12 +418,12 @@ test('the build copies legal/ and _redirects, and reads the five legal build var
   }
 });
 
-test('the dev server takes the legal and partner build variables from the environment, as the build does', async () => {
+test('the dev server takes the legal, partner and social-link build variables from the environment, as the build does', async () => {
   const build = await read('scripts/build.mjs');
   const serve = await read('scripts/serve.mjs');
   const fromBuild = new Map([...build.matchAll(/^ {2}([A-Z_]+): process\.env\.(DAILY_PLANNER_[A-Z_]+) \|\| ''/gm)].map(match => [match[1], match[2]]));
   const fromServe = [...(/const ENV_CONFIG = \[([\s\S]*?)\n\];/.exec(serve)?.[1] || '').matchAll(/\['([A-Z_]+)', '(DAILY_PLANNER_[A-Z_]+)'\]/g)].map(match => [match[1], match[2]]);
-  assert.deepEqual(fromServe.map(([key]) => key), ['SUPPORT_EMAIL', 'PRIVACY_EMAIL', 'LEGAL_PHONE', 'LEGAL_ADDRESS', 'LEGAL_REGISTRATION', 'AFFILIATE_URL']);
+  assert.deepEqual(fromServe.map(([key]) => key), ['SUPPORT_EMAIL', 'PRIVACY_EMAIL', 'LEGAL_PHONE', 'LEGAL_ADDRESS', 'LEGAL_REGISTRATION', 'AFFILIATE_URL', 'PROJECT_GITHUB_URL', 'SOCIAL_X_URL', 'SOCIAL_LINKEDIN_URL']);
   for (const [key, variable] of fromServe) {
     assert.equal(variable, fromBuild.get(key), `${key}: the same variable as the build`);
     assert.ok(serve.slice(0, serve.indexOf('import ')).includes(variable), `${variable} is in the header`);
