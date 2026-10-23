@@ -335,7 +335,8 @@ test('the panel: counts, what the mode means, and the actions it allows', () => 
   const status = readStatus(counts({ plusOff: 1, active: 3, mode: 'live' }));
   assert.deepEqual([status.total, status.off, status.active], [4, 1, 3]);
   assert.equal(readStatus({ plus: 2, plusOff: 9 }).plusOff, 2, 'never more off than bought');
-  assert.equal(panelShown(readStatus({})), false, 'nothing bought, review mode off: no panel');
+  assert.equal(panelShown(null), false, 'no counts (the refunds tables are missing): no panel');
+  assert.equal(panelShown(readStatus({})), true, 'nothing bought, review mode off: shown all the same (1.34.1)');
   assert.equal(panelShown(readStatus({ reviewOpen: true })), true, 'review mode open: shown, with nothing to switch off');
 
   const html = testPurchasesHtml(status, { number: String });
@@ -356,8 +357,26 @@ test('the panel: counts, what the mode means, and the actions it allows', () => 
   const reviewing = testPurchasesHtml(readStatus(counts({ mode: 'test', reviewMode: true, reviewOpen: true })), { number: String });
   assert.match(reviewing, /Review mode on<\/span>/);
   assert.match(reviewing, /While Creem reviews your store, checkouts on the production address run in Creem’s test mode/);
-  assert.match(testPurchasesHtml(readStatus({ reviewOpen: true, mode: 'test' }), { number: String }), /Nothing bought in test mode yet\./);
-  assert.equal(testPurchasesHtml(readStatus({}), { number: String }), '');
+  assert.equal(testPurchasesHtml(null, { number: String }), '');
+});
+
+test('with no test-mode purchase, the panel is there all the same: the switch, disabled, says why and when to use it', () => {
+  const empty = testPurchasesHtml(readStatus({ mode: 'test' }), { number: String });
+  assert.match(empty, /<h3 id="owner-tests-title"><span>Test-mode purchases<\/span><\/h3>/);
+  assert.match(empty, /<button class="primary-button owner-danger" type="button" data-owner-tests-switch disabled aria-describedby="owner-tests-state">Switch off test-mode purchases…<\/button><p class="owner-tests__state" id="owner-tests-state">No test-mode purchases yet<\/p>/);
+  assert.match(empty, /give Plus without a real payment\. Once your live key is in, switch them all off here, in one go\./, 'when to use it');
+  assert.doesNotMatch(empty, /owner-tests__counts|data-owner-tests-restore/, 'no zero tiles, nothing to restore');
+  // Review mode set in Cloudflare but not deployed yet can't be seen: the hint says when it applies.
+  assert.match(empty, /Just set <code>CREEM_TEST_ON_PRODUCTION<\/code>\? Cloudflare applies a new variable from the next deployment/);
+  const reviewing = testPurchasesHtml(readStatus({ reviewMode: true, reviewOpen: true, mode: 'test' }), { number: String });
+  assert.match(reviewing, /Review mode on<\/span>/);
+  assert.match(reviewing, /data-owner-tests-switch disabled[^>]*>Switch off test-mode purchases…<\/button><p class="owner-tests__state" id="owner-tests-state">No test-mode purchases yet<\/p>/);
+  assert.doesNotMatch(reviewing, /Just set/, 'review mode is on: nothing to deploy');
+  const live = testPurchasesHtml(readStatus({ mode: 'live' }), { number: String });
+  assert.match(live, /None were made here, so there is nothing to switch off\./);
+  assert.doesNotMatch(live, /Just set/);
+  // Not counted as something to do.
+  assert.deepEqual(build(calm({ testPurchases: counts({ plus: 0, gifts: 0, active: 0 }) })), []);
 });
 
 test('the dialog asks for SWITCH OFF, give or take case and spaces; restore is one button', () => {

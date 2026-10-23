@@ -5,7 +5,7 @@
 
 import {
   TREND_METRICS, FUNNELS, metricById, metricTrend, change, comparisonRanges, funnelSteps, funnelOverall,
-  sectionUsage, installUsage, saleCurrencies, yearsToShow, PERIODS
+  sectionUsage, installUsage, saleCurrencies, testSalesIn, yearsToShow, PERIODS
 } from './trends.js';
 import { columnChart, sparklineHtml } from './charts.js';
 // The animation library itself, not src/ui/motion.js: that one marks the page `has-motion`, which would take the dashboard's dropdowns' own transition away.
@@ -62,8 +62,8 @@ const METRIC_COPY = {
   'days-closed': { label: () => 'Days closed', about: () => 'Days closed in the planner.' },
   plus: { label: () => 'Plus unlocked', about: () => 'Plus unlocked on a planner, whichever way: purchase, gift or licence.' },
   'gifts-activated': { label: () => 'Gifts activated', about: () => 'Team gift links activated on a planner.' },
-  'gifts-sold': { label: () => 'Team gifts sold', about: () => 'Team gifts paid online, plus invoiced ones that have an amount.' },
-  revenue: { label: () => 'Revenue', about: () => 'Plus and team gifts, paid online or invoiced with an amount. Each currency on its own: they are never added together.' }
+  'gifts-sold': { label: () => 'Team gifts sold', about: () => 'Team gifts paid online, plus invoiced ones that have an amount. Purchases made in Creem’s test mode are left out.' },
+  revenue: { label: () => 'Revenue', about: () => 'Plus and team gifts, paid online or invoiced with an amount. Each currency on its own: they are never added together. Purchases made in Creem’s test mode are left out.' }
 };
 
 const FUNNEL_COPY = {
@@ -224,6 +224,18 @@ export function createTrendsView(root, { storage = globalThis.localStorage } = {
 
   const shortDate = day => dateFormat({ day: 'numeric', month: 'short', ...(day.slice(0, 4) !== series.to.slice(0, 4) ? { year: 'numeric' } : {}) }).format(utcDate(day));
 
+  /**
+   * Sales made in Creem's test mode over `range`, for a sales or revenue
+   * metric: never in its figures, only said apart ('' when there are none).
+   */
+  function testSalesText(metric, range) {
+    if (!metric.revenue && !metric.sales) return '';
+    const found = testSalesIn(series, range, metric.sales || {});
+    if (!found.count) return '';
+    const amounts = metric.revenue ? Object.entries(found.revenue).map(([code, cents]) => money(cents, code)).join(' · ') : '';
+    return `${number(found.count)} test-mode ${found.count === 1 ? 'sale' : 'sales'}${amounts ? ` (${amounts})` : ''} not counted`;
+  }
+
   function tileHtml(metric) {
     const copy = PERIOD_COPY[period];
     const trend = trendOf(metric);
@@ -233,19 +245,22 @@ export function createTrendsView(root, { storage = globalThis.localStorage } = {
     const selected = metric.id === metricId;
     const head = `<span class="trend-tile__label">${esc(label)}</span>`;
     const open = `<button type="button" class="trend-tile${selected ? ' is-selected' : ''}" data-trend-metric="${esc(metric.id)}" aria-pressed="${selected}" aria-controls="owner-trend-detail">`;
+    // Test-mode sales of the period so far: never in the figure, said apart.
+    const testText = testSalesText(metric, trend.ranges.current);
+    const tested = testText ? `<span class="trend-tile__note trend-tile__test">${esc(testText)}</span>` : '';
     if (metric.revenue || metric.sales) {
-      if (series.salesUnavailable && !series.sales.length) return `${open}${head}<span class="trend-tile__figure"><strong>—</strong></span><span class="trend-tile__note">Run migration 0004 to see sales.</span></button>`;
+      if (series.salesUnavailable && !series.sales.length) return `${open}${head}<span class="trend-tile__figure"><strong>—</strong></span><span class="trend-tile__note">Run migration 0004 to see sales.</span>${tested}</button>`;
     }
     if (metric.revenue) {
       const codes = currencies();
-      if (!codes.length) return `${open}${head}<span class="trend-tile__figure"><strong>—</strong></span><span class="trend-tile__note">No sales with an amount yet.</span></button>`;
+      if (!codes.length) return `${open}${head}<span class="trend-tile__figure"><strong>—</strong></span><span class="trend-tile__note">No sales with an amount yet.</span>${tested}</button>`;
       const rows = codes.map(code => `<span class="trend-tile__money"><strong>${esc(money(trend.current[code], code))}</strong>${deltaHtml(trend.current[code], trend.previous[code], copy.before)}<span class="trend-tile__note">vs ${esc(money(trend.previous[code], code))}${esc(partly)}${trend.lastYear ? ` · ${esc(money(trend.lastYear[code], code))} ${esc(copy.yearAgo)}` : ''}</span></span>`).join('');
       const spark = codes.length === 1 ? sparklineHtml(trend.history.map(row => row.value[codes[0]] || 0)) : '';
-      return `${open}${head}<span class="trend-tile__monies">${rows}</span>${spark}</button>`;
+      return `${open}${head}<span class="trend-tile__monies">${rows}</span>${tested}${spark}</button>`;
     }
     const yearAgo = trend.lastYear != null ? `<span class="trend-tile__note">${esc(number(trend.lastYear))} ${esc(copy.yearAgo)}</span>` : '';
     return `${open}${head}<span class="trend-tile__figure"><strong>${esc(number(trend.current))}</strong>${deltaHtml(trend.current, trend.previous, copy.before)}</span>
-      <span class="trend-tile__note">vs ${esc(number(trend.previous))} ${esc(copy.before)}${esc(partly)}</span>${yearAgo}${sparklineHtml(trend.history.map(row => row.value))}</button>`;
+      <span class="trend-tile__note">vs ${esc(number(trend.previous))} ${esc(copy.before)}${esc(partly)}</span>${yearAgo}${tested}${sparklineHtml(trend.history.map(row => row.value))}</button>`;
   }
 
   function detailTable(metric, trend, labels) {
@@ -272,10 +287,13 @@ export function createTrendsView(root, { storage = globalThis.localStorage } = {
       : '';
     const codes = metric.revenue ? currencies() : [];
     const empty = metric.revenue && !codes.length;
+    // Test-mode sales over the periods shown: left out of the chart, and said so.
+    const testText = testSalesText(metric, { from: shown.from, to: series.to });
+    const leftOut = testText ? `<p class="owner-hint">Over these ${esc(period === 'week' ? 'weeks' : period === 'month' ? 'months' : 'years')}: ${esc(testText)}.</p>` : '';
     host.innerHTML = `<header class="owner-card__head"><div><h2 id="owner-trend-detail-title">${esc(label)} <span class="trend-detail__span">· ${esc(copy.history)}</span></h2>
         <p>${esc(METRIC_COPY[metric.id].about(period))} ${esc(copy.bar)} The last one, ${esc(copy.now.toLowerCase())} so far, is shown in a softer shade.</p></div>
         <div class="owner-card__tools"><button class="secondary-button trend-table-toggle" type="button" data-trend-table aria-pressed="${tableView}"${empty ? ' disabled' : ''}>${tableView ? 'Chart view' : 'Table view'}</button></div></header>
-      <div class="trend-detail__body" data-trend-detail-body></div>${started}`;
+      <div class="trend-detail__body" data-trend-detail-body></div>${started}${leftOut}`;
     const target = host.querySelector('[data-trend-detail-body]');
     if (empty) { target.innerHTML = '<p class="owner-empty">No sales with an amount yet.</p>'; return; }
     if (tableView) { target.innerHTML = detailTable(metric, trend, labels); return; }

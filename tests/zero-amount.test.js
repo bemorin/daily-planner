@@ -178,10 +178,11 @@ test('a free Plus order from the webhook becomes a licence and its email, record
     assert.equal(await store.getPayment('ch_freeplus0003'), null, label);
     assert.equal(buyerEmails(resend).length, 2, label);
 
-    // The sales chart counts the free order, at 0.
+    // The sales chart counts the free order, at 0 (apart here: made with a test key, so a test-mode sale).
     const series = (await asJson(await api(get('admin/series?from=2026-10-23&to=2026-10-23', 'secret')))).body;
-    const sales = (series.sales || []).filter(row => row.source === 'creem');
+    const sales = (series.testSales || []).filter(row => row.source === 'creem');
     assert.deepEqual(sales.map(row => [row.kind, row.amount, row.currency]), [['plus', 0, 'EUR'], ['plus', 0, 'EUR']], label);
+    assert.deepEqual(series.sales, [], label);
   });
 });
 

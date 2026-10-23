@@ -19,6 +19,8 @@ import { openPayoutDialog, parseAmount } from './payout-dialog.js';
 import { teamRequestsTableHtml } from './requests-view.js';
 // Test-mode purchases (1.34): switch them all off once payments are live, after typing SWITCH OFF in a dialog.
 import { doneText, openTestPurchasesDialog, readStatus, RESTORE_WORD, SWITCH_OFF_WORDS, testPurchasesHtml } from './test-purchases.js';
+// The owner's own browsers kept out of the anonymous counts, and “Start fresh at launch”.
+import { browserLine, countBrowser, freshDoneText, freshStartHtml, keepBrowserOut, openFreshStartDialog, readCounts, RESET_WORD } from './usage-counts.js';
 import { createTrendsView } from './trends-view.js';
 import { dayOf, normalizeSeries, seriesWindow } from './trends.js';
 // The landing page's stepper (− value +): no browser spin arrows on Seats.
@@ -62,9 +64,9 @@ const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', ma
 // This page's own release, kept in step with package.json and src/config.js
 // (tests/admin-version.test.js). Not imported: it must come from this very
 // file, so an old cached admin.js shows its old number.
-const APP_VERSION = '1.34.0';
+const APP_VERSION = '1.34.1';
 // What Reload fetches again past the browser cache before opening the page anew.
-const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './payout-dialog.js', './requests-view.js', './test-purchases.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/vendor/motion.js', '../src/lib/pricing.js', '../legal/legal-details.js', '../src/lib/text.js'];
+const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './payout-dialog.js', './requests-view.js', './test-purchases.js', './usage-counts.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/vendor/motion.js', '../src/lib/pricing.js', '../src/lib/planner-api.js', '../src/config.js', '../legal/legal-details.js', '../src/lib/text.js'];
 const RELOAD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/></svg>';
 
 class ApiError extends Error {
@@ -290,6 +292,7 @@ function show(view) {
   $('[data-owner-login]').hidden = view !== 'login';
   $('[data-owner-body]').hidden = view !== 'dashboard';
   $('[data-owner-actions]').hidden = view !== 'dashboard';
+  $('[data-owner-browser]').hidden = view !== 'dashboard';
 }
 
 function showLogin(message = '') {
@@ -313,7 +316,7 @@ function showUnavailable(error) {
 function clearRendered() {
   ['[data-owner-kpis]', '[data-owner-funnel]', '[data-owner-team-funnel]', '[data-owner-teams]', '[data-owner-waitlist]', '[data-owner-versions]', '[data-owner-feedback]', '[data-owner-signals]',
     '[data-owner-gifts]', '[data-owner-gift-created]', '[data-owner-gift-panel]', '[data-owner-plus-stats]', '[data-owner-plus-funnel]', '[data-owner-license-created]', '[data-owner-license-list]', '[data-owner-setup]',
-    '[data-owner-reviews]', '[data-owner-refunds]', '[data-owner-tests]', '[data-owner-revocations]', '[data-owner-partners]']
+    '[data-owner-reviews]', '[data-owner-refunds]', '[data-owner-tests]', '[data-owner-revocations]', '[data-owner-partners]', '[data-owner-fresh]']
     .forEach(selector => { $(selector).innerHTML = ''; });
   trends.clear();
   seriesSession = null;
@@ -330,6 +333,8 @@ function clearRendered() {
   revokedState = { gifts: new Map(), licenses: new Map(), sources: new Set() };
   testStatus = null;
   testResult = null;
+  freshCounts = null;
+  freshResult = null;
   clearAttention();
 }
 
@@ -690,14 +695,16 @@ function giftRowHtml(row) {
   const message = row.message ? `<small class="owner-small owner-quote">“${esc(row.message)}”</small>` : '';
   const buyer = row.buyerEmail ? `<small class="owner-small">${mailLink(row.buyerEmail)}${row.emailedAt ? ` · emailed ${esc(day(row.emailedAt))}` : ''}</small>` : '';
   const note = row.note ? `<small class="owner-small">${esc(row.note)}</small>` : '';
-  const amount = row.amount != null ? `<small class="owner-small">${esc(money(row.amount, row.currency))}</small>` : '';
+  // Bought in Creem's test mode: no real payment, never counted as a sale.
+  const amount = row.amount != null ? `<small class="owner-small">${esc(money(row.amount, row.currency))}${row.test ? ' · not counted' : ''}</small>` : '';
+  const test = row.test ? ' <span class="owner-pill">Test mode</span>' : '';
   return `<tr data-owner-attn="gift:${esc(row.code)}">
     <td class="owner-nowrap"><code>${esc(row.code)}</code></td>
     <td class="owner-gift-org"><b>${esc(row.org)}</b>${message}${buyer}${note}</td>
     <td class="num owner-nowrap"><b>${number(row.redeemed)}</b> / ${number(row.seats)}<small class="owner-small">up to ${number(row.limit)}</small>${status}</td>
     <td class="owner-nowrap">${esc(day(row.createdAt))}</td>
     <td class="owner-nowrap">${esc(day(row.expiresAt))}</td>
-    <td class="owner-nowrap">${esc(SOURCE_LABELS[row.source] || row.source || SOURCE_LABELS.manual)}${amount}${revokedPill(revokedState.gifts.get(row.code))}</td>
+    <td class="owner-nowrap">${esc(SOURCE_LABELS[row.source] || row.source || SOURCE_LABELS.manual)}${amount}${test}${revokedPill(revokedState.gifts.get(row.code))}</td>
     <td><input class="privacy-switch" type="checkbox" role="switch" data-owner-gift-active="${esc(row.code)}"${row.active ? ' checked' : ''} aria-label="Gift link for ${esc(row.org)} is active"></td>
     <td><div class="owner-row-actions">
       <button class="text-button" type="button" data-owner-copy="${esc(row.url)}">Copy link</button>
@@ -723,9 +730,12 @@ function renderGifts(summary) {
   }
   giftRows = Array.isArray(summary.gifts) ? summary.gifts : [];
   const totals = summary.giftTotals || { count: 0, seats: 0, redeemed: 0, paid: 0 };
+  // Gifts bought in Creem's test mode are listed, but counted apart.
+  const tests = Number(totals.test?.count) || 0;
+  const apart = tests ? `${number(tests)} bought in test mode, not counted` : '';
   caption.textContent = totals.count
-    ? `${number(totals.count)} ${plural(totals.count, 'gift')} · ${number(totals.redeemed)} of ${number(totals.seats)} seats activated · ${number(totals.paid)} bought online. ${intro}`
-    : intro;
+    ? `${number(totals.count)} ${plural(totals.count, 'gift')} · ${number(totals.redeemed)} of ${number(totals.seats)} seats activated · ${number(totals.paid)} bought online${apart ? ` · ${apart}` : ''}. ${intro}`
+    : apart ? `No gifts yet besides ${number(tests)} bought in test mode, not counted. ${intro}` : intro;
   target.innerHTML = giftRows.length
     ? `<div class="owner-scroll"><table class="owner-table owner-gifts"><thead><tr><th>Code</th><th>Company</th><th class="num">Activated</th><th>Created</th><th>Expires</th><th>Source</th><th>Active</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${giftRows.map(giftRowHtml).join('')}</tbody></table></div>`
     : '<p class="owner-empty">No gifts yet. Create one above for an invoice; gifts bought online appear here on their own.</p>';
@@ -915,9 +925,12 @@ function renderPlus(summary, days) {
   const totals = summary.giftTotals || {};
   const missing = !!summary.plusUnavailable;
   const value = count => (missing ? '—' : number(count));
+  // Bought in Creem's test mode: never counted, said apart.
+  const testPlus = Number(plus.testPurchases) || 0;
+  const testGifts = totals.test || {};
   $('[data-owner-plus-stats]').innerHTML = [
-    ['Individual purchases', value(plus.purchases), 'Bought online'],
-    ['Gift activations', value(totals.redeemed), `${number(totals.count)} ${plural(totals.count, 'gift')} · ${number(totals.seats)} seats`],
+    ['Individual purchases', value(plus.purchases), testPlus ? `Bought online · ${number(testPlus)} in test mode, not counted` : 'Bought online'],
+    ['Gift activations', value(totals.redeemed), `${number(totals.count)} ${plural(totals.count, 'gift')} · ${number(totals.seats)} seats${Number(testGifts.count) ? ` · ${number(testGifts.count)} test-mode ${plural(testGifts.count, 'gift')} not counted` : ''}`],
     ['Licences made here', value(plus.manualLicenses), 'Support and giveaways']
   ].map(([label, figure, note]) => `<div class="owner-stat"><span>${esc(label)}</span><strong>${figure}</strong><small>${esc(note)}</small></div>`).join('');
   const rows = summary.eventTotals;
@@ -1145,6 +1158,65 @@ $('[data-owner-refunds]').closest('.owner-card').addEventListener('click', async
   }
   showResult('[data-owner-revoke-result]', '');
   await load();
+});
+
+// ---- Anonymous usage counts (./usage-counts.js) -----------------------------------
+
+// The header line: this browser is kept out of the counts (on sign-in and on every load), unless the owner counts it again.
+function renderBrowser(counted) {
+  const line = browserLine(counted);
+  $('[data-owner-browser-title]').textContent = line.title;
+  $('[data-owner-browser-detail]').textContent = line.detail;
+  $('[data-owner-browser-count]').checked = counted;
+  $('[data-owner-browser]').classList.toggle('is-counted', counted);
+}
+
+$('[data-owner-browser-count]').addEventListener('change', event => renderBrowser(countBrowser(event.target.checked)));
+
+// Start fresh at launch (the last card of Trends): the counts of the last summary, and what it said after the last action.
+let freshCounts = null;
+let freshResult = null;
+
+function renderFresh() {
+  $('[data-owner-fresh]').innerHTML = freshStartHtml(freshCounts, { number, result: freshResult });
+}
+
+/** Reads what is recorded now, says it in the dialog, and deletes it once RESET is typed (sent to the server too). */
+async function startFresh(button) {
+  button.disabled = true;
+  let counts = null;
+  try {
+    counts = readCounts((await jsonOf(await call('admin/usage-counts'))).counts);
+  } catch (error) {
+    button.disabled = false;
+    if (error.kind === 'unauthorized') { handleError(error); return; }
+    freshResult = { text: failureText(error), error: true };
+    renderFresh();
+    $('[data-owner-fresh-result]')?.focus?.();
+    return;
+  }
+  freshCounts = counts;
+  if (!counts?.rows) { freshResult = null; renderFresh(); return; }
+  button.disabled = false;
+  if (!await openFreshStartDialog(counts, { number })) { button.focus(); return; }
+  button.disabled = true;
+  freshResult = { text: 'Deleting the counts…' };
+  renderFresh();
+  try {
+    const answer = await sendJson('admin/usage-counts/reset', 'POST', { confirm: RESET_WORD });
+    freshResult = { text: freshDoneText(answer, { number }) };
+    await load({ series: true });
+  } catch (error) {
+    freshResult = { text: failureText(error), error: true };
+    if (error.kind === 'unauthorized') { handleError(error); return; }
+    renderFresh();
+  }
+  $('[data-owner-fresh-result]')?.focus?.();
+}
+
+$('[data-owner-fresh]').addEventListener('click', event => {
+  const button = event.target.closest('[data-owner-fresh-start]');
+  if (button && !button.disabled) startFresh(button);
 });
 
 // ---- Partners ------------------------------------------------------------------
@@ -1795,6 +1867,8 @@ async function load({ series: refreshSeries = false } = {}) {
     show('dashboard');
     $('[data-owner-session]').textContent = `Signed in until ${untilLabel(session.expiresAt)}`;
     $('[data-owner-sub]').textContent = `Private. Updated ${when(summary.generatedAt)} · counts since ${summary.sinceDay}.`;
+    // Signed in: this browser stays out of the anonymous counts (unless the owner counts it again).
+    renderBrowser(keepBrowserOut());
     renderVersion(summary);
     if (Number(summary.partnerProgram?.teamRate) > 0) TEAM_RATE = Number(summary.partnerProgram.teamRate);
     renderKpis(summary, days);
@@ -1807,6 +1881,8 @@ async function load({ series: refreshSeries = false } = {}) {
     renderRefunds(summary);
     renderPartners(summary);
     renderSetup(summary);
+    freshCounts = readCounts(summary.usageCounts);
+    renderFresh();
     renderWaitlist(summary);
     renderAnnounce(summary);
     renderVersions(summary);
@@ -1880,6 +1956,8 @@ loginForm.addEventListener('submit', async event => {
     if (typeof body?.session !== 'string' || !Number.isFinite(expiresAt)) throw new ApiError('failed', 'The API answered without a session.');
     loginForm.reset();
     saveSession({ session: body.session, expiresAt });
+    // The owner's browser is kept out of the anonymous counts from the moment they sign in.
+    keepBrowserOut();
     await load();
   } catch (failure) {
     if (failure.kind === 'unauthorized') showLogin(SIGN_IN_FAILED_MESSAGE);

@@ -58,9 +58,17 @@ export function createD1Store(db) {
     listGifts: ({ limit = 0 } = {}) => (limit
       ? all(`SELECT ${giftColumns} FROM gifts ORDER BY created_at DESC, code LIMIT ?`, limit)
       : all(`SELECT ${giftColumns} FROM gifts ORDER BY created_at DESC, code`)).then(rows => rows.map(normalizeGift)),
-    /** `paid`: gifts bought online (every source but 'manual'). */
-    giftTotals: () => all('SELECT COUNT(*) AS count, COALESCE(SUM(seats), 0) AS seats, COALESCE(SUM(redeemed), 0) AS redeemed, COALESCE(SUM(CASE WHEN source <> ? THEN 1 ELSE 0 END), 0) AS paid FROM gifts', 'manual')
-      .then(([row]) => ({ count: Number(row?.count) || 0, seats: Number(row?.seats) || 0, redeemed: Number(row?.redeemed) || 0, paid: Number(row?.paid) || 0 })),
+    /**
+     * `paid`: gifts bought online (every source but 'manual'). Gifts bought in Creem's test mode (bought
+     * online, their note starting with `testNote`) are counted apart, in `test`, never with the others.
+     */
+    giftTotals: ({ testNote = '' } = {}) => all(`SELECT CASE WHEN ? <> '' AND source = 'creem' AND substr(note, 1, ?) = ? THEN 1 ELSE 0 END AS test, COUNT(*) AS count, COALESCE(SUM(seats), 0) AS seats, COALESCE(SUM(redeemed), 0) AS redeemed, COALESCE(SUM(CASE WHEN source <> 'manual' THEN 1 ELSE 0 END), 0) AS paid FROM gifts GROUP BY 1`, testNote, testNote.length, testNote)
+      .then(rows => {
+        const totals = flag => rows.find(row => Number(row.test) === flag) || {};
+        const real = totals(0);
+        const test = totals(1);
+        return { count: Number(real.count) || 0, seats: Number(real.seats) || 0, redeemed: Number(real.redeemed) || 0, paid: Number(real.paid) || 0, test: { count: Number(test.count) || 0, seats: Number(test.seats) || 0, redeemed: Number(test.redeemed) || 0 } };
+      }),
     /**
      * One activation in a single statement: the WHERE clause re-checks the
      * limit (giftLimit in gifts.js: seats + max(1, seats / 10) from 10 seats, exactly the seats below), so concurrent requests can never
@@ -81,9 +89,11 @@ export function createD1Store(db) {
     addPurchase: async row => await run('INSERT INTO purchases (stripe_session, kind, license_id, claims, email, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(stripe_session) DO NOTHING',
       row.checkoutRef, row.kind, row.licenseId, row.claims, row.email || '', row.note || '', row.createdAt) > 0,
     claimPurchase: async (ref, max) => await run('UPDATE purchases SET claims = claims + 1 WHERE stripe_session = ? AND claims < ?', ref, max) === 1,
-    purchaseTotals: () => all('SELECT kind, COUNT(*) AS count FROM purchases GROUP BY kind').then(rows => {
-      const count = kind => Number(rows.find(row => row.kind === kind)?.count) || 0;
-      return { plus: count('plus'), manual: count('manual') };
+    /** Plus purchases (`plus`, those bought in Creem's test mode, noted `testNote`, apart in `test`) and licences made in the dashboard. */
+    purchaseTotals: ({ testNote = '' } = {}) => all(`SELECT kind, COUNT(*) AS count, COALESCE(SUM(CASE WHEN ? <> '' AND substr(note, 1, ?) = ? THEN 1 ELSE 0 END), 0) AS test FROM purchases GROUP BY kind`, testNote, testNote.length, testNote).then(rows => {
+      const row = kind => rows.find(entry => entry.kind === kind) || {};
+      const test = Number(row('plus').test) || 0;
+      return { plus: (Number(row('plus').count) || 0) - test, manual: Number(row('manual').count) || 0, test };
     }),
     listPurchases: ({ kind = '', limit = 50 } = {}) => (kind
       ? all(`SELECT ${purchaseColumns} FROM purchases WHERE kind = ? ORDER BY created_at DESC LIMIT ?`, kind, limit)
@@ -150,6 +160,20 @@ export function createD1Store(db) {
       ]);
       const flagged = row => ({ ...row, revoked: Number(row.revoked) === 1, grouped: Number(row.grouped) === 1 });
       return { plus: plus.map(flagged), gifts: gifts.map(row => ({ ...flagged(row), active: Number(row.active) === 1 })) };
+    },
+    /**
+     * The checkouts paid in Creem's test mode, for the sales figures: Plus purchases and gifts bought
+     * online whose note starts with `note` (the Test mode note), and orders Creem said were in test
+     * mode (in case a note was edited). A table that isn't there yet (0003, 0005) adds none.
+     */
+    async listTestCheckouts({ note }) {
+      const none = error => { if (isMissingTable(error)) return []; throw error; };
+      const lists = await Promise.all([
+        note ? all("SELECT stripe_session AS checkoutId FROM purchases WHERE kind = 'plus' AND stripe_session IS NOT NULL AND substr(note, 1, ?) = ?", note.length, note).catch(none) : [],
+        note ? all("SELECT stripe_session AS checkoutId FROM gifts WHERE source = 'creem' AND stripe_session IS NOT NULL AND substr(note, 1, ?) = ?", note.length, note).catch(none) : [],
+        all("SELECT checkout_id AS checkoutId FROM orders WHERE lower(mode) IN ('test', 'sandbox')").catch(none)
+      ]);
+      return [...new Set(lists.flat().map(row => String(row.checkoutId)))].sort();
     },
     /** Switches many gift links on or off at once, ID_CHUNK codes to a statement. */
     async setGiftsActive(codes, active) {
@@ -251,6 +275,11 @@ export function createD1Store(db) {
       await db.prepare('INSERT INTO events (day, name, app_version, count) VALUES (?, ?, ?, 1) ON CONFLICT(day, name, app_version) DO UPDATE SET count = count + 1')
         .bind(day, name, appVersion).run();
     },
+    /** The anonymous counts recorded so far, internal rows left out: { rows, count, firstDay, lastDay } ('' without any). */
+    eventsOverview: () => all("SELECT COUNT(*) AS rowCount, COALESCE(SUM(count), 0) AS total, MIN(day) AS firstDay, MAX(day) AS lastDay FROM events WHERE name NOT LIKE 'internal:%'")
+      .then(([row]) => ({ rows: Number(row?.rowCount) || 0, count: Number(row?.total) || 0, firstDay: String(row?.firstDay || ''), lastDay: String(row?.lastDay || '') })),
+    /** Deletes every anonymous count; internal rows (the day's email tally) stay. Answers how many rows went. */
+    deleteEvents: () => run("DELETE FROM events WHERE name NOT LIKE 'internal:%'"),
     async addWaitlist(entry) {
       const result = await db.prepare('INSERT INTO waitlist (email, devices, note, locale, app_version, drive_seen, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(email) DO NOTHING')
         .bind(entry.email, entry.devices, entry.note, entry.locale, entry.appVersion, entry.driveSeen, entry.createdAt).run();

@@ -221,6 +221,8 @@ export const TEST_PURCHASES_SOURCE = `${OWNER_SOURCE_PREFIX}test_mode`;
 export const TEST_SWITCH_OFF_CONFIRM = 'SWITCH OFF';
 export const TEST_RESTORE_CONFIRM = 'RESTORE';
 export const TEST_SWITCH_OFF_BATCH = 120;
+/** What the owner types, and the dashboard sends, to delete the anonymous usage counts (“Start fresh at launch”, 1.34.1). */
+export const USAGE_RESET_CONFIRM = 'RESET';
 const TEST_SWITCH_OFF_NOTE = 'Bought in test mode, switched off together';
 const FLAG_ON_RE = /^(?:1|true|yes|on)$/i;
 // Shown on the Creem checkout of a gift; the answer is the name the gift shows:
@@ -540,8 +542,9 @@ export const buyerCurrency = request => currencyForCountry(requestCountry(reques
  * @param {object} [options.configEnv] the deployment's variables, secrets and bindings (Pages: context.env), for
  *   the configuration checks (POST admin/config/check, server/admin-config.js); none without it
  * @param {typeof fetch} [options.configFetch] fetch used by those checks (tests and the dev server inject one)
- * @param {object} [options.adminLimits] rate limits of the configuration check, the Creem setup assistant and the
- *   test email (server/admin-limits.js): the worker isolate's own by default, shared by every request; tests pass theirs
+ * @param {object} [options.adminLimits] rate limits of the configuration check, the Creem setup assistant, the
+ *   test email and “Start fresh at launch” (server/admin-limits.js): the worker isolate's own by default, shared by
+ *   every request; tests pass theirs
  * @param {object} [options.partnerLimits] rate limits of a partner's statement and of the visits through partner
  *   links (server/partners.js): the worker isolate's own by default; tests pass theirs
  * @param {() => number} [options.random] draws in [0, 1) (Math.random): about 1 counted visit in 100 also deletes
@@ -814,6 +817,8 @@ export function createPlannerApi({
       limit: giftLimit(gift.seats),
       status: giftStatus(gift, nowIso),
       url: giftUrl(base, gift.code),
+      // Bought in Creem's test mode: never counted as a sale.
+      test: gift.source === 'creem' && isTestRow(gift),
       manageKey,
       manageUrl: manageKey ? giftManageUrl(base, gift.code, manageKey) : ''
     };
@@ -1621,15 +1626,19 @@ export function createPlannerApi({
   /**
    * Daily counts and sales between two days, for the dashboard charts. Counts
    * are summed across app versions (internal rows excluded); sales are the
-   * recorded Creem payments plus manual gifts that have an amount.
+   * recorded Creem payments plus manual gifts that have an amount. Payments
+   * made in Creem's test mode (their purchase or gift noted Test mode, or
+   * their order in test mode) are never sales: they come apart, in testSales.
    */
   async function seriesAnswer(url) {
     const { from, to } = seriesRange(url.searchParams.get('from'), url.searchParams.get('to'), today());
-    const [rows, payments, gifts] = await Promise.all([
+    const [rows, payments, gifts, testCheckouts] = await Promise.all([
       store.eventsSeries(from, to),
       store.listPayments({ fromDay: from, toDay: to }).catch(() => null),
-      store.listGifts().catch(() => null)
+      store.listGifts().catch(() => null),
+      Promise.resolve().then(() => store.listTestCheckouts({ note: TEST_NOTE })).catch(error => { safeWarn(`Test-mode checkouts not read: ${error?.message || error}`); return []; })
     ]);
+    const testRefs = new Set(testCheckouts);
     const events = {};
     for (const row of rows) {
       if (String(row.name).startsWith(INTERNAL_EVENT_PREFIX)) continue;
@@ -1637,12 +1646,39 @@ export function createPlannerApi({
       events[row.name][row.day] = (events[row.name][row.day] || 0) + (Number(row.count) || 0);
     }
     const number = value => (value == null || value === '' ? null : Number(value));
-    const sales = [
-      ...(payments || []).map(row => ({ day: String(row.createdAt).slice(0, 10), kind: row.kind, source: 'creem', plan: row.plan || '', seats: number(row.seats), amount: number(row.amount), currency: row.currency || '' })),
+    const all = [
+      ...(payments || []).map(row => ({ day: String(row.createdAt).slice(0, 10), kind: row.kind, source: 'creem', plan: row.plan || '', seats: number(row.seats), amount: number(row.amount), currency: row.currency || '', ...(testRefs.has(String(row.checkoutId)) ? { test: true } : {}) })),
       ...(gifts || []).filter(gift => gift.source === 'manual' && gift.amount != null && gift.createdAt.slice(0, 10) >= from && gift.createdAt.slice(0, 10) <= to)
         .map(gift => ({ day: gift.createdAt.slice(0, 10), kind: 'gift', source: 'manual', plan: TEAM_TIERS.find(tier => tier.seats === gift.seats)?.plan || '', seats: gift.seats, amount: gift.amount, currency: gift.currency }))
     ].sort((a, b) => a.day.localeCompare(b.day) || a.source.localeCompare(b.source) || a.kind.localeCompare(b.kind) || (a.seats ?? 0) - (b.seats ?? 0) || (a.amount ?? 0) - (b.amount ?? 0));
-    return { from, to, events, sales, salesUnavailable: !payments || !gifts };
+    const sales = all.filter(row => !row.test);
+    const testSales = all.filter(row => row.test);
+    return { from, to, events, sales, testSales, salesUnavailable: !payments || !gifts };
+  }
+
+  /**
+   * The anonymous usage counts (the events table, internal rows left out).
+   * GET admin/usage-counts answers what is there: { counts: { rows, count,
+   * firstDay, lastDay } }. POST admin/usage-counts/reset { confirm: 'RESET' }
+   * deletes them all (“Start fresh at launch”, once the owner typed RESET in
+   * the dashboard) and answers what went: { deleted, counts }. Nothing else is
+   * touched: purchases, gifts, requests, the waitlist, feedback, reviews and
+   * partner data (partner-link visits included) stay, and so does the day's
+   * email tally (an internal row). Rate-limited per worker isolate.
+   */
+  async function usageCountsRoute(request, path, cors) {
+    if (path === 'admin/usage-counts') {
+      if (request.method !== 'GET') return json(405, { error: 'Method not allowed' }, cors);
+      return json(200, { counts: await store.eventsOverview() }, cors);
+    }
+    if (request.method !== 'POST') return json(405, { error: 'Method not allowed' }, cors);
+    const wait = adminLimits.resetCounts();
+    if (wait) return json(429, { error: `Too many tries in a short time. Try again in ${waitWords(wait)}.`, retryAfter: wait }, { ...cors, 'retry-after': String(wait) });
+    const body = await readJson(request);
+    if (body?.confirm !== USAGE_RESET_CONFIRM) return json(400, { error: `Type ${USAGE_RESET_CONFIRM} to confirm.` }, cors);
+    const before = await store.eventsOverview();
+    const rows = await store.deleteEvents();
+    return json(200, { deleted: { ...before, rows }, counts: await store.eventsOverview() }, cors);
   }
 
   async function adminGifts(request, path, cors) {
@@ -2031,7 +2067,10 @@ export function createPlannerApi({
       // Team and Plus queries must not take the whole dashboard down when the
       // 0002 or 0003 migration has not been applied yet.
       const teams = Promise.all([store.listTeamRequests({ limit: 200 }), store.teamRequestTotals()]).catch(() => null);
-      const plusTables = Promise.all([store.listGifts({ limit: 200 }), store.giftTotals(), store.purchaseTotals(), store.listPurchases({ kind: 'manual', limit: 10 })]).catch(() => null);
+      // Gifts and Plus purchases bought in Creem's test mode (the Test mode note) are counted apart, never as sales.
+      const plusTables = Promise.all([store.listGifts({ limit: 200 }), store.giftTotals({ testNote: TEST_NOTE }), store.purchaseTotals({ testNote: TEST_NOTE }), store.listPurchases({ kind: 'manual', limit: 10 })]).catch(() => null);
+      // What “Start fresh at launch” would delete: the anonymous counts recorded so far.
+      const usageCounts = Promise.resolve().then(() => store.eventsOverview()).catch(() => null);
       // Reviews come from migration 0004, refunds from 0005; without them the rest still loads.
       const reviewRows = store.listReviews({ limit: REVIEWS_LATEST }).catch(() => null);
       const refundData = Promise.all([store.listRefunds({ limit: REFUNDS_LISTED }), store.listRevocations({ limit: REVOCATIONS_LISTED })]).catch(() => null);
@@ -2048,7 +2087,7 @@ export function createPlannerApi({
       const commissionData = commissionLists().catch(failed);
       const visitsFrom = dayKey(new Date(now().getTime() - (PARTNER_VISIT_DAYS - 1) * 86400000));
       const profileData = Promise.all([profileList(), store.partnerVisitTotals({ fromDay: visitsFrom })]).catch(whenMissing(null)).catch(failed);
-      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, refundLists, partnerRows, commissions, profileRows, setup, testPurchases] = await Promise.all([
+      const [eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamData, emailsSentToday, plusData, reviews, refundLists, partnerRows, commissions, profileRows, setup, testPurchases, usageCountRows] = await Promise.all([
         store.eventTotals({ sinceDay }).then(publicEvents),
         store.eventDaily({ sinceDay }).then(publicEvents),
         store.listWaitlist(),
@@ -2063,7 +2102,8 @@ export function createPlannerApi({
         commissionData,
         profileData,
         setupInfo(),
-        testData
+        testData,
+        usageCounts
       ]);
       const partners = partnerSummary(partnerRows?.[0] || [], partnerRows?.[1] || [], partnerRows?.[2] || [], { limit: PARTNER_SALES_LISTED, payouts: commissions?.payouts || [], rejections: commissions?.rejections || [], profiles: profileRows?.[0] || [], now: now().getTime() });
       // Visits through each partner's link over the last 30 days (one count per partner, whatever the case of the code);
@@ -2073,21 +2113,22 @@ export function createPlannerApi({
       partners.visitsOnly = (profileRows?.[1] || []).filter(row => row.count > 0 && !partners.codes.some(entry => partnerKey(entry.code) === partnerKey(row.code))).sort((a, b) => b.count - a.count || a.code.localeCompare(b.code)).slice(0, 20);
       partners.visitDays = PARTNER_VISIT_DAYS;
       const [teamRequests, teamRequestTotals] = teamData || [[], { count: 0, seats: 0 }];
-      const [giftRows, giftTotals, purchaseTotals, manualLicenses] = plusData || [[], { count: 0, seats: 0, redeemed: 0, paid: 0 }, { plus: 0, manual: 0 }, []];
+      const [giftRows, giftTotals, purchaseTotals, manualLicenses] = plusData || [[], { count: 0, seats: 0, redeemed: 0, paid: 0, test: { count: 0, seats: 0, redeemed: 0 } }, { plus: 0, manual: 0, test: 0 }, []];
       return json(200, {
         version: APP_VERSION, generatedAt: nowIso, sinceDay, eventTotals, eventDaily, waitlist, feedbackByVersion, feedbackLatest, teamRequests, teamRequestTotals, teamRequestsUnavailable: !teamData,
         emailConfigured: mailer.configured, emailTestAvailable: mailer.configured && !!owner, emailDailyLimit: dailyLimit, emailsSentToday, emailsPerSend: EMAILS_PER_SEND,
         gifts: await Promise.all(giftRows.map(gift => adminGift(gift, nowIso))), giftTotals, plusUnavailable: !plusData,
-        plus: { purchases: purchaseTotals.plus, manualLicenses: purchaseTotals.manual, recentLicenses: manualLicenses.map(row => ({ id: row.licenseId, note: row.note, createdAt: row.createdAt })) },
+        plus: { purchases: purchaseTotals.plus, testPurchases: purchaseTotals.test || 0, manualLicenses: purchaseTotals.manual, recentLicenses: manualLicenses.map(row => ({ id: row.licenseId, note: row.note, createdAt: row.createdAt })) },
         reviews: reviews || [], reviewsUnavailable: !reviews,
         refunds: refundLists?.[0] || [], revocations: refundLists?.[1] || [], refundsUnavailable: !refundLists, testPurchases,
         partners, partnersUnavailable: !partnerRows && !partnersFailed, partnersFailed,
         partnerCommissionsUnavailable: !commissions && !partnersFailed, partnerProfilesUnavailable: !profileRows && !partnersFailed,
         partnerProgram: { rate: PARTNER_PROGRAM.rate, teamRate: PARTNER_PROGRAM.teamRate, refundDays: PARTNER_PROGRAM.refundDays, cookieDays: PARTNER_PROGRAM.cookieDays, minimumPayout: { ...PARTNER_PROGRAM.minimumPayout }, individualYearlyCap: { ...PARTNER_PROGRAM.individualYearlyCap } },
-        setup
+        setup, usageCounts: usageCountRows
       }, cors);
     }
     if (request.method === 'GET' && path === 'admin/series') return json(200, await seriesAnswer(url), cors);
+    if (path === 'admin/usage-counts' || path === 'admin/usage-counts/reset') return usageCountsRoute(request, path, cors);
     if (request.method === 'GET' && path === 'admin/feedback') {
       const version = url.searchParams.get('version') || '';
       const rows = await store.listFeedback({ version: VERSION_RE.test(version) ? version : '', limit: 500 });
@@ -2267,13 +2308,19 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
       const rows = [...data.gifts].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)) || a.code.localeCompare(b.code)).map(normalizeGift);
       return limit ? rows.slice(0, limit) : rows;
     },
-    async giftTotals() {
-      return data.gifts.reduce((totals, item) => ({
-        count: totals.count + 1,
-        seats: totals.seats + (Number(item.seats) || 0),
-        redeemed: totals.redeemed + (Number(item.redeemed) || 0),
-        paid: totals.paid + (String(item.source ?? 'manual') !== 'manual' ? 1 : 0)
-      }), { count: 0, seats: 0, redeemed: 0, paid: 0 });
+    /** As in D1: gifts bought in Creem's test mode (bought online, noted `testNote`) apart, in `test`. */
+    async giftTotals({ testNote = '' } = {}) {
+      const isTest = item => !!testNote && String(item.source ?? 'manual') === 'creem' && String(item.note || '').startsWith(testNote);
+      const real = { count: 0, seats: 0, redeemed: 0, paid: 0 };
+      const test = { count: 0, seats: 0, redeemed: 0 };
+      for (const item of data.gifts) {
+        const totals = isTest(item) ? test : real;
+        totals.count += 1;
+        totals.seats += Number(item.seats) || 0;
+        totals.redeemed += Number(item.redeemed) || 0;
+        if (totals === real && String(item.source ?? 'manual') !== 'manual') real.paid += 1;
+      }
+      return { ...real, test };
     },
     /** One activation, only while the gift is active, unexpired and under its limit. */
     async redeemGift(code, nowIso) {
@@ -2331,8 +2378,10 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
       changed();
       return true;
     },
-    async purchaseTotals() {
-      return { plus: data.purchases.filter(item => item.kind === 'plus').length, manual: data.purchases.filter(item => item.kind === 'manual').length };
+    async purchaseTotals({ testNote = '' } = {}) {
+      const plus = data.purchases.filter(item => item.kind === 'plus');
+      const test = plus.filter(item => !!testNote && String(item.note || '').startsWith(testNote)).length;
+      return { plus: plus.length - test, manual: data.purchases.filter(item => item.kind === 'manual').length, test };
     },
     async listPurchases({ kind = '', limit = 50 } = {}) {
       return data.purchases.filter(item => !kind || item.kind === kind).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, limit).map(row => ({ ...row }));
@@ -2476,6 +2525,15 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
           .sort(newest)
       };
     },
+    /** As in D1: the checkouts paid in Creem's test mode (noted `note`, or an order in test mode). */
+    async listTestCheckouts({ note }) {
+      const noted = row => !!note && String(row?.note || '').startsWith(note);
+      return [...new Set([
+        ...data.purchases.filter(row => row.kind === 'plus' && row.checkoutRef && noted(row)).map(row => row.checkoutRef),
+        ...data.gifts.filter(row => row.checkoutRef && (row.source ?? 'manual') === 'creem' && noted(row)).map(row => row.checkoutRef),
+        ...data.orders.filter(row => ['test', 'sandbox'].includes(String(row.mode || '').toLowerCase())).map(row => row.checkoutId)
+      ].map(String))].sort();
+    },
     async setGiftsActive(codes, active) {
       const wanted = new Set(codes);
       let changedRows = 0;
@@ -2598,6 +2656,17 @@ export function createMemoryStore(initial = {}, { onChange = null } = {}) {
       const row = data.events.find(item => item.day === day && item.name === name && item.appVersion === appVersion);
       if (row) row.count += 1; else data.events.push({ day, name, appVersion, count: 1 });
       changed();
+    },
+    async eventsOverview() {
+      const rows = data.events.filter(item => !String(item.name).startsWith(INTERNAL_EVENT_PREFIX));
+      const days = rows.map(item => String(item.day)).sort();
+      return { rows: rows.length, count: rows.reduce((sum, item) => sum + (Number(item.count) || 0), 0), firstDay: days[0] || '', lastDay: days.at(-1) || '' };
+    },
+    async deleteEvents() {
+      const before = data.events.length;
+      data.events = data.events.filter(item => String(item.name).startsWith(INTERNAL_EVENT_PREFIX));
+      changed();
+      return before - data.events.length;
     },
     async addWaitlist(entry) {
       if (data.waitlist.some(item => item.email === entry.email)) return { duplicate: true };

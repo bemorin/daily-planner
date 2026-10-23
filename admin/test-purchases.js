@@ -1,4 +1,5 @@
-// Test-mode purchases (the dashboard's Refunds and disputes card, 1.34). While
+// Test-mode purchases (the dashboard's Refunds and disputes card, 1.34; always
+// shown there since 1.34.1, so the switch is found before it is needed). While
 // Creem reviews the store, review mode (CREEM_TEST_ON_PRODUCTION) lets a test
 // key sell on the production address; anyone who knows Creem's test card can
 // buy then, and what they get works like a paid purchase. Once payments are
@@ -50,15 +51,30 @@ export function readStatus(status) {
   };
 }
 
-/** Whether the panel shows at all: once something was bought in test mode, or while review mode is open. */
-export const panelShown = status => !!status && (status.total > 0 || status.reviewOpen);
+/**
+ * Whether the panel shows: whenever the counts could be read (the refunds
+ * tables exist), with or without a test-mode purchase, so the owner finds the
+ * switch before it is needed. Review mode set in Cloudflare but not deployed
+ * yet can't be seen from here: the empty panel says when it applies.
+ */
+export const panelShown = status => !!status;
 
 /** The panel's lead, from the mode: what these purchases are, and when to switch them off. */
 function leadText(status) {
   if (status.reviewOpen) return 'While Creem reviews your store, checkouts on the production address run in Creem’s test mode: no real payment, and anyone with a test card can buy. Once your live key is in, switch them all off here.';
+  if (!status.total) {
+    return status.mode === 'live'
+      ? 'Purchases made in Creem’s test mode give Plus without a real payment. None were made here, so there is nothing to switch off.'
+      : 'Purchases made in Creem’s test mode (in review mode, while Creem reviews your store, or with a test key) give Plus without a real payment. Once your live key is in, switch them all off here, in one go.';
+  }
   if (status.mode === 'live') return 'Bought before payments went live, with no real payment. They work like paid purchases until you switch them off: gift links stop at once, planners lose Plus at their next weekly check.';
   return 'Bought with Creem’s test key: no real payment. Once your live key is in, switch them all off here.';
 }
+
+/** Under an empty panel, before payments are live: review mode set but not deployed yet doesn't show. */
+const deployHint = status => (!status.total && !status.reviewMode && status.mode !== 'live'
+  ? '<p class="owner-hint">Just set <code>CREEM_TEST_ON_PRODUCTION</code>? Cloudflare applies a new variable from the next deployment: deploy again, and this panel says “Review mode on”.</p>'
+  : '');
 
 /**
  * The panel (HTML, every value escaped): the counts, what the mode means, and
@@ -66,15 +82,26 @@ function leadText(status) {
  */
 export function testPurchasesHtml(status, { number = defaultNumber, result = null } = {}) {
   if (!panelShown(status)) return '';
+  if (!status.total) {
+    // Nothing bought in test mode yet: the switch is there, unusable, and says why.
+    return `<section class="owner-subform owner-tests" data-owner-attn="test-purchases" aria-labelledby="owner-tests-title">
+      <div class="owner-subform__head">
+        <h3 id="owner-tests-title"><span>Test-mode purchases</span>${status.reviewOpen ? '<span class="owner-pill owner-pill--review">Review mode on</span>' : ''}</h3>
+        <p>${esc(leadText(status))}</p>
+      </div>
+      <div class="owner-actions"><button class="primary-button owner-danger" type="button" data-owner-tests-switch disabled aria-describedby="owner-tests-state">Switch off test-mode purchases…</button><p class="owner-tests__state" id="owner-tests-state">No test-mode purchases yet</p></div>
+      ${deployHint(status)}
+    </section>`;
+  }
   const counts = [
     ['Plus licences', status.plus, status.plusOff],
     ['Gift links', status.gifts, status.giftsOff]
   ].map(([label, all, off]) => `<div class="owner-tests__count"><dt>${esc(label)}</dt><dd><b>${esc(number(all))}</b>${all ? `<small>${off === all ? 'all off' : off ? `${esc(number(off))} off` : 'none off'}</small>` : ''}</dd></div>`).join('');
   const active = `<div class="owner-tests__count${status.active ? ' is-active' : ''}"><dt>Still active</dt><dd><b>${esc(number(status.active))}</b><small>${status.active ? 'give Plus' : status.total ? 'all switched off' : 'none yet'}</small></dd></div>`;
-  // Nothing to switch off: a calm state instead of a button that can't be used.
+  // All switched off: a calm state instead of a button that can't be used (Restore all undoes it).
   const switchButton = status.active
     ? '<button class="primary-button owner-danger" type="button" data-owner-tests-switch>Switch off test-mode purchases…</button>'
-    : `<p class="owner-tests__state">${status.total ? `${CHECK_ICON}All switched off` : 'Nothing bought in test mode yet.'}</p>`;
+    : `<p class="owner-tests__state">${CHECK_ICON}All switched off</p>`;
   const restoreButton = status.switchedOff ? '<button class="text-button" type="button" data-owner-tests-restore>Restore all…</button>' : '';
   return `<section class="owner-subform owner-tests" data-owner-attn="test-purchases" aria-labelledby="owner-tests-title">
       <div class="owner-subform__head">

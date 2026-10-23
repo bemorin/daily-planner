@@ -312,7 +312,9 @@ test('a Creem Plus purchase becomes a licence, the same one on every claim (memo
     const eleventh = await asJson(await api(post('purchases/claim', { checkout: 'ch_plus123456' })));
     assert.equal(eleventh.status, 409, label);
     assert.match(eleventh.body.error, /10 times/);
-    assert.equal((await asJson(await api(get('admin/summary', 'secret')))).body.plus.purchases, 1, label);
+    // Bought with a test key: counted apart, never as a sale (1.34.1).
+    const { plus } = (await asJson(await api(get('admin/summary', 'secret')))).body;
+    assert.deepEqual([plus.purchases, plus.testPurchases], [0, 1], label);
   });
 });
 
@@ -357,8 +359,10 @@ test('a Creem team gift becomes one gift, emailed once to the buyer (memory and 
     const other = await asJson(await api(post('purchases/claim', { checkout: 'ch_gift10nocomp' })));
     assert.deepEqual([other.body.seats, other.body.org], [10, 'Your company'], label);
     const summary = (await asJson(await api(get('admin/summary', 'secret')))).body;
-    assert.deepEqual(summary.giftTotals, { count: 2, seats: 60, redeemed: 0, paid: 2 }, label);
-    assert.equal(summary.plus.purchases, 0, label);
+    // Bought with a test key: counted apart, never with the gifts sold (1.34.1).
+    assert.deepEqual(summary.giftTotals, { count: 0, seats: 0, redeemed: 0, paid: 0, test: { count: 2, seats: 60, redeemed: 0 } }, label);
+    assert.deepEqual([summary.plus.purchases, summary.plus.testPurchases], [0, 0], label);
+    assert.deepEqual(summary.gifts.map(gift => gift.test), [true, true], label);
   });
 });
 
@@ -629,9 +633,12 @@ test('series: daily counts summed across versions, and sales, between two days (
       to: '2026-10-08',
       events: { app_active_day: { '2026-10-01': 3, '2026-10-02': 1 }, pricing_viewed: { '2026-10-02': 1 } },
       sales: [
-        { day: '2026-10-05', kind: 'gift', source: 'creem', plan: 'up-to-10', seats: 10, amount: 19500, currency: 'USD' },
         { day: '2026-10-05', kind: 'gift', source: 'manual', plan: '', seats: 37, amount: 30000, currency: 'USD' },
         { day: '2026-10-05', kind: 'gift', source: 'manual', plan: 'up-to-50', seats: 50, amount: 50000, currency: 'EUR' }
+      ],
+      // Bought with a test key: apart, never a sale (1.34.1).
+      testSales: [
+        { day: '2026-10-05', kind: 'gift', source: 'creem', plan: 'up-to-10', seats: 10, amount: 19500, currency: 'USD', test: true }
       ],
       salesUnavailable: false
     }, `${label}: the Plus sale of 9 October is after the range`);
@@ -639,7 +646,7 @@ test('series: daily counts summed across versions, and sales, between two days (
     const recent = (await asJson(await api(get('admin/series', 'secret')))).body;
     assert.deepEqual([recent.from, recent.to], ['2025-09-01', '2026-10-05'], label);
     assert.deepEqual(recent.events.app_active_day, { '2026-09-30': 1, '2026-10-01': 3, '2026-10-02': 1 }, label);
-    assert.equal(recent.sales.length, 3, label);
+    assert.deepEqual([recent.sales.length, recent.testSales.length], [2, 1], label);
     assert.ok(!Object.keys(recent.events).some(name => name.startsWith('internal:')), label);
   });
 });
@@ -928,8 +935,10 @@ test('a personal gift becomes a gift link, emailed to the giver in personal word
     assert.equal((await api(post(`gifts/${one.code}/redeem`))).status, 409, label);
 
     // Sales rows carry the plan; the dashboard lists the gifts with their notes.
-    const { sales } = (await asJson(await api(get('admin/series?from=2026-10-09&to=2026-10-09', 'secret')))).body;
-    assert.deepEqual(sales.map(row => [row.plan, row.seats, row.amount, row.currency]).sort(), [['family-5', 5, 9900, 'USD'], ['gift-1', 1, 2900, 'EUR'], ['gift-1', 1, 2900, 'EUR']], label);
+    // Made with a test key: test-mode sales, apart from the real ones (1.34.1).
+    const { sales, testSales } = (await asJson(await api(get('admin/series?from=2026-10-09&to=2026-10-09', 'secret')))).body;
+    assert.deepEqual(testSales.map(row => [row.plan, row.seats, row.amount, row.currency]).sort(), [['family-5', 5, 9900, 'USD'], ['gift-1', 1, 2900, 'EUR'], ['gift-1', 1, 2900, 'EUR']], label);
+    assert.deepEqual(sales, [], label);
     const { rows } = (await asJson(await api(get('admin/gifts', 'secret')))).body;
     assert.deepEqual(rows.map(row => row.note).sort(), ['Test mode · Creem · Give Plus', 'Test mode · Creem · Give Plus', 'Test mode · Creem · Plus Family'], label);
   });

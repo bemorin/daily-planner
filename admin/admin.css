@@ -44,6 +44,30 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .owner-sub { margin: 6px 0 0; color: var(--muted); font-size: .82rem; }
 
+/* This browser kept out of the anonymous counts (./usage-counts.js, 1.34.1): one quiet line under the subtitle. */
+.owner-browser { display: grid; grid-template-columns: 16px minmax(0, auto) auto; justify-content: start; align-items: center; gap: 8px 12px; margin-top: 10px; color: var(--muted); font-size: .76rem; line-height: 1.4; }
+
+.owner-browser[hidden] { display: none; }
+
+.owner-browser > svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+.owner-browser .owner-browser__on,
+.owner-browser.is-counted .owner-browser__off { display: none; }
+
+.owner-browser.is-counted .owner-browser__on { display: block; }
+
+.owner-browser p { min-width: 0; margin: 0; }
+
+.owner-browser b { color: var(--ink); font-weight: 650; }
+
+.owner-browser__toggle { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-weight: 600; white-space: nowrap; cursor: pointer; }
+
+@media (max-width: 720px) {
+  .owner-browser { grid-template-columns: 16px minmax(0, 1fr); align-items: start; }
+  .owner-browser > svg { margin-top: 1px; }
+  .owner-browser__toggle { grid-column: 2; }
+}
+
 .owner-head__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 
 .owner-range { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .78rem; }
@@ -376,6 +400,8 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 
 .owner .owner-danger:hover,
 .owner .owner-danger:focus-visible { background: color-mix(in srgb, var(--danger) 86%, var(--ink)); }
+
+.owner .owner-danger:disabled:hover { background: var(--danger); }
 
 .owner-inline { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 
@@ -942,6 +968,34 @@ body.owner { height: auto; min-height: 100%; overflow: auto; background: var(--p
 .owner-pay input[type="radio"] { flex: none; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--ink); }
 
 .owner-pay .owner-small { margin-top: -8px; }
+
+/* Start fresh at launch (./usage-counts.js, 1.34.1): the last card of Trends, what is recorded now beside what it does. */
+[data-owner-fresh]:empty { display: none; }
+
+[data-owner-fresh] { margin-top: 4px; }
+
+.owner-fresh { grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 32px; }
+
+.owner-fresh header p { max-width: 78ch; }
+
+.owner-fresh__side { display: grid; justify-items: end; gap: 10px; text-align: right; }
+
+.owner-fresh__now { display: grid; gap: 1px; margin: 0; font-size: .8rem; line-height: 1.4; }
+
+.owner-fresh__now span { color: var(--muted); font-size: .72rem; font-weight: 620; }
+
+.owner-fresh__now b { font-size: .92rem; font-weight: 680; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+
+.owner-fresh__now small { color: var(--muted); font-size: .74rem; }
+
+.owner-fresh .owner-result { grid-column: 1 / -1; margin: 0; }
+
+.owner-fresh .secondary-button { min-height: 36px; padding: 6px 14px; font-size: .78rem; }
+
+@media (max-width: 720px) {
+  .owner-fresh { grid-template-columns: minmax(0, 1fr); }
+  .owner-fresh__side { justify-items: start; text-align: left; }
+}
 
 /* Test-mode purchases (./test-purchases.js, 1.34): bought in Creem's test mode, switched off together once live. */
 [data-owner-tests]:empty { display: none; }
