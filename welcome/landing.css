@@ -1611,6 +1611,23 @@ input[type="number"]::-webkit-outer-spin-button { margin: 0; -webkit-appearance:
 
 .buy__error { color: var(--danger); font-size: .9rem; font-weight: 600; line-height: 1.45; }
 
+/* Creem's test mode (1.34: review mode, while the payment provider reviews the store): one calm line by the buy buttons. */
+.buy__test { display: flex; align-items: flex-start; gap: 8px; margin: 2px 0 0; color: var(--muted); font-size: .84rem; line-height: 1.45; text-wrap: pretty; }
+
+.buy__test-icon { display: inline-flex; flex: 0 0 auto; margin-top: 1px; color: var(--paint); }
+
+.buy__test-icon svg.i { width: 16px; height: 16px; stroke-width: 1.9; }
+
+.gifts__test { margin-top: -2px; }
+
+.band .buy__test { color: var(--band-muted); }
+
+.band .buy__test-icon { color: var(--band-accent); }
+
+.prices__test-slot { margin-top: 12px; }
+
+.prices__test-slot:empty { display: none; }
+
 /* Team gift prices, on the dark band: one row per tier ---------------------- */
 
 .prices { container: team / inline-size; }

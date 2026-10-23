@@ -1,7 +1,8 @@
 /* The configuration page (/admin/configuration/): the dashboard's look (../admin.css)
    and the planner's tokens and controls (../../styles.css). One tone per state, always
-   with a shape and a word: OK (green ✓), Problem (red !), Missing (red, or amber when
-   only recommended, –), Optional and missing (grey ○), Present and not tested (warm ?). */
+   with a shape and a word: OK (green ✓), Problem (red !), Warning (amber !, a problem
+   that blocks nothing), Missing (red, or amber when only recommended, –), Optional and
+   missing (grey ○), Present and not tested (warm ?). */
 
 .owner-config {
   --cfg-ok: var(--hz-habit);
@@ -77,6 +78,8 @@
 
 .cfg-chip.is-untested { --tone: var(--cfg-untested); }
 
+.cfg-chip.is-warning { --tone: var(--cfg-warn); }
+
 .cfg-notes { grid-column: 1 / -1; margin: 0; padding: 0; display: grid; gap: 4px; list-style: none; }
 
 .cfg-notes li { position: relative; padding-left: 16px; color: var(--muted); font-size: .78rem; line-height: 1.5; }
@@ -95,12 +98,17 @@
 
 .cfg-badge.is-untested { --tone: var(--cfg-untested); }
 
+/* A warning: a problem that blocks nothing (review mode while Creem reviews the store), in amber. */
+.cfg-badge.is-problem.is-warning { --tone: var(--cfg-warn); }
+
 .cfg-badge.is-optional-missing { background: var(--soft); color: var(--muted); }
 
 /* Fix first */
 .cfg-first { display: grid; border: 1px solid color-mix(in srgb, var(--cfg-problem) 26%, var(--line)); border-radius: 16px; background: var(--surface-strong); box-shadow: inset 3px 0 0 var(--cfg-problem); overflow: hidden; }
 
 .cfg-first[hidden] { display: none; }
+
+.cfg-first.is-warnings { border-color: color-mix(in srgb, var(--cfg-warn) 30%, var(--line)); box-shadow: inset 3px 0 0 var(--cfg-warn); }
 
 .cfg-first:focus { outline: none; }
 
@@ -164,6 +172,8 @@
 .cfg-item.is-problem { --tone: var(--cfg-problem); }
 
 .cfg-item.is-missing { --tone: var(--cfg-warn); }
+
+.cfg-item.is-problem.is-warning { --tone: var(--cfg-warn); }
 
 .cfg-item__main { min-width: 0; display: grid; gap: 4px; }
 

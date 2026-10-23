@@ -66,14 +66,18 @@ export function planForPeople(count) {
 }
 
 /**
- * GET /api/checkout answers { plus: ['EUR'], gift: ['EUR','USD'], test }.
+ * GET /api/checkout answers { plus: ['EUR'], gift: ['EUR','USD'], test, review? }.
  * `known` is false when the server could not be asked (offline, error):
- * the page then stays optimistic and asks again on the next click.
+ * the page then stays optimistic and asks again on the next click. `test`:
+ * checkouts run in Creem's test mode; `review`: on the production address,
+ * while the payment provider reviews the store (1.34). The buy buttons then
+ * say so (testModeLine in src/lib/planner-api.js).
  */
 export function readCheckoutOptions(result) {
   const list = value => (Array.isArray(value) ? CURRENCIES.filter(currency => value.includes(currency)) : []);
-  if (!result || result.ok !== true) return { known: false, plus: [], gift: [], currency: '', test: false };
-  return { known: true, plus: list(result.plus), gift: list(result.gift), currency: validCurrency(result.currency), test: result.test === true };
+  if (!result || result.ok !== true) return { known: false, plus: [], gift: [], currency: '', test: false, review: false };
+  const test = result.test === true;
+  return { known: true, plus: list(result.plus), gift: list(result.gift), currency: validCurrency(result.currency), test, review: test && result.review === true };
 }
 
 /**

@@ -13,7 +13,7 @@
 // (sessionStorage), never the token. The Creem setup assistant
 // (../creem-setup.js) is mounted in the Creem group when its module is there.
 
-import { fixFirst, LEVEL_LABELS, newAdminToken, newPlusKeyPair, newTotpSecret, otpauthUri, STATE_LABELS, summaryText, totalsText, utcStamp } from './config-model.js';
+import { fixFirst, isWarning, LEVEL_LABELS, newAdminToken, newPlusKeyPair, newTotpSecret, otpauthUri, shownCounts, shownState, stateLabel, summaryText, totalsText, utcStamp } from './config-model.js';
 
 const SESSION_KEY = 'daily-planner-owner-session';
 const API = (() => {
@@ -42,6 +42,8 @@ const STATE_ICONS = {
   'optional-missing': SVG('<circle cx="12" cy="12" r="5.5"/>'),
   untested: SVG('<path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.6"/><path d="M12 17.3v.01"/>')
 };
+// A warning (a problem that is a reminder, 1.34) keeps the problem's “!”, in amber.
+STATE_ICONS.warning = STATE_ICONS.problem;
 
 let session = readSession();
 let expiryTimer = 0;
@@ -149,7 +151,7 @@ function signOut(message = '') {
 
 // ---- Rendering -------------------------------------------------------------------
 
-const badge = item => `<span class="cfg-badge is-${esc(item.state)}${item.state === 'missing' ? ` is-${esc(item.level)}` : ''}">${STATE_ICONS[item.state] || ''}<span>${esc(STATE_LABELS[item.state] || item.state)}</span></span>`;
+const badge = item => `<span class="cfg-badge is-${esc(item.state)}${item.state === 'missing' ? ` is-${esc(item.level)}` : ''}${isWarning(item) ? ' is-warning' : ''}">${STATE_ICONS[shownState(item)] || ''}<span>${esc(stateLabel(item))}</span></span>`;
 
 function copyRow(label, text, kind = '') {
   const index = copyTexts.push(String(text)) - 1;
@@ -216,7 +218,7 @@ function itemHtml(item) {
   const optionalFix = item.state === 'optional-missing' ? fixHtml(item, { title: 'How to set it' }) : '';
   // A value to generate is offered in the open while the setting needs one; once it is fine, under Details (to replace it).
   const generateOpen = needsFix || item.state === 'optional-missing';
-  return `<li class="cfg-item is-${esc(item.state)}" id="cfg-${slug(item.id)}" tabindex="-1">
+  return `<li class="cfg-item is-${esc(item.state)}${isWarning(item) ? ' is-warning' : ''}" id="cfg-${slug(item.id)}" tabindex="-1">
     ${badge(item)}
     <div class="cfg-item__main">
       <p class="cfg-item__title"><code class="cfg-name">${esc(item.name)}</code><span class="cfg-tags">${tags}</span></p>
@@ -231,8 +233,8 @@ function itemHtml(item) {
 
 function groupTally(rows) {
   const counts = {};
-  for (const row of rows) counts[row.state] = (counts[row.state] || 0) + 1;
-  const parts = [['problem', 'problem', 'problems'], ['missing', 'missing', 'missing'], ['untested', 'not tested', 'not tested'], ['ok', 'OK', 'OK']]
+  for (const row of rows) counts[shownState(row)] = (counts[shownState(row)] || 0) + 1;
+  const parts = [['problem', 'problem', 'problems'], ['warning', 'warning', 'warnings'], ['missing', 'missing', 'missing'], ['untested', 'not tested', 'not tested'], ['ok', 'OK', 'OK']]
     .filter(([state]) => counts[state]).map(([state, one, many]) => `${counts[state]} ${counts[state] === 1 ? one : many}`);
   return parts.join(' · ');
 }
@@ -255,10 +257,15 @@ function renderFirst(result) {
   const section = $('[data-cfg-first]');
   section.hidden = !first.length;
   if (!first.length) return;
-  const required = first.filter(item => item.level === 'required').length;
+  const required = first.filter(item => item.level === 'required' && !isWarning(item)).length;
+  const warnings = first.filter(isWarning).length;
+  // Only reminders: the box takes the warning's amber, not the problem's red.
+  section.classList.toggle('is-warnings', warnings === first.length);
   $('[data-cfg-first-caption]').textContent = required
-    ? `${required} required ${required === 1 ? 'setting needs' : 'settings need'} you first; the rest follow by importance. Each line opens its fix below.`
-    : 'Nothing required is wrong. These would still help, most useful first. Each line opens its fix below.';
+    ? `${required} required ${required === 1 ? 'setting needs' : 'settings need'} you first; the rest follow by importance${warnings ? ', and the warnings come last: they block nothing' : ''}. Each line opens its fix below.`
+    : warnings === first.length
+      ? 'Nothing is blocking. These are reminders of what to change later; each line opens its fix below.'
+      : `Nothing required is wrong. These would still help, most useful first${warnings ? ', then the warnings, which block nothing' : ''}. Each line opens its fix below.`;
   $('[data-cfg-first-list]').innerHTML = first.map(item => `<li class="cfg-first__item">
       <a class="cfg-first__link" href="#cfg-${slug(item.id)}" data-cfg-jump="cfg-${slug(item.id)}">
         ${badge(item)}
@@ -269,10 +276,10 @@ function renderFirst(result) {
 }
 
 // The totals, most urgent first: [state, one, many].
-const CHIP_WORDS = [['problem', 'problem', 'problems'], ['missing', 'missing', 'missing'], ['untested', 'present, not tested', 'present, not tested'], ['ok', 'OK', 'OK'], ['optional-missing', 'optional, missing', 'optional, missing']];
+const CHIP_WORDS = [['problem', 'problem', 'problems'], ['warning', 'warning', 'warnings'], ['missing', 'missing', 'missing'], ['untested', 'present, not tested', 'present, not tested'], ['ok', 'OK', 'OK'], ['optional-missing', 'optional, missing', 'optional, missing']];
 
 function renderTally(result) {
-  const counts = result.counts || {};
+  const counts = shownCounts(result.counts || {});
   const tally = $('[data-cfg-tally]');
   tally.innerHTML = CHIP_WORDS.filter(([state]) => counts[state]).map(([state, one, many]) => `<li class="cfg-chip is-${state}">${STATE_ICONS[state]}<b>${Number(counts[state])}</b><span>${esc(Number(counts[state]) === 1 ? one : many)}</span></li>`).join('');
   tally.hidden = !tally.innerHTML;

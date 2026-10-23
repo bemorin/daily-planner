@@ -114,6 +114,8 @@ export function describeShape(def, raw) {
       return PRODUCT_ID_RE.test(text) ? 'an id, not the usual prod_… form' : 'not a product id';
     case 'flag':
       return isOn(text) ? 'on: Creem’s test API' : 'set, but not 1: read as off';
+    case 'review-flag':
+      return isOn(text) ? 'on: review mode' : 'set, but not 1: read as off';
     case 'resend-key':
       return text.startsWith('re_') ? `looks like a Resend API key (re_…), ${length}` : `${length}, not the re_… form of a Resend key`;
     case 'sender':
@@ -611,17 +613,48 @@ async function checkCreem(ctx, items) {
   const keyItem = items.get('CREEM_API_KEY');
   const secretItem = items.get('CREEM_WEBHOOK_SECRET');
   const flagItem = items.get('CREEM_TEST_MODE');
+  const reviewItem = items.get('CREEM_TEST_ON_PRODUCTION');
+  const reviewValue = ctx.value('CREEM_TEST_ON_PRODUCTION');
+  const review = isOn(reviewValue);
   const productDefs = CONFIG_VARIABLES.filter(def => def.format === 'creem-product');
   const liveLooking = key.startsWith('creem_') && !key.startsWith('creem_test_');
   keyItem.test = 'Creem: GET /v1/checkouts with a made-up id, read-only (404 means the key was accepted).';
   secretItem.test = 'Creem: GET /v1/webhooks, then that webhook’s signing secret, compared here in constant time and never sent back.';
   for (const def of productDefs) items.get(def.name).test = 'Creem: GET /v1/products/{id}, read-only.';
   flagItem.test = 'Compared with the form of CREEM_API_KEY.';
+  reviewItem.test = 'Compared with the mode of CREEM_API_KEY (its form, and CREEM_TEST_MODE).';
 
   if (flag) {
     if (isOn(flag) && liveLooking) patch(flagItem, { state: 'problem', summary: 'On, but CREEM_API_KEY looks like a live key, and Creem’s test API refuses live keys.', fix: { steps: [`${CLOUDFLARE.variables} → Production → delete CREEM_TEST_MODE (a creem_test_ key already means test mode).`, REDEPLOY], copy: [{ label: 'Variable name', text: 'CREEM_TEST_MODE' }] } });
     else if (isOn(flag)) patch(flagItem, { summary: key.startsWith('creem_test_') ? 'On: every Creem call goes to the test API. Not needed: a creem_test_ key already means test mode.' : 'On: every Creem call goes to the test API.' });
     else patch(flagItem, { summary: 'Set, but not 1: read as off.' });
+  }
+
+  // Review mode (1.34): a reminder, never a blocker — on purpose while Creem reviews the store, to remove afterwards.
+  if (reviewValue) {
+    const copy = [{ label: 'Variable name', text: 'CREEM_TEST_ON_PRODUCTION' }];
+    const remove = `${CLOUDFLARE.variables} → Production → delete CREEM_TEST_ON_PRODUCTION.`;
+    if (!review) patch(reviewItem, { summary: 'Set, but not 1: read as off. With a test key, buying stays switched off on the production address.' });
+    else if (!key) patch(reviewItem, { summary: 'On, but CREEM_API_KEY is missing: nothing can be bought yet.' });
+    else if (mode === 'live') {
+      patch(reviewItem, { state: 'problem', warning: true, summary: 'Has no effect with the live key in CREEM_API_KEY: remove it.', fix: { steps: [remove, REDEPLOY, 'Then, in the dashboard: Refunds and disputes → Switch off test-mode purchases, if some are still active.'], copy } });
+    } else {
+      patch(reviewItem, {
+        state: 'problem',
+        warning: true,
+        summary: 'Review mode: test purchases are open on the production address — turn it off once your live key is in.',
+        fix: {
+          steps: [
+            'Leave it on while Creem reviews your store: its team may make a test purchase here (no card is charged, and the buy buttons say payments are in test mode).',
+            'Once Creem has approved the store, put the live key, the four live product ids and the live webhook’s signing secret in place (see CREEM_API_KEY).',
+            remove,
+            REDEPLOY,
+            'Then open the dashboard: Refunds and disputes → Switch off test-mode purchases.'
+          ],
+          copy
+        }
+      });
+    }
   }
 
   // Product ids: their form, and no id used twice, before asking Creem.
@@ -656,7 +689,27 @@ async function checkCreem(ctx, items) {
   // The key.
   if ([200, 400, 404].includes(probe.status)) {
     if (mode === 'test' && ctx.production) {
-      patch(keyItem, { state: 'problem', summary: 'A valid test key: Creem accepted it. On the production address, test mode switches buying off: put the live key here once Creem has approved your store.', fix: variableFix(configVariableOf('CREEM_API_KEY'), { edit: true, value: 'the live key from Creem → Developers → API keys, with Test mode off.', after: [...(flag ? ['Delete CREEM_TEST_MODE too.'] : []), 'Live mode has its own products and webhook: put their ids and signing secret here as well.'] }) });
+      const live = { edit: true, value: 'the live key from Creem → Developers → API keys, with Test mode off.' };
+      const liveAlso = [...(flag ? ['Delete CREEM_TEST_MODE too.'] : []), 'Live mode has its own products and webhook: put their ids and signing secret here as well.'];
+      if (review) {
+        patch(keyItem, {
+          state: 'problem',
+          warning: true,
+          summary: 'A valid test key: Creem accepted it. Review mode is on (CREEM_TEST_ON_PRODUCTION): test purchases are open on the production address while Creem reviews your store. Put the live key here once Creem has approved it.',
+          fix: variableFix(configVariableOf('CREEM_API_KEY'), { ...live, before: ['Once Creem has approved your store:'], after: [...liveAlso, 'Delete CREEM_TEST_ON_PRODUCTION in the same place.'] })
+        });
+      } else {
+        patch(keyItem, {
+          state: 'problem',
+          summary: 'A valid test key: Creem accepted it. On the production address, test mode switches buying off: put the live key here once Creem has approved your store. Until then, review mode lets Creem’s team make a test purchase here: set CREEM_TEST_ON_PRODUCTION to 1.',
+          fix: variableFix(configVariableOf('CREEM_API_KEY'), {
+            ...live,
+            before: ['Creem still reviewing your store? Keep this test key and add CREEM_TEST_ON_PRODUCTION (Type: Text, Value: 1) in the same place, then redeploy: Creem’s team can make a test purchase here (no card is charged). Once Creem has approved it:'],
+            after: liveAlso,
+            copy: [{ label: 'Review mode', text: 'CREEM_TEST_ON_PRODUCTION' }]
+          })
+        });
+      }
     } else patch(keyItem, { summary: `Valid: Creem accepted it (${modeWord} mode).` });
   } else if (refused) {
     const hint = isOn(flag) && liveLooking ? 'CREEM_TEST_MODE sends this live key to the test API: delete CREEM_TEST_MODE.'
@@ -948,7 +1001,8 @@ export async function runConfigChecks({ env = {}, fetch: fetchImpl = globalThis.
 
   const order = new Map(CONFIG_GROUPS.map((group, index) => [group.id, index]));
   const list = [...items.values()].sort((a, b) => order.get(a.group) - order.get(b.group));
-  const counts = Object.fromEntries(STATES.map(state => [state, list.filter(item => item.state === state).length]));
+  // `warning`: the problems that are reminders, not blockers (counted among the problems too).
+  const counts = { ...Object.fromEntries(STATES.map(state => [state, list.filter(item => item.state === state).length])), warning: list.filter(item => item.state === 'problem' && item.warning).length };
   const notes = [];
   if (!ctx.production) {
     notes.push(ctx.local

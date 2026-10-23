@@ -17,6 +17,8 @@ import { partnersCardHtml, yearlyCapText } from './partners-view.js';
 import { openPayoutDialog, parseAmount } from './payout-dialog.js';
 // The requests table: a question reads as one, without a team's details.
 import { teamRequestsTableHtml } from './requests-view.js';
+// Test-mode purchases (1.34): switch them all off once payments are live, after typing SWITCH OFF in a dialog.
+import { doneText, openTestPurchasesDialog, readStatus, RESTORE_WORD, SWITCH_OFF_WORDS, testPurchasesHtml } from './test-purchases.js';
 import { createTrendsView } from './trends-view.js';
 import { dayOf, normalizeSeries, seriesWindow } from './trends.js';
 // The landing page's stepper (− value +): no browser spin arrows on Seats.
@@ -60,9 +62,9 @@ const SOURCE_LABELS = { creem: 'Paid online', stripe: 'Paid online (Stripe)', ma
 // This page's own release, kept in step with package.json and src/config.js
 // (tests/admin-version.test.js). Not imported: it must come from this very
 // file, so an old cached admin.js shows its old number.
-const APP_VERSION = '1.33.2';
+const APP_VERSION = '1.34.0';
 // What Reload fetches again past the browser cache before opening the page anew.
-const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './payout-dialog.js', './requests-view.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/vendor/motion.js', '../src/lib/pricing.js', '../legal/legal-details.js', '../src/lib/text.js'];
+const DASHBOARD_FILES = ['./', './admin.js', './admin.css', './version.js', './attention.js', './partners-view.js', './payout-dialog.js', './requests-view.js', './test-purchases.js', './trends-view.js', './trends.js', './charts.js', '../styles.css', '../runtime-config.js', '../welcome/stepper.js', '../src/vendor/motion.js', '../src/lib/pricing.js', '../legal/legal-details.js', '../src/lib/text.js'];
 const RELOAD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4.5v4h-4"/></svg>';
 
 class ApiError extends Error {
@@ -311,7 +313,7 @@ function showUnavailable(error) {
 function clearRendered() {
   ['[data-owner-kpis]', '[data-owner-funnel]', '[data-owner-team-funnel]', '[data-owner-teams]', '[data-owner-waitlist]', '[data-owner-versions]', '[data-owner-feedback]', '[data-owner-signals]',
     '[data-owner-gifts]', '[data-owner-gift-created]', '[data-owner-gift-panel]', '[data-owner-plus-stats]', '[data-owner-plus-funnel]', '[data-owner-license-created]', '[data-owner-license-list]', '[data-owner-setup]',
-    '[data-owner-reviews]', '[data-owner-refunds]', '[data-owner-revocations]', '[data-owner-partners]']
+    '[data-owner-reviews]', '[data-owner-refunds]', '[data-owner-tests]', '[data-owner-revocations]', '[data-owner-partners]']
     .forEach(selector => { $(selector).innerHTML = ''; });
   trends.clear();
   seriesSession = null;
@@ -326,6 +328,8 @@ function clearRendered() {
   showResult('[data-owner-license-result]', '');
   showResult('[data-owner-revoke-result]', '');
   revokedState = { gifts: new Map(), licenses: new Map(), sources: new Set() };
+  testStatus = null;
+  testResult = null;
   clearAttention();
 }
 
@@ -1025,10 +1029,10 @@ function refundRowHtml(row) {
   </tr>`;
 }
 
-/** Revocations made in this dashboard, one line per Revoke (owner_… groups). */
+/** Revocations made in this dashboard, one line per Revoke (owner_… groups; the test-mode switch-off has its own panel). */
 function ownerRevocationsHtml(rows) {
   const groups = new Map();
-  rows.filter(row => String(row.source).startsWith('owner_')).forEach(row => { if (groups.has(row.source)) groups.get(row.source).push(row); else groups.set(row.source, [row]); });
+  rows.filter(row => String(row.source).startsWith('owner_') && row.source !== TEST_SOURCE).forEach(row => { if (groups.has(row.source)) groups.get(row.source).push(row); else groups.set(row.source, [row]); });
   if (!groups.size) return '';
   const describe = items => {
     const gift = items.find(item => item.kind === 'gift');
@@ -1050,6 +1054,8 @@ function ownerRevocationsHtml(rows) {
 function renderRefunds(summary) {
   const target = $('[data-owner-refunds]');
   const form = $('[data-owner-revoke-form]');
+  testStatus = summary.refundsUnavailable ? null : readStatus(summary.testPurchases);
+  renderTestPurchases();
   if (summary.refundsUnavailable) {
     target.innerHTML = '<p class="owner-empty">The refunds tables do not exist yet, so refunds are not recorded and nothing is switched off. Apply <code>migrations/0005_refunds.sql</code> to the D1 database (see <code>docs/FEEDBACK_AND_WAITLIST.md</code>).</p>';
     form.hidden = true;
@@ -1089,7 +1095,39 @@ revokeForm.addEventListener('submit', async event => {
   }
 });
 
+// ---- Test-mode purchases (./test-purchases.js) ------------------------------------
+
+const TEST_SOURCE = 'owner_test_mode';
+// The counts of the last summary, and what the panel said after the last action (kept across a refresh).
+let testStatus = null;
+let testResult = null;
+
+function renderTestPurchases() {
+  $('[data-owner-tests]').innerHTML = testPurchasesHtml(testStatus, { number, result: testResult });
+}
+
+/** Switch off (after SWITCH OFF typed in the dialog) or restore all (after the dialog's Restore all). */
+async function testPurchasesAction(kind, button) {
+  const before = testStatus;
+  if (!before || !await openTestPurchasesDialog(kind, before, { number })) { button.focus(); return; }
+  button.disabled = true;
+  testResult = { text: kind === 'restore' ? 'Restoring…' : 'Switching off…' };
+  renderTestPurchases();
+  try {
+    const answer = await sendJson(`admin/test-purchases/${kind}`, 'POST', { confirm: kind === 'restore' ? RESTORE_WORD : SWITCH_OFF_WORDS });
+    testResult = { text: doneText(kind, before, answer, { number }) };
+    await load();
+  } catch (error) {
+    testResult = { text: failureText(error), error: true };
+    if (error.kind === 'unauthorized') { handleError(error); return; }
+    renderTestPurchases();
+  }
+  $('[data-owner-tests-result]')?.focus?.();
+}
+
 $('[data-owner-refunds]').closest('.owner-card').addEventListener('click', async event => {
+  const tests = event.target.closest('[data-owner-tests-switch], [data-owner-tests-restore]');
+  if (tests) { testPurchasesAction(tests.matches('[data-owner-tests-restore]') ? 'restore' : 'switch-off', tests); return; }
   const button = event.target.closest('[data-owner-restore]');
   if (!button) return;
   if (!window.confirm(`Restore ${button.dataset.ownerRestoreLabel || 'it'}? Its links work again, and planners that already lost Plus get it back at their next weekly check, when they are online.`)) return;
@@ -1272,9 +1310,16 @@ function paymentsItem(payments) {
       : `<td class="owner-missing">missing · <code>CREEM_${item.toUpperCase()}_${currency}</code></td>`;
   };
   const table = `<div class="owner-scroll"><table class="owner-table owner-mini"><thead><tr><th>Product</th>${PAYMENT_CURRENCIES.map(currency => `<th>${currency}</th>`).join('')}</tr></thead><tbody>${PAYMENT_ITEMS.map(([item, label]) => `<tr><th scope="row">${label}</th>${PAYMENT_CURRENCIES.map(currency => cell(item, currency)).join('')}</tr>`).join('')}</tbody></table></div>`;
-  const mode = payments.mode === 'live' ? 'live mode' : payments.mode === 'test' ? 'test mode: no real payments, and buying is switched off on the public address — test on your project’s .pages.dev address' : '';
+  const mode = payments.mode === 'live' ? 'live mode'
+    : payments.mode === 'test' && payments.reviewOpen ? 'test mode, in review mode: no real payments'
+      : payments.mode === 'test' ? 'test mode: no real payments, and buying is switched off on the public address — test on your project’s .pages.dev address' : '';
+  // Review mode (CREEM_TEST_ON_PRODUCTION, 1.34): while Creem reviews the store, then removed once live.
+  const review = payments.mode === 'test' && payments.reviewOpen
+    ? '<p>Review mode is on (<code>CREEM_TEST_ON_PRODUCTION</code>): while Creem reviews your store, checkouts on the public address run in Creem’s test mode, so its team can make a test purchase. No card is charged, and the buy buttons say so. Once the live key is in, delete it, then switch the test-mode purchases off (Refunds and disputes).</p>'
+    : payments.mode === 'test' ? '<p>While Creem reviews your store, set <code>CREEM_TEST_ON_PRODUCTION</code> to <code>1</code> (review mode) so its team can make a test purchase on the public address.</p>'
+      : payments.reviewMode ? '<p><code>CREEM_TEST_ON_PRODUCTION</code> is set, but has no effect with a live key: delete it.</p>' : '';
   const key = payments.apiKeySet
-    ? `<p>API key set${mode ? ` · ${mode}` : ''} (<code>CREEM_API_KEY</code>).</p>`
+    ? `<p>API key set${mode ? ` · ${mode}` : ''} (<code>CREEM_API_KEY</code>).</p>${review}`
     : '<p>Set the secret <code>CREEM_API_KEY</code> (Creem → Developers → API keys), then redeploy. Until then nothing can be bought online.</p>';
   const webhook = payments.webhookSecretSet
     ? '<p>Webhook signing secret set (<code>CREEM_WEBHOOK_SECRET</code>).</p>'
@@ -1460,7 +1505,9 @@ const ATTENTION_ICONS = {
   gift: '<rect x="3.5" y="8.5" width="17" height="4" rx="1"/><path d="M5.5 12.5v7h13v-7"/><path d="M12 8.5v11"/><path d="M12 8.5C10.6 5 7 4.6 7 6.6c0 1.4 2.2 1.9 5 1.9 2.8 0 5-.5 5-1.9 0-2-3.6-1.6-5 1.9"/>',
   review: '<path d="m12 4.5 2.3 4.7 5.2.8-3.8 3.6.9 5.1-4.6-2.4-4.6 2.4.9-5.1-3.8-3.6 5.2-.8z"/>',
   clear: '<circle cx="12" cy="12" r="8.5"/><path d="m8.4 12.3 2.5 2.5 4.7-5"/>',
-  partner: '<circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.2c-.5-.9-1.5-1.4-2.6-1.4-1.6 0-2.7.8-2.7 2 0 2.8 5.5 1.5 5.5 4.3 0 1.2-1.2 2.1-2.8 2.1-1.2 0-2.3-.6-2.8-1.5M12 6v1.8M12 16.2V18"/>'
+  partner: '<circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.2c-.5-.9-1.5-1.4-2.6-1.4-1.6 0-2.7.8-2.7 2 0 2.8 5.5 1.5 5.5 4.3 0 1.2-1.2 2.1-2.8 2.1-1.2 0-2.3-.6-2.8-1.5M12 6v1.8M12 16.2V18"/>',
+  // Test-mode purchases (1.34): a flask.
+  test: '<path d="M9.5 3.5h5"/><path d="M10.5 3.5v5.6l-4.9 8.6a1.9 1.9 0 0 0 1.7 2.8h9.4a1.9 1.9 0 0 0 1.7-2.8l-4.9-8.6V3.5"/><path d="M7.9 15h8.2"/>'
 };
 const ATTENTION_ARROW = '<svg class="owner-attention__arrow" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
 // The mark on a row: “!” to act on, “i” worth a look. A shape and words, not only a colour.
@@ -1550,7 +1597,7 @@ function renderAttention(summary) {
   if (!items.length) {
     panel.innerHTML = `<div class="owner-attention__clear">
       <span class="owner-attention__icon" aria-hidden="true">${attentionIcon('clear')}</span>
-      <div class="owner-attention__text"><h2 id="owner-attention-title">All clear</h2><p>Nothing needs your attention. Refunds and disputes, team requests, partner commissions, Setup, gifts and reviews were checked.</p></div>
+      <div class="owner-attention__text"><h2 id="owner-attention-title">All clear</h2><p>Nothing needs your attention. Refunds and disputes, test-mode purchases, team requests, partner commissions, Setup, gifts and reviews were checked.</p></div>
       ${checked}
     </div>`;
     return;

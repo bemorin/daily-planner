@@ -9,7 +9,7 @@ import { CHECK_ICON, el, qs, qsa, renderFooter, setupTopBar } from './page-kit.j
 import { EASE_OUT, followMotion, motionWanted, reduceQuery, setupFaq, setupReveal } from './page-motion.js';
 import { createPaletteCard } from './palette-card.js';
 import { createPrivacyDialog } from './privacy-dialog.js';
-import { checkout, createSale, renderPriceLines, setupBuyButtons } from './sale.js';
+import { checkout, createSale, renderPriceLines, setupBuyButtons, testNotice } from './sale.js';
 import { playCues, setupScenes } from './scenes.js';
 import { movedAddress } from './teams-model.js';
 
@@ -113,6 +113,9 @@ function plusCta(box) {
     // The button names the price, so it reads the same wherever it is.
     const label = Number.isFinite(price) ? `Get Plus — ${money(price)}` : 'Get Plus';
     children.push(el('button', { class: 'btn btn--primary btn--buy', type: 'button', 'data-buy': 'plus' }, label));
+    // Creem's test mode (review mode while the payment provider reviews the store): one calm line under the button.
+    const notice = testNotice(sale);
+    if (notice) children.push(notice);
   } else {
     const id = `plus-note-${box.dataset.plusCta || 'x'}`;
     children.push(el('button', { class: 'btn btn--primary btn--buy', type: 'button', disabled: true, 'aria-describedby': id }, 'Coming soon'));
@@ -164,6 +167,7 @@ function renderGifts() {
       el('span', { class: 'gift-btn__price' }, price, was != null ? el('small', {}, `was ${money(was)}`) : null));
     }));
   }
+  renderGiftsTestNotice();
   const badge = qs('[data-member-badge]');
   if (badge) badge.hidden = !member.active;
   const note = qs('[data-gifts-note]');
@@ -188,6 +192,15 @@ function renderGifts() {
       ? ['Member price ', el('b', {}, money(amount)), ` · was ${money(was)}`]
       : [el('span', { 'data-gift-price': plan }, money(amount)), after]));
   });
+}
+
+/** The test-mode line by the gifts, only when Get Plus (just above them) isn't there to carry it. */
+function renderGiftsTestNotice() {
+  const box = qs('[data-gifts]');
+  if (!box) return;
+  qs('[data-test-mode]', box)?.remove();
+  const notice = sale.state('gift').buyable && !sale.state('plus').buyable ? testNotice(sale, 'gifts__test') : null;
+  if (notice) box.insertBefore(notice, qs('[data-buy-error]', box));
 }
 
 function renderOffers() {

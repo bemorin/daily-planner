@@ -478,6 +478,13 @@
 
 .plus-cta__note { margin: 6px 0 2px; color: var(--muted); font-size: .72rem; line-height: 1.45; text-align: center; }
 
+/* Creem's test mode (1.34: review mode, while the payment provider reviews the store): one calm line, never an alarm. */
+.plus-test { display: flex; align-items: flex-start; justify-content: center; gap: 6px; margin: 8px 0 2px; color: var(--muted); font-size: .72rem; line-height: 1.45; text-wrap: pretty; }
+
+.plus-test svg { flex: 0 0 auto; width: 14px; height: 14px; margin-top: 1px; fill: none; stroke: var(--accent); stroke-width: 1.9; stroke-linecap: round; }
+
+.plus-test--gifts { justify-content: flex-start; margin: -2px 0 0; }
+
 .plus-offer .plus-inline-error { margin: 8px 0 2px; }
 
 /* Bleeds to the scroll area's edges by its padding (the variables above), no further. */

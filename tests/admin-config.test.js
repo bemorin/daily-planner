@@ -17,7 +17,12 @@ const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'
 const ORIGIN = 'https://planner.bemorin.com';
 const PAIR = await generatePlusKeyPair();
 const OTHER = await generatePlusKeyPair();
-const random = (length, alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789') => Array.from(crypto.getRandomValues(new Uint8Array(length)), byte => alphabet[byte % alphabet.length]).join('');
+// Secret-looking values from a fixed sequence, not crypto randomness: a random secret now and then shares 4
+// characters with a service's words (“…alid…”, “RROR”), which the scrubber then hides, as it should, and an
+// exact summary would fail once in a while. The same values every run keep the tests steady.
+let draws = 0x2f6b1c3d;
+const nextByte = () => { draws = (Math.imul(draws, 1664525) + 1013904223) >>> 0; return draws >>> 24; };
+const random = (length, alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789') => Array.from({ length }, () => alphabet[nextByte() % alphabet.length]).join('');
 // Fake secrets with their public prefix: only the part after it is secret.
 const SECRETS = {
   ADMIN_TOKEN: random(48),
@@ -164,6 +169,46 @@ test('Creem: a live key sent to the test API by CREEM_TEST_MODE is named, and a 
   const both = await check({ env: goodEnv({ CREEM_API_KEY: testKey, CREEM_TEST_MODE: '1' }), origin: 'https://abc123.daily-planner.pages.dev' });
   assert.equal(both.items.CREEM_TEST_MODE.state, 'ok');
   assert.equal(both.items.CREEM_TEST_MODE.summary, 'On: every Creem call goes to the test API. Not needed: a creem_test_ key already means test mode.');
+});
+
+test('Creem review mode (CREEM_TEST_ON_PRODUCTION): a warning while it opens test purchases, “remove it” with a live key, and the way in for a test key', async () => {
+  const testKey = `creem_test_${random(24)}`;
+  // A test key on the production address without it: the problem names review mode as the way to let Creem test.
+  const closed = await check({ env: goodEnv({ CREEM_API_KEY: testKey }) });
+  assert.equal(closed.items.CREEM_API_KEY.warning, undefined);
+  assert.match(closed.items.CREEM_API_KEY.summary, /review mode lets Creem’s team make a test purchase here: set CREEM_TEST_ON_PRODUCTION to 1\.$/);
+  assert.match(closed.items.CREEM_API_KEY.fix.steps[0], /^Creem still reviewing your store\? Keep this test key and add CREEM_TEST_ON_PRODUCTION \(Type: Text, Value: 1\)/);
+  assert.deepEqual(closed.items.CREEM_API_KEY.fix.copy.map(entry => entry.text), ['CREEM_API_KEY', 'CREEM_TEST_ON_PRODUCTION']);
+  assert.equal(closed.items.CREEM_TEST_ON_PRODUCTION.state, 'optional-missing');
+
+  // On, with the test key: two warnings, last in Fix first, never a value.
+  const open = await check({ env: goodEnv({ CREEM_API_KEY: testKey, CREEM_TEST_ON_PRODUCTION: '1', OWNER_EMAIL: '' }) });
+  const review = open.items.CREEM_TEST_ON_PRODUCTION;
+  assert.deepEqual([review.state, review.warning, review.shape], ['problem', true, 'on: review mode']);
+  assert.equal(review.summary, 'Review mode: test purchases are open on the production address — turn it off once your live key is in.');
+  assert.match(review.fix.steps.join(' '), /Variables and Secrets → Production → delete CREEM_TEST_ON_PRODUCTION\..*Retry deployment.*Switch off test-mode purchases/);
+  assert.deepEqual([open.items.CREEM_API_KEY.state, open.items.CREEM_API_KEY.warning], ['problem', true]);
+  assert.match(open.items.CREEM_API_KEY.summary, /Review mode is on \(CREEM_TEST_ON_PRODUCTION\): test purchases are open on the production address while Creem reviews your store\. Put the live key here once Creem has approved it\.$/);
+  assert.equal(open.result.counts.warning, 2);
+  assert.deepEqual(fixFirst(open.result.items).map(item => item.name), ['OWNER_EMAIL', 'CREEM_API_KEY', 'CREEM_TEST_ON_PRODUCTION'], 'the warnings come after what blocks something');
+  assert.equal(totalsText(open.result.counts).includes('2 warnings'), true);
+  assert.doesNotMatch(totalsText(open.result.counts), /problem/, 'a warning is not counted as a problem on the page');
+  assert.match(summaryText(open.result), /CREEM_TEST_ON_PRODUCTION \(optional, Text\): Warning \[on: review mode\] — Review mode: test purchases are open/);
+  assert.ok(!JSON.stringify(open.result).includes(testKey.slice(11)), 'no part of the key');
+
+  // On, with a live key: no effect, remove it.
+  const live = await check({ env: goodEnv({ CREEM_TEST_ON_PRODUCTION: '1' }) });
+  assert.deepEqual([live.items.CREEM_TEST_ON_PRODUCTION.state, live.items.CREEM_TEST_ON_PRODUCTION.warning], ['problem', true]);
+  assert.equal(live.items.CREEM_TEST_ON_PRODUCTION.summary, 'Has no effect with the live key in CREEM_API_KEY: remove it.');
+  assert.equal(live.items.CREEM_API_KEY.summary, 'Valid: Creem accepted it (live mode).');
+  // Set to anything but 1: read as off.
+  const off = await check({ env: goodEnv({ CREEM_API_KEY: testKey, CREEM_TEST_ON_PRODUCTION: 'no' }) });
+  assert.deepEqual([off.items.CREEM_TEST_ON_PRODUCTION.state, off.items.CREEM_TEST_ON_PRODUCTION.shape], ['ok', 'set, but not 1: read as off']);
+  assert.equal(off.items.CREEM_API_KEY.warning, undefined);
+  // A preview with a test key is fine either way; the variable still says what it does.
+  const preview = await check({ env: goodEnv({ CREEM_API_KEY: testKey, CREEM_TEST_ON_PRODUCTION: '1' }), origin: 'https://abc123.daily-planner.pages.dev', routes: { webhooks: json(200, { items: [{ ...HOOK, url: 'https://abc123.daily-planner.pages.dev/api/creem/webhook' }] }) } });
+  assert.equal(preview.items.CREEM_API_KEY.state, 'ok');
+  assert.equal(preview.items.CREEM_TEST_ON_PRODUCTION.warning, true);
 });
 
 test('Creem: a missing product, a wrong price, currency, billing or tax, an archived product and a repeated id are problems', async () => {

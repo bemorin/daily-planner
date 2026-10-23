@@ -40,6 +40,7 @@ const skipMissing = error => { if (!isMissingTable(error)) throw error; return 0
 const refundRow = row => (row ? { ...row, amount: row.amount == null ? null : Number(row.amount), fullRefund: Number(row.fullRefund) === 1, attempts: Number(row.attempts) || 0, ...(row.inForce === undefined ? {} : { inForce: Number(row.inForce) === 1 }) } : null);
 const revocationRow = row => ({ ...row, wasActive: row.wasActive == null ? null : Number(row.wasActive) === 1 });
 const ID_CHUNK = 90;
+const REVOCATION_ROWS = 12;
 const nextDay = day => new Date(Date.parse(`${day}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
 
 export function createD1Store(db) {
@@ -119,14 +120,45 @@ export function createD1Store(db) {
     getRefund: id => all(`SELECT ${refundColumns} FROM refunds WHERE id = ?`, id).then(([row]) => refundRow(row)),
     /** Newest first; `inForce` says whether what the refund revoked is still revoked (not restored). */
     listRefunds: ({ limit = 100 } = {}) => all(`SELECT ${refundColumns}, EXISTS (SELECT 1 FROM revocations WHERE revocations.source = refunds.id) AS inForce FROM refunds ORDER BY created_at DESC, id LIMIT ?`, limit).then(rows => rows.map(refundRow)),
-    /** Rows already there (same target and source) are kept as they are. Returns how many were added. */
+    /**
+     * Rows already there (same target and source) are kept as they are. Returns how many were added.
+     * REVOCATION_ROWS rows to a statement (8 values each, under D1's 100), so switching many
+     * test-mode purchases off stays within the queries a request may make.
+     */
     async addRevocations(rows) {
       let added = 0;
-      for (const row of rows) {
-        added += await run('INSERT INTO revocations (target, source, kind, label, reason, note, was_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(target, source) DO NOTHING',
-          row.target, row.source, row.kind, row.label || '', row.reason || '', row.note || '', typeof row.wasActive === 'boolean' ? (row.wasActive ? 1 : 0) : null, row.createdAt);
+      for (let start = 0; start < rows.length; start += REVOCATION_ROWS) {
+        const chunk = rows.slice(start, start + REVOCATION_ROWS);
+        added += await run(`INSERT INTO revocations (target, source, kind, label, reason, note, was_active, created_at) VALUES ${chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ')} ON CONFLICT(target, source) DO NOTHING`,
+          ...chunk.flatMap(row => [row.target, row.source, row.kind, row.label || '', row.reason || '', row.note || '', typeof row.wasActive === 'boolean' ? (row.wasActive ? 1 : 0) : null, row.createdAt]));
       }
       return added;
+    },
+    /**
+     * Plus purchases and gifts bought online whose note starts with `note` (the
+     * Test mode note), newest first: `revoked` when a revocation holds their
+     * checkout (or a Plus purchase's licence), `grouped` when `source`'s does.
+     * Needs migrations 0003 and 0005.
+     */
+    async listTestPurchases({ note, source }) {
+      if (!note) return { plus: [], gifts: [] };
+      const flags = table => `EXISTS (SELECT 1 FROM revocations WHERE revocations.target = 'checkout:' || ${table}.stripe_session${table === 'purchases' ? " OR revocations.target = 'license:' || purchases.license_id" : ''}) AS revoked,
+        EXISTS (SELECT 1 FROM revocations WHERE revocations.source = ? AND revocations.target = 'checkout:' || ${table}.stripe_session) AS grouped`;
+      const [plus, gifts] = await Promise.all([
+        all(`SELECT stripe_session AS checkoutRef, license_id AS licenseId, created_at AS createdAt, ${flags('purchases')} FROM purchases WHERE kind = 'plus' AND substr(note, 1, ?) = ? ORDER BY created_at DESC, stripe_session`, source, note.length, note),
+        all(`SELECT code, stripe_session AS checkoutRef, active, created_at AS createdAt, ${flags('gifts')} FROM gifts WHERE source = 'creem' AND stripe_session IS NOT NULL AND substr(note, 1, ?) = ? ORDER BY created_at DESC, code`, source, note.length, note)
+      ]);
+      const flagged = row => ({ ...row, revoked: Number(row.revoked) === 1, grouped: Number(row.grouped) === 1 });
+      return { plus: plus.map(flagged), gifts: gifts.map(row => ({ ...flagged(row), active: Number(row.active) === 1 })) };
+    },
+    /** Switches many gift links on or off at once, ID_CHUNK codes to a statement. */
+    async setGiftsActive(codes, active) {
+      let changed = 0;
+      for (let start = 0; start < codes.length; start += ID_CHUNK) {
+        const chunk = codes.slice(start, start + ID_CHUNK);
+        changed += await run(`UPDATE gifts SET active = ? WHERE code IN (${chunk.map(() => '?').join(', ')})`, active ? 1 : 0, ...chunk);
+      }
+      return changed;
     },
     /** True when any of the targets is revoked, by any source. */
     isRevoked: async targets => (targets.length ? (await all(`SELECT 1 AS hit FROM revocations WHERE target IN (${targets.map(() => '?').join(', ')}) LIMIT 1`, ...targets)).length > 0 : false),

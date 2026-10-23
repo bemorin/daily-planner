@@ -88,7 +88,9 @@ export const CONFIG_VARIABLES = Object.freeze([
   v({ name: 'CREEM_GIFT_USD', where: 'runtime', group: 'creem', level: 'required', secret: false, type: 'Text', format: 'creem-product', item: 'gift', currency: 'USD',
     source: 'Creem → Products → Daily Planner Plus gift in dollars → its id (prod_…).', unlocks: 'Every gift in dollars.', blocks: 'Without it no gift can be bought in dollars.' }),
   v({ name: 'CREEM_TEST_MODE', where: 'runtime', group: 'creem', level: 'optional', secret: false, type: 'Text', format: 'flag',
-    source: '1 forces Creem’s test API; not needed with a creem_test_ key.', unlocks: 'Sends every Creem call to the test API.', blocks: 'Leave it blank in production: test mode switches buying off on the production address.' }),
+    source: '1 forces Creem’s test API; not needed with a creem_test_ key.', unlocks: 'Sends every Creem call to the test API.', blocks: 'Leave it blank in production: test mode switches buying off on the production address, unless CREEM_TEST_ON_PRODUCTION is on.' }),
+  v({ name: 'CREEM_TEST_ON_PRODUCTION', where: 'runtime', group: 'creem', level: 'optional', secret: false, type: 'Text', format: 'review-flag',
+    source: '1 while Creem reviews your store (with the test key in CREEM_API_KEY); delete it once the live key is in.', unlocks: 'Review mode: with a test key, checkouts open on the production address in Creem’s test mode (no card is charged), so Creem’s team can make a test purchase before approving the store. The pages say payments are in test mode; what is bought is marked Test mode, and the dashboard switches it all off once you are live.', blocks: 'Blank: with a test key, buying stays switched off on the production address (“Coming soon”). It has no effect with a live key.' }),
 
   // ---- Resend ------------------------------------------------------------------
   v({ name: 'RESEND_API_KEY', where: 'runtime', group: 'resend', level: 'recommended', secret: true, type: 'Secret', format: 'resend-key',

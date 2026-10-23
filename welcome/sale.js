@@ -1,4 +1,4 @@
-import { checkoutOptions, plannerApiEnabled, startCheckout } from '../src/lib/planner-api.js';
+import { checkoutOptions, plannerApiEnabled, startCheckout, testModeLine } from '../src/lib/planner-api.js';
 import { formatMoney } from '../src/lib/pricing.js';
 import { buyState, checkoutUrl, currencyLine, lowestPerPerson, pageCurrency, readCheckoutOptions, taxLine } from './landing-model.js';
 import { el, qs, qsa } from './page-kit.js';
@@ -11,6 +11,9 @@ import { el, qs, qsa } from './page-kit.js';
    answer (from the visitor's country, GET /api/checkout) replaces it as soon
    as it arrives, before the prices are on screen. There is no switch: the
    euro area pays in EUR, everyone else in USD, and Creem charges exactly that.
+   While checkouts run in Creem's test mode (1.34: review mode on the
+   production address, while the payment provider reviews the store), one
+   calm line by the buy buttons says so (testNotice).
    ============================================================================ */
 
 /**
@@ -30,6 +33,8 @@ export function createSale({ onLoad = () => {} } = {}) {
     currencyName: () => (currency === 'EUR' ? 'euros' : 'US dollars'),
     /** Whether `item` ('plus' | 'gift') can be bought online here: { buyable, reason, other }. */
     state: item => buyState({ apiOn, options, item, currency }),
+    /** The test-mode line ('' outside Creem's test mode): see testModeLine in src/lib/planner-api.js. */
+    get testLine() { return testModeLine(options); },
     /** Asks the server once (again on the next click if it couldn't be reached). */
     load() {
       if (!apiOn || options.known) return Promise.resolve(options);
@@ -52,6 +57,20 @@ export function renderPriceLines(sale) {
   qsa('[data-currency-line]').forEach(node => { node.textContent = currencyLine(sale.currency); });
   qsa('[data-tax-line]').forEach(node => { node.textContent = taxLine(sale.currency); });
   qsa('[data-min-per-person]').forEach(node => { node.textContent = lowestPerPerson(sale.currency); });
+}
+
+/* Test mode: one calm line by the buy buttons ------------------------------- */
+
+const INFO_ICON = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M12 11.2v5"/><path d="M12 7.8v.01"/></svg>';
+
+/**
+ * “Payments are in test mode …”, as a paragraph to put by the buy buttons, or
+ * null outside test mode. `className` adds the place's own class (on the dark band, say).
+ */
+export function testNotice(sale, className = '') {
+  const line = sale.testLine;
+  if (!line) return null;
+  return el('p', { class: `buy__test${className ? ` ${className}` : ''}`, 'data-test-mode': true }, el('span', { class: 'buy__test-icon', html: INFO_ICON }), el('span', {}, line));
 }
 
 /* Buy buttons: busy while the checkout opens, an error underneath if it can't */
