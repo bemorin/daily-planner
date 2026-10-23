@@ -374,7 +374,7 @@ test('migration 0003: columns, one gift per checkout, several invoiced gifts', a
   assert.equal(await store.addGift(gift('AAAAAAAAAAAA', 'ch_test_2')), false, 'codes are unique');
   assert.equal((await store.getGiftByCheckout('ch_test_1')).code, 'CCCCCCCCCCCC');
   assert.equal(d1.sqlite.prepare('SELECT stripe_session AS ref FROM gifts WHERE code = ?').get('CCCCCCCCCCCC').ref, 'ch_test_1', 'the column keeps its name');
-  assert.deepEqual(await store.giftTotals(), { count: 3, seats: 15, redeemed: 0, paid: 1 });
+  assert.deepEqual(await store.giftTotals(), { count: 3, seats: 15, redeemed: 0, paid: 1, test: { count: 0, seats: 0, redeemed: 0 } });
   assert.equal(await store.markGiftEmailed('CCCCCCCCCCCC', '2026-10-09T09:00:00.000Z'), true);
   assert.equal(await store.markGiftEmailed('CCCCCCCCCCCC', '2026-10-09T10:00:00.000Z'), false);
   await store.clearGiftEmailed('CCCCCCCCCCCC');

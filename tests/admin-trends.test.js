@@ -251,7 +251,7 @@ test('the series window and answer are checked before use', () => {
   assert.equal(normalizeSeries({ error: 'Not found' }), null);
   assert.equal(normalizeSeries({ events: {}, to: 'soon' }), null);
   const clean = normalizeSeries({ from: '2025-01-01', to: '2026-10-11', events: {}, sales: [{ day: '2026-10-01' }, { day: 'bad' }, null], salesUnavailable: true });
-  assert.deepEqual(clean, { from: '2025-01-01', to: '2026-10-11', events: {}, sales: [{ day: '2026-10-01' }], salesUnavailable: true });
+  assert.deepEqual(clean, { from: '2025-01-01', to: '2026-10-11', events: {}, sales: [{ day: '2026-10-01' }], testSales: [], salesUnavailable: true });
 });
 
 test('Week · Month · Year is a radio group whose pill slides like the planner’s view switch', async () => {

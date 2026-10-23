@@ -11,8 +11,15 @@
   --accent: #8b6b4f;
   --danger: #8c4e45;
   --hour-line: color-mix(in srgb, #8f8a83 22%, transparent);
-  --scrollbar-thumb: color-mix(in srgb, var(--line) 82%, var(--paper));
-  --scrollbar-thumb-hover: color-mix(in srgb, var(--line-strong) 72%, var(--paper));
+  /* The scrollbar (below), the same set in welcome/landing.css, legal/legal.css and src/features/pip-styles.js:
+     a 12px gutter whose thumb is 6px at rest (3px of transparent border round it) and 8px under the pointer
+     or while dragged, darker then. */
+  --scrollbar-size: 12px;
+  --scrollbar-inset: 3px;
+  --scrollbar-inset-active: 2px;
+  --scrollbar-thumb-min: 2.5rem;
+  --scrollbar-thumb: color-mix(in srgb, var(--line-strong) 62%, var(--paper));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--muted) 46%, var(--paper));
   --hour: 72px;
   --visible-hours: 16;
   --schedule-pad-top: 14px;
@@ -71,20 +78,25 @@ a { color: inherit; }
 
 [hidden] { display: none !important; }
 
-/* Bemorin-style scrollbar: no arrows, no track, only a light thumb that
-   darkens under the pointer, in both themes (it follows --line). Chromium and
-   Safari draw it from the ::-webkit-scrollbar parts below, which Chromium
-   ignores as soon as the standard scrollbar-width / scrollbar-color are set
-   (and then draws its own, with arrows), so those are for the other browsers
-   only — as in welcome/landing.css and legal/legal.css. A scroller that hides
-   its bar sets scrollbar-width: none and ::-webkit-scrollbar { display: none }. */
+/* Bemorin-style scrollbar: no arrows, no track, only a light rounded thumb in
+   a 12px gutter, 6px wide at rest and 8px, darker, under the pointer or while
+   dragged — easy to grab, calm the rest of the time, in both themes (it
+   follows --line-strong and --muted). The sizes are the --scrollbar-* tokens
+   above. Chromium and Safari draw it from the ::-webkit-scrollbar parts below,
+   which Chromium ignores as soon as the standard scrollbar-width /
+   scrollbar-color are set (and then draws its own, with arrows), so those are
+   for the other browsers only — as in welcome/landing.css and legal/legal.css.
+   Firefox can't take a width: it keeps `thin` (about 8px, no arrows, close to
+   this thumb), not `auto` (a wider classic bar, with arrows on Windows). A
+   scroller that hides its bar sets scrollbar-width: none and
+   ::-webkit-scrollbar { display: none }. */
 
 @supports not selector(::-webkit-scrollbar) {
   html,
   * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
 }
 
-*::-webkit-scrollbar { width: 7px; height: 7px; }
+*::-webkit-scrollbar { width: var(--scrollbar-size); height: var(--scrollbar-size); }
 
 *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 
@@ -93,14 +105,16 @@ a { color: inherit; }
 *::-webkit-scrollbar-corner { background: transparent; }
 
 *::-webkit-scrollbar-thumb {
-  min-height: 2.5rem;
-  border: 2px solid transparent;
+  min-height: var(--scrollbar-thumb-min);
+  border: var(--scrollbar-inset) solid transparent;
   border-radius: 999px;
   background: var(--scrollbar-thumb);
   background-clip: padding-box;
 }
 
-*::-webkit-scrollbar-thumb:hover {
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active {
+  border-width: var(--scrollbar-inset-active);
   background: var(--scrollbar-thumb-hover);
   background-clip: padding-box;
 }
@@ -2594,13 +2608,11 @@ h3,
 
 .modal__close { top: .72rem; }
 
-.modal__scroll::-webkit-scrollbar { width: 8px; }
-
-.modal__scroll::-webkit-scrollbar-track { background: transparent; }
-
-.modal__scroll::-webkit-scrollbar-thumb { border: 2px solid transparent; background: color-mix(in srgb, var(--line-strong) 58%, var(--surface)); background-clip: padding-box; border-radius: 99px; }
-
-.modal__scroll::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--line-strong) 92%, var(--surface)); background-clip: padding-box; }
+/* The page's bar (the --scrollbar-* sizes), its thumb mixed with the dialog's surface rather than the paper. */
+.modal__scroll {
+  --scrollbar-thumb: color-mix(in srgb, var(--line-strong) 62%, var(--surface));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--muted) 46%, var(--surface));
+}
 
 .modal__panel--help .modal__scroll { margin-bottom: 7px; }
 

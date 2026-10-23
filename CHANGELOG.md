@@ -2,6 +2,11 @@
 
 Notable changes to published Daily Planner releases.
 
+## 1.34.1 — 2026-10-23
+
+- **Wider scrollbar** everywhere (planner, its modals, the floating window, the dashboard, the public and legal pages): a 12px gutter with a 6px rounded thumb that grows to 8px and darkens under the pointer, from one set of tokens per stylesheet; Firefox keeps its thin bar.
+- Dashboard: **the owner's browsers aren't counted** — signing in (and each signed-in load) switches the anonymous counts off in that browser, with “This browser isn't counted” and a switch to count it again. **Test-mode purchases are never counted as sales** (Trends revenue and charts, the team-gift funnel, the Plus and Team gifts cards), and are shown apart. **Start fresh at launch** (end of Trends) deletes the anonymous usage counts after a typed RESET (server-enforced), never purchases, gifts, licences, requests, waitlist, feedback, reviews or partner data. The **Switch off test-mode purchases** panel is always shown in Refunds and disputes.
+
 ## 1.34.0 — 2026-10-23
 
 - **Creem review mode**: with a test key, `CREEM_TEST_ON_PRODUCTION=1` (Functions, Text) opens checkouts on the production address in Creem test mode, so the owner and Creem's compliance team can go through the whole purchase before approval (no effect with a live key; preview and localhost unchanged). Purchases keep the `Test mode` note. The configuration page shows it as a warning to remove once live, and the test-key problem points to it.

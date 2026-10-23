@@ -139,6 +139,18 @@ export function saleCurrencies(sales) {
   });
 }
 
+/**
+ * Sales made in Creem's test mode (series.testSales: no real payment) in a
+ * range: how many, and cents per currency. They are never counted as sales;
+ * the dashboard only says how many it left out.
+ */
+export function testSalesIn(series, range, filter = {}) {
+  const rows = (series?.testSales || []).filter(row => inRange(String(row.day), range) && saleMatches(row, filter));
+  const revenue = {};
+  for (const row of rows) if (row.amount != null && row.currency) revenue[row.currency] = (revenue[row.currency] || 0) + (Number(row.amount) || 0);
+  return { count: rows.length, revenue };
+}
+
 /** Cents per currency. Amounts in different currencies are never added together. */
 export function revenueByCurrency(sales, range, currencies = saleCurrencies(sales)) {
   const totals = Object.fromEntries(currencies.map(code => [code, 0]));
@@ -319,14 +331,21 @@ export function seriesWindow(today) {
   return { from: `${Number(today.slice(0, 4)) - 1}-01-01`, to: today };
 }
 
-/** A usable series answer, or null. */
+/**
+ * A usable series answer, or null. Sales made in Creem's test mode come apart
+ * (testSales, 1.34.1): a row flagged `test` among the sales joins them, so a
+ * test purchase never reaches a revenue or sales figure, a chart or a funnel.
+ */
 export function normalizeSeries(body) {
   if (!body || typeof body !== 'object' || !body.events || typeof body.events !== 'object' || !isDay(body.to)) return null;
+  const rows = list => (Array.isArray(list) ? list.filter(row => row && isDay(String(row.day))) : []);
+  const sales = rows(body.sales);
   return {
     from: isDay(body.from) ? body.from : body.to,
     to: body.to,
     events: body.events,
-    sales: Array.isArray(body.sales) ? body.sales.filter(row => row && isDay(String(row.day))) : [],
+    sales: sales.filter(row => row.test !== true),
+    testSales: [...rows(body.testSales), ...sales.filter(row => row.test === true)].map(row => ({ ...row, test: true })),
     salesUnavailable: !!body.salesUnavailable
   };
 }

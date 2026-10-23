@@ -4,8 +4,9 @@
  * The floating window is a separate document: it cannot see the planner's
  * stylesheets, so its styles travel with it as one template string (no runtime
  * CSS fetch, nothing to cache separately, no unstyled flash when it opens).
- * The tokens repeat the planner's (styles/core.css and styles/theme.css) and
- * the window mirrors the planner's resolved theme through `data-theme`.
+ * The tokens repeat the planner's (styles/core.css and styles/theme.css),
+ * the --scrollbar-* sizes of its scrollbar included, and the window mirrors
+ * the planner's resolved theme through `data-theme`.
  *
  * Every transition and animation sits in one `prefers-reduced-motion:
  * no-preference` block at the end, so reduced motion means no motion at all.
@@ -27,6 +28,12 @@ const TOKENS = `
   --now-line: #9a5149;
   --raised: 0 1px 2px rgba(28, 25, 21, .08);
   --ease: cubic-bezier(.22, 1, .36, 1);
+  --scrollbar-size: 12px;
+  --scrollbar-inset: 3px;
+  --scrollbar-inset-active: 2px;
+  --scrollbar-thumb-min: 2.5rem;
+  --scrollbar-thumb: color-mix(in srgb, var(--line-strong) 62%, var(--paper));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--muted) 46%, var(--paper));
   color-scheme: light;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
@@ -61,12 +68,12 @@ button { margin: 0; padding: 0; border: 0; background: none; cursor: pointer; -w
 button:disabled { cursor: default; }
 svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 :focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 2px; }
-@supports not selector(::-webkit-scrollbar) { * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--line) 82%, var(--paper)) transparent; } }
-*::-webkit-scrollbar { width: 7px; height: 7px; }
+@supports not selector(::-webkit-scrollbar) { * { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; } }
+*::-webkit-scrollbar { width: var(--scrollbar-size); height: var(--scrollbar-size); }
 *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
-*::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
-*::-webkit-scrollbar-thumb { min-height: 2.5rem; border: 2px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--line) 82%, var(--paper)); background-clip: padding-box; }
-*::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--line-strong) 72%, var(--paper)); background-clip: padding-box; }
+*::-webkit-scrollbar-track, *::-webkit-scrollbar-track-piece, *::-webkit-scrollbar-corner { background: transparent; }
+*::-webkit-scrollbar-thumb { min-height: var(--scrollbar-thumb-min); border: var(--scrollbar-inset) solid transparent; border-radius: 999px; background: var(--scrollbar-thumb); background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover, *::-webkit-scrollbar-thumb:active { border-width: var(--scrollbar-inset-active); background: var(--scrollbar-thumb-hover); background-clip: padding-box; }
 .pip-short { display: none; }
 .pip-eyebrow { display: block; color: var(--faint); font-size: 10.5px; font-weight: 650; line-height: 1.3; letter-spacing: .07em; text-transform: uppercase; }
 .pip-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; color: var(--muted); font-size: 11.5px; line-height: 1.35; font-variant-numeric: tabular-nums; }
