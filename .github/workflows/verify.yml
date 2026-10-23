@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moves to a new image from 19 October 2026; move on purpose, after a green run.
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -28,4 +29,4 @@ jobs:
       - name: Report failures
         if: failure()
         shell: bash
-        run: grep -E "^not ok|# fail|Smoke test failed|^- |Error|failed" verify.log | head -40 | while IFS= read -r line; do echo "::error::${line}"; done
+        run: grep -E -A 8 "^not ok|# fail|Smoke test failed|^- |Error|failed" verify.log | head -80 | while IFS= read -r line; do echo "::error::${line}"; done

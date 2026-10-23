@@ -35,6 +35,9 @@ const profile = await mkdtemp(resolve(tmpdir(), 'daily-planner-smoke-'));
 const args = [
   '--headless=new',
   '--disable-gpu',
+  '--disable-dev-shm-usage',
+  '--no-first-run',
+  '--no-default-browser-check',
   '--remote-debugging-port=0',
   '--remote-allow-origins=*',
   `--user-data-dir=${profile}`,
@@ -46,7 +49,7 @@ const browser = spawn(chrome, args, { stdio: ['ignore', 'ignore', 'pipe'] });
 let browserWs = '';
 let stderr = '';
 const started = new Promise((resolveStarted, reject) => {
-  const timer = setTimeout(() => reject(new Error(`Chrome did not expose DevTools in time.\n${stderr}`)), 10000);
+  const timer = setTimeout(() => reject(new Error(`Chrome did not expose DevTools in time.\n${stderr}`)), 30000);
   browser.stderr.setEncoding('utf8');
   browser.stderr.on('data', chunk => {
     stderr += chunk;
