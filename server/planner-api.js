@@ -50,7 +50,8 @@
 //   commission, the amount and its tax, the date — a partner code names the
 //   partner, not the buyer). Only a checkout our API opened, with a valid
 //   seal, is recorded. A code Creem refuses is named in the server log and not
-//   recorded. The owner marks team commissions as paid (table partner_payouts:
+//   recorded, and so is a free order (a 100% discount code, 1.33.2): it
+//   earns nothing, so it leaves no commission to pay. The owner marks team commissions as paid (table partner_payouts:
 //   the checkout, the code, the amount, the date) and codes found to be no
 //   partner (table partner_code_rejections: the code, the date).
 // - Visits through a partner's link (1.33, migration 0008): the browser sends
@@ -641,9 +642,12 @@ export function createPlannerApi({
     try { await store.addOrder({ orderId, checkoutId, kind, mode, createdAt: now().toISOString() }); }
     catch (error) { safeWarn(`Order ${orderId} of ${checkoutId} not recorded: ${error?.message || error}`); }
   }
-  /** A sale through a partner's link (migration 0006). Best effort: never blocks a delivery. */
+  /**
+   * A sale through a partner's link (migration 0006). Best effort: never blocks a delivery.
+   * A free order (a 100% discount code) is not one: it earns its partner nothing.
+   */
   async function recordPartnerSale(checkoutId, paid, createdAt) {
-    const row = partnerSaleRow(checkoutId, paid, createdAt);
+    const row = paid.amount === 0 ? null : partnerSaleRow(checkoutId, paid, createdAt);
     if (!row) return;
     try { await store.addPartnerSale(row); }
     catch (error) { if (!isMissingTable(error)) safeWarn(`Partner sale ${checkoutId} (${row.code}) not recorded: ${error?.message || error}`); }

@@ -192,7 +192,7 @@ const DESKTOP_STEPS = [
         spot: ['[data-mobile-more]', '[data-mobile-more-menu]'],
         name: 'the More menu',
         title: 'Settings, help and more',
-        body: () => '**More** holds **Print / PDF** and **Export**, **Settings**, **Install the app**, **Sync my devices** and **How it works** — where you can take this tour again whenever you like.',
+        body: () => '**More** holds **Print / PDF** and **Export**, **Settings**, **Sync my devices**, **Install the app** and **How it works** — where you can take this tour again whenever you like.',
         keys: ['settings', 'help']
       }
     ]
@@ -277,7 +277,7 @@ const PHONE_STEPS = [
       spot: ['[data-mobile-more]', '[data-mobile-more-menu]'],
       name: 'the More menu',
       title: 'Everything else is under More',
-      body: () => '**Settings**, **Print / PDF** and **Export**, **Install the app**, **Sync my devices** and **How it works**. You can take this tour again from here whenever you like.',
+      body: () => '**Print / PDF** and **Export**, **Settings**, **Sync my devices**, **Install the app** and **How it works**. You can take this tour again from here whenever you like.',
       keys: ['settings', 'help']
     }]
   }

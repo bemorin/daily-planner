@@ -98,7 +98,10 @@ body.contact-page { padding-bottom: 0; }
 
 .ct-form .field textarea { min-height: 168px; }
 
-.ct-form .team-form__foot { border-top-color: var(--line); }
+/* No rule above the end of the form (1.33.2): on a card this short the line
+   cut it in two. The fine print and the button follow the question at the
+   fields' own rhythm, a little apart. */
+.ct-form .team-form__foot { margin-top: 6px; padding-top: 0; border-top: 0; }
 
 .ct-form .form-privacy a { color: var(--ink); white-space: nowrap; }
 

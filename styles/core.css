@@ -3209,28 +3209,11 @@ div.open-work-row__main { cursor: default; }
 
 /* Week chart tooltip belongs to its point, even at the right edge. */
 
-/* Mobile More mirrors the header rather than becoming a second navigation system. */
-
-.mobile-more-menu button,
-.mobile-more-menu a { width:100%; min-height:44px; display:flex; align-items:center; gap:11px; padding:10px 11px; border:0; border-radius:9px; background:transparent; color:var(--muted); text-decoration:none; font:inherit; font-size:.78rem; line-height:1.25; font-weight:590; text-align:left; cursor:pointer; }
-
-.mobile-more-menu button:hover,
-.mobile-more-menu a:hover { background:var(--soft); color:var(--ink); }
-
-.mobile-more-menu svg {   flex:0 0 auto; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
-
-.mobile-more-menu svg .icon-fill,
-.mobile-more-menu .icon-fill { fill:currentColor; stroke:none; }
-
 /* Category add uses the same quiet inline-add language as Schedule. */
 
 [data-category-add] { min-height:34px; padding:6px 10px; border-radius:9px; font-size:.66rem; }
 
 /* PiP Plan stays compact and recognizably the same planner. */
-
-@media (max-width:790px) {
-  .mobile-more-menu { min-width:220px; padding:7px; }
-}
 
 /* Keep in mind + outcome clears use the same calm hover-only language as task actions. */
 
@@ -3292,23 +3275,87 @@ div.open-work-row__main { cursor: default; }
 
 /* PiP top row is true three-way space-between: date | navigation | time. */
 
-/* Mobile More: only actions hidden from the real header live here. Export expands in place. */
+/* Header menus (1.33.2). More (≤1080px) holds what the header hides at that
+   width, never what it still shows, in the wide header's order: Time stats
+   (below 340px only, where the header lets it go), Print and Export, the
+   planner (Settings, sync, install, Plus), then help. A rule separates the
+   groups. Export opens in place on its own well, its options as large as the
+   rest. The desktop Export menu speaks the same language: icons, the same
+   type, rounded rows and a visible keyboard ring. */
 
-.mobile-export-disclosure { display: grid; }
+.export-menu,
+.mobile-more-menu { padding: 5px; border-radius: 12px; box-shadow: 0 16px 36px rgba(24, 21, 17, .12), 0 2px 6px rgba(24, 21, 17, .04); }
 
-.mobile-export-disclosure > button { grid-template-columns: 15px minmax(0,1fr) 15px; }
+.mobile-more-menu { min-width: 236px; max-height: calc(100dvh - 76px); overflow-y: auto; overscroll-behavior: contain; gap: 0; }
 
-.mobile-export-disclosure .disclosure-chevron { justify-self: end; transition: transform 180ms cubic-bezier(.22,1,.36,1); }
+/* Up to 790px it ends above the Plan / Schedule dock, and scrolls if it must. */
+@media (max-width: 790px) {
+  .mobile-more-menu { max-height: calc(100dvh - 72px - var(--mobile-dock-clearance)); }
+}
+
+.mobile-more-group { display: grid; gap: 2px; padding: 4px 0; }
+
+.mobile-more-group:not(:last-child) { border-bottom: 1px solid var(--line); }
+
+.mobile-more-menu .mobile-more-review { display: none; }
+
+@media (max-width: 339px) {
+  .topbar .actions > [data-stats-open] { display: none; }
+  .mobile-more-menu .mobile-more-review { display: grid; }
+}
+
+/* From 791px the header has its own workspace switcher. */
+@media (min-width: 791px) {
+  .mobile-more-menu .mobile-workspace { display: none; }
+}
+
+.mobile-more-menu button,
+.mobile-more-menu a { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 11px; padding: 10px 11px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); text-decoration: none; font: inherit; font-size: .78rem; line-height: 1.25; font-weight: 590; text-align: left; cursor: pointer; }
+
+.mobile-more-menu button:hover,
+.mobile-more-menu a:hover { background: var(--soft); color: var(--ink); }
+
+.mobile-more-menu svg { flex: 0 0 var(--icon-size); fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+.mobile-more-menu svg .icon-fill,
+.mobile-more-menu .icon-fill { fill: currentColor; stroke: none; }
+
+.mobile-export-disclosure { --menu-well: var(--soft); --menu-well-hover: color-mix(in srgb, var(--ink) 6%, var(--soft)); display: grid; border-radius: 10px; }
+
+.mobile-export-disclosure.is-open { background: var(--menu-well); }
+
+.mobile-export-disclosure.is-open > button:hover,
+.mobile-export-list button:hover { background: var(--menu-well-hover); }
+
+.mobile-more-menu .disclosure-chevron { flex-basis: 16px; width: 16px; height: 16px; margin-left: auto; color: var(--faint); transition: transform 180ms cubic-bezier(.22,1,.36,1); }
 
 .mobile-export-disclosure.is-open .disclosure-chevron { transform: rotate(180deg); }
 
-.mobile-export-options { display: grid; grid-template-rows: 0fr; opacity: 0; overflow: hidden; transition: grid-template-rows 220ms cubic-bezier(.22,1,.36,1), opacity 150ms ease; }
+.mobile-export-options { display: grid; max-height: 0; opacity: 0; visibility: hidden; overflow: hidden; transition: max-height 220ms cubic-bezier(.22,1,.36,1), opacity 150ms ease, visibility 0s linear 220ms; }
 
-.mobile-export-options::before { content: ""; min-height: 0; }
+.mobile-export-disclosure.is-open .mobile-export-options { max-height: 240px; opacity: 1; visibility: visible; transition-delay: 0s; }
 
-.mobile-export-disclosure.is-open .mobile-export-options { grid-template-rows: 1fr; opacity: 1; }
+.mobile-export-list { display: grid; gap: 1px; padding: 0 4px 4px; }
 
-.mobile-export-options > button { padding-left: 33px; min-height: 31px; font-size: .62rem; }
+/* Option icons and labels line up with the row above (11px in, an icon, 11px). */
+.mobile-export-list button { min-height: 40px; padding: 8px 7px; font-weight: 560; }
+
+.mobile-more-menu .mobile-export-list svg { flex-basis: 18px; width: 18px; height: 18px; margin: 0 calc((var(--icon-size) - 18px) / 2); }
+
+.export-menu { min-width: 214px; gap: 1px; }
+
+.export-menu button { min-height: 36px; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 8px; font-size: .78rem; font-weight: 590; line-height: 1.25; white-space: nowrap; }
+
+.export-menu svg { flex: 0 0 18px; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+
+.app-menu__rule { height: 1px; margin: 4px 6px; background: var(--line); }
+
+.app-menu :is(button, a):focus-visible { outline: 0; color: var(--ink); background: var(--soft); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-export-options,
+  .mobile-more-menu .disclosure-chevron { transition: none; }
+}
 
 /* Help FAQ animation: shortcut starts closed; numbered sections can stay open. */
 
@@ -3331,10 +3378,6 @@ div.open-work-row__main { cursor: default; }
 @media (max-width: 790px) {
   .mobile-more-wrap { display: flex; }
 }
-
-.mobile-export-options { max-height: 0; grid-template-rows: none; transition: max-height 220ms cubic-bezier(.22,1,.36,1), opacity 150ms ease; }
-
-.mobile-export-disclosure.is-open .mobile-export-options { max-height: 160px; }
 
 @media (max-width: 620px) {
   .modal__actions--block:not(.is-add) {
@@ -3961,7 +4004,6 @@ div.open-work-row__main { cursor: default; }
     width: 38px;
     height: 38px;
   }
-  .mobile-more-menu svg { flex: 0 0 var(--icon-size); }
 }
 
 
@@ -4010,11 +4052,6 @@ div.open-work-row__main { cursor: default; }
   .today-button { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
   .today-calendar-icon { width: 28px; height: 28px; }
   .topbar { --icon-size: 21px; }
-}
-.mobile-stats-action { display: none; }
-@media (max-width: 339px) {
-  .topbar .actions > [data-stats-open] { display: none; }
-  .mobile-more-menu .mobile-stats-action { display: flex; }
 }
 
 /* Day view: the left column is "Plan", mirroring "Schedule" (same size and

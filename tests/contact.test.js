@@ -235,3 +235,10 @@ test('from 960px the card keeps to the window as the page scrolls, only when all
   assert.match(script, /new ResizeObserver\(check\)\.observe\(card\);\n {2}window\.addEventListener\('resize', check, \{ passive: true \}\);/, 'checked on resize, never on scroll');
   assert.doesNotMatch(script, /addEventListener\('scroll'/);
 });
+
+test('the card has no rule above its fine print and button: they follow the question, a little apart (1.33.2)', async () => {
+  const css = await read('contact/contact.css');
+  assert.match(css, /^\.ct-form \.team-form__foot \{ margin-top: 6px; padding-top: 0; border-top: 0; \}$/m);
+  // Nothing else draws a line across the card's form.
+  assert.doesNotMatch(css.replace(/^\.ct-form \.team-form__foot \{[^}]*\}$/m, ''), /\.ct-form[^{]*\{[^}]*border-(?:top|bottom)(?!-color)[^}]*\}/);
+});

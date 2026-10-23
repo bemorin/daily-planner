@@ -101,11 +101,13 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg>
           </button>
           <div class="export-menu app-menu" data-export-menu hidden>
-            <button type="button" data-export-md>Markdown</button>
-            <button type="button" data-export-json>Current day JSON</button>
-            <button type="button" data-export-backup>Backup all data</button>
-            <button type="button" data-import-menu>Import backup</button>
-            <button type="button" data-export-pdf>Print / PDF</button>
+            <button type="button" data-export-md><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h6.5L18 8v11.5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h4"/></svg><span>Markdown</span></button>
+            <button type="button" data-export-json><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4.5H8a2 2 0 0 0-2 2v3.2A2.3 2.3 0 0 1 3.7 12 2.3 2.3 0 0 1 6 14.3v3.2a2 2 0 0 0 2 2h1M15 4.5h1a2 2 0 0 1 2 2v3.2a2.3 2.3 0 0 0 2.3 2.3 2.3 2.3 0 0 0-2.3 2.3v3.2a2 2 0 0 1-2 2h-1"/></svg><span>Current day JSON</span></button>
+            <span class="app-menu__rule" aria-hidden="true"></span>
+            <button type="button" data-export-backup><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="4.5" rx="1.2"/><path d="M5 8.5v9.7A1.8 1.8 0 0 0 6.8 20h10.4a1.8 1.8 0 0 0 1.8-1.8V8.5"/><path d="M12 11v5.2M9.6 13.9 12 16.3l2.4-2.4"/></svg><span>Backup all data</span></button>
+            <button type="button" data-import-menu><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M8 8l4-4 4 4M5 20h14"/></svg><span>Import backup</span></button>
+            <span class="app-menu__rule" aria-hidden="true"></span>
+            <button type="button" data-export-pdf><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z"/></svg><span>Print / PDF</span></button>
           </div>
         </div>
 
@@ -131,25 +133,35 @@
               <button type="button" data-mobile-workspace-toggle aria-expanded="false"><strong data-mobile-workspace-label>Personal</strong><svg class="disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
               <div class="mobile-workspace-options" data-mobile-workspace-options hidden></div>
             </div>
-            <button type="button" class="mobile-stats-action" data-mobile-stats><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span>Time stats</span></button>
-            <button type="button" data-mobile-print><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z"/></svg><span>Print / PDF</span></button>
-            <div class="mobile-export-disclosure" data-mobile-export-disclosure>
-              <button type="button" data-mobile-export-toggle aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg><span>Export</span><svg class="disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
-              <div class="mobile-export-options" data-mobile-export-options>
-                <button type="button" data-mobile-export-md><span>Markdown</span></button>
-                <button type="button" data-mobile-export-json><span>Current day JSON</span></button>
-                <button type="button" data-mobile-export-backup><span>Backup all data</span></button>
-                <button type="button" data-mobile-import><span>Import backup</span></button>
+            <div class="mobile-more-group mobile-more-review">
+              <button type="button" data-mobile-stats><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V10M12 20V4M19 20v-7"/></svg><span>Time stats</span></button>
+            </div>
+            <div class="mobile-more-group">
+              <button type="button" data-mobile-print><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z"/></svg><span>Print / PDF</span></button>
+              <div class="mobile-export-disclosure" data-mobile-export-disclosure>
+                <button type="button" data-mobile-export-toggle aria-expanded="false" aria-controls="more-export-options"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 11l4 4 4-4M5 20h14"/></svg><span>Export</span><svg class="disclosure-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg></button>
+                <div class="mobile-export-options" id="more-export-options" data-mobile-export-options>
+                  <div class="mobile-export-list">
+                    <button type="button" data-mobile-export-md><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h6.5L18 8v11.5a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h4"/></svg><span>Markdown</span></button>
+                    <button type="button" data-mobile-export-json><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4.5H8a2 2 0 0 0-2 2v3.2A2.3 2.3 0 0 1 3.7 12 2.3 2.3 0 0 1 6 14.3v3.2a2 2 0 0 0 2 2h1M15 4.5h1a2 2 0 0 1 2 2v3.2a2.3 2.3 0 0 0 2.3 2.3 2.3 2.3 0 0 0-2.3 2.3v3.2a2 2 0 0 1-2 2h-1"/></svg><span>Current day JSON</span></button>
+                    <button type="button" data-mobile-export-backup><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="4.5" rx="1.2"/><path d="M5 8.5v9.7A1.8 1.8 0 0 0 6.8 20h10.4a1.8 1.8 0 0 0 1.8-1.8V8.5"/><path d="M12 11v5.2M9.6 13.9 12 16.3l2.4-2.4"/></svg><span>Backup all data</span></button>
+                    <button type="button" data-mobile-import><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M8 8l4-4 4 4M5 20h14"/></svg><span>Import backup</span></button>
+                  </div>
+                </div>
               </div>
             </div>
-            <button type="button" data-mobile-settings><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.12-1.3l2-1.55-2-3.46-2.43.98A7 7 0 0 0 14.2 5.4L13.85 3h-4l-.35 2.4a7 7 0 0 0-2.25 1.27L4.82 5.7l-2 3.46 2 1.55A7 7 0 0 0 4.7 12c0 .44.04.87.12 1.3l-2 1.55 2 3.46 2.43-.98A7 7 0 0 0 9.5 18.6l.35 2.4h4l.35-2.4a7 7 0 0 0 2.25-1.27l2.43.98 2-3.46-2-1.55c.08-.43.12-.86.12-1.3Z"/></svg><span>Settings</span></button>
-            <button type="button" data-install-open><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="12.5" rx="2"/><path d="M12 8.5v5.5M9.5 11.5 12 14l2.5-2.5M8.5 20h7"/></svg><span>Install the app</span></button>
-            <button type="button" data-sync-guide-open><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="13" height="9.5" rx="1.6"/><path d="M1.5 17.5h15"/><rect x="16.5" y="8.5" width="5.5" height="11" rx="1.4"/></svg><span>Sync my devices</span></button>
-            <button type="button" class="mobile-plus-action" data-plus-open><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 13.9 9l5.5 1.9-5.5 1.9L12 18.3l-1.9-5.5-5.5-1.9L10.1 9Z"/><path d="M18.6 3.8v3.4M16.9 5.5h3.4"/></svg><span>Daily Planner Plus</span></button>
-            <button type="button" data-feedback-open hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9.5L5 19.5v-14Z"/><path d="M9 10.5h6"/></svg><span>Send feedback</span></button>
-            <button type="button" data-tour-open><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M9 21h6"/><path d="M12 5.5h6.2l2.3 2.5-2.3 2.5H12M12 12.5H5.8L3.5 15l2.3 2.5H12"/></svg><span>Take the tour</span></button>
-            <button type="button" data-mobile-help><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.35 2.35 0 1 1 3.6 1.98c-.9.55-1.4 1.02-1.4 2.02M12 17h.01"/></svg><span>How it works</span></button>
-            <a data-mobile-github hidden href="https://github.com/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="icon-fill" d="M12 2.5a9.7 9.7 0 0 0-3.07 18.9c.49.1.67-.22.67-.48v-1.87c-2.73.6-3.3-1.18-3.3-1.18-.45-1.15-1.09-1.46-1.09-1.46-.9-.62.07-.6.07-.6.98.06 1.5 1.01 1.5 1.01.88 1.5 2.29 1.07 2.85.82.09-.63.34-1.07.62-1.32-2.18-.25-4.48-1.09-4.48-4.86 0-1.07.38-1.95 1-2.64-.1-.25-.43-1.25.1-2.6 0 0 .82-.26 2.68 1.01A9.25 9.25 0 0 1 12 6.9a9.2 9.2 0 0 1 2.44.33c1.86-1.27 2.67-1 2.67-1 .54 1.34.2 2.34.1 2.59.63.69 1.01 1.57 1.01 2.64 0 3.78-2.3 4.6-4.49 4.85.35.3.66.9.66 1.8v2.8c0 .27.18.59.68.49A9.7 9.7 0 0 0 12 2.5Z"/></svg><span>GitHub project</span></a>
+            <div class="mobile-more-group">
+              <button type="button" data-mobile-settings><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.12-1.3l2-1.55-2-3.46-2.43.98A7 7 0 0 0 14.2 5.4L13.85 3h-4l-.35 2.4a7 7 0 0 0-2.25 1.27L4.82 5.7l-2 3.46 2 1.55A7 7 0 0 0 4.7 12c0 .44.04.87.12 1.3l-2 1.55 2 3.46 2.43-.98A7 7 0 0 0 9.5 18.6l.35 2.4h4l.35-2.4a7 7 0 0 0 2.25-1.27l2.43.98 2-3.46-2-1.55c.08-.43.12-.86.12-1.3Z"/></svg><span>Settings</span></button>
+              <button type="button" data-sync-guide-open><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="13" height="9.5" rx="1.6"/><path d="M1.5 17.5h15"/><rect x="16.5" y="8.5" width="5.5" height="11" rx="1.4"/></svg><span>Sync my devices</span></button>
+              <button type="button" data-install-open><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="12.5" rx="2"/><path d="M12 8.5v5.5M9.5 11.5 12 14l2.5-2.5M8.5 20h7"/></svg><span>Install the app</span></button>
+              <button type="button" class="mobile-plus-action" data-plus-open><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.6 13.9 9l5.5 1.9-5.5 1.9L12 18.3l-1.9-5.5-5.5-1.9L10.1 9Z"/><path d="M18.6 3.8v3.4M16.9 5.5h3.4"/></svg><span>Daily Planner Plus</span></button>
+            </div>
+            <div class="mobile-more-group">
+              <button type="button" data-mobile-help><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.8 9a2.35 2.35 0 1 1 3.6 1.98c-.9.55-1.4 1.02-1.4 2.02M12 17h.01"/></svg><span>How it works</span></button>
+              <button type="button" data-tour-open><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M9 21h6"/><path d="M12 5.5h6.2l2.3 2.5-2.3 2.5H12M12 12.5H5.8L3.5 15l2.3 2.5H12"/></svg><span>Take the tour</span></button>
+              <button type="button" data-feedback-open hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v10H9.5L5 19.5v-14Z"/><path d="M9 10.5h6"/></svg><span>Send feedback</span></button>
+              <a data-mobile-github hidden href="https://github.com/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path class="icon-fill" d="M12 2.5a9.7 9.7 0 0 0-3.07 18.9c.49.1.67-.22.67-.48v-1.87c-2.73.6-3.3-1.18-3.3-1.18-.45-1.15-1.09-1.46-1.09-1.46-.9-.62.07-.6.07-.6.98.06 1.5 1.01 1.5 1.01.88 1.5 2.29 1.07 2.85.82.09-.63.34-1.07.62-1.32-2.18-.25-4.48-1.09-4.48-4.86 0-1.07.38-1.95 1-2.64-.1-.25-.43-1.25.1-2.6 0 0 .82-.26 2.68 1.01A9.25 9.25 0 0 1 12 6.9a9.2 9.2 0 0 1 2.44.33c1.86-1.27 2.67-1 2.67-1 .54 1.34.2 2.34.1 2.59.63.69 1.01 1.57 1.01 2.64 0 3.78-2.3 4.6-4.49 4.85.35.3.66.9.66 1.8v2.8c0 .27.18.59.68.49A9.7 9.7 0 0 0 12 2.5Z"/></svg><span>GitHub project</span></a>
+            </div>
           </div>
         </div>
       </div>
